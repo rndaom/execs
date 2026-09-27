@@ -57,61 +57,83 @@
       "height": 48
     }
   },
-  "crosshair-designer": {
+  "crosshair": {
+    "shapes": {
+      "x": 249,
+      "y": 317.1,
+      "width": 544,
+      "height": 155.9
+    },
     "circle": {
-      "x": 359,
-      "y": 363.1,
-      "width": 104,
-      "height": 36.6
+      "x": 663,
+      "y": 317.1,
+      "width": 130,
+      "height": 73.9
     },
     "chevron": {
-      "x": 249,
-      "y": 405.7,
-      "width": 104,
-      "height": 36.6
+      "x": 387,
+      "y": 399,
+      "width": 130,
+      "height": 73.9
     },
     "ring": {
-      "x": 469,
-      "y": 405.7,
-      "width": 104,
-      "height": 36.6
+      "x": 663,
+      "y": 399,
+      "width": 130,
+      "height": 73.9
+    },
+    "sprite": {
+      "x": 925,
+      "y": 528.8,
+      "width": 87.2,
+      "height": 19.5
     }
   },
-  "viewmodels-weapons": {
-    "scattergun": {
-      "x": 1140.2,
-      "y": 264.4,
-      "width": 220.8,
-      "height": 36
-    },
-    "forceANature": {
-      "x": 1140.2,
-      "y": 324.5,
-      "width": 220.8,
-      "height": 36
-    },
-    "shortstop": {
-      "x": 1140.2,
-      "y": 383.1,
-      "width": 220.8,
-      "height": 36
+  "viewmodels": {
+    "primaryHidden": {
+      "x": 1206,
+      "y": 423.4,
+      "width": 62.8,
+      "height": 30
     },
     "toolbar": {
       "x": 249,
-      "y": 168.2,
+      "y": 353.2,
       "width": 1112,
       "height": 39.7
     }
   },
+  "viewmodels-primary": {
+    "secondaryHands": {
+      "x": 1270.8,
+      "y": 483.5,
+      "width": 87.2,
+      "height": 30
+    }
+  },
   "sounds": {
+    "filter": {
+      "x": 466.7,
+      "y": 574.8,
+      "width": 87.9,
+      "height": 30
+    }
+  },
+  "sounds-comfig": {
     "use": {
       "x": 1309,
-      "y": 802.3,
+      "y": 719.8,
       "width": 48,
       "height": 36
     }
   },
   "sounds-used": {
+    "hitSlot": {
+      "x": 249,
+      "y": 141,
+      "width": 544,
+      "height": 208.8
+    },
     "hitToggle": {
       "x": 753,
       "y": 141,
@@ -129,88 +151,5350 @@
   },
   "files-lines": [
     {
-      "x": 420.296875,
-      "y": 207,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 215,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 228.4375,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 236.4375,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 249.875,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 257.875,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 271.3125,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 279.3125,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 292.75,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 300.75,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 314.1875,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 322.1875,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 335.625,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 343.625,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 357.0625,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 365.0625,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 378.5,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 386.5,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 399.9375,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 407.9375,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 421.375,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 429.375,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 442.8125,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 450.8125,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 464.25,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 472.25,
+      "width": 976.703125,
       "height": 21.4375
     },
     {
-      "x": 420.296875,
-      "y": 485.6875,
-      "width": 992.703125,
+      "x": 428.296875,
+      "y": 493.6875,
+      "width": 976.703125,
       "height": 21.4375
     }
-  ]
+  ],
+  "restore-points": {
+    "dialog": {
+      "x": 380,
+      "y": 274.4,
+      "width": 680,
+      "height": 351.2
+    }
+  },
+  "inv-grid": {
+    "grid": {
+      "x": 249,
+      "y": 198.2,
+      "width": 1112,
+      "height": 504
+    }
+  },
+  "inv-grid-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000000008": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000023": {
+      "x": 472.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 23"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000038": {
+      "x": 1031.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 38"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000048": {
+      "x": 1031.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Gift Wrap, Unique, slot 48"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-hover": {
+    "card": {
+      "x": 249,
+      "y": 300.2,
+      "width": 240,
+      "height": 109.6
+    }
+  },
+  "inv-hover-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000000008": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000023": {
+      "x": 472.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 23"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000038": {
+      "x": 1031.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 38"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000048": {
+      "x": 1031.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Gift Wrap, Unique, slot 48"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-inspect": {
+    "dialog": {
+      "x": 510,
+      "y": 200.2,
+      "width": 420,
+      "height": 499.7
+    }
+  },
+  "inv-inspect-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000000008": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000023": {
+      "x": 472.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 23"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000038": {
+      "x": 1031.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 38"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000048": {
+      "x": 1031.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Gift Wrap, Unique, slot 48"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-delete-selected": {
+    "delete": {
+      "x": 1127.2,
+      "y": 724.9,
+      "width": 62.4,
+      "height": 32
+    }
+  },
+  "inv-delete-selected-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000000008": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000023": {
+      "x": 472.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 23"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000038": {
+      "x": 1031.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 38"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000048": {
+      "x": 1031.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Gift Wrap, Unique, slot 48"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-delete": {
+    "dialog": {
+      "x": 490,
+      "y": 316.3,
+      "width": 460,
+      "height": 267.4
+    },
+    "confirm": {
+      "x": 735.5,
+      "y": 519,
+      "width": 189.5,
+      "height": 39.7
+    }
+  },
+  "inv-delete-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000000008": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000023": {
+      "x": 472.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 23"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000038": {
+      "x": 1031.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 38"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000048": {
+      "x": 1031.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Gift Wrap, Unique, slot 48"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-deleted-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000000008": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000023": {
+      "x": 472.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 23"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000038": {
+      "x": 1031.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 38"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-selected": {
+    "craft": {
+      "x": 1072.6,
+      "y": 751.3,
+      "width": 52.7,
+      "height": 32
+    }
+  },
+  "inv-selected-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000000008": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000023": {
+      "x": 472.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 23"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000038": {
+      "x": 1031.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 38"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-craft": {
+    "dialog": {
+      "x": 460,
+      "y": 234.5,
+      "width": 520,
+      "height": 431
+    },
+    "confirm": {
+      "x": 767.9,
+      "y": 600.8,
+      "width": 187.1,
+      "height": 39.7
+    }
+  },
+  "inv-craft-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000000008": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000023": {
+      "x": 472.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 23"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000038": {
+      "x": 1031.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 38"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-reveal": {
+    "image": {
+      "x": 556,
+      "y": 312.2,
+      "width": 328,
+      "height": 178
+    },
+    "dialog": {
+      "x": 530,
+      "y": 248.6,
+      "width": 380,
+      "height": 402.9
+    },
+    "done": {
+      "x": 822.1,
+      "y": 588.8,
+      "width": 62.9,
+      "height": 37.7
+    }
+  },
+  "inv-reveal-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000001330": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Noble Amassment of Hats, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-crafted": {
+    "sort": {
+      "x": 720.4,
+      "y": 149.3,
+      "width": 88.5,
+      "height": 34
+    }
+  },
+  "inv-crafted-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000001330": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Noble Amassment of Hats, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-sort-menu": {
+    "quality": {
+      "x": 725.4,
+      "y": 224.3,
+      "width": 246,
+      "height": 32
+    }
+  },
+  "inv-sort-menu-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000002": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 2"
+    },
+    "11000000003": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 3"
+    },
+    "11000000004": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 4"
+    },
+    "11000000005": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 5"
+    },
+    "11000000006": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 6"
+    },
+    "11000000007": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 7"
+    },
+    "11000001330": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Noble Amassment of Hats, Unique, slot 8"
+    },
+    "11000000009": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 9"
+    },
+    "11000000010": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 10"
+    },
+    "11000000011": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 11"
+    },
+    "11000000012": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 12"
+    },
+    "11000000013": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 13"
+    },
+    "11000000014": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 14"
+    },
+    "11000000015": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 15"
+    },
+    "11000000016": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 16"
+    },
+    "11000000017": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 17"
+    },
+    "11000000018": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 18"
+    },
+    "11000000019": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 19"
+    },
+    "11000000020": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 20"
+    },
+    "11000000021": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 21"
+    },
+    "11000000022": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 22"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 24"
+    },
+    "11000000025": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 25"
+    },
+    "11000000026": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 26"
+    },
+    "11000000027": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 27"
+    },
+    "11000000028": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 28"
+    },
+    "11000000029": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 29"
+    },
+    "11000000030": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 30"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 31"
+    },
+    "11000000032": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 32"
+    },
+    "11000000033": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 33"
+    },
+    "11000000034": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 34"
+    },
+    "11000000035": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 35"
+    },
+    "11000000036": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 36"
+    },
+    "11000000037": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 37"
+    },
+    "11000000039": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 39"
+    },
+    "11000000040": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 40"
+    },
+    "11000000041": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 41"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 42"
+    },
+    "11000000043": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 43"
+    },
+    "11000000044": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 44"
+    },
+    "11000000045": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 45"
+    },
+    "11000000046": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 46"
+    },
+    "11000000047": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 47"
+    },
+    "11000000049": {
+      "x": 1143.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 49"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 50"
+    }
+  },
+  "inv-sorted": {
+    "review": {
+      "x": 1168.3,
+      "y": 146.5,
+      "width": 152.7,
+      "height": 37.7
+    }
+  },
+  "inv-sorted-items": {
+    "11000000004": {
+      "x": 249,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 1"
+    },
+    "11000000043": {
+      "x": 360.796875,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 2"
+    },
+    "11000000027": {
+      "x": 472.59375,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 3"
+    },
+    "11000000011": {
+      "x": 584.390625,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 4"
+    },
+    "11000000007": {
+      "x": 696.1875,
+      "y": 196.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 5"
+    },
+    "11000000022": {
+      "x": 808,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 6"
+    },
+    "11000000041": {
+      "x": 919.796875,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 7"
+    },
+    "11000000033": {
+      "x": 1031.59375,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 8"
+    },
+    "11000000003": {
+      "x": 1143.390625,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 9"
+    },
+    "11000000014": {
+      "x": 1255.1875,
+      "y": 196.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 10"
+    },
+    "11000000034": {
+      "x": 249,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 11"
+    },
+    "11000000009": {
+      "x": 360.796875,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 12"
+    },
+    "11000000047": {
+      "x": 472.59375,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 13"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 14"
+    },
+    "11000000006": {
+      "x": 696.1875,
+      "y": 298.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 15"
+    },
+    "11000000019": {
+      "x": 808,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 16"
+    },
+    "11000000045": {
+      "x": 919.796875,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 17"
+    },
+    "11000000039": {
+      "x": 1031.59375,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 18"
+    },
+    "11000000013": {
+      "x": 1143.390625,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 19"
+    },
+    "11000000016": {
+      "x": 1255.1875,
+      "y": 298.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 20"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 21"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 22"
+    },
+    "11000000049": {
+      "x": 472.59375,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 23"
+    },
+    "11000000037": {
+      "x": 584.390625,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 24"
+    },
+    "11000000028": {
+      "x": 696.1875,
+      "y": 400.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 25"
+    },
+    "11000000002": {
+      "x": 808,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 26"
+    },
+    "11000000029": {
+      "x": 919.796875,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 27"
+    },
+    "11000000036": {
+      "x": 1031.59375,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 28"
+    },
+    "11000000026": {
+      "x": 1143.390625,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 29"
+    },
+    "11000000005": {
+      "x": 1255.1875,
+      "y": 400.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 30"
+    },
+    "11000000032": {
+      "x": 249,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 31"
+    },
+    "11000001330": {
+      "x": 360.796875,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Noble Amassment of Hats, Unique, slot 32"
+    },
+    "11000000017": {
+      "x": 472.59375,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 33"
+    },
+    "11000000030": {
+      "x": 584.390625,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 34"
+    },
+    "11000000046": {
+      "x": 696.1875,
+      "y": 502.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 35"
+    },
+    "11000000040": {
+      "x": 808,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 36"
+    },
+    "11000000012": {
+      "x": 919.796875,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 37"
+    },
+    "11000000020": {
+      "x": 1031.59375,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 38"
+    },
+    "11000000025": {
+      "x": 1143.390625,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 39"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 502.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 40"
+    },
+    "11000000035": {
+      "x": 249,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 41"
+    },
+    "11000000018": {
+      "x": 360.796875,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 42"
+    },
+    "11000000044": {
+      "x": 472.59375,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 43"
+    },
+    "11000000015": {
+      "x": 584.390625,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 44"
+    },
+    "11000000010": {
+      "x": 696.1875,
+      "y": 604.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 45"
+    },
+    "11000000001": {
+      "x": 808,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 46"
+    },
+    "11000000021": {
+      "x": 919.796875,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 47"
+    }
+  },
+  "inv-moved": {
+    "review": {
+      "x": 1167.5,
+      "y": 146.5,
+      "width": 153.5,
+      "height": 37.7
+    }
+  },
+  "inv-moved-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000043": {
+      "x": 360.796875,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 2"
+    },
+    "11000000027": {
+      "x": 472.59375,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 3"
+    },
+    "11000000011": {
+      "x": 584.390625,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 4"
+    },
+    "11000000007": {
+      "x": 696.1875,
+      "y": 196.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 5"
+    },
+    "11000000022": {
+      "x": 808,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 6"
+    },
+    "11000000041": {
+      "x": 919.796875,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 7"
+    },
+    "11000000033": {
+      "x": 1031.59375,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 8"
+    },
+    "11000000003": {
+      "x": 1143.390625,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 9"
+    },
+    "11000000014": {
+      "x": 1255.1875,
+      "y": 196.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 10"
+    },
+    "11000000034": {
+      "x": 249,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 11"
+    },
+    "11000000009": {
+      "x": 360.796875,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 12"
+    },
+    "11000000047": {
+      "x": 472.59375,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 13"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 14"
+    },
+    "11000000006": {
+      "x": 696.1875,
+      "y": 298.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 15"
+    },
+    "11000000019": {
+      "x": 808,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 16"
+    },
+    "11000000045": {
+      "x": 919.796875,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 17"
+    },
+    "11000000039": {
+      "x": 1031.59375,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 18"
+    },
+    "11000000013": {
+      "x": 1143.390625,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 19"
+    },
+    "11000000016": {
+      "x": 1255.1875,
+      "y": 298.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 20"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 21"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 22"
+    },
+    "11000000049": {
+      "x": 472.59375,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 23"
+    },
+    "11000000037": {
+      "x": 584.390625,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 24"
+    },
+    "11000000028": {
+      "x": 696.1875,
+      "y": 400.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 25"
+    },
+    "11000000002": {
+      "x": 808,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 26"
+    },
+    "11000000029": {
+      "x": 919.796875,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 27"
+    },
+    "11000000036": {
+      "x": 1031.59375,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 28"
+    },
+    "11000000026": {
+      "x": 1143.390625,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 29"
+    },
+    "11000000005": {
+      "x": 1255.1875,
+      "y": 400.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 30"
+    },
+    "11000000032": {
+      "x": 249,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 31"
+    },
+    "11000001330": {
+      "x": 360.796875,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Noble Amassment of Hats, Unique, slot 32"
+    },
+    "11000000017": {
+      "x": 472.59375,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 33"
+    },
+    "11000000030": {
+      "x": 584.390625,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 34"
+    },
+    "11000000046": {
+      "x": 696.1875,
+      "y": 502.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 35"
+    },
+    "11000000040": {
+      "x": 808,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 36"
+    },
+    "11000000012": {
+      "x": 919.796875,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 37"
+    },
+    "11000000020": {
+      "x": 1031.59375,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 38"
+    },
+    "11000000025": {
+      "x": 1143.390625,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 39"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 502.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 40"
+    },
+    "11000000035": {
+      "x": 249,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 41"
+    },
+    "11000000018": {
+      "x": 360.796875,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 42"
+    },
+    "11000000044": {
+      "x": 472.59375,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 43"
+    },
+    "11000000015": {
+      "x": 584.390625,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 44"
+    },
+    "11000000010": {
+      "x": 696.1875,
+      "y": 604.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 45"
+    },
+    "11000000004": {
+      "x": 808,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 46"
+    },
+    "11000000021": {
+      "x": 919.796875,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 47"
+    }
+  },
+  "inv-review": {
+    "dialog": {
+      "x": 440,
+      "y": 204.6,
+      "width": 560,
+      "height": 490.8
+    },
+    "apply": {
+      "x": 846.3,
+      "y": 630.7,
+      "width": 128.7,
+      "height": 39.7
+    }
+  },
+  "inv-review-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000043": {
+      "x": 360.796875,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 2"
+    },
+    "11000000027": {
+      "x": 472.59375,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 3"
+    },
+    "11000000011": {
+      "x": 584.390625,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 4"
+    },
+    "11000000007": {
+      "x": 696.1875,
+      "y": 196.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 5"
+    },
+    "11000000022": {
+      "x": 808,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 6"
+    },
+    "11000000041": {
+      "x": 919.796875,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 7"
+    },
+    "11000000033": {
+      "x": 1031.59375,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 8"
+    },
+    "11000000003": {
+      "x": 1143.390625,
+      "y": 196.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 9"
+    },
+    "11000000014": {
+      "x": 1255.1875,
+      "y": 196.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 10"
+    },
+    "11000000034": {
+      "x": 249,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 11"
+    },
+    "11000000009": {
+      "x": 360.796875,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 12"
+    },
+    "11000000047": {
+      "x": 472.59375,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 13"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 14"
+    },
+    "11000000006": {
+      "x": 696.1875,
+      "y": 298.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 15"
+    },
+    "11000000019": {
+      "x": 808,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 16"
+    },
+    "11000000045": {
+      "x": 919.796875,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 17"
+    },
+    "11000000039": {
+      "x": 1031.59375,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 18"
+    },
+    "11000000013": {
+      "x": 1143.390625,
+      "y": 298.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 19"
+    },
+    "11000000016": {
+      "x": 1255.1875,
+      "y": 298.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 20"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 21"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 22"
+    },
+    "11000000049": {
+      "x": 472.59375,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 23"
+    },
+    "11000000037": {
+      "x": 584.390625,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 24"
+    },
+    "11000000028": {
+      "x": 696.1875,
+      "y": 400.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 25"
+    },
+    "11000000002": {
+      "x": 808,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 26"
+    },
+    "11000000029": {
+      "x": 919.796875,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 27"
+    },
+    "11000000036": {
+      "x": 1031.59375,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 28"
+    },
+    "11000000026": {
+      "x": 1143.390625,
+      "y": 400.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 29"
+    },
+    "11000000005": {
+      "x": 1255.1875,
+      "y": 400.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 30"
+    },
+    "11000000032": {
+      "x": 249,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 31"
+    },
+    "11000001330": {
+      "x": 360.796875,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Noble Amassment of Hats, Unique, slot 32"
+    },
+    "11000000017": {
+      "x": 472.59375,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 33"
+    },
+    "11000000030": {
+      "x": 584.390625,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 34"
+    },
+    "11000000046": {
+      "x": 696.1875,
+      "y": 502.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 35"
+    },
+    "11000000040": {
+      "x": 808,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 36"
+    },
+    "11000000012": {
+      "x": 919.796875,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 37"
+    },
+    "11000000020": {
+      "x": 1031.59375,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 38"
+    },
+    "11000000025": {
+      "x": 1143.390625,
+      "y": 502.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 39"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 502.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 40"
+    },
+    "11000000035": {
+      "x": 249,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 41"
+    },
+    "11000000018": {
+      "x": 360.796875,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 42"
+    },
+    "11000000044": {
+      "x": 472.59375,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 43"
+    },
+    "11000000015": {
+      "x": 584.390625,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 44"
+    },
+    "11000000010": {
+      "x": 696.1875,
+      "y": 604.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 45"
+    },
+    "11000000004": {
+      "x": 808,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 46"
+    },
+    "11000000021": {
+      "x": 919.796875,
+      "y": 604.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 47"
+    }
+  },
+  "inv-applied-items": {
+    "11000000001": {
+      "x": 249,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Nightcap, Unusual, slot 1"
+    },
+    "11000000043": {
+      "x": 360.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Loose Cannon, Decorated, slot 2"
+    },
+    "11000000027": {
+      "x": 472.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Medi Gun, Decorated, slot 3"
+    },
+    "11000000011": {
+      "x": 584.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Festivized Smissmas Sweater Rocket Launcher, Decorated, slot 4"
+    },
+    "11000000007": {
+      "x": 696.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Genuine Jaunty Voyager, Genuine, slot 5"
+    },
+    "11000000022": {
+      "x": 808,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Bonedolier, Haunted, slot 6"
+    },
+    "11000000041": {
+      "x": 919.796875,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Ethereal Hood, Haunted, slot 7"
+    },
+    "11000000033": {
+      "x": 1031.59375,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted External Organ, Haunted, slot 8"
+    },
+    "11000000003": {
+      "x": 1143.390625,
+      "y": 198.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Haunted Freedom Feathers, Haunted, slot 9"
+    },
+    "11000000014": {
+      "x": 1255.1875,
+      "y": 198.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Haunted Idiot Box, Haunted, slot 10"
+    },
+    "11000000034": {
+      "x": 249,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Ambassador, Strange, slot 11"
+    },
+    "11000000009": {
+      "x": 360.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Balloonicorn, Strange, slot 12"
+    },
+    "11000000047": {
+      "x": 472.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Boarder's Beanie, Strange, slot 13"
+    },
+    "11000000024": {
+      "x": 584.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Bomb Carrier Minigun, Strange, slot 14"
+    },
+    "11000000006": {
+      "x": 696.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Carbonado Botkiller Rocket Launcher Mk.I, Strange, slot 15"
+    },
+    "11000000019": {
+      "x": 808,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Cardboard Boxed Medi Gun, Strange, slot 16"
+    },
+    "11000000045": {
+      "x": 919.796875,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Eye-Catcher, Strange, slot 17"
+    },
+    "11000000039": {
+      "x": 1031.59375,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kiss King, Strange, slot 18"
+    },
+    "11000000013": {
+      "x": 1143.390625,
+      "y": 300.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Kukri, Strange, slot 19"
+    },
+    "11000000016": {
+      "x": 1255.1875,
+      "y": 300.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Leopard Printed Wrench, Strange, slot 20"
+    },
+    "11000000031": {
+      "x": 249,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Lumbercap, Strange, slot 21"
+    },
+    "11000000042": {
+      "x": 360.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Natascha, Strange, slot 22"
+    },
+    "11000000049": {
+      "x": 472.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Puffed Practitioner, Strange, slot 23"
+    },
+    "11000000037": {
+      "x": 584.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Rugged Rags, Strange, slot 24"
+    },
+    "11000000028": {
+      "x": 696.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Strange Scattergun, Strange, slot 25"
+    },
+    "11000000002": {
+      "x": 808,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Strange Sniper Rifle, Strange, slot 26"
+    },
+    "11000000029": {
+      "x": 919.796875,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Spirit of Giving, Strange, slot 27"
+    },
+    "11000000036": {
+      "x": 1031.59375,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Battle-Worn Robot Money Furnace, Unique, slot 28"
+    },
+    "11000000026": {
+      "x": 1143.390625,
+      "y": 402.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Honcho's Headgear, Unique, slot 29"
+    },
+    "11000000005": {
+      "x": 1255.1875,
+      "y": 402.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 30"
+    },
+    "11000000032": {
+      "x": 249,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Mann Co. Supply Crate Key, Unique, slot 31"
+    },
+    "11000001330": {
+      "x": 360.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Noble Amassment of Hats, Unique, slot 32"
+    },
+    "11000000017": {
+      "x": 472.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 33"
+    },
+    "11000000030": {
+      "x": 584.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 34"
+    },
+    "11000000046": {
+      "x": 696.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Reclaimed Metal, Unique, slot 35"
+    },
+    "11000000040": {
+      "x": 808,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Refined Metal, Unique, slot 36"
+    },
+    "11000000012": {
+      "x": 919.796875,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 37"
+    },
+    "11000000020": {
+      "x": 1031.59375,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 38"
+    },
+    "11000000025": {
+      "x": 1143.390625,
+      "y": 504.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 39"
+    },
+    "11000000050": {
+      "x": 1255.1875,
+      "y": 504.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Scrap Metal, Unique, slot 40"
+    },
+    "11000000035": {
+      "x": 249,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Koala Compact, Unique, slot 41"
+    },
+    "11000000018": {
+      "x": 360.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Lone Star, Unique, slot 42"
+    },
+    "11000000044": {
+      "x": 472.59375,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "The Proof of Purchase, Unique, slot 43"
+    },
+    "11000000015": {
+      "x": 584.390625,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Tour of Duty Ticket, Unique, slot 44"
+    },
+    "11000000010": {
+      "x": 696.1875,
+      "y": 606.1875,
+      "width": 105.8125,
+      "height": 96,
+      "label": "Unusual Epilogue Locks, Unusual, slot 45"
+    },
+    "11000000004": {
+      "x": 808,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Dragon Slayer Sniper Rifle, Decorated, slot 46"
+    },
+    "11000000021": {
+      "x": 919.796875,
+      "y": 606.1875,
+      "width": 105.796875,
+      "height": 96,
+      "label": "Unusual Taunt: Scorcher's Solo, Unusual, slot 47"
+    }
+  },
+  "inv-applied": {
+    "feedback": {
+      "x": 249,
+      "y": 721.2,
+      "width": 1112,
+      "height": 20.1
+    }
+  }
 }

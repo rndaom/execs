@@ -1,6 +1,7 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import { interpolate, useCurrentFrame } from "remotion";
 import { fieldLayout } from "../../../apps/desktop/src/lib/dot-field";
+import { useSettledLayout } from "./settled";
 import { theme } from "./theme";
 import { easeInOut, easeOut } from "./timing";
 
@@ -16,8 +17,8 @@ export type FieldMotion = {
    * point is the centre of that element, measured from the laid-out page.
    */
   burst: Point & { start: number; end: number; fromId?: string };
-  /** A single ripple through the field, like the app's pointer stir. */
-  wave: Point & { start: number };
+  /** Ripples through the field, like the app's pointer stir. */
+  waves: (Point & { start: number })[];
   /** Dots gather into this point over [start, end]. */
   gather: Point & { start: number; end: number };
   /** Overall strength, 0–1, per frame. */
@@ -50,14 +51,14 @@ export function DotField({
   const canvas = useRef<HTMLCanvasElement>(null);
   const layout = useMemo(() => fieldLayout(WIDTH, HEIGHT, SPACING), [WIDTH, HEIGHT]);
 
-  useLayoutEffect(() => {
+  useSettledLayout(() => {
     const element = canvas.current;
     const context = element?.getContext("2d");
     if (!element || !context) return;
     context.clearRect(0, 0, WIDTH, HEIGHT);
     const level = motion.level(frame);
     if (level <= 0 || frame < motion.burst.start) return;
-    const { wave, gather } = motion;
+    const { waves, gather } = motion;
     const burst = { ...motion.burst };
     const source = burst.fromId ? document.getElementById(burst.fromId) : null;
     if (source) {
@@ -73,11 +74,16 @@ export function DotField({
       farthest = Math.max(farthest, Math.hypot(dot.x - burst.x, dot.y - burst.y));
     }
     const burstLength = burst.end - burst.start;
-    const waveRadius = (frame - wave.start) * 70;
-    const waveFade = interpolate(frame - wave.start, [0, 26], [1, 0], {
-      extrapolateLeft: "clamp",
-      extrapolateRight: "clamp",
-    });
+    const ripples = waves
+      .filter((wave) => frame >= wave.start && frame < wave.start + 26)
+      .map((wave) => ({
+        ...wave,
+        radius: (frame - wave.start) * 70,
+        fade: interpolate(frame - wave.start, [0, 26], [1, 0], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        }),
+      }));
     for (const dot of layout.dots) {
       if (dot.alpha <= 0) continue;
       const emblem = dot.ink > 0;
@@ -105,12 +111,12 @@ export function DotField({
         if (flight <= 0) continue;
       }
 
-      // The ripple: a ring that pushes dots outward as it passes.
-      if (waveFade > 0 && frame >= wave.start) {
-        const dx = dot.x - wave.x;
-        const dy = dot.y - wave.y;
+      // A ripple: a ring that pushes dots outward as it passes.
+      for (const ripple of ripples) {
+        const dx = dot.x - ripple.x;
+        const dy = dot.y - ripple.y;
         const distance = Math.hypot(dx, dy) || 1;
-        const push = Math.exp(-(((distance - waveRadius) / 70) ** 2)) * 9 * waveFade;
+        const push = Math.exp(-(((distance - ripple.radius) / 70) ** 2)) * 9 * ripple.fade;
         x += (dx / distance) * push;
         y += (dy / distance) * push;
         alpha *= 1 + push * 0.06;
@@ -140,7 +146,7 @@ export function DotField({
       context.arc(x, y, Math.max(0.3, radius), 0, Math.PI * 2);
       context.fill();
     }
-  }, [frame, layout, motion, WIDTH, HEIGHT]);
+  }, frame);
 
   return (
     <canvas

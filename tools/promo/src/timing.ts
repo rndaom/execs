@@ -25,6 +25,7 @@ export function on(name: EventName): number {
 export const DURATION = on("end") + FPS;
 
 export const TILE_FRAMES = timeline.tiles.map(([bar, beat]) => at(bar, beat));
+export const METAL_FRAMES = timeline.metal.map(([bar, beat]) => at(bar, beat));
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 export const easeOut = Easing.bezier(0.16, 1, 0.3, 1);

@@ -77,11 +77,12 @@ item images and descriptions for the player's public Steam inventory, fetched
 from Steam Community on use and cached locally; they are never packaged,
 exported or shared. The [D7 register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md)
 tracks unresolved rights questions, including the proposed use of stock models
-in a replacement Viewmodels builder. The promo video and README screenshots in
-`docs/media` show the TF2 emblem and TF2's class emblems as the app displays
-them; the class emblem images are decoded from a local install when the media is
-rendered and are not stored in the repository. execs is a fan project and is not
-affiliated with Valve.
+in a replacement Viewmodels builder. The promo GIF and README screenshots in
+`docs/media` show the TF2 emblem, TF2's class emblems and, in the Inventory
+scenes, Valve's item images and descriptions for a real backpack, as the app
+displays them. Those images come from a local install and a local Inventory art
+cache when the media is rendered; they are not stored in the repository as
+separate files. execs is a fan project and is not affiliated with Valve.
 
 ## Packaged notices
 

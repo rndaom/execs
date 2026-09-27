@@ -34,4 +34,4 @@ unchanged for provenance, including references to the former tracked AGENTS.md.
 - `release-*.md`, `forwardport-0.1.4.md`, `creator-import-0.1.6.md`, `hud-import-0.1.6.md`,
   `hud-paths-0.1.6.md` and `files-native-0.1.7.md`: validation records for past releases.
 - [audits/](audits/): release and whole-program audits with their findings and remediation.
-- [media/](media/): the app icon, the promo video and its poster, README screenshots and release announcement graphics.
+- [media/](media/): the app icon, the README's promo GIF and screenshots, and release announcement graphics.

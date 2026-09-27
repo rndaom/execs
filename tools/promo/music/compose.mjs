@@ -247,6 +247,122 @@ function click(level = 1) {
   return out;
 }
 
+/** Struck metal: inharmonic partials for each Refined Metal picked up. */
+function clink(base, level = 1) {
+  const out = buffer(0.45);
+  const partials = [
+    [1, 1, 0.16],
+    [2.76, 0.55, 0.09],
+    [5.4, 0.3, 0.05],
+    [8.93, 0.18, 0.03],
+  ];
+  for (let i = 0; i < out.length; i += 1) {
+    const t = i / SR;
+    let value = 0;
+    for (const [ratio, gain, decay] of partials) {
+      value += Math.sin(2 * Math.PI * base * ratio * t) * gain * Math.exp(-t / decay);
+    }
+    const strike = t < 0.002 ? noise() * (1 - t / 0.002) * 0.5 : 0;
+    out[i] = (value * 0.6 + strike) * Math.min(1, t / 0.0008) * level;
+  }
+  return out;
+}
+
+/** A small bell, for opening an item's panel and for the reveal's sparkle. */
+function chime(note, level = 1) {
+  const out = buffer(1.6);
+  const base = midi(note);
+  const partials = [
+    [1, 1, 0.9],
+    [2, 0.4, 0.5],
+    [2.76, 0.25, 0.35],
+    [5.4, 0.12, 0.16],
+  ];
+  for (let i = 0; i < out.length; i += 1) {
+    const t = i / SR;
+    let value = 0;
+    for (const [ratio, gain, decay] of partials) {
+      value += Math.sin(2 * Math.PI * base * ratio * t) * gain * Math.exp(-t / decay);
+    }
+    out[i] = value * 0.5 * Math.min(1, t / 0.002) * level;
+  }
+  return out;
+}
+
+/** Air moving: band-passed noise sweeping up, for items flying into order. */
+function whoosh(seconds, level = 1) {
+  const out = buffer(seconds);
+  const filter = svf();
+  for (let i = 0; i < out.length; i += 1) {
+    const p = i / out.length;
+    const cutoff = 500 * 9 ** p;
+    out[i] = filter(noise(), cutoff, 1.4).band * Math.sin(Math.PI * p) ** 1.5 * level;
+  }
+  return out;
+}
+
+/** A soft burst, for an item dissolving into dots. */
+function poof(level = 1) {
+  const out = buffer(0.45);
+  const filter = svf();
+  for (let i = 0; i < out.length; i += 1) {
+    const t = i / SR;
+    const cutoff = 2600 * Math.exp(-t / 0.12) + 250;
+    const air = filter(noise(), cutoff, 0.8).low * Math.exp(-t / 0.11);
+    const thump =
+      Math.sin(2 * Math.PI * (110 * Math.exp(-t / 0.05) + 55) * t) * Math.exp(-t / 0.06);
+    out[i] = (air * 1.4 + thump * 0.5) * Math.min(1, t / 0.003) * level;
+  }
+  return out;
+}
+
+/** Picking an item up. */
+function lift(level = 1) {
+  const out = buffer(0.12);
+  let phase = 0;
+  for (let i = 0; i < out.length; i += 1) {
+    const t = i / SR;
+    phase += (2 * Math.PI * (420 + 520 * Math.min(1, t / 0.07))) / SR;
+    out[i] = Math.sin(phase) * Math.exp(-t / 0.045) * Math.min(1, t / 0.004) * level;
+  }
+  return out;
+}
+
+/** Setting it down. */
+function thunk(level = 1) {
+  const out = buffer(0.2);
+  let phase = 0;
+  for (let i = 0; i < out.length; i += 1) {
+    const t = i / SR;
+    phase += (2 * Math.PI * (80 + 120 * Math.exp(-t / 0.02))) / SR;
+    const knock = t < 0.004 ? noise() * (1 - t / 0.004) * 0.4 : 0;
+    out[i] = (Math.sin(phase) * Math.exp(-t / 0.07) + knock) * level;
+  }
+  return out;
+}
+
+/** A crash played backwards: the breath before a drop. */
+function swell(seconds, level = 1) {
+  const hit = crash(1);
+  const out = buffer(seconds);
+  for (let i = 0; i < out.length; i += 1) {
+    const source = hit[out.length - 1 - i] ?? 0;
+    out[i] = source * (i / out.length) ** 1.5 * level;
+  }
+  return out;
+}
+
+function shaker(level = 1) {
+  const out = buffer(0.06);
+  const filter = svf();
+  for (let i = 0; i < out.length; i += 1) {
+    const t = i / SR;
+    out[i] =
+      filter(noise(), 7000, 0.8).high * Math.exp(-t / 0.018) * Math.min(1, t / 0.004) * level;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- instruments
 
 /** Brass section note: three detuned saws, a filter swell and a small scoop. */
@@ -354,8 +470,29 @@ const CHORDS = {
     pad: [45, 55, 61, 64],
   },
   C: { root: 36, bass: [0, 0, 12, 0, 7, 10, 12, 7], stab: [60, 64, 67, 72], pad: [48, 55, 60, 64] },
+  // The finale moves up a step to E minor, and the crafted hat lands on E major.
+  Em: {
+    root: 40,
+    bass: [0, 0, 12, 0, 7, 10, 12, 7],
+    stab: [64, 67, 71, 76],
+    pad: [52, 59, 64, 67],
+  },
+  C6: { root: 36, bass: [0, 0, 12, 0, 7, 9, 12, 7], stab: [64, 67, 72, 76], pad: [48, 55, 64, 67] },
+  Am: {
+    root: 33,
+    bass: [0, 0, 12, 0, 7, 10, 12, 7],
+    stab: [64, 69, 72, 76],
+    pad: [45, 57, 64, 69],
+  },
+  B7: {
+    root: 35,
+    bass: [0, 0, 12, 0, 7, 10, 12, 4],
+    stab: [63, 66, 69, 71],
+    pad: [47, 57, 63, 66],
+  },
+  E: { root: 40, bass: [0, 0, 12, 0, 7, 4, 12, 7], stab: [64, 68, 71, 76], pad: [52, 59, 64, 68] },
 };
-/** One chord per bar from the drop to the outro. */
+/** One chord per bar from the drop to the outro; bar 15 is the breakdown. */
 const PROGRESSION = {
   4: "Dm",
   5: "Bb",
@@ -368,9 +505,20 @@ const PROGRESSION = {
   12: "Dm",
   13: "Bb",
   14: "A7",
+  16: "Em",
+  17: "C6",
+  18: "Am",
+  19: "B7",
+  20: "Em",
+  21: "E",
+  22: "C6",
+  23: "Am",
+  24: "B7",
 };
 const BASS_STEPS = [0, 3, 4, 6, 8, 10, 12, 14];
 const BASS_LENGTHS = [2, 1, 2, 2, 2, 2, 2, 2];
+const BREAKDOWN = 15;
+const OUTRO = timeline.events.outro[0];
 
 // ---------------------------------------------------------------- arrangement
 
@@ -419,12 +567,18 @@ for (let step = 0; step < 10; step += 1) {
 place(riser(2.5 * BEAT, 1), at(3, 1), { gain: 0.18, send: 0.3 });
 place(pad([45, 55, 61, 64], 2.4 * BEAT, 0.5), at(3, 0), { gain: 0.4, send: 0.3 });
 
-// The drop and the groove.
-place(crash(1), at(4), { gain: 0.3, pan: 0.2, send: 0.2 });
-place(boom(1), at(4), { gain: 0.42 });
-for (let bar = 4; bar <= 14; bar += 1) {
-  const chord = CHORDS[PROGRESSION[bar]];
-  const fill = bar === 14;
+// The drops: the app arrives on bar 4, the backpack on bar 16.
+for (const bar of [4, 16]) {
+  place(crash(1), at(bar), { gain: 0.3, pan: 0.2, send: 0.2 });
+  place(boom(1), at(bar), { gain: 0.42 });
+}
+
+// The groove, both keys.
+for (const [barText, name] of Object.entries(PROGRESSION)) {
+  const bar = Number(barText);
+  const chord = CHORDS[name];
+  const finale = bar >= 16;
+  const fill = bar === 14 || bar === OUTRO - 1;
   for (let step = 0; step < 16; step += 1) {
     const beat = step / 4;
     if ([0, 7, 10].includes(step) && !(fill && step > 11))
@@ -435,6 +589,8 @@ for (let bar = 4; bar <= 14; bar += 1) {
     const accent = step % 4 === 0 ? 0.7 : step % 2 === 0 ? 0.5 : 0.3;
     if (step === 14) place(hat(true, 0.6), at(bar, beat), { gain: 0.14, pan: 0.35 });
     else place(hat(false, accent), at(bar, beat), { gain: 0.17, pan: 0.35 });
+    // The finale adds a shaker on the off sixteenths for lift.
+    if (finale && step % 2 === 1) place(shaker(0.8), at(bar, beat), { gain: 0.1, pan: -0.3 });
     if ([2, 3, 9, 13].includes(step))
       place(bongo(step === 9 ? 240 : 330, 0.8), at(bar, beat), {
         gain: 0.16,
@@ -451,19 +607,19 @@ for (let bar = 4; bar <= 14; bar += 1) {
       { gain: 0.33 },
     );
   });
-  const stabs =
-    bar <= 7
-      ? [
-          [0, 2],
-          [6, 1.5],
-          [14, 1.5],
-        ]
-      : bar === 13
-        ? []
-        : [
-            [6, 1],
-            [14, 1],
-          ];
+  const heavy = bar <= 7 || bar === 16 || bar === 21;
+  const stabs = heavy
+    ? [
+        [0, 2],
+        [6, 1.5],
+        [14, 1.5],
+      ]
+    : bar === 13 || bar === 14
+      ? []
+      : [
+          [6, 1],
+          [14, 1],
+        ];
   for (const [step, length] of stabs) {
     chord.stab.forEach((note, voice) => {
       place(brass(note, length * sixteenth, 1, step === 0 ? 1.2 : 0.9), at(bar, step / 4), {
@@ -487,6 +643,8 @@ const TILE_VOICINGS = [
   [62, 65, 70, 74],
   [65, 70, 74, 77],
   [70, 74, 77, 82],
+  [61, 64, 69, 73],
+  [64, 69, 73, 76],
 ];
 timeline.tiles.forEach(([bar, beat], i) => {
   TILE_VOICINGS[i].forEach((note, voice) => {
@@ -498,7 +656,38 @@ timeline.tiles.forEach(([bar, beat], i) => {
   });
 });
 
-// The lead: a surf-guitar line over the features.
+// Bar 15, "And now, your backpack": the band drops out over B7, the dot pops,
+// splits into a shimmer of plucks and the room breathes in before the drop.
+for (const note of CHORDS.B7.stab)
+  place(brass(note, 0.3, 1), at(BREAKDOWN, 0), { gain: 0.12, send: 0.35 });
+place(kick(1), at(BREAKDOWN, 0), { gain: 0.8 });
+place(bass(35, 3.6 * BEAT, 0.9), at(BREAKDOWN, 0), { gain: 0.34 });
+place(pad(CHORDS.B7.pad, 3.2 * BEAT, 0.5), at(BREAKDOWN, 0), { gain: 0.45, send: 0.4 });
+place(guitar(83, 1.4, 1), event("backpackDot"), { gain: 0.26, pan: 0.15, send: 0.55 });
+for (let step = 0; step < 12; step += 1) {
+  const beat = 2 + step * 0.125;
+  place(snare(0.25 + 0.75 * (step / 11)), at(BREAKDOWN, beat), { gain: 0.26, send: 0.15 });
+}
+place(riser(3 * BEAT, 1), at(BREAKDOWN, 1), { gain: 0.2, send: 0.3 });
+[71, 75, 78, 81, 83, 87, 90, 93].forEach((note, i) => {
+  place(guitar(note, 0.3, 1), event("split") + i * (BEAT / 8), {
+    gain: 0.2,
+    pan: -0.6 + i * 0.17,
+    send: 0.5,
+  });
+});
+place(swell(BEAT / 2, 1), at(16) - BEAT / 2, { gain: 0.3, send: 0.3 });
+
+// Bar 16: every item lands, a rising glissando across the backpack.
+[64, 67, 69, 71, 74, 76, 79, 81, 83, 86, 88, 91, 93, 95].forEach((note, i) => {
+  place(guitar(note, 0.35, 1), event("inventory") + i * 0.05, {
+    gain: 0.16,
+    pan: -0.7 + i * 0.1,
+    send: 0.4,
+  });
+});
+
+// The lead: a surf-guitar line over the features, then a second one in E.
 const LEAD = {
   8: [
     [0, 74, 3],
@@ -552,6 +741,67 @@ const LEAD = {
     [12, 76, 2],
     [14, 79, 2],
   ],
+  17: [
+    [0, 79, 3],
+    [3, 76, 1],
+    [4, 79, 2],
+    [6, 84, 2],
+    [8, 83, 2],
+    [10, 79, 2],
+    [12, 76, 4],
+  ],
+  18: [
+    [0, 76, 3],
+    [3, 72, 1],
+    [4, 76, 2],
+    [6, 81, 2],
+    [8, 79, 4],
+    [12, 76, 2],
+    [14, 74, 2],
+  ],
+  19: [
+    [0, 75, 4],
+    [8, 83, 4],
+    [12, 81, 2],
+  ],
+  20: [
+    [0, 76, 3],
+    [3, 71, 1],
+    [4, 76, 2],
+    [6, 79, 2],
+    [8, 83, 3],
+    [11, 79, 1],
+    [12, 76, 2],
+    [14, 74, 2],
+  ],
+  21: [
+    [8, 80, 2],
+    [10, 83, 2],
+    [12, 88, 4],
+  ],
+  22: [
+    [0, 84, 2],
+    [2, 83, 1],
+    [3, 79, 1],
+    [4, 76, 4],
+    [12, 79, 2],
+    [14, 84, 2],
+  ],
+  23: [
+    [0, 81, 3],
+    [3, 76, 1],
+    [4, 81, 2],
+    [6, 84, 2],
+    [8, 83, 4],
+    [12, 81, 2],
+    [14, 79, 2],
+  ],
+  24: [
+    [8, 75, 2],
+    [10, 78, 2],
+    [12, 81, 2],
+    [14, 83, 2],
+  ],
 };
 for (const [bar, notes] of Object.entries(LEAD)) {
   for (const [step, note, length] of notes) {
@@ -576,20 +826,41 @@ for (const [step, note, length] of [
   });
 }
 
+// Inventory sound effects.
+place(click(0.5), event("hoverItem"), { gain: 0.1, pan: -0.2 });
+place(click(1), event("inspect") - 0.012, { gain: 0.16, pan: 0.1 });
+place(click(1), event("inspect") + 0.09, { gain: 0.16, pan: 0.1 });
+place(chime(88, 1), event("inspect") + 0.14, { gain: 0.14, pan: 0.2, send: 0.5 });
+place(poof(1), event("confirmDelete"), { gain: 0.5, send: 0.2 });
+timeline.metal.forEach(([bar, beat], i) => {
+  place(clink(1480 * 1.12 ** i, 1), at(bar, beat), { gain: 0.26, pan: -0.2 + i * 0.2, send: 0.3 });
+});
+place(riser(BEAT / 2, 1), event("confirmCraft"), { gain: 0.2, send: 0.3 });
+// The hat: a fanfare on E major and a run of bells.
+for (const note of [64, 68, 71, 76, 80])
+  place(brass(note, 1.4 * BEAT, 1, 1.4), event("reveal"), { gain: 0.1, send: 0.45 });
+[88, 92, 95, 100, 104].forEach((note, i) => {
+  place(chime(note, 1), event("reveal") + i * 0.06, { gain: 0.12, pan: -0.4 + i * 0.2, send: 0.5 });
+});
+place(pop(1), event("reveal"), { gain: 0.42, send: 0.15 });
+place(whoosh(0.75, 1), event("clickQuality"), { gain: 0.34, send: 0.25 });
+place(lift(1), event("grab"), { gain: 0.3 });
+place(thunk(1), event("dropItem"), { gain: 0.5 });
+
 // Outro: one big chord, a tremolo guitar and the room.
 place(crash(1), event("outro"), { gain: 0.32, pan: -0.2, send: 0.3 });
 place(boom(1), event("outro"), { gain: 0.4 });
 place(kick(1), event("outro"), { gain: 0.8 });
-place(bass(38, 2.4, 1), event("outro"), { gain: 0.42 });
-for (const note of [62, 65, 69, 72, 76])
+place(bass(40, 2.4, 1), event("outro"), { gain: 0.42 });
+for (const note of [64, 67, 71, 74, 78])
   place(brass(note, 1.6, 1, 1.3), event("outro"), { gain: 0.085, send: 0.45 });
-place(guitar(74, 3.2, 1, { tremolo: 8 }), event("outro"), { gain: 0.24, pan: -0.3, send: 0.5 });
-place(guitar(81, 3.2, 1, { tremolo: 8 }), event("outro"), { gain: 0.16, pan: 0.3, send: 0.5 });
-place(pad([38, 50, 57, 62, 65], at(17) - event("outro") - 1.2, 0.5), event("outro"), {
+place(guitar(76, 3.2, 1, { tremolo: 8 }), event("outro"), { gain: 0.24, pan: -0.3, send: 0.5 });
+place(guitar(83, 3.2, 1, { tremolo: 8 }), event("outro"), { gain: 0.16, pan: 0.3, send: 0.5 });
+place(pad([40, 52, 59, 64, 67], at(timeline.bars) - event("outro") - 1.2, 0.5), event("outro"), {
   gain: 0.45,
   send: 0.5,
 });
-place(guitar(74, 1.2, 1), event("url"), { gain: 0.22, pan: 0.1, send: 0.6 });
+place(guitar(76, 1.2, 1), event("url"), { gain: 0.22, pan: 0.1, send: 0.6 });
 
 // The dot's pops and the cursor's clicks.
 for (const [name, level] of timeline.pops)
@@ -648,8 +919,8 @@ const right = new Float32Array(LENGTH);
 const hpL = svf();
 const hpR = svf();
 let peak = 0;
-const fadeStart = at(16, 3) * SR;
-const fadeEnd = at(17) * SR + TAIL * SR * 0.9;
+const fadeStart = at(timeline.bars - 1, 3) * SR;
+const fadeEnd = at(timeline.bars) * SR + TAIL * SR * 0.9;
 for (let i = 0; i < LENGTH; i += 1) {
   const fade = i < fadeStart ? 1 : Math.max(0, 1 - (i - fadeStart) / (fadeEnd - fadeStart));
   left[i] = Math.tanh(hpL(dry.l[i] + wetL[i] * 2.6, 28).high * 1.15) * fade;

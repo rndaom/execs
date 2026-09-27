@@ -4,12 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "capture": "node capture/capture.mjs && node capture/capture.mjs --set=readme",
+    "capture": "node capture/capture.mjs && node capture/capture.mjs --set=tiles && node capture/capture.mjs --set=readme",
     "emblems": "node capture/emblems.mjs",
     "music": "node music/compose.mjs",
     "studio": "node capture/emblems.mjs && node music/compose.mjs && remotion studio",
-    "render": "node capture/emblems.mjs && node music/compose.mjs && remotion render Promo out/execs-promo.mp4 --codec=h264 --crf=21 --x264-preset=slow --audio-bitrate=192k",
-    "poster": "remotion still Poster out/promo-poster.png",
+    "render": "node capture/emblems.mjs && node music/compose.mjs && remotion render Promo out/execs-promo.mp4 --codec=h264 --crf=18 --x264-preset=slow --audio-bitrate=192k",
+    "gif": "node capture/emblems.mjs && node gif.mjs",
     "announcement": "remotion still Announcement out/release-0.2.0-x.png"
   },
   "dependencies": {

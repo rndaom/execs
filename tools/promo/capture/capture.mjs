@@ -1,12 +1,12 @@
 // Captures the desktop app's browser preview for the promo video and README.
 //
 //   node <repo>/node_modules/vite/bin/vite.js --config tools/promo/capture/vite.config.ts
-//   pnpm capture                      (both sets; pass shot names to capture a subset)
+//   pnpm capture                      (both sets; pass flow names to capture a subset)
 //
-// Every shot drives the real interface over the app's preview fixtures at 2x,
-// with the hosts of HUD and mod art blocked so no third-party artwork appears. Video captures go to public/captures (gitignored)
-// with the element boxes the video frames on in public/captures/targets.json;
-// README captures go to docs/media/screen-*.png.
+// Each flow drives the real interface over the app's preview fixtures at 2x and
+// snaps the states the video cuts between. Video captures go to
+// public/captures (gitignored) with the element boxes the video frames on in
+// public/captures/targets.json; README captures go to docs/media/screen-*.png.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
@@ -17,6 +17,7 @@ const promo = path.resolve(import.meta.dirname, "..");
 const VIDEO = path.join(promo, "public/captures");
 const README = path.resolve(promo, "../../docs/media");
 
+/** Hosts of third-party HUD and mod art; blocked so no such artwork is captured. */
 const REMOTE_ART = [
   "*githubusercontent.com*",
   "*gamebanana.com*",
@@ -60,10 +61,12 @@ async function locate(page, selector, text, { exact = false, nth = 0 } = {}) {
   return handle.jsonValue();
 }
 
-async function click(page, selector, text, options) {
+async function click(page, selector, text, options = {}) {
   const { x, y } = await locate(page, selector, text, options);
+  if (options.ctrl) await page.keyboard.down("Control");
   await page.mouse.click(x, y);
-  await sleep(options?.settle ?? 450);
+  if (options.ctrl) await page.keyboard.up("Control");
+  await sleep(options.settle ?? 450);
 }
 
 /** Scroll the pane's own scroller so the matching element sits `offset` px below its top. */
@@ -91,14 +94,14 @@ async function scrollToText(page, selector, text, offset = 80) {
 }
 
 async function open(page, state) {
-  await page.goto(`${BASE}/?preview=${state}`, { waitUntil: "networkidle0" });
+  await page.goto(`${BASE}/?preview=${state}`, { waitUntil: "load", timeout: 60000 });
   await page.evaluate(() => document.fonts.ready);
-  await sleep(900);
+  await sleep(2500);
 }
 
-/** Park the pointer where it hovers nothing, so no hover state is captured. */
+/** Park the pointer over the sidebar's empty foot, so no hover state is captured. */
 async function park(page) {
-  await page.mouse.move(60, 780);
+  await page.mouse.move(60, page.viewport().height - 120);
   await sleep(250);
 }
 
@@ -106,135 +109,205 @@ async function openProfiles(page) {
   await click(page, "header summary", "Profile", { settle: 500 });
 }
 
-/** A library with a few named setups, profile menu open. */
-async function profiles(page) {
-  await open(page, "settings-comfig");
-  await openProfiles(page);
-  for (const name of ["Competitive", "Casual", "Potato PC"]) {
-    const { x, y } = await locate(page, "input", "Save current as");
-    await page.mouse.click(x, y, { clickCount: 3 });
-    await page.keyboard.type(name);
-    await page.keyboard.press("Enter");
-    await sleep(700);
-  }
-  await page.evaluate(() => document.activeElement?.blur());
-}
-
-async function compare(page) {
-  await profiles(page);
-  await click(page, button, "Actions for Competitive", { exact: true, settle: 400 });
-  await click(page, button, "Compare with current", { settle: 1200 });
-}
-
-async function recordKey(page, action, key) {
-  await click(page, "button", `Add a key for ${action}`, { settle: 300 });
-  await page.keyboard.press(key);
-  await sleep(600);
-}
-
-async function designShape(page, shape) {
-  await open(page, "settings-crosshair");
-  await click(page, "button", "Customize shape", { settle: 1000 });
-  // Style labels are lower case in the DOM and capitalised by CSS.
-  if (shape) await click(page, "label", shape, { exact: true, settle: 700 });
-}
-
-async function perWeapon(page, choose) {
-  await open(page, "settings-viewmodels");
-  if (choose) {
-    await click(page, "label", "Hidden", { nth: 0, exact: true, settle: 300 });
-    await click(page, "label", "Hands only", { nth: 1, exact: true, settle: 300 });
-    await click(page, "label", "Hidden", { nth: 2, exact: true, settle: 300 });
-  }
-  await page.evaluate(() =>
-    document.getElementById("viewmodel-per-weapon")?.scrollIntoView({ block: "start" }),
-  );
-  await sleep(600);
-}
-
-async function autoexec(page, text) {
-  await open(page, "settings-files");
-  await click(page, button, "autoexec.cfg", { settle: 600 });
-  const editor = await locate(page, ".cm-content", "");
-  await page.mouse.click(editor.x, editor.y);
-  await page.keyboard.down("Control");
-  await page.keyboard.press("End");
-  await page.keyboard.up("Control");
-  if (!text) {
-    await page.evaluate(() => document.activeElement?.blur());
-    return;
-  }
-  await page.keyboard.type(text, { delay: 4 });
-  // Let the cfg analysis finish so the status bar shows its result.
-  await page.waitForFunction(() => /Problems \d/.test(document.body.innerText), { timeout: 20000 });
-  await sleep(600);
-}
-
 const TYPED =
   '\n// Movement\nbind "mouse4" "+jump"\nbind "q" "lastinv"\n\n// Network\ncl_interp 0.0152\ncl_cmdrate 66\ncl_updaterate 66\nrate 196608\n';
 
-const SHOTS = {
-  "profiles-menu": profiles,
-  compare,
-  "switch-done": async (page) => {
-    await compare(page);
-    await click(page, "button", "Switch to Competitive", { settle: 2600 });
-  },
-  "comfig-medium": (page) => open(page, "settings-comfig"),
-  "comfig-high": async (page) => {
+/** Hides page-one items but keeps the chrome: the backdrop tiles fly over. */
+const HIDE_ITEMS = ".inventory-grid [data-item-id] { visibility: hidden !important; }";
+
+/**
+ * Flows: each walks one part of the interface and snaps named states.
+ * `snap(name, { park, hideItems })` screenshots and measures the current state.
+ */
+const FLOWS = {
+  profiles: async (page, snap) => {
     await open(page, "settings-comfig");
-    await click(page, "label", "High quality for modern systems", { settle: 900 });
+    await openProfiles(page);
+    for (const name of ["Competitive", "Casual", "Potato PC"]) {
+      const { x, y } = await locate(page, "input", "Save current as");
+      await page.mouse.click(x, y, { clickCount: 3 });
+      await page.keyboard.type(name);
+      await page.keyboard.press("Enter");
+      await sleep(700);
+    }
+    await page.evaluate(() => document.activeElement?.blur());
+    await snap("profiles-menu");
+    await click(page, button, "Actions for Competitive", { exact: true, settle: 400 });
+    await click(page, button, "Compare with current", { settle: 1200 });
+    await snap("compare");
+    await click(page, "button", "Switch to Competitive", { settle: 2600 });
+    await snap("switch-done");
   },
-  binds: (page) => open(page, "settings-binds"),
-  "binds-recording": async (page) => {
+  comfig: async (page, snap) => {
+    await open(page, "settings-comfig");
+    await snap("comfig-medium");
+    await click(page, "label", "High quality for modern systems", { settle: 1000 });
+    await snap("comfig-high");
+  },
+  binds: async (page, snap) => {
     await open(page, "settings-binds");
+    await snap("binds");
     await click(page, "button", "Add a key for Taunt", { settle: 300 });
-  },
-  "binds-recorded": async (page) => {
-    await open(page, "settings-binds");
-    await recordKey(page, "Taunt", "KeyG");
-    await recordKey(page, "Reload", "KeyR");
-  },
-  "crosshair-designer": (page) => designShape(page),
-  "crosshair-circle": (page) => designShape(page, "circle"),
-  "crosshair-chevron": (page) => designShape(page, "chevron"),
-  "crosshair-ring": (page) => designShape(page, "ring cross"),
-  "viewmodels-scrolled": (page) => perWeapon(page, false),
-  "viewmodels-weapons": (page) => perWeapon(page, true),
-  sounds: (page) => open(page, "settings-sounds"),
-  "sounds-used": async (page) => {
-    await open(page, "settings-sounds");
-    const use = await page.evaluate(() => {
-      const row = [...document.querySelectorAll("[data-testid^=sounds-row-]")].find((item) =>
-        item.textContent.includes("Electro"),
-      );
-      const box = row?.querySelector("[data-testid^=sounds-assign-]")?.getBoundingClientRect();
-      return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null;
-    });
-    if (!use) throw new Error("No Use button for Electro");
-    await page.mouse.click(use.x, use.y);
+    await snap("binds-recording");
+    await page.keyboard.press("KeyG");
+    await sleep(600);
+    await click(page, "button", "Add a key for Reload", { settle: 300 });
+    await snap("binds-recording-reload");
+    await page.keyboard.press("KeyR");
     await sleep(900);
+    await page.evaluate(() => document.activeElement?.blur());
+    await snap("binds-recorded");
   },
-  "files-before": (page) => autoexec(page),
-  files: (page) => autoexec(page, TYPED),
-  "gameplay-sources": async (page) => {
+  crosshair: async (page, snap) => {
+    await open(page, "settings-crosshair");
+    await snap("crosshair");
+    // Shape labels are lower case in the DOM and capitalised by CSS.
+    for (const shape of ["circle", "chevron", "ring cross"]) {
+      await click(page, "button, label", shape, { exact: true, settle: 900 });
+      await snap(`crosshair-${shape.split(" ")[0]}`);
+    }
+  },
+  viewmodels: async (page, snap) => {
+    await open(page, "settings-viewmodels");
+    await scrollToText(page, "h2", "Per weapon", 32);
+    await snap("viewmodels");
+    await click(page, "label", "Hidden", { nth: 0, exact: true, settle: 600 });
+    await snap("viewmodels-primary");
+    await click(page, "label", "Hands only", { nth: 1, exact: true, settle: 600 });
+    await snap("viewmodels-both");
+  },
+  sounds: async (page, snap) => {
+    await open(page, "settings-sounds");
+    await snap("sounds");
+    await click(page, "button, label", "comfig.app", { exact: true, settle: 900 });
+    await snap("sounds-comfig");
+    await click(page, "button", "Use Bubble pop (comfig.app) for hits", { settle: 1200 });
+    await snap("sounds-used");
+  },
+  files: async (page, snap) => {
+    await open(page, "settings-files");
+    await click(page, button, "autoexec.cfg", { settle: 600 });
+    const editor = await locate(page, ".cm-content", "");
+    const end = async () => {
+      await page.mouse.click(editor.x, editor.y);
+      await page.keyboard.down("Control");
+      await page.keyboard.press("End");
+      await page.keyboard.up("Control");
+    };
+    await end();
+    await page.evaluate(() => document.activeElement?.blur());
+    await snap("files-before");
+    await end();
+    await page.keyboard.type(TYPED, { delay: 4 });
+    // Let the cfg analysis finish so the status bar shows its result.
+    await page.waitForFunction(() => /Problems \d/.test(document.body.innerText), {
+      timeout: 20000,
+    });
+    await sleep(600);
+    await snap("files");
+    await click(page, "button", "Problems", { settle: 900 });
+    await snap("files-problems");
+  },
+  news: async (page, snap) => {
     await open(page, "settings-gameplay");
     await click(page, "summary", "Where these values come from", { settle: 700 });
     await scrollToText(page, "summary", "Where these values come from", 120);
-  },
-  "restore-points": async (page) => {
+    await snap("gameplay-sources");
     await open(page, "settings-comfig");
     await openProfiles(page);
     await click(page, button, "Actions for Main", { exact: true, settle: 400 });
     await click(page, button, "Restore points", { settle: 1200 });
-  },
-  "app-health": async (page) => {
+    await snap("restore-points");
     await open(page, "settings-comfig");
     await click(page, button, "App settings", { settle: 1000 });
-    const health = await locate(page, "h2, h3", "Health");
-    await page.mouse.move(health.x, health.y);
-    await page.mouse.wheel({ deltaY: 520 });
-    await sleep(700);
+    await scrollToText(page, "h2, h3", "Health", 24);
+    await snap("app-health");
+  },
+  inventory: async (page, snap) => {
+    const blur = () => page.evaluate(() => document.activeElement?.blur());
+    const hideId = (label) =>
+      page.evaluate(
+        (label) =>
+          `.inventory-grid [data-item-id="${document
+            .querySelector(`[data-item-id][aria-label^="${label}"]`)
+            ?.getAttribute("data-item-id")}"] { visibility: hidden !important; }`,
+        label,
+      );
+    await open(page, "settings-comfig");
+    await click(page, "[data-testid=settings-tab-inventory]", "", { settle: 3500 });
+    await snap("inv-grid");
+    await snap("inv-grid-empty", { hideItems: true });
+    // Inspect: the hover card, then the full item panel.
+    const nightcap = await locate(page, "[data-item-id]", "Unusual Nightcap");
+    await page.mouse.move(nightcap.x, nightcap.y);
+    await sleep(1500);
+    await snap("inv-hover", { park: false });
+    const rifle = await locate(page, "[data-item-id]", "Dragon Slayer Sniper Rifle");
+    await page.mouse.click(rifle.x, rifle.y, { clickCount: 2 });
+    await sleep(1500);
+    await snap("inv-inspect");
+    await page.keyboard.press("Escape");
+    await sleep(900);
+    // Delete one item.
+    await click(page, "[data-item-id]", "Gift Wrap", { settle: 500 });
+    await blur();
+    await snap("inv-delete-selected");
+    await click(page, "button", "Delete selected", { settle: 1200 });
+    await snap("inv-delete");
+    await click(page, "button", "Delete item permanently", { settle: 1500 });
+    await blur();
+    await snap("inv-deleted");
+    // Craft a random hat from three Refined Metal.
+    for (const [index, slot] of ["slot 8", "slot 23", "slot 38"].entries()) {
+      await click(page, "[data-item-id]", `Refined Metal, Unique, ${slot}`, {
+        ctrl: index > 0,
+        settle: 350,
+      });
+    }
+    await snap("inv-selected");
+    await click(page, "button", "Craft selected", { settle: 1200 });
+    await snap("inv-craft");
+    await click(page, "button", "Craft items permanently", { settle: 2500 });
+    await snap("inv-reveal");
+    await click(page, "button", "Done", { exact: true, settle: 1200 });
+    await blur();
+    await snap("inv-crafted");
+    // Sort, then drag the Unusual into slot 1; single moves swap.
+    await click(page, "button", "Sort backpack", { settle: 700 });
+    await snap("inv-sort-menu", { park: false });
+    await click(page, "[role=menuitem]", "By quality", { settle: 1600 });
+    await snap("inv-sorted");
+    await snap("inv-sorted-empty", { hideItems: true });
+    const first = await page.evaluate(
+      () =>
+        document
+          .querySelector(".inventory-grid [data-item-id][aria-label$=', slot 1']")
+          ?.getAttribute("aria-label")
+          ?.split(",")[0],
+    );
+    await snap("inv-sorted-swap", {
+      hide: `${await hideId("Unusual Nightcap")}\n${await hideId(first)}`,
+    });
+    const from = await locate(page, "[data-item-id]", "Unusual Nightcap");
+    const to = await locate(page, "[data-item-id][aria-label$=', slot 1']", "");
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    for (let step = 1; step <= 20; step += 1) {
+      const t = step / 20;
+      await page.mouse.move(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t);
+      await sleep(25);
+    }
+    await sleep(300);
+    await page.mouse.up();
+    await sleep(1200);
+    await blur();
+    await snap("inv-moved");
+    // Review and apply the arrangement.
+    await click(page, ".inventory-toolbar button", "Review", { settle: 1200 });
+    await snap("inv-review");
+    await click(page, "button", "Apply to Steam", { settle: 2000 });
+    await blur();
+    await snap("inv-applied");
   },
 };
 
@@ -263,31 +336,88 @@ const MARKS = {
     taunt: { selector: "div", text: ["Taunt"], pick: "smallest" },
     reload: { selector: "div", text: ["Reload"], pick: "smallest" },
   },
-  "crosshair-designer": {
-    circle: { selector: "label", text: ["circle"], exact: true },
-    chevron: { selector: "label", text: ["chevron"], exact: true },
-    ring: { selector: "label", text: ["ring cross"], exact: true },
+  "restore-points": {
+    dialog: { selector: "[role=dialog]", text: ["Restore points"] },
   },
-  "viewmodels-weapons": {
-    scattergun: { selector: "*", text: ["Scattergun", "Hands only"], pick: "climb" },
-    forceANature: { selector: "*", text: ["Force-a-Nature", "Hands only"], pick: "climb" },
-    shortstop: { selector: "*", text: ["Shortstop", "Hands only"], pick: "climb" },
+  crosshair: {
+    shapes: { selector: "*", text: ["plus gap", "ring cross"], pick: "climb" },
+    circle: { selector: "button, label", text: ["circle"], exact: true },
+    chevron: { selector: "button, label", text: ["chevron"], exact: true },
+    ring: { selector: "button, label", text: ["ring cross"], exact: true },
+    sprite: { selector: "*", text: ["64 × 64 sprite"], pick: "climb" },
+  },
+  viewmodels: {
+    primaryHidden: { selector: "label", text: ["Hidden"], exact: true },
     toolbar: { selector: "*", text: ["Every class", "Review and build"], pick: "climb" },
   },
+  "viewmodels-primary": {
+    secondaryHands: { selector: "label", text: ["Hands only"], exact: true, nth: 1 },
+  },
   sounds: {
-    use: { selector: "[data-testid^=sounds-assign-hit-]", text: ["Electro"] },
+    filter: { selector: "button, label", text: ["comfig.app"], exact: true },
+  },
+  "sounds-comfig": {
+    use: { selector: "button", text: ["Use Bubble pop (comfig.app) for hits"] },
   },
   "sounds-used": {
+    hitSlot: { selector: "*", text: ["Hit sound", "Browse"], pick: "climb" },
     hitToggle: { selector: "[role=switch]", text: [] },
   },
   files: {
     change: { selector: "[data-testid=settings-tab-files-changed]", text: [] },
   },
+  "inv-grid": {
+    grid: { selector: ".inventory-grid", text: [] },
+  },
+  "inv-hover": {
+    card: { selector: ".inventory-hovercard", text: [] },
+  },
+  "inv-inspect": {
+    dialog: { selector: "[role=dialog]", text: ["Dragon Slayer"] },
+  },
+  "inv-delete-selected": {
+    delete: { selector: "button", text: ["Delete selected"] },
+  },
+  "inv-delete": {
+    dialog: { selector: "[role=dialog]", text: ["Delete item"] },
+    confirm: { selector: "button", text: ["Delete item permanently"] },
+  },
+  "inv-selected": {
+    craft: { selector: "button", text: ["Craft selected"] },
+  },
+  "inv-craft": {
+    dialog: { selector: "[role=dialog]", text: ["Craft"] },
+    confirm: { selector: "button", text: ["Craft items permanently"] },
+  },
+  "inv-reveal": {
+    image: { selector: "[role=dialog] img", text: [] },
+    dialog: { selector: "[role=dialog]", text: ["You crafted a hat"] },
+    done: { selector: "button", text: ["Done"], exact: true },
+  },
+  "inv-crafted": {
+    sort: { selector: "button", text: ["Sort backpack"] },
+  },
+  "inv-sort-menu": {
+    quality: { selector: "[role=menuitem]", text: ["By quality"] },
+  },
+  "inv-sorted": {
+    review: { selector: ".inventory-toolbar button", text: ["Review"] },
+  },
+  "inv-moved": {
+    review: { selector: ".inventory-toolbar button", text: ["Review"] },
+  },
+  "inv-applied": {
+    feedback: { selector: "p, div, span", text: ["Applied"], pick: "smallest" },
+  },
+  "inv-review": {
+    dialog: { selector: "[role=dialog]", text: ["Apply to Steam"] },
+    apply: { selector: "button", text: ["Apply to Steam"] },
+  },
 };
 
-async function measure(page, { selector, text, pick = "first", exact = false }) {
+async function measure(page, { selector, text, pick = "first", exact = false, nth = 0 }) {
   return page.evaluate(
-    (selector, texts, pick, exact) => {
+    (selector, texts, pick, exact, nth) => {
       const clean = (value) => (value ?? "").replace(/\s+/g, " ").trim();
       const area = (element) => {
         const box = element.getBoundingClientRect();
@@ -312,7 +442,7 @@ async function measure(page, { selector, text, pick = "first", exact = false }) 
           return exact ? value === texts[0] : texts.every((text) => value.includes(text));
         });
         if (pick === "smallest") hits.sort((a, b) => area(a) - area(b));
-        hit = hits[0];
+        hit = hits[nth];
       }
       if (!hit) return null;
       const box = hit.getBoundingClientRect();
@@ -328,23 +458,66 @@ async function measure(page, { selector, text, pick = "first", exact = false }) 
     text,
     pick,
     exact,
+    nth,
   );
 }
 
-/** Which shots go where, at what size. */
+/** Every page-one item's box by item ID, for tiles that fly between slots. */
+function itemBoxes(page) {
+  return page.evaluate(() =>
+    Object.fromEntries(
+      [...document.querySelectorAll(".inventory-grid [data-item-id]")].map((element) => {
+        const box = element.getBoundingClientRect();
+        return [
+          element.getAttribute("data-item-id"),
+          {
+            x: box.x,
+            y: box.y,
+            width: box.width,
+            height: box.height,
+            label: element.getAttribute("aria-label"),
+          },
+        ];
+      }),
+    ),
+  );
+}
+
+/** Which flows go where, at what size; `keep` limits a set to certain snaps. */
 const SETS = {
-  video: { dir: VIDEO, prefix: "", width: 1440, height: 900, shots: Object.keys(SHOTS) },
+  video: { dir: VIDEO, prefix: "", width: 1440, height: 900, flows: Object.keys(FLOWS) },
+  // The recap tiles: a narrower layout drawn larger, so small tiles stay legible.
+  // Same 2880x1800 pixels as the video captures.
+  tiles: {
+    dir: VIDEO,
+    prefix: "tile-",
+    width: 1028,
+    height: 643,
+    scale: 2.8,
+    flows: ["profiles", "files", "viewmodels", "news"],
+    keep: [
+      "compare",
+      "restore-points",
+      "gameplay-sources",
+      "app-health",
+      "files-problems",
+      "viewmodels-both",
+    ],
+  },
   readme: {
     dir: README,
     prefix: "screen-",
     width: 1280,
     height: 800,
-    shots: [
-      "comfig-medium",
+    flows: ["inventory", "profiles", "crosshair", "viewmodels", "files", "news"],
+    keep: [
+      "inv-hover",
+      "inv-inspect",
+      "inv-reveal",
       "compare",
-      "viewmodels-weapons",
-      "crosshair-designer",
-      "files",
+      "viewmodels-both",
+      "crosshair-ring",
+      "files-problems",
       "app-health",
     ],
   },
@@ -363,30 +536,42 @@ const targets =
 
 const browser = await puppeteer.launch({ executablePath: CHROME });
 try {
-  for (const name of set.shots) {
-    if (only.length > 0 && !only.includes(name)) continue;
+  for (const flow of set.flows) {
+    if (only.length > 0 && !only.includes(flow)) continue;
     const page = await browser.newPage();
-    await page.setViewport({ width: set.width, height: set.height, deviceScaleFactor: 2 });
+    // Pending drafts guard navigation with "Leave site?"; captures always leave.
+    page.on("dialog", (dialog) => void dialog.accept());
+    await page.setViewport({
+      width: set.width,
+      height: set.height,
+      deviceScaleFactor: set.scale ?? 2,
+    });
     await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
-    // Keep third-party art out: the preview fixtures load HUD and mod images
-    // from these hosts. (Request interception would also stall the cfg
+    // Keep third-party art out. (Request interception would also stall the cfg
     // analysis worker, so block by URL instead.)
     const cdp = await page.createCDPSession();
     await cdp.send("Network.enable");
     await cdp.send("Network.setBlockedURLs", { urls: REMOTE_ART });
-    try {
-      await SHOTS[name](page);
-      await park(page);
+    const snap = async (
+      name,
+      { park: parkPointer = true, hideItems = false, hide = null } = {},
+    ) => {
+      if (set.keep && !set.keep.includes(name)) return;
+      if (parkPointer) await park(page);
+      const css = hideItems ? HIDE_ITEMS : hide;
+      const style = css ? await page.addStyleTag({ content: css }) : null;
+      if (style) await sleep(150);
       const file = path.join(set.dir, `${set.prefix}${name}.png`);
       await page.screenshot({ path: file });
       console.log(`captured ${path.relative(promo, file)}`);
-      if (setName !== "video") continue;
+      if (style) await style.evaluate((element) => element.remove());
+      if (setName !== "video") return;
       if (MARKS[name]) {
         targets[name] = {};
         for (const [mark, query] of Object.entries(MARKS[name])) {
           const box = await measure(page, query);
-          if (box) targets[name][mark] = box;
-          else throw new Error(`no element for mark ${mark}`);
+          if (!box) throw new Error(`no element for mark ${name}.${mark}`);
+          targets[name][mark] = box;
         }
       }
       if (name === "files") {
@@ -397,8 +582,12 @@ try {
           }),
         );
       }
+      if (name.startsWith("inv-") && !css) targets[`${name}-items`] = await itemBoxes(page);
+    };
+    try {
+      await FLOWS[flow](page, snap);
     } catch (error) {
-      console.error(`FAILED ${name}: ${error.message}`);
+      console.error(`FAILED ${flow}: ${error.message}`);
       process.exitCode = 1;
     } finally {
       await page.close();
