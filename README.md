@@ -143,14 +143,9 @@ execs installs work by the TF2 community:
 - [TF2HUD.Editor](https://github.com/CriticalFlaw/TF2HUD.Editor) by [CriticalFlaw](https://github.com/CriticalFlaw)
 - Previously built viewmodel packs used [CompVMInstaller](https://github.com/Yttrium-tYcLief/CompVMInstaller) by [Yttrium](https://github.com/Yttrium-tYcLief), with previews by Oblique; those remote source and preview downloads have ended; execs now builds viewmodel packs from your installed TF2 files
 - [casual-pre-loader](https://github.com/cueki/casual-pre-loader) by [cueki](https://github.com/cueki)
-- [Flat Textures (2021)](https://gamebanana.com/mods/295065) by [flewvar](https://gamebanana.com/members/1764119), with textures credited to [JarateKing](https://github.com/JarateKing)
-- [Developer Textures Overhaul v2](https://gamebanana.com/mods/336110), a rework by FPS_Engineer; earlier material was reuploaded and continued by ayrtonSilna, who did not identify its original creator
-- [Square Series](https://gamebanana.com/mods/435309), submitted by ghytd, supplies the No Burning Overlay and No Sentry Shield Overlay Casual choices
-- Previously installed [Venom Crosshairs](https://github.com/hbivnm/Venom-Crosshairs) by [HbiVnm](https://github.com/hbivnm) and the [list](https://github.com/hbivnm/Venom-Crosshairs-List) contributors; new downloads are unavailable in execs
 - [comfig.app hit and kill sounds](https://comfig.app/hits/), community uploads that belong to their makers
-- Previously installed [TF2Hitsounds](https://github.com/WishingStardust/TF2Hitsounds) by [WishingStardust](https://github.com/WishingStardust); new downloads from that collection are unavailable in execs
 
-Licenses and how each one is used: [THIRD_PARTY.md](THIRD_PARTY.md).
+Individual mods, crosshair packs and sound collections are credited inside the app, where you use them. Licenses and how each source is used: [THIRD_PARTY.md](THIRD_PARTY.md).
 
 The Inventory pane is inspired by
 [Jengerer's Item Manager](https://www.jengerer.com/item_manager/), by Jengerer
