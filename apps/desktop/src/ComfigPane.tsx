@@ -56,14 +56,9 @@ function ModuleControl({
 
   return (
     <article className="min-w-0 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <p id={labelId} className="t-row">
-          {module.label}
-        </p>
-        <p className="shrink-0 text-[12px] text-ink-faint">
-          {value ? readableLevel(value) : "Preset default"}
-        </p>
-      </div>
+      <p id={labelId} className="t-row">
+        {module.label}
+      </p>
 
       <fieldset
         data-testid={`comfig-module-${module.id}`}
