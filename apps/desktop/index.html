@@ -4,9 +4,109 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>execs</title>
+    <!-- The startup screen draws before any script or stylesheet loads, so the
+         window opens on the page colour and the spinning emblem instead of a
+         blank frame. components/BootSplash.tsx renders the same markup and
+         takes over in place. -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #100f0e;
+        color-scheme: dark;
+      }
+
+      .boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+      }
+
+      .boot-splash[data-leaving="true"] {
+        pointer-events: none;
+      }
+
+      .boot-splash-veil {
+        position: absolute;
+        inset: 0;
+        background: #100f0e;
+      }
+
+      .boot-splash-emblem {
+        position: absolute;
+        top: calc(50% - 74px);
+        left: calc(50% - 18px);
+        display: flex;
+        width: 36px;
+        height: 36px;
+        color: #d98449;
+        animation: boot-tick 900ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
+      }
+
+      .boot-splash-emblem > svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .boot-splash-copy {
+        position: absolute;
+        top: calc(50% - 14px);
+        right: 0;
+        left: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        animation: boot-copy-in 460ms cubic-bezier(0.2, 0, 0, 1) 80ms backwards;
+      }
+
+      .boot-splash-status {
+        min-height: 1.5em;
+        margin: 0;
+      }
+
+      @keyframes boot-tick {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(90deg);
+        }
+      }
+
+      @keyframes boot-copy-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .boot-splash-emblem,
+        .boot-splash-copy {
+          animation: none;
+        }
+      }
+
+      [data-motion="reduce"] .boot-splash-emblem,
+      [data-motion="reduce"] .boot-splash-copy {
+        animation: none;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-splash" aria-hidden="true">
+        <div class="boot-splash-veil"></div>
+        <span class="boot-splash-emblem"><!--boot-emblem--></span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -305,6 +305,167 @@ export function viewmodelSectionsForClass(
   })).filter((section) => section.rows.length > 0);
 }
 
+export type ViewmodelChoice = ViewmodelHideMode | "shown";
+export type ViewmodelSlotId = "primary" | "secondary" | "melee" | "pda";
+
+const SLOT_LABELS: Record<ViewmodelSlotId, string> = {
+  primary: "Primary",
+  secondary: "Secondary",
+  melee: "Melee",
+  pda: "PDA",
+};
+
+/**
+ * One class as the player chooses it: a line per loadout slot, one line for
+ * every inspect animation, and the weapons behind each slot for exceptions.
+ * Spellbooks and the grappling hook have no slot line; they stay shown unless
+ * changed on their own.
+ */
+export type ViewmodelClassLayout = {
+  slots: { id: ViewmodelSlotId; label: string; rows: ViewmodelRow[] }[];
+  other: ViewmodelRow[];
+  inspect: ViewmodelRow[];
+};
+
+export function viewmodelClassLayout(
+  catalog: ViewmodelSourceCatalog,
+  className: string,
+): ViewmodelClassLayout {
+  const rows = viewmodelRowsForClass(catalog, className);
+  const weapons = rows.filter((row) => !row.groups[0].inspect);
+  return {
+    slots: (["primary", "secondary", "melee", "pda"] as const)
+      .map((id) => ({
+        id,
+        label: SLOT_LABELS[id],
+        rows: weapons.filter((row) => viewmodelGroupSlot(row.groups[0]) === id),
+      }))
+      .filter((slot) => slot.rows.length > 0),
+    other: weapons.filter((row) => viewmodelGroupSlot(row.groups[0]) === "other"),
+    inspect: rows.filter((row) => row.groups[0].inspect),
+  };
+}
+
+export function viewmodelRowChoice(
+  choices: ViewmodelDraftChoices,
+  row: ViewmodelRow,
+): ViewmodelChoice {
+  return choices[row.groups[0].id] ?? "shown";
+}
+
+/** What most of a slot's weapons use; a tie goes to the first (stock) weapon. */
+export function viewmodelSlotChoice(
+  choices: ViewmodelDraftChoices,
+  rows: ViewmodelRow[],
+): ViewmodelChoice {
+  const counts = new Map<ViewmodelChoice, number>();
+  for (const row of rows) {
+    const choice = viewmodelRowChoice(choices, row);
+    counts.set(choice, (counts.get(choice) ?? 0) + 1);
+  }
+  let best: ViewmodelChoice = "shown";
+  let bestCount = 0;
+  for (const row of rows) {
+    const choice = viewmodelRowChoice(choices, row);
+    const count = counts.get(choice) ?? 0;
+    if (count > bestCount) {
+      best = choice;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/** Set every group in these rows, reskins included. */
+export function viewmodelWithRows(
+  choices: ViewmodelDraftChoices,
+  rows: ViewmodelRow[],
+  choice: ViewmodelChoice,
+): ViewmodelDraftChoices {
+  const next = { ...choices };
+  for (const row of rows) {
+    for (const group of row.groups) {
+      if (choice === "shown") delete next[group.id];
+      else next[group.id] = choice;
+    }
+  }
+  return next;
+}
+
+/** Change a slot: weapons following it move with it, weapons set on their own stay. */
+export function viewmodelWithSlot(
+  choices: ViewmodelDraftChoices,
+  rows: ViewmodelRow[],
+  choice: ViewmodelChoice,
+): ViewmodelDraftChoices {
+  const current = viewmodelSlotChoice(choices, rows);
+  return viewmodelWithRows(
+    choices,
+    rows.filter((row) => viewmodelRowChoice(choices, row) === current),
+    choice,
+  );
+}
+
+export function viewmodelInspectChoice(
+  choices: ViewmodelDraftChoices,
+  rows: ViewmodelRow[],
+): "shown" | "full" | "mixed" {
+  const hidden = rows.filter((row) => viewmodelRowChoice(choices, row) !== "shown").length;
+  return hidden === 0 ? "shown" : hidden === rows.length ? "full" : "mixed";
+}
+
+/** Weapons set differently from their slot, and extras that are not shown. */
+export function viewmodelExceptions(
+  choices: ViewmodelDraftChoices,
+  layout: ViewmodelClassLayout,
+): ViewmodelRow[] {
+  return [
+    ...layout.slots.flatMap((slot) => {
+      const choice = viewmodelSlotChoice(choices, slot.rows);
+      return slot.rows.filter((row) => viewmodelRowChoice(choices, row) !== choice);
+    }),
+    ...layout.other.filter((row) => viewmodelRowChoice(choices, row) !== "shown"),
+  ];
+}
+
+const CHOICE_WORDS: Record<ViewmodelChoice, string> = {
+  shown: "shown",
+  full: "hidden",
+  weapon: "hands only",
+};
+
+/** "Primary hidden, Inspect hidden, Shortstop shown", or null when everything is shown. */
+export function viewmodelClassSummary(
+  choices: ViewmodelDraftChoices,
+  layout: ViewmodelClassLayout,
+): string | null {
+  const parts: string[] = [];
+  for (const slot of layout.slots) {
+    const choice = viewmodelSlotChoice(choices, slot.rows);
+    if (choice !== "shown") parts.push(`${slot.label} ${CHOICE_WORDS[choice]}`);
+  }
+  const inspect = viewmodelInspectChoice(choices, layout.inspect);
+  if (layout.inspect.length && inspect !== "shown") {
+    parts.push(inspect === "full" ? "Inspect hidden" : "Some inspects hidden");
+  }
+  for (const row of viewmodelExceptions(choices, layout)) {
+    parts.push(`${viewmodelRowLabel(row)} ${CHOICE_WORDS[viewmodelRowChoice(choices, row)]}`);
+  }
+  return parts.length ? parts.join(", ") : null;
+}
+
+/** Rows in one class whose shared animations are set to different hide modes. */
+export function viewmodelConflictRows(
+  catalog: ViewmodelSourceCatalog,
+  choices: ViewmodelDraftChoices,
+  className: string,
+): ViewmodelRow[] {
+  const conflicts = conflictingViewmodelGroupIds(catalog, choices);
+  return viewmodelRowsForClass(catalog, className).filter((row) =>
+    row.groups.some((group) => conflicts.has(group.id)),
+  );
+}
+
 /** Whole-profile starting points; every class and weapon row follows the same rule. */
 export type ViewmodelPreset = "show-all" | "hide-all" | "keep-melee";
 
@@ -328,7 +489,8 @@ export function viewmodelPresetChoices(
   for (const className of viewmodelClasses(catalog)) {
     for (const row of viewmodelRowsForClass(catalog, className)) {
       if (preset === "keep-melee" && viewmodelGroupSlot(row.groups[0]) === "melee") continue;
-      for (const group of row.groups) next[group.id] = mode;
+      // Inspect animations are only ever shown or hidden.
+      for (const group of row.groups) next[group.id] = group.inspect ? "full" : mode;
     }
   }
   return next;

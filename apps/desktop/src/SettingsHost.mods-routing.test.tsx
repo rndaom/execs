@@ -188,7 +188,7 @@ describe("Mods HUD recovery through the real settings host", () => {
     expect(element("mods-addon-no-sentry-shield-overlay")).toBeTruthy();
     expect(element("mods-particle-square-series")).toBeTruthy();
     expect(box.querySelector('[data-testid="mods-download"]')).toBeNull();
-    expect(box.textContent).toContain("New library choices and downloads are paused");
+    expect(box.textContent).toContain("New library choices are no longer offered");
   });
 
   it.each(["archive", "folder"] as const)(
@@ -216,7 +216,7 @@ describe("Mods HUD recovery through the real settings host", () => {
     await chooseGameBananaFile();
     expect(element("mods-gb-install-700000").textContent).toBe("Installing…");
     await act(async () => vi.advanceTimersByTimeAsync(450));
-    expect(element("toast").textContent).toBe("Saving…");
+    expect(element("toast").textContent).toBe("Installing mod…");
     await act(async () => install.reject(new BridgeError(hudMessage, "HudImportRequired")));
     expectOnlyHudRecovery();
     expect(box.textContent).not.toContain("Retry this mod");

@@ -1,7 +1,16 @@
 import { ArrowLeft, GearSix } from "@phosphor-icons/react";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { AppSettingsPane } from "./AppSettingsPane";
 import { AppFooter } from "./components/AppFooter";
+import { BootSplash } from "./components/BootSplash";
 import { DotBackdrop } from "./components/DotBackdrop";
 import { FinderPanel } from "./components/FinderPanel";
 import { HudOwnershipDialog } from "./components/HudOwnershipDialog";
@@ -13,6 +22,7 @@ import { ClassIconProvider } from "./components/ui/ClassIcon";
 import { Modal } from "./components/ui/Modal";
 import { Loading } from "./components/ui/Spinner";
 import { ToastProvider } from "./components/ui/Toast";
+import { Wordmark } from "./components/ui/Wordmark";
 import { WriteLockBanner } from "./components/WriteLockBanner";
 import { FirstRunExisting } from "./FirstRunExisting";
 import { useAppPreferences } from "./hooks/useAppPreferences";
@@ -28,7 +38,15 @@ import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
 import type { Api } from "./lib/api";
+import {
+  BOOT_MIN_MS,
+  bootRemaining,
+  bootStage,
+  CONFIRM_HOLD_MS,
+  CONFIRM_MAX_MS,
+} from "./lib/boot-ui";
 import { invokeErrorMessage, type LaunchSyncStatus } from "./lib/bridge";
+import { motionHold, revealPane, revealScreen } from "./lib/entrance";
 import { createFilesDraftStore } from "./lib/files-drafts";
 import { confirmEnabled } from "./lib/finder-ui";
 import { firstRunSurface, showStartFromChoice } from "./lib/first-run-ui";
@@ -46,8 +64,26 @@ import { SettingsHost } from "./SettingsHost";
 import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard } from "./SetupWizard";
 
-export function App({ api, preview }: { api: Api; preview: PreviewState }) {
+export function App({
+  api,
+  preview,
+  bootSplash = false,
+}: {
+  api: Api;
+  preview: PreviewState;
+  /** Hold a startup screen over the app until its first screen is ready. */
+  bootSplash?: boolean;
+}) {
   const { error, setError, dismissError } = useOperationErrors();
+  const [splash, setSplash] = useState<"shown" | "leaving" | "gone">(bootSplash ? "shown" : "gone");
+  const [settingsSettled, setSettingsSettled] = useState(false);
+  // A newly confirmed install stays on the finder for a beat, so the
+  // confirmation is seen before setup continues. Skipped without motion.
+  const [handoffSince, setHandoffSince] = useState<number | null>(null);
+  const onInstallConfirmed = useCallback(() => {
+    if (motionHold(CONFIRM_HOLD_MS) > 0) setHandoffSince(performance.now());
+  }, []);
+  const shell = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsWriting, setSettingsWriting] = useState(false);
@@ -165,9 +201,11 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   const install = useTf2Install(api, {
     setError,
     setBusy,
+    onConfirmed: onInstallConfirmed,
     onChanged: () => {
       // A different install must never inherit the previous one's first-run
       // screen, reasons, pack prompt, library or draft name.
+      setHandoffSince(null);
       setDraftName("");
       setAppSettingsOpen(false);
       setHudReviewId(null);
@@ -274,24 +312,89 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
   }, [firstRun, draftName]);
 
   const surface = firstRunSurface(profiles.library, firstRun.kind);
+  const installReady =
+    install.screen === "ready" && install.confirmed !== null && handoffSince === null;
   const settingsOpen =
-    install.screen === "ready" &&
-    install.confirmed !== null &&
-    surface === "ready" &&
-    !creating &&
-    showSettingsChrome(profiles.library);
+    installReady && surface === "ready" && !creating && showSettingsChrome(profiles.library);
   // The ready shell (header + library status) fills the window even before a
   // profile is active, so the empty library view is not an inset card.
   const readyShellOpen =
-    settingsOpen ||
-    (install.screen === "ready" &&
-      install.confirmed !== null &&
-      surface === "ready" &&
-      !creating &&
-      !appSettingsOpen);
+    settingsOpen || (installReady && surface === "ready" && !creating && !appSettingsOpen);
   // The sidebar holds App settings. Without it (first run, or a ready shell
   // with no active profile) the footer is the way there.
   const sidebarShown = readyShellOpen && showSettingsChrome(profiles.library);
+
+  // Startup and a confirmed install each wait for the first screen's reads.
+  const stageInput = {
+    screen:
+      install.screen === "ready" && install.confirmed ? ("ready" as const) : ("finder" as const),
+    scanning: install.scanning,
+    libraryLoaded: profiles.library !== null,
+    surface,
+    settingsOpen,
+    settingsSettled,
+    paneLabel: SETTINGS_TAB_LABELS[settingsTab],
+    failed: error !== null,
+  };
+  const boot = bootStage(stageInput);
+  const handoff = bootStage({ ...stageInput, settingsOpen: false });
+  const bootSettled = boot.settled;
+  useEffect(() => {
+    if (splash !== "shown") return;
+    const wait = bootRemaining(
+      { settled: bootSettled, status: "" },
+      performance.now(),
+      motionHold(BOOT_MIN_MS),
+    );
+    const timer = window.setTimeout(() => setSplash("leaving"), wait);
+    return () => window.clearTimeout(timer);
+  }, [splash, bootSettled]);
+  const handoffSettled = handoff.settled;
+  useEffect(() => {
+    if (handoffSince === null) return;
+    const elapsed = performance.now() - handoffSince;
+    const wait = handoffSettled
+      ? Math.max(0, CONFIRM_HOLD_MS - elapsed)
+      : Math.max(0, CONFIRM_MAX_MS - elapsed);
+    const timer = window.setTimeout(() => setHandoffSince(null), wait);
+    return () => window.clearTimeout(timer);
+  }, [handoffSince, handoffSettled]);
+
+  // Each new screen arrives in order: header, sidebar, then the pane's
+  // sections, or an onboarding frame top to bottom. The first one enters as
+  // the startup screen lifts off it.
+  const screen =
+    splash === "shown"
+      ? "boot"
+      : appSettingsOpen && !settingsOpen
+        ? "app"
+        : !installReady
+          ? "finder"
+          : surface === "first-existing"
+            ? "existing"
+            : surface === "first-unused" || creating
+              ? "wizard"
+              : surface === "loading"
+                ? "loading"
+                : settingsOpen
+                  ? "workspace"
+                  : "shell";
+  const lastScreen = useRef(screen);
+  useLayoutEffect(() => {
+    const previous = lastScreen.current;
+    lastScreen.current = screen;
+    if (screen === "boot" || previous === screen) return;
+    revealScreen(shell.current, previous === "boot" ? 160 : 0);
+  }, [screen]);
+  // A profile's settings finishing their read (after a switch) reveal the pane.
+  const wasSettled = useRef(settingsSettled);
+  useLayoutEffect(() => {
+    const was = wasSettled.current;
+    wasSettled.current = settingsSettled;
+    if (!was && settingsSettled && lastScreen.current === "workspace") {
+      revealPane(shell.current);
+    }
+  }, [settingsSettled]);
 
   const activeProfileId = profiles.library?.activeProfileId ?? null;
   const refreshLaunchSync = useCallback(async (): Promise<LaunchSyncStatus | null> => {
@@ -427,11 +530,11 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
     }
     if (surface === "loading") {
       return (
-        <section className="flex w-full max-w-[640px] flex-col items-center text-center">
-          <p className="flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-ink">
-            <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
-            execs
-          </p>
+        <section
+          data-reveal="group"
+          className="flex w-full max-w-[640px] flex-col items-center text-center"
+        >
+          <Wordmark target />
           <p className="t-body mt-8 text-ink-muted">
             <Loading size={16}>Checking this install…</Loading>
           </p>
@@ -553,6 +656,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                   bindSyncRequest={profiles.bindSyncRequest}
                   onBindSyncHandled={profiles.onBindSyncHandled}
                   onBusyChange={setSettingsBusy}
+                  onSettledChange={setSettingsSettled}
                   onWriteBusyChange={setSettingsWriting}
                   onRecoveryChange={setPreloaderRecovery}
                   onHudReviewRequired={setHudReviewId}
@@ -713,7 +817,18 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
         />
         {filesExit.modal}
         {filesExit.error ? <p role="alert">{filesExit.error}</p> : null}
-        <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink">
+        {splash === "gone" ? null : (
+          <BootSplash
+            status={boot.status}
+            leaving={splash === "leaving"}
+            onDone={() => setSplash("gone")}
+          />
+        )}
+        <div
+          ref={shell}
+          inert={splash === "shown"}
+          className="flex h-dvh min-h-0 flex-col overflow-hidden bg-bg text-ink"
+        >
           <WriteLockBanner
             running={lock.running}
             degraded={lock.degraded ?? lifecycle.degraded ?? progress.degraded}
@@ -752,7 +867,7 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
             >
               {appSettingsOpen && !settingsOpen ? (
                 <section className="w-full max-w-[960px]">{renderAppPreferences()}</section>
-              ) : install.screen === "ready" && install.confirmed ? (
+              ) : installReady && install.confirmed ? (
                 <ClassIconProvider api={api} installPath={install.confirmed.path}>
                   {renderReady(install.confirmed.path)}
                 </ClassIconProvider>
@@ -768,6 +883,8 @@ export function App({ api, preview }: { api: Api; preview: PreviewState }) {
                   onSelect={install.select}
                   onBrowse={() => void install.browse()}
                   onConfirm={() => void install.confirm()}
+                  confirmed={handoffSince !== null}
+                  waitingFor={handoffSettled ? null : handoff.status}
                 />
               )}
 

@@ -37,7 +37,6 @@ export function ModImport({
         testId="mods-import-modal"
         title="Import a mod"
         description="Choose one archive, VPK, or extracted mod folder."
-        className="fixed top-24 left-1/2 z-50 w-[min(460px,calc(100vw-2.5rem))] -translate-x-1/2"
         onClose={() => setOpen(false)}
         initialFocusRef={cancelRef}
       >

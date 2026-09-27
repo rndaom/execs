@@ -1,4 +1,6 @@
+import { Check } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
+import { Wordmark } from "./ui/Wordmark";
 
 export type OnboardingStep = {
   label: string;
@@ -34,15 +36,13 @@ export function OnboardingFrame({
   return (
     <section
       data-testid={testId}
+      data-reveal="group"
       className={`flex w-full flex-col items-center ${
         width === "wide" ? "max-w-[880px]" : "max-w-[640px]"
       }`}
     >
       <div className="flex w-full items-center border-b border-edge pb-4">
-        <p className="flex items-center gap-2.5 text-[17px] font-semibold tracking-tight text-ink">
-          <span aria-hidden="true" className="size-2 rounded-sm bg-brand" />
-          execs
-        </p>
+        <Wordmark target />
       </div>
       <div
         className={
@@ -78,18 +78,27 @@ export function OnboardingFrame({
                 {index < steps.length - 1 ? (
                   <span
                     aria-hidden="true"
-                    className="absolute top-3.5 left-1/2 h-px w-full bg-edge-strong"
-                  />
+                    className="absolute top-3.5 left-1/2 h-px w-full overflow-hidden bg-edge-strong"
+                  >
+                    {/* A finished step fills its line toward the next one. */}
+                    {step.state === "complete" ? <span className="onboarding-step-fill" /> : null}
+                  </span>
                 ) : null}
                 <span
                   aria-hidden="true"
-                  className={`relative flex size-7 items-center justify-center rounded-full border bg-bg text-[12px] font-medium ${
-                    step.state === "current"
-                      ? "border-brand text-ink"
-                      : "border-edge-strong text-ink-muted"
+                  className={`relative flex size-7 items-center justify-center rounded-full border text-[12px] font-medium transition-colors duration-150 ${
+                    step.state === "complete"
+                      ? "border-brand bg-[color-mix(in_srgb,var(--color-brand)_16%,var(--color-bg))] text-brand"
+                      : step.state === "current"
+                        ? "border-brand bg-bg text-ink"
+                        : "border-edge-strong bg-bg text-ink-muted"
                   }`}
                 >
-                  {index + 1}
+                  {step.state === "complete" ? (
+                    <Check size={13} weight="bold" className="onboarding-step-done" />
+                  ) : (
+                    index + 1
+                  )}
                 </span>
                 <span className="t-meta text-ink">{step.label}</span>
                 {/* The ring already shows the current step; the state is for screen readers. */}

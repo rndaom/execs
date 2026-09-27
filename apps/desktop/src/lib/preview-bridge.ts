@@ -18,6 +18,7 @@ import {
   type GameBananaSort,
   type HitsoundRecord,
   type HitsoundSlotChange,
+  type HudInstallProgress,
   type HudUiState,
   type ModRecord,
   type OfficialAddon,
@@ -171,6 +172,15 @@ export function createPreviewApi(state: PreviewState): Api {
     state === "settings-sounds" ? { hit: { name: "quack", source: "community" } } : null;
   let importReadingHandler: (() => void) | null = null;
   let progressHandler: ((progress: SwitchProgress) => void) | null = null;
+  let hudProgressHandler: ((progress: HudInstallProgress) => void) | null = null;
+  // The browser fixture walks the same real stages with short pauses so the
+  // install panel can be seen; it never skips or invents a step.
+  async function previewHudStages(id: string) {
+    for (const step of ["downloading", "checking", "installing"] as const) {
+      hudProgressHandler?.({ id, step });
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+  }
   let lifecycle = {
     launchingTf2: false,
     steamVerification: false,
@@ -849,7 +859,17 @@ export function createPreviewApi(state: PreviewState): Api {
         warning: null,
       };
     },
+    async onHudInstallProgress(handler: (progress: HudInstallProgress) => void) {
+      hudProgressHandler = handler;
+      return () => {
+        hudProgressHandler = null;
+      };
+    },
     async installHud(id: string) {
+      await previewHudStages(id);
+      return api.matchHudCatalog(id);
+    },
+    async matchHudCatalog(id: string) {
       const entry = hudCatalog.find((item) => item.id === id);
       const supported = schemaSupportedIds().includes(id);
       hudState = {
@@ -867,9 +887,6 @@ export function createPreviewApi(state: PreviewState): Api {
     async importHudFolder() {
       throw notInPreview("Importing a HUD folder");
     },
-    async matchHudCatalog(id: string) {
-      return api.installHud(id);
-    },
     async returnToStockHud() {
       if (previewLocked(state))
         throw new BridgeError("Close TF2 before changing the HUD.", "GameRunning");
@@ -877,6 +894,7 @@ export function createPreviewApi(state: PreviewState): Api {
       return requireDetail();
     },
     async updateHud() {
+      if (hudState.installed) await previewHudStages(hudState.installed.id);
       if (hudState.installed) {
         hudState = {
           ...hudState,
@@ -1221,6 +1239,8 @@ export function createPreviewApi(state: PreviewState): Api {
     async installGameBananaMod(id: number, fileId: number) {
       const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
       const variants = await this.gameBananaDownloadVariants(id);
+      // A short pause so the fixture shows the card's install overlay.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
       if (listing?.route !== "mod" || !variants.some((file) => file.id === fileId)) {
         throw notInPreview(`Installing mod ${id}`);
       }

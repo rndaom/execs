@@ -21,8 +21,11 @@ import {
 import { Loading } from "./Spinner";
 
 export type ToastApi = {
-  /** A write started: arms the delayed "Saving…" pill. */
-  startSave: (source?: string) => void;
+  /**
+   * A write started: arms the delayed "Saving…" pill. `label` replaces that
+   * word while this source runs, for work that is not a plain save.
+   */
+  startSave: (source?: string, label?: string) => void;
   /** A write landed. `message` names what happened when it was not a save. */
   finishSave: (message?: string, source?: string) => void;
   /** A write failed; `prefix` carries the verb ("Could not apply"). */
@@ -120,6 +123,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
   const [savedCount, setSavedCount] = useState(0);
   const toast = feedback.toast;
   const [inFlight, setInFlight] = useState<Record<string, number>>({});
+  const [labels, setLabels] = useState<Record<string, string>>({});
 
   const send = useCallback((event: ToastEvent) => {
     setFeedback((current) => toastStep(current, event));
@@ -134,11 +138,25 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
     });
   }, []);
 
+  const setLabel = useCallback((source: string | undefined, label: string | undefined) => {
+    setLabels((current) => {
+      const key = source ?? "default";
+      if (current[key] === label) return current;
+      const next = { ...current };
+      if (label) next[key] = label;
+      else delete next[key];
+      return next;
+    });
+  }, []);
+
   // Stable: `useAutosave` keys its own effects off this object, so a new
   // identity every render would look like a fresh edit.
   const api = useMemo<ToastApi>(
     () => ({
-      startSave: (source) => changeInFlight(source, 1),
+      startSave: (source, label) => {
+        setLabel(source, label);
+        changeInFlight(source, 1);
+      },
       finishSave: (message, source) => {
         changeInFlight(source, -1);
         send({ type: "done", message, source });
@@ -154,19 +172,26 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
       noteQuietSave: () => setSavedCount((count) => count + 1),
       dismiss: () => send({ type: "hide" }),
     }),
-    [send, changeInFlight],
+    [send, changeInFlight, setLabel],
   );
 
   // Quick saves — the common case — never flash a pill.
   const activeSaves = Object.values(inFlight).reduce((total, count) => total + count, 0);
+  // A named operation still running outranks a plain save; the most recent wins.
+  const activeLabel = Object.entries(labels)
+    .filter(([source]) => (inFlight[source] ?? 0) > 0)
+    .at(-1)?.[1];
   useEffect(() => {
     if (activeSaves === 0) {
       send({ type: "cancel" });
       return;
     }
-    const timer = window.setTimeout(() => send({ type: "slow" }), TOAST_SAVING_DELAY_MS);
+    const timer = window.setTimeout(
+      () => send({ type: "slow", message: activeLabel }),
+      TOAST_SAVING_DELAY_MS,
+    );
     return () => window.clearTimeout(timer);
-  }, [activeSaves, send]);
+  }, [activeSaves, activeLabel, send]);
 
   // Every completion is a fresh toast object, so each one counts once.
   useEffect(() => {

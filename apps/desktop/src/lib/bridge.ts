@@ -957,6 +957,19 @@ export async function getHudAlbum(id: string, refresh = false): Promise<HudAlbum
   return call<HudAlbumImage[]>("get_hud_album", { id, refresh });
 }
 
+/** The real stages of a catalog HUD install or update, in the order they run. */
+export type HudInstallStep = "downloading" | "checking" | "installing";
+
+export type HudInstallProgress = { id: string; step: HudInstallStep };
+
+export async function onHudInstallProgress(
+  handler: (progress: HudInstallProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<HudInstallProgress>("hud-install-progress", (event) => {
+    handler(event.payload);
+  });
+}
+
 export async function installHud(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("install_hud", { id });
 }

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
+import type { HudInstallProgress } from "./lib/bridge";
 import {
   emptyHudState,
   PREVIEW_HUD_CATALOG,
@@ -31,6 +32,7 @@ let root: Root;
 let container: HTMLDivElement;
 let props: Props;
 let running: boolean;
+let emitProgress: ((progress: HudInstallProgress) => void) | null;
 
 function element(testId: string): HTMLElement {
   const node = container.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
@@ -67,8 +69,16 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   running = false;
+  emitProgress = null;
   props = {
-    api: {} as Api,
+    api: {
+      onHudInstallProgress: vi.fn(async (handler: (progress: HudInstallProgress) => void) => {
+        emitProgress = handler;
+        return () => {
+          emitProgress = null;
+        };
+      }),
+    } as unknown as Api,
     profileId: "profile-a",
     catalogLoading: false,
     catalogError: null,
@@ -150,6 +160,29 @@ describe("HUD workspace interactions", () => {
     expect(selectedSurface()).toBe("hud-surface-browse");
     await act(async () => complete(true));
     expect(selectedSurface()).toBe("hud-surface-installed");
+  });
+
+  it("shows the backend's install steps on the card being installed and clears them after", async () => {
+    let complete!: (success: boolean) => void;
+    const onInstall = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    await render({ onInstall });
+    expect(element("hud-installed-overlay-rayshud").textContent).toContain("Installed");
+    await click("hud-install-budhud");
+    await click("hud-replace-confirm");
+    const overlay = () => element("hud-installing-overlay-budhud");
+    expect(overlay().textContent).toContain("Starting…");
+    await act(async () => emitProgress?.({ id: "budhud", step: "downloading" }));
+    expect(overlay().textContent).toContain("Downloading from GitHub.");
+    await act(async () => emitProgress?.({ id: "budhud", step: "installing" }));
+    expect(overlay().textContent).toContain("Saving it to this profile");
+    expect(container.querySelector('[data-testid="hud-install-panel"]')).toBeNull();
+    await act(async () => complete(false));
+    expect(container.querySelector('[data-testid="hud-installing-overlay-budhud"]')).toBeNull();
   });
 
   it.each([false, null, undefined])(

@@ -1,10 +1,21 @@
-import { ArrowClockwise, ArrowSquareOut, Image, Plus } from "@phosphor-icons/react";
+import { ArrowClockwise, ArrowSquareOut, Check, Image } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { GameBananaMod } from "../lib/bridge";
-import { Loading } from "./ui/Spinner";
+import { Spinner } from "./ui/Spinner";
 
-export type GameBananaInstallState = "idle" | "loading" | "installing" | "failed";
+export type GameBananaInstallState =
+  | "idle"
+  | "loading"
+  | "installing"
+  | "failed"
+  /** The author's file list could not be read; nothing was installed. */
+  | "load-failed";
 
+/**
+ * One GameBanana listing, laid out like a HUD catalog card: the preview, what
+ * it is, and one labelled action. Work in progress covers the preview so the
+ * card being installed is unmistakable.
+ */
 export function GameBananaCard({
   mod,
   meta,
@@ -15,6 +26,7 @@ export function GameBananaCard({
   onView,
   onInstall,
   onRoute,
+  onManage,
 }: {
   mod: GameBananaMod;
   meta: string;
@@ -25,29 +37,35 @@ export function GameBananaCard({
   onView: () => void;
   onInstall: () => void;
   onRoute: () => void;
+  /** Opens Custom packs for a listing that is already installed. */
+  onManage?: () => void;
 }) {
   const titleId = `mods-gb-title-${mod.id}`;
   const failureId = `mods-gb-failure-${mod.id}`;
-  const failed = installState === "failed";
+  const failed = installState === "failed" || installState === "load-failed";
   const installing = installState === "installing";
   const loading = installState === "loading";
-  const installLabel = installed
-    ? "Installed"
-    : installing
-      ? "Installing…"
-      : loading
-        ? "Loading files…"
-        : failed
-          ? "Retry"
-          : running
-            ? "Close TF2 to install"
-            : "Install";
+  const working = installing || loading;
+  const installLabel = installing
+    ? "Installing…"
+    : loading
+      ? "Loading files…"
+      : failed
+        ? "Retry"
+        : running
+          ? "Close TF2 to install"
+          : "Install";
+  const category = mod.subCategory ? `${mod.category} · ${mod.subCategory}` : mod.category;
 
   return (
     <article
       data-testid={`mods-gb-card-${mod.id}`}
+      data-installed={installed ? "true" : undefined}
       aria-labelledby={titleId}
-      className="surface group flex min-w-0 flex-col overflow-hidden text-left transition-colors duration-150 hover:border-edge-strong"
+      aria-busy={working || undefined}
+      className={`surface group flex min-w-0 flex-col overflow-hidden text-left transition-colors duration-150 ${
+        installed || working ? "ring-2 ring-brand" : "hover:border-edge-strong"
+      }`}
     >
       <div className="relative">
         <button
@@ -58,50 +76,37 @@ export function GameBananaCard({
         >
           <GameBananaThumbnail mod={mod} />
         </button>
-        <span className="badge pointer-events-none absolute bottom-2 left-2 bg-panel">
-          {mod.subCategory ? `${mod.category} · ${mod.subCategory}` : mod.category}
-        </span>
-        {mod.route !== "mod" ? (
-          <button
-            type="button"
-            data-testid={`mods-gb-route-${mod.id}`}
-            className="btn btn-ghost absolute top-2 right-2 min-h-8 bg-panel px-2"
-            disabled={mod.route === "manual" && locked}
-            onClick={onRoute}
+        {installed && !working ? (
+          <span
+            data-testid={`mods-gb-installed-${mod.id}`}
+            className="pointer-events-none absolute top-2.5 left-2.5 inline-flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 font-semibold text-[13px] text-on-brand leading-none"
           >
-            {mod.route === "hud" ? "Open HUD" : "Import mod"}
-          </button>
-        ) : installed ? (
-          <span className="badge pointer-events-none absolute top-2 right-2 bg-panel">
+            <Check size={14} weight="bold" aria-hidden="true" />
             Installed
           </span>
-        ) : (
-          <button
-            type="button"
-            data-testid={`mods-gb-install-${mod.id}`}
-            className={`btn ${failed ? "btn-primary" : "btn-ghost bg-panel"} absolute top-2 right-2 min-h-8 gap-1.5 p-1.5`}
-            aria-label={`${installLabel} ${mod.name}`}
-            title={`${installLabel} ${mod.name}`}
-            aria-describedby={failed ? failureId : undefined}
-            disabled={loading || installing || locked}
-            onClick={onInstall}
-          >
-            {installing || loading ? (
-              <Loading>{installing ? "Installing…" : "Loading files…"}</Loading>
-            ) : failed ? (
-              <>
-                <ArrowClockwise size={16} /> Retry
-              </>
-            ) : (
-              <Plus size={18} />
-            )}
-          </button>
-        )}
+        ) : null}
         {mod.mature ? (
-          <span className="badge pointer-events-none absolute top-2 left-2 bg-panel">Mature</span>
+          <span className="badge pointer-events-none absolute top-2 right-2 bg-panel">Mature</span>
+        ) : null}
+        <span className="badge pointer-events-none absolute bottom-2 left-2 bg-panel">
+          {category}
+        </span>
+        {working ? (
+          <div
+            data-testid={`mods-gb-working-${mod.id}`}
+            className="enter-fade absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg/80 px-4 text-center"
+          >
+            <Spinner size={22} />
+            <span className="t-row">{installing ? "Installing" : "Loading files"}</span>
+            <span className="t-meta">
+              {installing
+                ? "Downloading from GameBanana and adding it to this profile."
+                : "Reading the author's file list."}
+            </span>
+          </div>
         ) : null}
       </div>
-      <div className="flex flex-1 flex-col gap-2 p-3">
+      <div className="flex flex-1 flex-col gap-2 px-3 pt-2.5">
         <div className="min-w-0">
           <h3 id={titleId} className="t-row break-words leading-5">
             <button
@@ -111,24 +116,67 @@ export function GameBananaCard({
               onClick={onView}
             >
               {mod.name}
-              <ArrowSquareOut size={12} className="ml-1.5 inline text-ink-muted" />
             </button>
           </h3>
           <p className="t-meta mt-0.5 break-words">by {mod.author} · GameBanana</p>
         </div>
         <p className="t-meta tnum">{meta}</p>
         {mod.route === "hud" ? (
-          <p className="t-meta">
-            Review the author’s files, then import the chosen archive in HUD.
-          </p>
+          <p className="t-meta">This is a HUD. Import the author's archive in HUD.</p>
         ) : mod.route === "manual" ? (
-          <p className="t-meta">Follow the author’s instructions, then import the intended file.</p>
+          <p className="t-meta">Follow the author's instructions, then import the file you need.</p>
         ) : null}
         {failed ? (
           <p id={failureId} role="alert" className="t-meta text-error">
-            Install failed. Retry this mod.
+            {installState === "load-failed"
+              ? "Could not read the author's files. Retry, or open it on GameBanana."
+              : "Install failed. The reason is shown at the top of the window."}
           </p>
         ) : null}
+      </div>
+      <div className="flex items-center gap-1 px-2 pt-2 pb-2">
+        <button
+          type="button"
+          onClick={onView}
+          aria-label={`${mod.name} on GameBanana`}
+          title="Open on GameBanana"
+          className="btn btn-quiet p-2"
+        >
+          <ArrowSquareOut size={15} />
+        </button>
+        {mod.route !== "mod" ? (
+          <button
+            type="button"
+            data-testid={`mods-gb-route-${mod.id}`}
+            className="btn btn-ghost ml-auto"
+            disabled={mod.route === "manual" && locked}
+            onClick={onRoute}
+          >
+            {mod.route === "hud" ? "Open HUD" : "Import mod…"}
+          </button>
+        ) : installed ? (
+          <button
+            type="button"
+            data-testid={`mods-gb-manage-${mod.id}`}
+            className="btn btn-ghost ml-auto"
+            onClick={onManage}
+          >
+            Manage
+          </button>
+        ) : (
+          <button
+            type="button"
+            data-testid={`mods-gb-install-${mod.id}`}
+            className={`btn ${failed ? "btn-primary" : "btn-ghost"} ml-auto gap-1.5`}
+            aria-label={`${installLabel} ${mod.name}`}
+            aria-describedby={failed ? failureId : undefined}
+            disabled={working || locked}
+            onClick={onInstall}
+          >
+            {failed ? <ArrowClockwise size={15} /> : null}
+            {installLabel}
+          </button>
+        )}
       </div>
     </article>
   );

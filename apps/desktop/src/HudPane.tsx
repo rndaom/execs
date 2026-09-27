@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowSquareOut,
+  Check,
   FolderOpen,
   Images,
   MagnifyingGlass,
@@ -32,6 +33,13 @@ import {
   openExternal,
 } from "./lib/bridge";
 import { hexToRgb, rgbToHex } from "./lib/color";
+import {
+  applyHudInstallProgress,
+  type HudInstallKind,
+  type HudInstallRun,
+  hudInstallDetail,
+  startHudInstall,
+} from "./lib/hud-install-ui";
 import {
   canInstallHud,
   filterHudCatalog,
@@ -127,7 +135,7 @@ export function HudPane({
   onRetryLocal?: () => void;
   onRefresh: () => void;
   onInstall: (id: string) => HudMutationResult;
-  onUpdate: () => void;
+  onUpdate: () => HudMutationResult;
   /** Resolves when the removal settles; the toast reports it. */
   onReturnToStock: () => Promise<unknown>;
   onMatch: (id: string) => void;
@@ -155,6 +163,27 @@ export function HudPane({
   const [importOpen, setImportOpen] = useState(false);
   const [replacement, setReplacement] = useState<HudReplacement | null>(null);
   const [confirmStock, setConfirmStock] = useState(false);
+  const [installRun, setInstallRun] = useState<HudInstallRun | null>(null);
+  const installRunning = installRun !== null;
+  // Listen only while an install runs; the backend emits its real steps.
+  useEffect(() => {
+    if (!installRunning) return;
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    void api
+      .onHudInstallProgress((progress) =>
+        setInstallRun((run) => applyHudInstallProgress(run, progress)),
+      )
+      .then((stop) => {
+        if (cancelled) stop();
+        else unlisten = stop;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [api, installRunning]);
   const recordKey = installedKeyOf(profileId, state);
   const incomingSeed = useMemo(
     () => seedHudOptions(schema, state.installed),
@@ -230,19 +259,27 @@ export function HudPane({
     if (installedId) {
       setReplacement({ entry, profileId, installedId });
     } else {
-      void finishInstallation(() => onInstall(entry.id));
+      void finishInstallation(() => onInstall(entry.id), entry, "install");
     }
   }
 
-  async function finishInstallation(operation: () => HudMutationResult) {
+  async function finishInstallation(
+    operation: () => HudMutationResult,
+    // Local imports have no catalog download steps, so they show no panel.
+    entry: HudCatalogEntry | null = null,
+    kind: HudInstallKind = "install",
+  ) {
     const expectedProfile = profileId;
+    setInstallRun(entry ? startHudInstall(entry, kind) : null);
     try {
       const installed = await operation();
+      setInstallRun(null);
       if (installed === true && currentProfile.current === expectedProfile) {
-        selectSurface("installed");
+        if (kind !== "update") selectSurface("installed");
         setError(null, "hud:mutation");
       }
     } catch (error) {
+      setInstallRun(null);
       setError(
         error instanceof Error ? error.message : "Could not install the HUD.",
         "hud:mutation",
@@ -345,7 +382,7 @@ export function HudPane({
                         data-testid="hud-update"
                         disabled={mutationBlocked}
                         title={mutationReason}
-                        onClick={onUpdate}
+                        onClick={() => void finishInstallation(onUpdate, installedEntry, "update")}
                         className="btn btn-primary"
                       >
                         {running ? "Close TF2 to update" : "Update HUD"}
@@ -885,6 +922,8 @@ export function HudPane({
               >
                 {paged.items.map((entry) => {
                   const current = installedId?.toLowerCase() === entry.id.toLowerCase();
+                  const installingHere =
+                    installRun !== null && installRun.id.toLowerCase() === entry.id.toLowerCase();
                   const installable = canInstallHud(entry);
                   const shots = entry.screenshots.length;
                   const hasPictures = shots > 0 || entry.album !== null || entry.banner !== null;
@@ -894,19 +933,43 @@ export function HudPane({
                       data-testid={`hud-card-${entry.id}`}
                       data-github={entry.github ? "true" : "false"}
                       data-install={entry.install}
-                      className={`surface flex min-w-0 flex-col overflow-hidden ${current ? "ring-1 ring-brand" : ""}`}
+                      data-current={current ? "true" : undefined}
+                      className={`surface flex min-w-0 flex-col overflow-hidden ${current || installingHere ? "ring-2 ring-brand" : ""}`}
                     >
-                      <button
-                        type="button"
-                        title={
-                          hasPictures ? `View ${hudDisplayName(entry)} screenshots` : undefined
-                        }
-                        disabled={!hasPictures}
-                        onClick={() => setViewer({ entry, index: 0 })}
-                        className="block aspect-video w-full shrink-0 cursor-zoom-in overflow-hidden bg-panel disabled:cursor-default"
-                      >
-                        <HudPreview src={entry.banner} name={hudDisplayName(entry)} compact />
-                      </button>
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
+                          title={
+                            hasPictures ? `View ${hudDisplayName(entry)} screenshots` : undefined
+                          }
+                          disabled={!hasPictures}
+                          onClick={() => setViewer({ entry, index: 0 })}
+                          className="block aspect-video w-full shrink-0 cursor-zoom-in overflow-hidden bg-panel disabled:cursor-default"
+                        >
+                          <HudPreview src={entry.banner} name={hudDisplayName(entry)} compact />
+                        </button>
+                        {current && !installingHere ? (
+                          <span
+                            data-testid={`hud-installed-overlay-${entry.id}`}
+                            className="pointer-events-none absolute top-2.5 left-2.5 inline-flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 font-semibold text-[13px] text-on-brand leading-none"
+                          >
+                            <Check size={14} weight="bold" aria-hidden="true" />
+                            Installed
+                          </span>
+                        ) : null}
+                        {installingHere && installRun ? (
+                          <div
+                            data-testid={`hud-installing-overlay-${entry.id}`}
+                            className="enter-fade absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg/80 px-4 text-center"
+                          >
+                            <Spinner size={22} />
+                            <span className="t-row">
+                              {installRun.kind === "update" ? "Updating" : "Installing"}
+                            </span>
+                            <span className="t-meta">{hudInstallDetail(installRun)}</span>
+                          </div>
+                        ) : null}
+                      </div>
                       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 px-3 pt-2">
                         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                           <button
@@ -918,7 +981,6 @@ export function HudPane({
                           >
                             {hudDisplayName(entry)}
                           </button>
-                          {current ? <span className="badge">Installed</span> : null}
                         </div>
                         <p className="t-meta truncate">{hudAuthorCopy(entry)}</p>
                         {sort !== "name" ? (
@@ -1143,7 +1205,11 @@ export function HudPane({
               onClick={() => {
                 if (mutationBlocked) return;
                 setReplacement(null);
-                void finishInstallation(() => onInstall(currentReplacement.entry.id));
+                void finishInstallation(
+                  () => onInstall(currentReplacement.entry.id),
+                  currentReplacement.entry,
+                  "install",
+                );
               }}
             >
               {running ? "Close TF2 to replace" : "Replace HUD"}

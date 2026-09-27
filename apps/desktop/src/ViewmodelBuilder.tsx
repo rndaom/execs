@@ -1,7 +1,14 @@
-import { ArrowClockwise, MagnifyingGlass } from "@phosphor-icons/react";
+import { ArrowClockwise } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Caret } from "./components/ui/Caret";
 import { ClassIcon } from "./components/ui/ClassIcon";
 import { ClassTabs } from "./components/ui/ClassTabs";
+import {
+  ContextMenu,
+  ContextMenuItem,
+  type ContextMenuPosition,
+} from "./components/ui/ContextMenu";
+import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { Segmented } from "./components/ui/Segmented";
 import { Loading, Spinner } from "./components/ui/Spinner";
@@ -20,6 +27,8 @@ import {
   conflictingViewmodelGroupIds,
   selectedViewmodelChoices,
   VIEWMODEL_PRESET_LABELS,
+  type ViewmodelChoice,
+  type ViewmodelClassLayout,
   type ViewmodelDraftChoices,
   type ViewmodelHideMode,
   type ViewmodelPreset,
@@ -28,12 +37,20 @@ import {
   viewmodelChoiceChanges,
   viewmodelClasses,
   viewmodelClassLabel,
+  viewmodelClassLayout,
+  viewmodelClassSummary,
+  viewmodelConflictRows,
   viewmodelDraftBuildRequest,
+  viewmodelExceptions,
+  viewmodelInspectChoice,
   viewmodelPresetChoices,
+  viewmodelRowChoice,
   viewmodelRowItemNames,
   viewmodelRowLabel,
   viewmodelRowsForClass,
-  viewmodelSectionsForClass,
+  viewmodelSlotChoice,
+  viewmodelWithRows,
+  viewmodelWithSlot,
 } from "./lib/viewmodel-ui";
 
 type CatalogState = {
@@ -56,6 +73,11 @@ const MODE_OPTIONS: { id: "shown" | ViewmodelHideMode; label: string; title: str
   { id: "weapon", label: "Hands only", title: "Hide the weapon and keep the hands" },
 ];
 
+const INSPECT_OPTIONS: { id: "shown" | "full"; label: string; title: string }[] = [
+  { id: "shown", label: "Shown", title: "Keep inspect animations" },
+  { id: "full", label: "Hidden", title: "Hide the hands and weapon while inspecting" },
+];
+
 const PRESET_OPTIONS: { id: ViewmodelPreset; label: string }[] = (
   ["show-all", "hide-all", "keep-melee"] as const
 ).map((id) => ({ id, label: VIEWMODEL_PRESET_LABELS[id] }));
@@ -72,6 +94,7 @@ function choiceLabel(mode: ViewmodelHideMode | "shown"): string {
 /** Per-class viewmodel choices built from the player's installed TF2 files. */
 export function ViewmodelBuilder({
   active,
+  profileId = null,
   profilePreload,
   savedRecipe,
   locked = false,
@@ -79,6 +102,8 @@ export function ViewmodelBuilder({
   onBuild,
 }: {
   active: boolean;
+  /** Remembers whether Customize weapons is open, per profile. */
+  profileId?: string | null;
   loadCatalog: () => Promise<ViewmodelSourceCatalog>;
   profilePreload: boolean | null;
   /** The saved locally built recipe, used to show its choices when the sources still match. */
@@ -250,6 +275,7 @@ export function ViewmodelBuilder({
         <ViewmodelCatalogChoices
           key={viewmodelCatalogRevision(catalog)}
           catalog={catalog}
+          profileId={profileId}
           editable={editable}
           active={active}
           busy={busy}
@@ -287,6 +313,7 @@ function sameChoices(left: ViewmodelDraftChoices, right: ViewmodelDraftChoices):
 
 function ViewmodelCatalogChoices({
   catalog,
+  profileId,
   editable,
   active,
   busy,
@@ -297,6 +324,7 @@ function ViewmodelCatalogChoices({
   onRefresh,
 }: {
   catalog: ViewmodelSourceCatalog;
+  profileId: string | null;
   editable: boolean;
   active: boolean;
   busy: boolean;
@@ -308,7 +336,6 @@ function ViewmodelCatalogChoices({
 }) {
   const classes = viewmodelClasses(catalog);
   const [selectedClass, setSelectedClass] = useState(classes[0] ?? "");
-  const [query, setQuery] = useState("");
   const [saved] = useState(() => savedChoices(catalog, savedRecipe));
   const [choices, setChoices] = useState<ViewmodelDraftChoices>(saved);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -318,7 +345,8 @@ function ViewmodelCatalogChoices({
   // The draft before the last whole-profile change, until another edit.
   const [undo, setUndo] = useState<ViewmodelDraftChoices | null>(null);
   const [building, setBuilding] = useState(false);
-  const sections = viewmodelSectionsForClass(catalog, selectedClass, query);
+  const layouts = new Map(classes.map((name) => [name, viewmodelClassLayout(catalog, name)]));
+  const layout = layouts.get(selectedClass);
   const reviewRequest =
     profilePreload === null ? null : viewmodelDraftBuildRequest(catalog, choices, profilePreload);
   const selected = reviewRequest?.choices ?? selectedViewmodelChoices(choices);
@@ -350,17 +378,9 @@ function ViewmodelCatalogChoices({
     setPresetOpen(false);
   }
 
-  // One row can cover a weapon and its reskins; every group in it follows the choice.
-  function choose(row: ViewmodelRow, mode: ViewmodelHideMode | "shown") {
+  function edit(change: (current: ViewmodelDraftChoices) => ViewmodelDraftChoices) {
     setUndo(null);
-    setChoices((current) => {
-      const next = { ...current };
-      for (const group of row.groups) {
-        if (mode === "shown") delete next[group.id];
-        else next[group.id] = mode;
-      }
-      return next;
-    });
+    setChoices(change);
   }
 
   async function build() {
@@ -373,15 +393,26 @@ function ViewmodelCatalogChoices({
     }
   }
 
-  const rowChoice = (row: ViewmodelRow): ViewmodelHideMode | "shown" =>
-    choices[row.groups[0].id] ?? "shown";
   const rowsByClass = new Map(classes.map((name) => [name, viewmodelRowsForClass(catalog, name)]));
-  // Review in the same class and loadout order as the list.
-  const reviewRows = classes.flatMap((name) =>
-    (rowsByClass.get(name) ?? []).filter((row) => rowChoice(row) !== "shown"),
+  const hiddenRows = classes.flatMap((name) =>
+    (rowsByClass.get(name) ?? []).filter((row) => viewmodelRowChoice(choices, row) !== "shown"),
   );
-  const hiddenIn = (className: string) =>
-    (rowsByClass.get(className) ?? []).filter((row) => rowChoice(row) !== "shown").length;
+  // Review and the class tabs read per class, the way the choices are made.
+  const summaries = classes.flatMap((name) => {
+    const classLayout = layouts.get(name);
+    const summary = classLayout ? viewmodelClassSummary(choices, classLayout) : null;
+    return summary ? [{ name, summary }] : [];
+  });
+  const changedIn = (className: string) => {
+    const classLayout = layouts.get(className);
+    if (!classLayout) return 0;
+    return (
+      classLayout.slots.filter((slot) => viewmodelSlotChoice(choices, slot.rows) !== "shown")
+        .length +
+      Number(viewmodelInspectChoice(choices, classLayout.inspect) !== "shown") +
+      viewmodelExceptions(choices, classLayout).length
+    );
+  };
 
   return (
     <div>
@@ -395,7 +426,7 @@ function ViewmodelCatalogChoices({
                 {viewmodelClassLabel(name)}
               </>
             ),
-            meta: hiddenIn(name) || undefined,
+            meta: changedIn(name) || undefined,
           }))}
           selected={selectedClass}
           label="Viewmodel class"
@@ -412,24 +443,7 @@ function ViewmodelCatalogChoices({
           role="tabpanel"
           aria-labelledby={`viewmodel-class-${selectedClass}`}
         >
-          <div className="mt-4 flex items-center gap-2">
-            <div className="relative min-w-0 flex-1">
-              <MagnifyingGlass
-                size={14}
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint"
-              />
-              <input
-                id="viewmodel-group-search"
-                data-testid="viewmodel-group-search"
-                type="search"
-                aria-label={`Search ${viewmodelClassLabel(selectedClass)} weapons`}
-                className="input w-full pl-8"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={`Search ${viewmodelClassLabel(selectedClass)} weapons`}
-              />
-            </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
               data-testid="viewmodel-catalog-refresh"
@@ -451,10 +465,13 @@ function ViewmodelCatalogChoices({
             >
               Every class…
             </button>
-            <p className="t-meta ml-2 whitespace-nowrap" data-testid="viewmodel-choice-summary">
-              {reviewRows.length
-                ? `${reviewRows.length} hidden${changed ? " · not built yet" : ""}`
-                : "Everything shown"}
+            <p
+              className="t-meta ml-2 min-w-0 flex-1 whitespace-nowrap"
+              data-testid="viewmodel-choice-summary"
+            >
+              {hiddenRows.length
+                ? `${summaries.length} ${summaries.length === 1 ? "class" : "classes"} changed${changed ? " · not built yet" : ""}`
+                : `Everything shown${changed ? " · not built yet" : ""}`}
             </p>
             {undo ? (
               <button
@@ -481,57 +498,18 @@ function ViewmodelCatalogChoices({
             </button>
           </div>
 
-          {sections.length ? (
-            sections.map((section) => (
-              <div
-                key={section.id}
-                className="mt-6"
-                data-testid={`viewmodel-section-${section.id}`}
-              >
-                <h3 className="eyebrow mb-1">{section.label}</h3>
-                {section.rows.map((row) => {
-                  const others = viewmodelRowItemNames(row).slice(1);
-                  const label = viewmodelRowLabel(row);
-                  const group = row.groups[0];
-                  return (
-                    <div
-                      key={row.id}
-                      data-testid="viewmodel-group"
-                      data-group-id={row.id}
-                      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-edge py-2.5 last:border-b-0"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="t-row">{label}</p>
-                        {others.length ? (
-                          <p className="t-meta truncate" title={others.join(", ")}>
-                            Also {others.slice(0, 3).join(", ")}
-                            {others.length > 3 ? ` and ${others.length - 3} more` : ""}
-                          </p>
-                        ) : null}
-                        {row.groups.some((member) => conflicts.has(member.id)) ? (
-                          <p className="t-meta text-warn">
-                            Shares animations with another choice set differently.
-                          </p>
-                        ) : null}
-                      </div>
-                      <Segmented<"shown" | ViewmodelHideMode>
-                        label={`${viewmodelClassLabel(group.class)} ${label}`}
-                        size="sm"
-                        neutralValue="shown"
-                        options={MODE_OPTIONS}
-                        value={rowChoice(row)}
-                        disabled={!editable}
-                        testIdPrefix={`viewmodel-choice-${row.id}`}
-                        onChange={(mode) => choose(row, mode)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            ))
-          ) : (
-            <p className="t-meta mt-6">No {viewmodelClassLabel(selectedClass)} weapons match.</p>
-          )}
+          {layout ? (
+            <ViewmodelClassChoices
+              key={selectedClass}
+              catalog={catalog}
+              className={selectedClass}
+              layout={layout}
+              choices={choices}
+              editable={editable}
+              profileId={profileId}
+              onEdit={edit}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -562,26 +540,25 @@ function ViewmodelCatalogChoices({
           )}
         </div>
         <p className="t-meta mt-4" data-testid="viewmodel-preset-count">
-          {proposedChanges.length === 0
-            ? "Nothing changes."
-            : `${proposedChanges.length} ${proposedChanges.length === 1 ? "choice changes" : "choices change"}:`}
+          {proposedChanges.length === 0 ? "Nothing changes." : "Afterwards:"}
         </p>
-        {proposedChanges.length ? (
+        {proposed && proposedChanges.length ? (
           <ul
             className="mt-2 grid max-h-64 gap-1.5 overflow-y-auto"
             data-testid="viewmodel-preset-changes"
           >
-            {proposedChanges.map((change) => (
-              <li key={change.row.id} className="flex justify-between gap-3 t-meta">
-                <span className="text-ink">
-                  {viewmodelClassLabel(change.row.groups[0].class)} ·{" "}
-                  {viewmodelRowLabel(change.row)}
-                </span>
-                <span className="whitespace-nowrap">
-                  {choiceLabel(change.from)} → {choiceLabel(change.to)}
-                </span>
-              </li>
-            ))}
+            {classes.map((name) => {
+              const classLayout = layouts.get(name);
+              if (!classLayout) return null;
+              return (
+                <li key={name} className="flex justify-between gap-3 t-meta">
+                  <span className="text-ink">{viewmodelClassLabel(name)}</span>
+                  <span className="text-right">
+                    {viewmodelClassSummary(proposed, classLayout) ?? "Everything shown"}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         ) : null}
         {proposedConflicts ? (
@@ -618,12 +595,10 @@ function ViewmodelCatalogChoices({
         }}
       >
         <ul className="mt-4 grid max-h-64 gap-1.5 overflow-y-auto">
-          {reviewRows.map((row) => (
-            <li key={row.id} className="flex justify-between gap-3 t-meta">
-              <span className="text-ink">
-                {viewmodelClassLabel(row.groups[0].class)} · {viewmodelRowLabel(row)}
-              </span>
-              <span>{rowChoice(row) === "full" ? "Hidden" : "Hands only"}</span>
+          {summaries.map(({ name, summary }) => (
+            <li key={name} className="flex justify-between gap-3 t-meta">
+              <span className="text-ink">{viewmodelClassLabel(name)}</span>
+              <span className="text-right">{summary}</span>
             </li>
           ))}
         </ul>
@@ -661,6 +636,213 @@ function ViewmodelCatalogChoices({
           </button>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+function slotWeaponNames(rows: ViewmodelRow[]): string {
+  const names = rows.map(viewmodelRowLabel);
+  return names.length > 4 ? `${names.slice(0, 4).join(", ")} and more` : names.join(", ");
+}
+
+/** One class: a line per slot, one for inspect animations, and per-weapon exceptions folded away. */
+function ViewmodelClassChoices({
+  catalog,
+  className,
+  layout,
+  choices,
+  editable,
+  profileId,
+  onEdit,
+}: {
+  catalog: ViewmodelSourceCatalog;
+  className: string;
+  layout: ViewmodelClassLayout;
+  choices: ViewmodelDraftChoices;
+  editable: boolean;
+  profileId: string | null;
+  onEdit: (change: (current: ViewmodelDraftChoices) => ViewmodelDraftChoices) => void;
+}) {
+  const [menu, setMenu] = useState<{
+    row: ViewmodelRow;
+    base: ViewmodelChoice;
+    position: ContextMenuPosition;
+  } | null>(null);
+  const classLabel = viewmodelClassLabel(className);
+  const inspect = viewmodelInspectChoice(choices, layout.inspect);
+  const exceptions = viewmodelExceptions(choices, layout);
+  const conflicts = viewmodelConflictRows(catalog, choices, className);
+  const lines = [
+    ...layout.slots.map((slot) => ({
+      id: slot.id as string,
+      label: slot.label,
+      rows: slot.rows,
+      base: viewmodelSlotChoice(choices, slot.rows),
+    })),
+    ...(layout.other.length
+      ? [{ id: "other", label: "Other", rows: layout.other, base: "shown" as ViewmodelChoice }]
+      : []),
+  ];
+
+  return (
+    <div className="mt-4">
+      {layout.slots.map((slot) => (
+        <div
+          key={slot.id}
+          data-testid={`viewmodel-slot-${slot.id}`}
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-edge py-2.5"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="t-row">{slot.label}</p>
+            <p
+              className="t-meta truncate"
+              title={slot.rows.flatMap(viewmodelRowItemNames).join(", ")}
+            >
+              {slotWeaponNames(slot.rows)}
+            </p>
+          </div>
+          <Segmented<ViewmodelChoice>
+            label={`${classLabel} ${slot.label}`}
+            size="sm"
+            neutralValue="shown"
+            options={MODE_OPTIONS}
+            value={viewmodelSlotChoice(choices, slot.rows)}
+            disabled={!editable}
+            testIdPrefix={`viewmodel-slot-choice-${slot.id}`}
+            onChange={(mode) => onEdit((current) => viewmodelWithSlot(current, slot.rows, mode))}
+          />
+        </div>
+      ))}
+      {layout.inspect.length ? (
+        <div
+          data-testid="viewmodel-slot-inspect"
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-edge py-2.5"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="t-row">Inspect</p>
+            <p className="t-meta">
+              {inspect === "mixed"
+                ? "Some inspect animations are hidden."
+                : "Inspect animations for every weapon."}
+            </p>
+          </div>
+          <Segmented<"shown" | "full">
+            label={`${classLabel} inspect`}
+            size="sm"
+            neutralValue="shown"
+            options={INSPECT_OPTIONS}
+            value={inspect === "mixed" ? ("mixed" as "shown") : inspect}
+            disabled={!editable}
+            testIdPrefix="viewmodel-slot-choice-inspect"
+            onChange={(mode) =>
+              onEdit((current) => viewmodelWithRows(current, layout.inspect, mode))
+            }
+          />
+        </div>
+      ) : null}
+
+      {conflicts.length ? (
+        <p role="alert" data-testid="viewmodel-conflict" className="t-meta mt-3 text-warn">
+          {conflicts.map(viewmodelRowLabel).join(" and ")} share animations but are set differently.
+          Set them the same to build.
+        </p>
+      ) : null}
+
+      <Disclosure
+        profileId={profileId}
+        storageKey="viewmodel-weapons"
+        testId="viewmodel-weapons"
+        className="mt-4"
+        summary={
+          <span className="flex min-w-0 flex-1 items-baseline justify-between gap-3">
+            <span>Customize weapons</span>
+            <span className="t-meta">
+              {exceptions.length
+                ? `${exceptions.length} set on ${exceptions.length === 1 ? "its" : "their"} own`
+                : "Every weapon follows its slot"}
+            </span>
+          </span>
+        }
+      >
+        <div className="mt-2 grid gap-2">
+          {lines.map((line) => (
+            <div
+              key={line.id}
+              data-testid={`viewmodel-weapons-${line.id}`}
+              className="flex min-w-0 items-baseline gap-3"
+            >
+              <span className="t-meta w-20 shrink-0">{line.label}</span>
+              <div className="flex min-w-0 flex-wrap gap-1.5">
+                {line.rows.map((row) => {
+                  const choice = viewmodelRowChoice(choices, row);
+                  const own = choice !== line.base;
+                  const names = viewmodelRowItemNames(row);
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      data-testid="viewmodel-weapon"
+                      data-group-id={row.id}
+                      data-choice={choice}
+                      disabled={!editable}
+                      aria-haspopup="menu"
+                      aria-label={`${viewmodelRowLabel(row)}: ${choiceLabel(choice)}`}
+                      title={names.length > 1 ? names.join(", ") : undefined}
+                      onClick={(event) => {
+                        const bounds = event.currentTarget.getBoundingClientRect();
+                        setMenu({
+                          row,
+                          base: line.base,
+                          position: { x: bounds.left, y: bounds.bottom + 4 },
+                        });
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12.5px] transition-colors duration-150 disabled:opacity-40 ${
+                        own
+                          ? "border-brand bg-brand/10 text-ink"
+                          : "border-edge text-ink-muted hover:border-edge-strong hover:text-ink"
+                      }`}
+                    >
+                      {viewmodelRowLabel(row)}
+                      {own ? <span className="text-ink-faint">· {choiceLabel(choice)}</span> : null}
+                      <Caret />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Disclosure>
+
+      {menu ? (
+        <ContextMenu
+          label={`${viewmodelRowLabel(menu.row)} viewmodel`}
+          position={menu.position}
+          onClose={() => setMenu(null)}
+        >
+          {MODE_OPTIONS.map((option) => (
+            <ContextMenuItem
+              key={option.id}
+              checked={viewmodelRowChoice(choices, menu.row) === option.id}
+              detail={option.id === menu.base ? "Same as slot" : undefined}
+              onSelect={() => {
+                onEdit((current) => viewmodelWithRows(current, [menu.row], option.id));
+                setMenu(null);
+              }}
+            >
+              <span className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={`size-1.5 rounded-full ${
+                    viewmodelRowChoice(choices, menu.row) === option.id ? "bg-brand" : ""
+                  }`}
+                />
+                {option.label}
+              </span>
+            </ContextMenuItem>
+          ))}
+        </ContextMenu>
+      ) : null}
     </div>
   );
 }

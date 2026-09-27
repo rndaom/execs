@@ -24,6 +24,7 @@ import { GameBananaPagination } from "./GameBananaPagination";
 import { Alert } from "./ui/Alert";
 import { Caret } from "./ui/Caret";
 import { Modal } from "./ui/Modal";
+import { OptionTile } from "./ui/OptionTile";
 import { Segmented } from "./ui/Segmented";
 import { Loading } from "./ui/Spinner";
 import { Switch } from "./ui/Switch";
@@ -92,7 +93,7 @@ export function GameBananaBrowser({
       setAnnouncement(`Choose a file for ${mod.name}.`);
     } catch {
       if (token !== choiceToken.current) return;
-      setInstall({ id: mod.id, state: "failed" });
+      setInstall({ id: mod.id, state: "load-failed" });
       setAnnouncement(`Could not load files for ${mod.name}. Retry is available on its card.`);
     }
   }
@@ -398,6 +399,7 @@ export function GameBananaBrowser({
                 installState={install?.id === mod.id ? install.state : "idle"}
                 onView={() => void openExternal(mod.url)}
                 onInstall={() => void prepareInstall(mod)}
+                onManage={onManageInstalled}
                 onRoute={() => {
                   if (mod.route === "hud") onOpenHud?.();
                   else onManualImport?.();
@@ -466,8 +468,13 @@ export function GameBananaBrowser({
         <Modal
           open
           title={`Choose a file for ${chooser.mod.name}`}
-          description="GameBanana authors may offer separate versions or optional addons. Choose the intended VPK, ZIP, or 7z before downloading."
+          description={
+            chooser.variants.length > 1
+              ? "The author uploaded more than one file. Pick the one you want."
+              : "Check the file, then download and install it."
+          }
           testId="mods-gb-file-choice"
+          className="fixed top-1/2 left-1/2 max-h-[calc(100dvh-2rem)] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
           onClose={() => setChooser(null)}
         >
           {chooser.variants.some((variant) => variant.splitPart) ? (
@@ -476,34 +483,33 @@ export function GameBananaBrowser({
               instructions, then use Import mod.
             </Alert>
           ) : null}
-          <div className="max-h-[55vh] space-y-2 overflow-y-auto py-4">
+          <div
+            role="radiogroup"
+            aria-label="Files"
+            className="mt-4 grid max-h-[55vh] gap-2 overflow-y-auto pb-4"
+          >
             {chooser.variants.map((variant) => (
-              <label
+              <OptionTile
                 key={variant.id}
-                className="flex cursor-pointer items-start gap-3 rounded border border-edge p-3"
-              >
-                <input
-                  type="radio"
-                  name="gamebanana-file"
-                  value={variant.id}
-                  checked={chooser.selectedId === variant.id}
-                  disabled={!variant.supported}
-                  onChange={() =>
-                    setChooser((current) =>
-                      current ? { ...current, selectedId: variant.id } : current,
-                    )
-                  }
-                />
-                <span className="min-w-0">
-                  <span className="block break-all text-sm text-ink">{variant.fileName}</span>
-                  {variant.description ? (
-                    <span className="t-meta mt-1 block whitespace-pre-wrap break-words">
-                      {variant.description}
-                    </span>
-                  ) : null}
-                  <span className="t-meta mt-1 block">{gameBananaVariantFacts(variant)}</span>
-                </span>
-              </label>
+                id={`mods-gb-file-${variant.id}`}
+                name="gamebanana-file"
+                value={String(variant.id)}
+                testId={`mods-gb-file-${variant.id}`}
+                selected={chooser.selectedId === variant.id}
+                disabled={!variant.supported}
+                title={<span className="break-all">{variant.fileName}</span>}
+                description={
+                  variant.description ? (
+                    <span className="whitespace-pre-wrap break-words">{variant.description}</span>
+                  ) : undefined
+                }
+                meta={<span className="t-meta">{gameBananaVariantFacts(variant)}</span>}
+                onSelect={() =>
+                  setChooser((current) =>
+                    current ? { ...current, selectedId: variant.id } : current,
+                  )
+                }
+              />
             ))}
           </div>
           <div className="flex flex-wrap justify-end gap-2 border-t border-edge pt-3">
