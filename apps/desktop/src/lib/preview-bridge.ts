@@ -42,6 +42,7 @@ import {
   previewInstalledState,
   schemaSupportedIds,
 } from "./hud-ui";
+import { createInventorySimulation } from "./inventory-simulation";
 import { recommendedLaunchOptions } from "./launch-ui";
 import {
   emptyAbsorbDelta,
@@ -255,72 +256,7 @@ export function createPreviewApi(state: PreviewState): Api {
   }
 
   const api: Api = {
-    async getInventory() {
-      return {
-        steamId: "Preview data",
-        personaName: "Preview player",
-        avatar: null,
-        capacity: 300,
-        warning: "Preview data · These are fixture items, not a Steam inventory.",
-        items: [
-          { id: "preview-1", definition: 13, position: 1, quality: 6, level: 1, customName: null },
-          {
-            id: "preview-paint",
-            definition: 17286,
-            position: 2,
-            quality: 15,
-            level: 1,
-            customName: null,
-          },
-          {
-            id: "preview-kit",
-            definition: 6526,
-            position: 3,
-            quality: 6,
-            level: 1,
-            customName: null,
-          },
-          {
-            id: "preview-2",
-            definition: 13,
-            position: 51,
-            quality: 11,
-            level: 10,
-            customName: "A familiar scattergun",
-          },
-          {
-            id: "preview-3",
-            definition: 5002,
-            position: 0,
-            quality: 6,
-            level: 1,
-            customName: null,
-          },
-        ],
-        definitions: {
-          "13": { name: "Scattergun", kind: "Scattergun", classes: ["scout"], icon: null },
-          "5002": { name: "Refined Metal", kind: "Crafting Item", classes: [], icon: null },
-          "17286": { name: "War Paint", kind: "War Paint", classes: [], icon: null },
-          "6526": { name: "Killstreak Kit", kind: "Tool", classes: [], icon: null },
-        },
-        itemDescriptions: {
-          "preview-paint": {
-            name: "Skull Cracked War Paint",
-            kind: "War Paint",
-            classes: [],
-            icon: null,
-            details: ["Minimal Wear", "Pattern preview unavailable"],
-          },
-          "preview-kit": {
-            name: "Professional Killstreak Kit · Rocket Launcher",
-            kind: "Tool",
-            classes: [],
-            icon: null,
-            details: ["Sheen: Team Shine", "Killstreaker: Fire Horns"],
-          },
-        },
-      };
-    },
+    ...createInventorySimulation(),
     async getInventoryIcons() {
       return {};
     },
@@ -1063,6 +999,41 @@ export function createPreviewApi(state: PreviewState): Api {
     // --- hit and kill sounds ------------------------------------------------
     async hitsoundBytes() {
       throw notInPreview("Auditioning sounds");
+    },
+    async comfigHitsoundIndex() {
+      // Preview data: invented names and ids in comfig.app's shape.
+      const names = [
+        "Soft click",
+        "Glass tap",
+        "Bubble pop",
+        "Arcade coin",
+        "Wood block",
+        "Snare hit",
+        "Retro blip",
+        "Chime",
+        "Clap",
+        "Whistle",
+        "Laser zap",
+        "Metal clang",
+        "Piano note",
+        "Bass drop",
+        "Cowbell",
+        "Squeak",
+        "Rim shot",
+        "Cash register",
+        "Victory horn",
+        "Air horn",
+        "Crowd cheer",
+        "Level up",
+        "Final bell",
+        "Record scratch",
+      ];
+      return names.map((name, order) => ({
+        name,
+        hash: order.toString(16).padStart(2, "0").repeat(64),
+        kind: order < 16 ? ("hit" as const) : ("kill" as const),
+        order,
+      }));
     },
     async listStockHitsounds() {
       // Every stock effect is "present" in preview; nothing can play anyway.

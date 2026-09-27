@@ -109,7 +109,10 @@ pub fn decode_vtf_frame0_with_max_dimension(
     let low_res_format = read_i32(bytes, 57).ok_or("VTF header truncated.")?;
     let low_res_w = u32::from(*bytes.get(61).ok_or("VTF header truncated.")?);
     let low_res_h = u32::from(*bytes.get(62).ok_or("VTF header truncated.")?);
-    if width == 0 || height == 0 || width > 2048 || height > 2048 {
+    // A small preview decodes only a small mip, so a 4096-pixel source (a few
+    // installed paint patterns) costs no more than a 2048-pixel one.
+    let source_limit = if max_dimension <= 1024 { 4096 } else { 2048 };
+    if width == 0 || height == 0 || width > source_limit || height > source_limit {
         return Err(format!("Unsupported VTF dimensions {width}x{height}."));
     }
     let max_mip_count = u32::BITS - width.max(height).leading_zeros();
@@ -429,6 +432,19 @@ mod tests {
         let decoded = decode_vtf_frame0(&bytes).unwrap();
         assert_eq!((decoded.width, decoded.height), (2048, 2048));
         assert_eq!(decoded.rgba.len(), 2048 * 2048 * 4);
+    }
+
+    #[test]
+    fn previews_a_4096_pattern_from_a_small_mip_but_never_decodes_it_whole() {
+        let mut bytes = header(2, 4096, 4096, 1, FORMAT_DXT1, 13, 80);
+        // Mips are stored smallest first; DXT1 is 8 bytes per 4x4 block.
+        for mip in (0..13).rev() {
+            let side = (4096u32 >> mip).max(1).div_ceil(4) as usize;
+            bytes.extend(vec![0u8; side * side * 8]);
+        }
+        let preview = decode_vtf_frame0_with_max_dimension(&bytes, 192).unwrap();
+        assert_eq!((preview.width, preview.height), (256, 256));
+        assert!(decode_vtf_frame0(&bytes).is_err());
     }
 
     #[test]

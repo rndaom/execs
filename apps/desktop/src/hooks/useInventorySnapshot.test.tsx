@@ -63,6 +63,29 @@ it("loads once even in Strict Mode and schedules successive quiet refreshes", as
   expect(getInventory).toHaveBeenCalledTimes(3);
 });
 
+it("does not let an older in-flight read overwrite an operation snapshot", async () => {
+  let finish: (value: unknown) => void = () => {};
+  getInventory.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render();
+  await act(async () =>
+    result.replaceSnapshot({
+      steamId: "one",
+      capacity: 300,
+      items: [],
+      definitions: {},
+      warning: "operation result",
+    }),
+  );
+  await act(async () => finish({ steamId: "one", items: [], warning: "old read" }));
+  expect(result.snapshot?.warning).toBe("operation result");
+  expect(result.loading).toBe(false);
+});
+
 it("sleeps when hidden, unfocused, inactive, busy or running and catches up on return", async () => {
   props.active = false;
   await render();

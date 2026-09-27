@@ -59,7 +59,8 @@ export const STORAGE_GROUP_COPY: Record<StorageGroupId, { label: string; detail:
   },
   downloads: {
     label: "Downloads",
-    detail: "HUD catalog and options, and Casual setup files. Downloaded again when needed.",
+    detail:
+      "HUD catalog and options, comfig.app sounds, and Casual setup files. Downloaded again when needed.",
   },
   retired: { label: "Retired downloads", detail: "Left over from features execs no longer has." },
   logs: { label: "Logs", detail: "Crash logs for bug reports." },

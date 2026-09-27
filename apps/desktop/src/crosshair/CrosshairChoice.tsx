@@ -1,6 +1,6 @@
-import { CaretDown } from "@phosphor-icons/react";
 import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Caret } from "../components/ui/Caret";
 import { AutosaveActivity } from "../hooks/useAutosave";
 import type { CrosshairColor, CrosshairShape } from "../lib/crosshair-ui";
 import { crosshairShapeLabel } from "./CrosshairPreview";
@@ -145,7 +145,7 @@ export function CrosshairChoice({
         <span className="max-w-24 truncate capitalize">
           {mixed ? "Mixed" : crosshairShapeLabel(value)}
         </span>
-        <CaretDown size={12} className="text-ink-faint" />
+        <Caret open={open} />
       </button>
       {open && active
         ? createPortal(

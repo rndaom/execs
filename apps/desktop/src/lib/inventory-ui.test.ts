@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { InventorySnapshot } from "./bridge";
-import { inventoryPage, itemName, qualityColor } from "./inventory-ui";
+import {
+  compareInventoryItems,
+  inventoryPage,
+  itemDescriptionTag,
+  itemLines,
+  itemName,
+  itemTitle,
+  itemTypeLine,
+  originalItemName,
+  qualityColor,
+} from "./inventory-ui";
 
 const snapshot: InventorySnapshot = {
   steamId: "test",
@@ -39,17 +49,17 @@ describe("inventory browsing", () => {
     expect(snapshot.items[0].position).toBe(51);
     expect(itemName(snapshot, snapshot.items[0])).toBe("Named gun");
   });
-  it("sorts a compact view without moving slots or mutating the snapshot", () => {
+  it("compares names and qualities without changing item positions", () => {
     const before = structuredClone(snapshot);
-    const byName = inventoryPage(snapshot, "", null, 1, "name");
-    expect(byName.slots.map((slot) => slot.item?.id)).toEqual(["9007199254740993", "2"]);
-    expect(byName.pages).toBe(1);
-    expect(byName.slots.map((slot) => slot.position)).toEqual([51, 0]);
-    expect(
-      inventoryPage(snapshot, "", null, 1, "quality").slots.map((slot) => slot.item?.quality),
-    ).toEqual([11, 6]);
+    for (const sort of ["name", "quality"] as const) {
+      expect(
+        [...snapshot.items]
+          .sort((a, b) => compareInventoryItems(snapshot, a, b, sort))
+          .map((item) => item.id),
+      ).toEqual(["9007199254740993", "2"]);
+    }
     expect(snapshot).toEqual(before);
-    expect(inventoryPage(snapshot, "", null, 2, "position").slots[0].position).toBe(51);
+    expect(inventoryPage(snapshot, "", null, 2).slots[0].position).toBe(51);
   });
   it("searches per-instance paint and kit details and honors missing variant artwork", () => {
     const enriched = {
@@ -67,8 +77,53 @@ describe("inventory browsing", () => {
     expect(itemName(enriched, enriched.items[1])).toBe("Mercenary Grade War Paint");
     expect(inventoryPage(enriched, "autumn", null, 1).slots[0].item?.id).toBe("2");
     expect(inventoryPage(enriched, "minimal wear", null, 1).matchCount).toBe(1);
-    expect(inventoryPage(enriched, "", null, 1, "type").slots.map((slot) => slot.item?.id)).toEqual(
-      ["9007199254740993", "2"],
-    );
+    expect(
+      [...enriched.items]
+        .sort((a, b) => compareInventoryItems(enriched, a, b, "type"))
+        .map((item) => item.id),
+    ).toEqual(["9007199254740993", "2"]);
+  });
+});
+
+describe("TF2 item text", () => {
+  const named = { ...snapshot.items[0], customDescription: "Found it under the bed." };
+  it("quotes a Name Tag and keeps the original name visible", () => {
+    expect(itemTitle(snapshot, named)).toBe("“Named gun”");
+    expect(originalItemName(snapshot, named)).toBe("Strange Scattergun");
+    expect(originalItemName(snapshot, snapshot.items[1])).toBeNull();
+    const steam = {
+      image: "preview-image-name",
+      name: "''Named gun''",
+      marketName: "Strange Scattergun",
+      nameColor: "#CF6A32",
+      typeLine: "Strange Scattergun - Kills: 4",
+      lines: [
+        { text: " ", color: null, user: false },
+        { text: "''Found it under the bed.''", color: null, user: true },
+        { text: " ", color: null, user: false },
+      ],
+      originalName: "Scattergun",
+    };
+    expect(itemTitle(snapshot, named, steam)).toBe("“Named gun”");
+    expect(itemTypeLine(snapshot, named, steam)).toBe("Strange Scattergun - Kills: 4");
+    expect(itemTypeLine(snapshot, snapshot.items[1])).toBe("Level 1 Primary");
+    // Spacers never lead or trail, and Steam's '' quotes become TF2's.
+    expect(itemLines(snapshot, named, steam)).toEqual([
+      { text: "“Found it under the bed.”", color: null, user: true },
+    ]);
+    expect(itemDescriptionTag(named, steam)).toBe("“Found it under the bed.”");
+  });
+  it("uses installed details and the description tag without Steam", () => {
+    expect(itemLines(snapshot, named).at(-1)).toEqual({
+      text: "“Found it under the bed.”",
+      color: null,
+      user: true,
+    });
+    expect(itemDescriptionTag(snapshot.items[1])).toBeNull();
+    expect(itemTitle(snapshot, snapshot.items[1], undefined)).toBe("Scattergun");
+  });
+  it("finds items by their description tag", () => {
+    const tagged = { ...snapshot, items: [named, snapshot.items[1]] };
+    expect(inventoryPage(tagged, "under the bed", null, 1).matchCount).toBe(1);
   });
 });

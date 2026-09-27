@@ -74,6 +74,7 @@ beforeEach(() => {
     getCrosshairContentSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
     getCrosshairSourceStatus: vi.fn(async () => ({ state: "none" })),
     getPackCrosshairPreviews: vi.fn(async () => ({})),
+    comfigHitsoundIndex: async () => [],
     listStockHitsounds: vi.fn(async () => []),
     getHitsoundSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
     pickHitsoundFile: vi.fn(async () => ({

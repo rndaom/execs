@@ -239,13 +239,19 @@ describe("Files draft navigation", () => {
     await contextMenu(`[data-path="${first}"]`);
     const outgoing =
       '[data-testid="files-source-link"][data-direction="outgoing"][data-deferred="false"]';
-    expect(document.querySelector(outgoing)?.textContent).toContain(`${second}:1`);
+    expect(document.querySelector(outgoing)?.textContent).toContain(
+      `Open ${second.split("/").pop()}`,
+    );
+    expect(document.querySelector(outgoing)?.textContent).toContain("Line 1");
     await click(outgoing);
     expect(editor().contentDOM.getAttribute("aria-label")).toBe(`Contents of ${second}`);
     await contextMenu(`[data-path="${second}"]`);
     const incoming =
       '[data-testid="files-source-link"][data-direction="incoming"][data-deferred="false"]';
-    expect(document.querySelector(incoming)?.textContent).toContain(`Referenced by: ${first}:2`);
+    expect(document.querySelector(incoming)?.textContent).toContain(
+      `Used by ${first.split("/").pop()}`,
+    );
+    expect(document.querySelector(incoming)?.textContent).toContain("Line 2");
     await click(incoming);
     expect(editor().contentDOM.getAttribute("aria-label")).toBe(`Contents of ${first}`);
     expect(editor().state.doc.lineAt(editor().state.selection.main.head).number).toBe(2);
@@ -254,8 +260,10 @@ describe("Files draft navigation", () => {
     await contextMenu(`[data-path="${second}"]`);
     const deferredCaller =
       '[data-testid="files-source-link"][data-direction="incoming"][data-deferred="true"]';
-    expect(document.querySelector(deferredCaller)?.textContent).toContain(`${first}:3`);
-    expect(document.querySelector(deferredCaller)?.textContent).toContain("Deferred");
+    expect(document.querySelector(deferredCaller)?.textContent).toContain(
+      `Used by ${first.split("/").pop()}`,
+    );
+    expect(document.querySelector(deferredCaller)?.textContent).toContain("Line 3 · key or alias");
     await click(deferredCaller);
     expect(editor().state.doc.lineAt(editor().state.selection.main.head).number).toBe(3);
     expect(editor().state.doc.toString()).toBe(retained);

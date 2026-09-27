@@ -92,7 +92,8 @@ export function OnboardingFrame({
                   {index + 1}
                 </span>
                 <span className="t-meta text-ink">{step.label}</span>
-                <span className="text-[11px] leading-4 text-ink-faint">
+                {/* The ring already shows the current step; the state is for screen readers. */}
+                <span className="sr-only">
                   {step.state === "complete"
                     ? "Done"
                     : step.state === "current"

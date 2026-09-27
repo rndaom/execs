@@ -505,7 +505,9 @@ function ProfileFilesPane({
   return (
     <section data-testid="settings-files" className="flex min-h-0 min-w-0 flex-col gap-3 text-left">
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-2">
-        <h1 className="t-pane">Files</h1>
+        <h1 className="t-pane" data-pane-heading tabIndex={-1}>
+          Files
+        </h1>
         {dirtyDocuments.length > 1 && (
           <button
             type="button"
@@ -826,7 +828,7 @@ function ProfileFilesPane({
                   title="File actions"
                   onClick={(event) => openFileMenuFromButton(event, selected)}
                 >
-                  <DotsThree size={17} weight="bold" aria-hidden="true" />
+                  <DotsThree size={16} weight="bold" aria-hidden="true" />
                 </button>
                 {editable && (
                   <>
@@ -1112,7 +1114,7 @@ function ProfileFilesPane({
               setFileMenu(null);
             }}
           >
-            {menuFile.path === selected ? "Focus editor" : "Open"}
+            Open
           </ContextMenuItem>
           {menuFile.editable && (
             <ContextMenuItem
@@ -1160,14 +1162,20 @@ function ProfileFilesPane({
               data-direction={incoming ? "incoming" : "outgoing"}
               data-deferred={link.deferred}
               disabled={!path}
-              detail={link.deferred ? "Deferred" : undefined}
-              title={path ? `${path}:${line}` : "Unresolved"}
+              detail={path ? `Line ${line}${link.deferred ? " · key or alias" : ""}` : undefined}
+              title={
+                path
+                  ? `${path}:${line}${link.deferred ? " (runs from a bind or alias)" : ""}`
+                  : "The target file was not found"
+              }
               onSelect={() => {
                 if (path) pick(path, line);
                 setFileMenu(null);
               }}
             >
-              {incoming ? "Referenced by" : link.label}: {path ? `${path}:${line}` : "Unresolved"}
+              {path
+                ? `${incoming ? "Used by" : link.kind === "exec" ? "Open" : "Alias in"} ${path.split("/").pop()}`
+                : `${link.label}: not found`}
             </ContextMenuItem>
           ))}
           <ContextMenuSeparator />

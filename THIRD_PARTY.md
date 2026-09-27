@@ -13,7 +13,7 @@ pin is not a rights grant.
 | Project | How execs uses it | License or permission evidence |
 |---|---|---|
 | [mastercomfig](https://github.com/mastercomfig/mastercomfig) by mastercoms · [comfig.app](https://comfig.app) | Official release VPKs are downloaded at install time. Preset and module semantics come from its documentation. The Comfig pane opens comfig.app pages in an in-app window. | MIT |
-| [comfig-app](https://github.com/mastercomfig/comfig-app) | Preset and module documentation informs the Comfig controls. New hosted-sound catalog reads and downloads are retired. Previously installed WAVs remain in profile packs and can still play and be auditioned; execs no longer re-fetches originals to change their baked boost. Its former preset screenshots have been removed from the current app. | MIT for the repository; that notice does not establish the rights in each uploaded sound or former screenshot. Users should review sharing rights before exporting a profile containing those sounds. See the D7 register below. |
+| [comfig-app](https://github.com/mastercomfig/comfig-app) | Preset and module documentation informs the Comfig controls. The hits index (pinned commit) lists comfig.app's hosted hit and kill sounds, which Sounds downloads from hits.comfig.app when a player previews or uses one; the owner restored this on September 27, 2026. Its former preset screenshots have been removed from the current app. | MIT for the repository; that notice does not establish the rights in each uploaded sound or former screenshot. Users should review sharing rights before exporting a profile containing those sounds. See the D7 register below. |
 | [hud-db](https://github.com/mastercomfig/hud-db) | The HUD catalog, banners and screenshots are loaded for browsing; the app shows the catalog's author information. Current README and promo media do not embed HUD artwork. | MIT for the repository; HUD authors supply catalog images. The rights of historical repository captures remain under D7 review. |
 | [TF2HUD.Editor](https://github.com/CriticalFlaw/TF2HUD.Editor) by CriticalFlaw | HUD option schemas are consumed as data. The apply logic is first-party. | MIT |
 | [CompVMInstaller](https://github.com/Yttrium-tYcLief/CompVMInstaller) by Yttrium, previews by Oblique | Earlier development builds fetched `animations.zip` and per-option JPEGs to build Viewmodels packs. The current app no longer fetches those files, compiles new packs from them, or ships their option mapping. Existing profile-owned VPKs remain usable and exportable. | The pinned [About box](https://github.com/Yttrium-tYcLief/CompVMInstaller/blob/b215a5cdfcd809ec3c2d71529e7a1eb22a72a39e/Project/CompVMInstaller/AboutBox1.Designer.vb) identifies the program as GPL-3.0. No separate rights file identifies terms for the animation ZIP or Oblique previews. The [public permission request](https://github.com/Yttrium-tYcLief/CompVMInstaller/issues/5) is open without a reply; the owner confirmed continuation for 0.1.1 on 2026-09-04. See docs/release-0.1.1.md. |
@@ -72,7 +72,10 @@ The repository and installers do not package Valve's game archive files.
 execs reads sprites, sounds and weapon scripts from the player's own install to
 build profile content. A user-initiated profile ZIP export copies the profile's
 packs, which may contain game-derived bytes or third-party content. The player
-controls whether to share that ZIP. The [D7 register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md)
+controls whether to share that ZIP. The development Inventory shows Valve's own
+item images and descriptions for the player's public Steam inventory, fetched
+from Steam Community on use and cached locally; they are never packaged,
+exported or shared. The [D7 register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md)
 tracks unresolved rights questions, including the proposed use of stock models
 in a replacement Viewmodels builder. execs is a fan project and is not
 affiliated with Valve.

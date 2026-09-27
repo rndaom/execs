@@ -1,10 +1,10 @@
-//! Minimal, independently declared wire fields for a read-only TF2 probe.
+//! Independently declared TF2 wire fields with bounded authoritative cache evidence.
 //! Wire references and limitations are documented in ../README.md.
 use prost::Message;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub steam_id: String,
@@ -14,9 +14,11 @@ pub struct Snapshot {
     pub avatar: Option<String>,
     pub capacity: u32,
     pub items: Vec<InventoryItem>,
+    #[serde(default)]
+    pub cache_version: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct InventoryItem {
     pub id: String,
@@ -27,13 +29,36 @@ pub struct InventoryItem {
     pub custom_name: Option<String>,
     #[serde(default)]
     pub attributes: Vec<ItemAttribute>,
+    pub raw_position: u32,
+    pub quantity: Option<u32>,
+    pub flags: Option<u32>,
+    pub origin: Option<u32>,
+    pub custom_description: Option<String>,
+    pub in_use: Option<bool>,
+    pub style: Option<u32>,
+    pub original_id: Option<String>,
+    pub contains_equipped_state: Option<bool>,
+    pub equipped_state: Vec<EquippedState>,
+    pub contains_equipped_state_v2: Option<bool>,
+    pub interior_item: Option<Vec<u8>>,
+    /// Original complete SO bytes retain unknown fields for conservative verification.
+    pub raw_item: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemAttribute {
     pub definition: u32,
     pub value_bytes: Vec<u8>,
+}
+
+#[derive(Clone, PartialEq, Eq, Message, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EquippedState {
+    #[prost(uint32, optional, tag = "1")]
+    pub new_class: Option<u32>,
+    #[prost(uint32, optional, tag = "2")]
+    pub new_slot: Option<u32>,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -57,6 +82,130 @@ struct Account {
 pub const PROTOBUF: u32 = 1 << 31;
 pub const MAX_MESSAGE: usize = 8 * 1024 * 1024;
 
+pub fn envelope(kind: u32, body: &[u8]) -> Vec<u8> {
+    let mut bytes = (kind | PROTOBUF).to_le_bytes().to_vec();
+    bytes.extend(0u32.to_le_bytes());
+    bytes.extend(body);
+    bytes
+}
+
+pub fn account_refresh(steam_id: u64) -> Vec<u8> {
+    envelope(
+        28,
+        &Refresh {
+            owner: Some(steam_id),
+            owner_soid: Some(Owner {
+                kind: Some(1),
+                id: Some(steam_id),
+            }),
+        }
+        .encode_to_vec(),
+    )
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct SingleChange {
+    #[prost(fixed64, optional, tag = "1")]
+    owner: Option<u64>,
+    #[prost(int32, optional, tag = "2")]
+    kind: Option<i32>,
+    #[prost(bytes = "vec", optional, tag = "3")]
+    data: Option<Vec<u8>>,
+    #[prost(fixed64, optional, tag = "4")]
+    version: Option<u64>,
+    #[prost(message, optional, tag = "5")]
+    owner_soid: Option<Owner>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct ChangedObject {
+    #[prost(int32, optional, tag = "1")]
+    kind: Option<i32>,
+    #[prost(bytes = "vec", optional, tag = "2")]
+    data: Option<Vec<u8>>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct MultipleChanges {
+    #[prost(fixed64, optional, tag = "1")]
+    owner: Option<u64>,
+    #[prost(message, repeated, tag = "2")]
+    objects: Vec<ChangedObject>,
+    #[prost(fixed64, optional, tag = "3")]
+    version: Option<u64>,
+    #[prost(message, optional, tag = "6")]
+    owner_soid: Option<Owner>,
+}
+
+pub struct Changes {
+    pub version: u64,
+    pub item_ids: Vec<String>,
+}
+
+/// Validate account and version on notifications. A full cache is still required;
+/// notifications are never patched into a potentially incomplete success snapshot.
+pub fn changes(kind: u32, body: &[u8], steam_id: u64) -> Result<Changes, String> {
+    if body.len() > MAX_MESSAGE {
+        return Err("Oversized SO notification".into());
+    }
+    let (owner, owner_soid, version, objects) = match kind {
+        21..=23 => {
+            let value = SingleChange::decode(body).map_err(|e| e.to_string())?;
+            (
+                value.owner,
+                value.owner_soid,
+                value.version,
+                vec![ChangedObject {
+                    kind: value.kind,
+                    data: value.data,
+                }],
+            )
+        }
+        26 => {
+            let value = MultipleChanges::decode(body).map_err(|e| e.to_string())?;
+            (value.owner, value.owner_soid, value.version, value.objects)
+        }
+        _ => return Err("Unexpected SO notification type".into()),
+    };
+    if owner_soid.as_ref().is_some_and(|o| o.kind != Some(1))
+        || owner_soid.as_ref().and_then(|o| o.id).or(owner) != Some(steam_id)
+        || owner.is_some_and(|o| o != steam_id)
+    {
+        return Err("SO notification belongs to another account".into());
+    }
+    if objects.len() > 100_000 {
+        return Err("Too many SO changes".into());
+    }
+    let mut item_ids = Vec::new();
+    let mut seen = HashSet::new();
+    for object in objects {
+        if object.kind != Some(1) {
+            continue;
+        }
+        let bytes = object.data.ok_or("Missing changed object")?;
+        if bytes.len() > 65_536 {
+            return Err("Oversized changed item".into());
+        }
+        let item = Item::decode(bytes.as_slice()).map_err(|e| e.to_string())?;
+        // Destroy notifications can contain only key fields.
+        if item.account.is_some_and(|id| id != steam_id as u32) {
+            return Err("Changed item belongs to another account".into());
+        }
+        let id = item
+            .id
+            .filter(|id| *id != 0)
+            .ok_or("Missing changed item identity")?;
+        if !seen.insert(id) {
+            return Err("Duplicate changed item identity".into());
+        }
+        item_ids.push(id.to_string());
+    }
+    Ok(Changes {
+        version: version.ok_or("Missing SO notification version")?,
+        item_ids,
+    })
+}
+
 #[derive(Clone, PartialEq, Message)]
 pub struct SubscriptionCheck {
     #[prost(fixed64, optional, tag = "1")]
@@ -76,6 +225,7 @@ pub struct Refresh {
 pub fn refresh(body: &[u8], steam_id: u64) -> Result<Vec<u8>, String> {
     let check = SubscriptionCheck::decode(body).map_err(|e| e.to_string())?;
     if check.owner_soid.as_ref().and_then(|o| o.id).or(check.owner) != Some(steam_id)
+        || check.owner_soid.as_ref().is_some_and(|o| o.kind != Some(1))
         || check.owner.is_some_and(|id| id != steam_id)
     {
         return Err("Subscription belongs to another account".into());
@@ -99,6 +249,8 @@ pub struct Cache {
     pub owner: Option<u64>,
     #[prost(message, repeated, tag = "2")]
     pub objects: Vec<ObjectType>,
+    #[prost(fixed64, optional, tag = "3")]
+    pub version: Option<u64>,
     #[prost(message, optional, tag = "4")]
     pub owner_soid: Option<Owner>,
 }
@@ -129,14 +281,36 @@ pub struct Item {
     pub inventory: Option<u32>,
     #[prost(uint32, optional, tag = "4")]
     pub definition: Option<u32>,
+    #[prost(uint32, optional, tag = "5")]
+    pub quantity: Option<u32>,
     #[prost(uint32, tag = "6")]
     pub level: u32,
     #[prost(uint32, tag = "7")]
     pub quality: u32,
+    #[prost(uint32, optional, tag = "8")]
+    pub flags: Option<u32>,
+    #[prost(uint32, optional, tag = "9")]
+    pub origin: Option<u32>,
     #[prost(string, optional, tag = "10")]
     pub custom_name: Option<String>,
+    #[prost(string, optional, tag = "11")]
+    pub custom_description: Option<String>,
     #[prost(message, repeated, tag = "12")]
     pub attributes: Vec<Attribute>,
+    #[prost(bytes = "vec", optional, tag = "13")]
+    pub interior_item: Option<Vec<u8>>,
+    #[prost(bool, optional, tag = "14")]
+    pub in_use: Option<bool>,
+    #[prost(uint32, optional, tag = "15")]
+    pub style: Option<u32>,
+    #[prost(uint64, optional, tag = "16")]
+    pub original_id: Option<u64>,
+    #[prost(bool, optional, tag = "17")]
+    pub contains_equipped_state: Option<bool>,
+    #[prost(message, repeated, tag = "18")]
+    pub equipped_state: Vec<EquippedState>,
+    #[prost(bool, optional, tag = "19")]
+    pub contains_equipped_state_v2: Option<bool>,
 }
 
 pub fn snapshot(body: &[u8], steam_id: u64) -> Result<Snapshot, String> {
@@ -169,12 +343,27 @@ pub fn snapshot(body: &[u8], steam_id: u64) -> Result<Snapshot, String> {
     {
         let item = Item::decode(bytes.as_slice()).map_err(|e| e.to_string())?;
         if item.attributes.len() > 256
+            || bytes.len() > 64 * 1024
+            || item.equipped_state.len() > 64
+            || item.custom_name.as_ref().is_some_and(|s| s.len() > 4096)
+            || item
+                .custom_description
+                .as_ref()
+                .is_some_and(|s| s.len() > 4096)
             || item
                 .attributes
                 .iter()
                 .any(|a| a.value_bytes.as_ref().is_some_and(|v| v.len() > 4096))
         {
             return Err("Item attributes exceed limit".into());
+        }
+        let mut attribute_ids = HashSet::new();
+        if item.attributes.iter().any(|a| {
+            a.definition.is_none_or(|id| !attribute_ids.insert(id))
+                || (a.value.is_none() && a.value_bytes.as_ref().is_none_or(Vec::is_empty))
+                || a.value_bytes.as_ref().is_some_and(Vec::is_empty)
+        }) {
+            return Err("Incomplete or duplicate authoritative item attributes".into());
         }
         let value = item.inventory.ok_or("Missing position")?;
         let position = if value & (1 << 30) != 0 {
@@ -192,16 +381,28 @@ pub fn snapshot(body: &[u8], steam_id: u64) -> Result<Snapshot, String> {
             quality: item.quality,
             level: item.level,
             custom_name: item.custom_name,
+            raw_position: value,
+            quantity: item.quantity,
+            flags: item.flags,
+            origin: item.origin,
+            custom_description: item.custom_description,
+            in_use: item.in_use,
+            style: item.style,
+            original_id: item.original_id.map(|id| id.to_string()),
+            contains_equipped_state: item.contains_equipped_state,
+            equipped_state: item.equipped_state,
+            contains_equipped_state_v2: item.contains_equipped_state_v2,
+            interior_item: item.interior_item,
+            raw_item: bytes.clone(),
             attributes: item
                 .attributes
                 .into_iter()
-                .filter_map(|a| {
-                    Some(ItemAttribute {
-                        definition: a.definition?,
-                        value_bytes: a
-                            .value_bytes
-                            .or_else(|| a.value.map(|v| v.to_le_bytes().to_vec()))?,
-                    })
+                .map(|a| ItemAttribute {
+                    definition: a.definition.expect("validated attribute definition"),
+                    value_bytes: a
+                        .value_bytes
+                        .or_else(|| a.value.map(|v| v.to_le_bytes().to_vec()))
+                        .expect("validated attribute value"),
                 })
                 .collect(),
         });
@@ -215,15 +416,18 @@ pub fn snapshot(body: &[u8], steam_id: u64) -> Result<Snapshot, String> {
         avatar: None,
         capacity,
         items,
+        cache_version: cache.version.map(|v| v.to_string()),
     })
 }
 
-/// Unknown protobuf fields are retained by neither this diagnostic nor its output.
-/// This is not yet the product's full item model.
+/// Validate complete ownership/identity before decoding snapshot presentation fields.
 pub fn summary(body: &[u8], steam_id: u64) -> Result<(usize, usize), String> {
     let cache = Cache::decode(body).map_err(|e| e.to_string())?;
     let owner = cache.owner_soid.as_ref().and_then(|o| o.id).or(cache.owner);
-    if owner != Some(steam_id) || cache.owner.is_some_and(|id| id != steam_id) {
+    if cache.owner_soid.as_ref().is_some_and(|o| o.kind != Some(1))
+        || owner != Some(steam_id)
+        || cache.owner.is_some_and(|id| id != steam_id)
+    {
         return Err("Cache owner does not match the connected Steam account".into());
     }
     let groups: Vec<_> = cache.objects.iter().filter(|o| o.kind == Some(1)).collect();
@@ -276,6 +480,7 @@ mod tests {
         Cache {
             owner: Some(USER),
             owner_soid: None,
+            version: Some(1),
             objects: vec![ObjectType {
                 kind: Some(1),
                 data: items.iter().map(Message::encode_to_vec).collect(),
@@ -383,6 +588,64 @@ mod tests {
         source.attributes[0].value_bytes = Some(vec![0; 4097]);
         c.objects[0].data[0] = source.encode_to_vec();
         assert!(snapshot(&c.encode_to_vec(), USER).is_err());
+    }
+
+    #[test]
+    fn complete_snapshots_refuse_dropped_attributes_and_foreign_owner_kinds() {
+        let mut source = item(1, 1);
+        source.attributes = vec![Attribute {
+            definition: None,
+            value: Some(1),
+            value_bytes: None,
+        }];
+        let mut c = cache(vec![source.clone()]);
+        c.objects.push(ObjectType {
+            kind: Some(7),
+            data: vec![Account::default().encode_to_vec()],
+        });
+        assert!(snapshot(&c.encode_to_vec(), USER).is_err());
+        source.attributes[0].definition = Some(153);
+        source.attributes.push(source.attributes[0].clone());
+        c.objects[0].data[0] = source.encode_to_vec();
+        assert!(snapshot(&c.encode_to_vec(), USER).is_err());
+        source.attributes.pop();
+        source.attributes[0].value = None;
+        c.objects[0].data[0] = source.encode_to_vec();
+        assert!(snapshot(&c.encode_to_vec(), USER).is_err());
+        c.objects[0].data[0] = item(1, 1).encode_to_vec();
+        c.owner_soid = Some(Owner {
+            kind: Some(2),
+            id: Some(USER),
+        });
+        assert!(snapshot(&c.encode_to_vec(), USER).is_err());
+    }
+
+    #[test]
+    fn snapshot_retains_field_presence_equipped_state_and_unknown_raw_bytes() {
+        let mut source = item(1, 1);
+        source.flags = Some(0);
+        source.quantity = Some(1);
+        source.origin = Some(4);
+        source.custom_description = Some("named history".into());
+        source.equipped_state = vec![EquippedState {
+            new_class: Some(1),
+            new_slot: Some(2),
+        }];
+        let mut raw = source.encode_to_vec();
+        raw.extend([160, 6, 7]);
+        let mut c = cache(vec![]);
+        c.objects[0].data.push(raw.clone());
+        c.objects.push(ObjectType {
+            kind: Some(7),
+            data: vec![Account::default().encode_to_vec()],
+        });
+        let item = snapshot(&c.encode_to_vec(), USER).unwrap().items.remove(0);
+        assert_eq!(item.raw_item, raw);
+        assert_eq!(item.flags, Some(0));
+        assert_eq!(item.in_use, None);
+        assert_eq!(item.origin, Some(4));
+        assert_eq!(item.equipped_state.len(), 1);
+        assert_eq!(item.custom_description.as_deref(), Some("named history"));
     }
 
     #[test]

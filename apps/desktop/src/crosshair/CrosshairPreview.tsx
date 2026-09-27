@@ -72,7 +72,7 @@ export function CrosshairPreview({
           </p>
         )}
         <span className="eyebrow absolute bottom-2.5 left-2.5 rounded-md bg-bg/80 px-2 py-0.5">
-          1280 × 720 reference
+          1280 × 720 reference · not game footage
         </span>
       </div>
       {pixels ? (
@@ -92,8 +92,7 @@ export function CrosshairPreview({
             />
           </div>
           <p className="t-meta">
-            Sprite detail ({pixels.width} × {pixels.height} pixels). The scene above shows its
-            approximate size at 1280 × 720.
+            {pixels.width} × {pixels.height} sprite
           </p>
         </div>
       ) : null}

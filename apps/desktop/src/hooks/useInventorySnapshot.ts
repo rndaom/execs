@@ -18,6 +18,7 @@ export function useInventorySnapshot(api: Api, active: boolean, running: boolean
   const lastAttempt = useRef(Number.NEGATIVE_INFINITY);
   const nextDue = useRef(0);
   const failures = useRef(0);
+  const revision = useRef(0);
   const wasRunning = useRef(running);
   const schedule = useRef<() => void>(() => {});
 
@@ -41,18 +42,30 @@ export function useInventorySnapshot(api: Api, active: boolean, running: boolean
     )
       return;
     inFlight.current = true;
+    const requestRevision = revision.current;
     lastAttempt.current = Date.now();
     setLoading(true);
     setError(null);
     try {
       const next = await current.api.getInventory();
-      if (!mounted.current || latest.current.api !== current.api || latest.current.running) return;
+      if (
+        !mounted.current ||
+        latest.current.api !== current.api ||
+        latest.current.running ||
+        revision.current !== requestRevision
+      )
+        return;
       failures.current = 0;
       nextDue.current = Date.now() + INVENTORY_REFRESH_MS;
       setSnapshot(next);
       setUpdatedAt(Date.now());
     } catch (reason) {
-      if (!mounted.current || latest.current.api !== current.api) return;
+      if (
+        !mounted.current ||
+        latest.current.api !== current.api ||
+        revision.current !== requestRevision
+      )
+        return;
       failures.current++;
       nextDue.current =
         Date.now() + Math.min(300_000, MIN_RECONNECT_MS * 2 ** Math.min(failures.current - 1, 4));
@@ -99,5 +112,14 @@ export function useInventorySnapshot(api: Api, active: boolean, running: boolean
     };
   }, [active, running, busy, refresh]);
 
-  return { snapshot, loading, error, updatedAt, refresh };
+  const replaceSnapshot = useCallback((next: InventorySnapshot) => {
+    revision.current++;
+    setSnapshot(next);
+    setError(null);
+    setUpdatedAt(Date.now());
+    failures.current = 0;
+    nextDue.current = Date.now() + INVENTORY_REFRESH_MS;
+  }, []);
+
+  return { snapshot, loading, error, updatedAt, refresh, replaceSnapshot };
 }

@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import { useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Alert } from "./components/ui/Alert";
+import { Caret } from "./components/ui/Caret";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
@@ -500,24 +501,27 @@ export function HudPane({
                                     htmlFor={`hud-opt-${control.name}`}
                                   >
                                     <span>{control.label}</span>
-                                    <select
-                                      id={`hud-opt-${control.name}`}
-                                      data-testid={`hud-opt-${control.name}`}
-                                      value={value}
-                                      onChange={(event) =>
-                                        setDraft((current) => ({
-                                          ...current,
-                                          [control.name]: event.target.value,
-                                        }))
-                                      }
-                                      className="field min-w-0 px-2 py-1.5 text-[13px] text-ink focus:outline-none disabled:opacity-50"
-                                    >
-                                      {control.choices.map((choice) => (
-                                        <option key={choice.value} value={choice.value}>
-                                          {choice.label}
-                                        </option>
-                                      ))}
-                                    </select>
+                                    <span className="select-field">
+                                      <select
+                                        id={`hud-opt-${control.name}`}
+                                        data-testid={`hud-opt-${control.name}`}
+                                        value={value}
+                                        onChange={(event) =>
+                                          setDraft((current) => ({
+                                            ...current,
+                                            [control.name]: event.target.value,
+                                          }))
+                                        }
+                                        className="field min-w-0 py-1.5 pr-7 pl-2 text-[13px] text-ink focus:outline-none disabled:opacity-50"
+                                      >
+                                        {control.choices.map((choice) => (
+                                          <option key={choice.value} value={choice.value}>
+                                            {choice.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <Caret />
+                                    </span>
                                   </label>
                                 );
                               }
@@ -529,24 +533,27 @@ export function HudPane({
                                     htmlFor={`hud-opt-${control.name}`}
                                   >
                                     <span>{control.label} · HUD overlay</span>
-                                    <select
-                                      id={`hud-opt-${control.name}`}
-                                      data-testid={`hud-opt-${control.name}`}
-                                      value={value}
-                                      onChange={(event) =>
-                                        setDraft((current) => ({
-                                          ...current,
-                                          [control.name]: event.target.value,
-                                        }))
-                                      }
-                                      className="field min-w-0 px-2 py-1.5 text-[13px] text-ink focus:outline-none disabled:opacity-50"
-                                    >
-                                      {control.choices.map((choice) => (
-                                        <option key={choice.value} value={choice.value}>
-                                          {choice.label}
-                                        </option>
-                                      ))}
-                                    </select>
+                                    <span className="select-field">
+                                      <select
+                                        id={`hud-opt-${control.name}`}
+                                        data-testid={`hud-opt-${control.name}`}
+                                        value={value}
+                                        onChange={(event) =>
+                                          setDraft((current) => ({
+                                            ...current,
+                                            [control.name]: event.target.value,
+                                          }))
+                                        }
+                                        className="field min-w-0 py-1.5 pr-7 pl-2 text-[13px] text-ink focus:outline-none disabled:opacity-50"
+                                      >
+                                        {control.choices.map((choice) => (
+                                          <option key={choice.value} value={choice.value}>
+                                            {choice.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <Caret />
+                                    </span>
                                   </label>
                                 );
                               }
@@ -1021,8 +1028,7 @@ export function HudPane({
         >
           TF2HUD.Editor
         </button>{" "}
-        (MIT) — first-party apply, not their editor. Credit each HUD’s author. Not affiliated with
-        Valve or Steam.
+        (MIT), applied by execs. Each HUD belongs to its author. Not affiliated with Valve or Steam.
       </p>
 
       {detailsEntry ? (
