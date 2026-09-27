@@ -154,6 +154,7 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Changed
 
+- Comfig modules no longer repeat the selected level as small text beside each module name.
 - Viewmodels builds from your own installed TF2 files instead of downloaded CompVMInstaller
   animations, and generated previews are gone. Packs built by earlier versions keep working.
 - New Venom Crosshairs, TF2Hitsounds and comfig hosted-sound downloads are retired. Crosshairs and
