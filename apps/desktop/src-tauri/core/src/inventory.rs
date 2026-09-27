@@ -1,4 +1,5 @@
 //! Read-only local item descriptions and base backpack artwork. No Steam session.
+pub mod operations;
 mod paintkits;
 use crate::{
     vdf::{parse_hud_vdf, parse_vdf, VdfMap, VdfValue},

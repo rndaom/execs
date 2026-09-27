@@ -657,6 +657,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::inventory::get_inventory,
             commands::inventory::get_inventory_icons,
+            commands::inventory::get_inventory_capabilities,
+            commands::inventory::apply_inventory_layout,
+            commands::inventory::craft_inventory,
+            commands::inventory::operations::prepare_inventory_operation,
+            commands::inventory::operations::execute_inventory_operation,
+            commands::inventory::operations::reconcile_inventory_operation,
             commands::finder::scan_tf2_installs,
             commands::finder::browse_tf2_root,
             commands::finder::confirm_tf2_root,

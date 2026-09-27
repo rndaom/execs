@@ -8,6 +8,7 @@ import type {
 } from "./app-settings-ui";
 import { editorPathFits, editorTextBytes, FILES_EDITOR_MAX_FILE_BYTES } from "./files-limits";
 import type { InstallHealth } from "./health-ui";
+import type { InventoryCraftRequest, InventoryCraftResult } from "./inventory-crafting";
 import type { RestorePoint, RestorePointList } from "./restore-points-ui";
 import type { ProfileComparison } from "./switch-compare-ui";
 import type { UninstallInfo } from "./uninstall-ui";
@@ -19,6 +20,19 @@ export type InventoryItem = {
   quality: number;
   level: number;
   customName: string | null;
+  rawPosition?: number | null;
+  quantity?: number | null;
+  flags?: number | null;
+  origin?: number | null;
+  customDescription?: string | null;
+  inUse?: boolean | null;
+  style?: number | null;
+  originalId?: string | null;
+  containsEquippedState?: boolean | null;
+  equippedState?: unknown;
+  containsEquippedStateV2?: boolean | null;
+  interiorItem?: unknown;
+  rawItem?: unknown;
 };
 export type InventoryDefinition = {
   name: string;
@@ -43,7 +57,87 @@ export type InventorySnapshot = {
   >;
   qualityColors?: Record<string, string>;
   warning: string | null;
+  craftingEligibility?: Record<
+    string,
+    {
+      craftable: boolean | null;
+      tradable: boolean | null;
+      customized: boolean | null;
+      deletable?: boolean | null;
+      reason?: string | null;
+    }
+  >;
+  craftingRevision?: string | null;
+  cacheVersion?: string | null;
+  pendingOperation?: {
+    operationId: string;
+    kind: "layout" | "craft" | "delete";
+    message: string;
+  } | null;
 };
+export type InventoryCapabilities = {
+  organizer: "live" | "simulation" | "unavailable";
+  crafting: "live" | "simulation" | "unavailable";
+  deletion?: "live" | "simulation" | "unavailable";
+  reason: string | null;
+};
+export type InventoryLayoutRequest = {
+  steamId: string;
+  baseline: InventorySnapshot;
+  moves: { id: string; from: number; to: number }[];
+  protectedIds: string[];
+};
+export type InventoryOperationResult = {
+  operationId: string;
+  kind: "layout" | "craft" | "delete";
+  status: "simulated" | "confirmed" | "partial" | "unknown" | "refused";
+  snapshot: InventorySnapshot | null;
+  message: string;
+};
+export type InventoryPrepareRequest = {
+  kind: "layout" | "craft" | "delete";
+  steamId: string;
+  baseline: InventorySnapshot;
+  moves?: { id: string; from: number; to: number }[];
+  recipe?: string;
+  inputIds?: string[];
+  itemId?: string;
+  protectedIds: string[];
+};
+export type InventoryPreparedOperation = {
+  token: string;
+  kind: InventoryPrepareRequest["kind"];
+  steamId: string;
+  expiresAt: number;
+  summary: string;
+};
+export type InventoryExecutedOperation = InventoryOperationResult & {
+  consumedIds: string[];
+  acquiredIds: string[];
+  deletedIds: string[];
+};
+export function prepareInventoryOperation(
+  request: InventoryPrepareRequest,
+): Promise<InventoryPreparedOperation> {
+  return call("prepare_inventory_operation", { request });
+}
+export function executeInventoryOperation(token: string): Promise<InventoryExecutedOperation> {
+  return call("execute_inventory_operation", { token });
+}
+export function reconcileInventoryOperation(steamId: string): Promise<InventoryExecutedOperation> {
+  return call("reconcile_inventory_operation", { steamId });
+}
+export function getInventoryCapabilities(): Promise<InventoryCapabilities> {
+  return call("get_inventory_capabilities");
+}
+export function applyInventoryLayout(
+  request: InventoryLayoutRequest,
+): Promise<InventoryOperationResult> {
+  return call("apply_inventory_layout", { request });
+}
+export function craftInventory(request: InventoryCraftRequest): Promise<InventoryCraftResult> {
+  return call("craft_inventory", { request });
+}
 export function getInventory(): Promise<InventorySnapshot> {
   return call("get_inventory");
 }

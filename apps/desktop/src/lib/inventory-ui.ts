@@ -41,15 +41,44 @@ export function itemName(snapshot: InventorySnapshot, item: InventoryItem): stri
 export function itemDescription(snapshot: InventorySnapshot, item: InventoryItem) {
   return snapshot.itemDescriptions?.[item.id] ?? snapshot.definitions[item.definition];
 }
+/** Stable item order, shared by browsing and the physical layout planner. */
+export function compareInventoryItems(
+  snapshot: InventorySnapshot,
+  a: InventoryItem,
+  b: InventoryItem,
+  sort: InventorySort,
+): number {
+  const names = () =>
+    itemName(snapshot, a).localeCompare(itemName(snapshot, b), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  const order =
+    sort === "name"
+      ? names()
+      : sort === "quality"
+        ? (QUALITY_NAMES[a.quality] ?? String(a.quality)).localeCompare(
+            QUALITY_NAMES[b.quality] ?? String(b.quality),
+          ) || names()
+        : sort === "type"
+          ? (itemDescription(snapshot, a)?.kind ?? "").localeCompare(
+              itemDescription(snapshot, b)?.kind ?? "",
+            ) || names()
+          : 0;
+  return (
+    order ||
+    (a.position || Number.MAX_SAFE_INTEGER) - (b.position || Number.MAX_SAFE_INTEGER) ||
+    a.id.localeCompare(b.id)
+  );
+}
 export function inventoryPage(
   snapshot: InventorySnapshot,
   query: string,
   quality: number | null,
   page: number,
-  sort: InventorySort = "position",
 ) {
   const needle = query.trim().toLocaleLowerCase();
-  const filtered = needle.length > 0 || quality !== null || sort !== "position";
+  const filtered = needle.length > 0 || quality !== null;
   const matches = snapshot.items
     .filter((item) => {
       const definition = itemDescription(snapshot, item);
@@ -68,30 +97,7 @@ export function inventoryPage(
           ].some((part) => part?.toLocaleLowerCase().includes(needle)))
       );
     })
-    .sort((a, b) => {
-      const names = () =>
-        itemName(snapshot, a).localeCompare(itemName(snapshot, b), undefined, {
-          numeric: true,
-          sensitivity: "base",
-        });
-      const order =
-        sort === "name"
-          ? names()
-          : sort === "quality"
-            ? (QUALITY_NAMES[a.quality] ?? String(a.quality)).localeCompare(
-                QUALITY_NAMES[b.quality] ?? String(b.quality),
-              ) || names()
-            : sort === "type"
-              ? (itemDescription(snapshot, a)?.kind ?? "").localeCompare(
-                  itemDescription(snapshot, b)?.kind ?? "",
-                ) || names()
-              : 0;
-      return (
-        order ||
-        (a.position || Number.MAX_SAFE_INTEGER) - (b.position || Number.MAX_SAFE_INTEGER) ||
-        a.id.localeCompare(b.id)
-      );
-    });
+    .sort((a, b) => compareInventoryItems(snapshot, a, b, "position"));
   const pages = Math.max(
     1,
     Math.ceil((filtered ? matches.length : snapshot.capacity) / INVENTORY_PAGE_SIZE),

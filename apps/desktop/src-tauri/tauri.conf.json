@@ -20,6 +20,7 @@
         "minWidth": 960,
         "minHeight": 640,
         "zoomHotkeysEnabled": true,
+        "dragDropEnabled": false,
         "backgroundColor": {
           "red": 18,
           "green": 18,

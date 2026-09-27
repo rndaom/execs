@@ -7,6 +7,7 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- Development Inventory: a TF2-style ten-by-five backpack with direct drag/drop, Ctrl/Shift selection, cross-page dragging, Undo/Redo and compact item inspection. Sorting by name, quality or type rearranges actual draft slots for reviewed Steam Apply, with protected items kept in place. Hold a dragged item or group over either page arrow to keep turning pages, then drop on the chosen page. Development builds support reviewed Steam moves, four metal conversions and single-item deletion, with native checks and recovery for unconfirmed outcomes; the separate test backpack simulates these actions. Protected favorites and saved layouts remain account-owned. Inventory remains hidden in release builds pending live/platform qualification.
 - A refreshed look across every pane: warm dark surfaces, TF2 orange for selections, clearer
   type, less repeated text, consistent dialogs and restrained motion. Loading shows a flat TF2
   emblem, and Viewmodels and Crosshair class tabs show TF2's class emblems read from your own game
