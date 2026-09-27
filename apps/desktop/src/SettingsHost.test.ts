@@ -169,6 +169,17 @@ describe("settings snapshot integrity", () => {
     expect(capture.panes.inventory.activity).toBe(true);
   });
 
+  it("mounts Inventory in production builds", async () => {
+    vi.stubEnv("DEV", false);
+    try {
+      await render({ tab: "inventory" });
+      expect(capture.panes.inventory.active).toBe(true);
+      expect(capture.panes.inventory.activity).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("binds a retained HUD options callback to its original HUD identity", async () => {
     api.getHudState.mockResolvedValue({
       profileId: "A",

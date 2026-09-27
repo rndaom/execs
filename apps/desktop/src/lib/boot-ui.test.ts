@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BOOT_MAX_MS, type BootInput, bootRemaining, bootStage } from "./boot-ui";
 
@@ -46,5 +47,18 @@ describe("bootRemaining", () => {
   it("never holds an unsettled start past the cap", () => {
     expect(bootRemaining({ settled: false, status: "x" }, 1000, 1100)).toBe(BOOT_MAX_MS - 1000);
     expect(bootRemaining({ settled: false, status: "x" }, BOOT_MAX_MS + 5, 1100)).toBe(0);
+  });
+});
+
+describe("startup screen markup", () => {
+  it("keeps index.html free of inline styles so release builds allow CodeMirror's", () => {
+    // Tauri adds a CSP nonce to each inline <style>; browsers then ignore
+    // 'unsafe-inline', and the styles CodeMirror adds at runtime are blocked.
+    const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8").replace(
+      /<!--[\s\S]*?-->/g,
+      "",
+    );
+    expect(html).not.toMatch(/<style[\s>]/i);
+    expect(html).toContain('<link rel="stylesheet" href="/src/boot.css" />');
   });
 });

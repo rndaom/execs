@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { emptyLibrary, previewSavedLibrary } from "./library-ui";
 import {
   canWriteSettings,
@@ -15,6 +15,23 @@ describe("settings chrome", () => {
     expect(SETTINGS_TAB_LABELS.hud).toBe("HUD");
     expect(SETTINGS_TAB_LABELS.crosshair).toBe("Crosshair");
     expect(SETTINGS_TAB_LABELS.viewmodels).toBe("Viewmodels");
+  });
+
+  it("lists every tab, including Inventory, in production builds", async () => {
+    vi.stubEnv("DEV", false);
+    vi.resetModules();
+    try {
+      const production = await import("./settings-ui");
+      expect(production.SETTINGS_TAB_GROUPS.flatMap((group) => group.tabs)).toEqual([
+        ...SETTINGS_TABS,
+      ]);
+      expect(production.SETTINGS_TAB_GROUPS.at(-1)).toEqual({
+        label: "Steam",
+        tabs: ["inventory"],
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("shows only when a usable library has an active profile", () => {
