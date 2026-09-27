@@ -8,7 +8,20 @@ __pycache__/
 *.pyc
 *.log
 .env
-.env.local
+.env.*
+!.env.example
+!.env.template
 .artifacts/
 apps/desktop/src-tauri/notices/LINUX-SYSTEM.txt
+
+# Local assistant instructions and workspace settings. Public product rules live
+# in docs/ARCHITECTURE.md; keep personal prompts and tool state off GitHub.
+AGENTS.md
+AGENTS.local.md
+CLAUDE.md
+CLAUDE.local.md
+GEMINI.md
+.codex/
 .claude/
+.cursor/
+.cursorrules

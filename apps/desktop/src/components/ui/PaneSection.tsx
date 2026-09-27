@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 /**
  * The pane rhythm: a hairline-separated flat section with a title, an optional
  * one-line description and optional right-hand meta. De-carded by construction
- * — no per-section box (AGENTS.md, "Design system").
+ * — no per-section box (docs/ARCHITECTURE.md, "Design system").
  */
 export function PaneSection({
   title,

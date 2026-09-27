@@ -1052,7 +1052,7 @@ mod tests {
         );
         assert_eq!(sanitize_launch_options("-dxlevel90 -novid"), "-novid");
         assert_eq!(sanitize_launch_options(""), "");
-        // AGENTS.md RND-158 names `gamemoderun %command%` alongside the rest.
+        // docs/ARCHITECTURE.md RND-158 names `gamemoderun %command%` alongside the rest.
         assert_eq!(
             sanitize_launch_options("gamemoderun %command% -novid"),
             "-novid"

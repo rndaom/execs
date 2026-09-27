@@ -36,6 +36,12 @@ function isInterrupted(err: unknown): boolean {
 export type SoundPlayer = {
   /** Play one pick at a 0–100 volume; a second call stops the first. */
   play: (pick: HitsoundPick, volume: number) => void;
+  /**
+   * A 0–100 preview level applied on top of every pick's own volume, so a
+   * loud clip can be auditioned quietly. It changes a sound already playing
+   * and never what TF2 plays.
+   */
+  setPreviewVolume: (volume: number) => void;
   stop: () => void;
   /** The pick currently sounding, for the button state. */
   playing: string | null;
@@ -49,6 +55,8 @@ export function useSoundPlayer(api: Api, installedIdentity: string): SoundPlayer
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const requestRef = useRef(0);
   const installedUrl = useRef<string | null>(null);
+  const previewLevel = useRef(1);
+  const pickLevel = useRef(1);
   const [playing, setPlaying] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,7 +137,8 @@ export function useSoundPlayer(api: Api, installedIdentity: string): SoundPlayer
           audio.pause();
           audio.src = url;
           audio.currentTime = 0;
-          audio.volume = Math.min(1, Math.max(0, volume / 100));
+          pickLevel.current = Math.min(1, Math.max(0, volume / 100));
+          audio.volume = pickLevel.current * previewLevel.current;
           return audio.play().catch((err: unknown) => {
             if (request !== requestRef.current || isInterrupted(err)) {
               return;
@@ -150,7 +159,13 @@ export function useSoundPlayer(api: Api, installedIdentity: string): SoundPlayer
     [api, stop],
   );
 
-  return { play, stop, playing, error };
+  const setPreviewVolume = useCallback((volume: number) => {
+    previewLevel.current = Math.min(1, Math.max(0, volume / 100));
+    const audio = audioRef.current;
+    if (audio) audio.volume = pickLevel.current * previewLevel.current;
+  }, []);
+
+  return { play, stop, setPreviewVolume, playing, error };
 }
 
 export function soundKey(pick: HitsoundPick): string {

@@ -202,3 +202,40 @@ describe("retained pane interactions", () => {
     expect(player.playing).toBeNull();
   });
 });
+
+describe("sound preview level", () => {
+  it("scales every preview under its slot volume and adjusts a sound already playing", async () => {
+    const audio: { volume: number }[] = [];
+    class AudioDouble {
+      volume = 1;
+      play = vi.fn().mockResolvedValue(undefined);
+      pause = vi.fn();
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+      constructor() {
+        audio.push(this);
+      }
+    }
+    vi.stubGlobal("Audio", AudioDouble);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
+    const api = {
+      hitsoundBytes: vi.fn(async () => new Uint8Array([1, 2])),
+    } as unknown as Api;
+    let player!: SoundPlayer;
+    function Pane() {
+      player = useSoundPlayer(api, "profile-a");
+      return null;
+    }
+    await act(async () =>
+      root.render(createElement(AutosaveActivity.Provider, { value: true }, createElement(Pane))),
+    );
+    await act(async () => player.setPreviewVolume(50));
+    await act(async () => player.play({ kind: "stock", stem: "preview-level-test" }, 80));
+    const element = audio.at(-1);
+    expect(element?.volume).toBeCloseTo(0.4);
+    await act(async () => player.setPreviewVolume(100));
+    expect(element?.volume).toBeCloseTo(0.8);
+    await act(async () => player.setPreviewVolume(0));
+    expect(element?.volume).toBe(0);
+  });
+});

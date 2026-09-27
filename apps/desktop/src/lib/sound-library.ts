@@ -49,6 +49,35 @@ export const SOUND_FILTERS: { id: SoundFilter; label: string }[] = [
 ];
 
 const FAVORITES_KEY = "execs.sounds.favorites";
+const PREVIEW_KEY = "execs.sounds.preview";
+
+/** Previews start quieter than TF2 plays them; clips are often loud. */
+export const DEFAULT_PREVIEW_VOLUME = 50;
+
+export type SoundPreviewLevel = { volume: number; muted: boolean };
+
+/** The preview level is an app-wide convenience, never part of a profile. */
+export function readSoundPreviewLevel(): SoundPreviewLevel {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(PREVIEW_KEY) ?? "null");
+    const volume = Number(stored?.volume);
+    return {
+      volume:
+        Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : DEFAULT_PREVIEW_VOLUME,
+      muted: stored?.muted === true,
+    };
+  } catch {
+    return { volume: DEFAULT_PREVIEW_VOLUME, muted: false };
+  }
+}
+
+export function writeSoundPreviewLevel(level: SoundPreviewLevel) {
+  try {
+    window.localStorage.setItem(PREVIEW_KEY, JSON.stringify(level));
+  } catch {
+    // Ignored: remembering the level is a convenience, not a requirement.
+  }
+}
 
 /** Favorite sounds are an app-wide convenience, never part of a profile. */
 export function readSoundFavorites(): Set<string> {

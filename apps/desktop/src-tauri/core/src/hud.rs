@@ -2452,7 +2452,7 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// AGENTS.md: "At most one HUD folder is mounted." A lowercased key never
+    /// docs/ARCHITECTURE.md: "At most one HUD folder is mounted." A lowercased key never
     /// matched a mixed-case folder on a case-sensitive filesystem, so the stray
     /// HUD stayed mounted next to the new one.
     #[test]

@@ -2,7 +2,7 @@
 //! particle patches inside `tf2_misc_dir.vpk`, with pristine snapshots of
 //! every byte we touch so one click restores stock files.
 //!
-//! Allowed by an explicit product decision (see AGENTS.md, dated 2026-08-31):
+//! Allowed by an explicit product decision (see docs/ARCHITECTURE.md, dated 2026-08-31):
 //! these are the only official-file edits the app may make, they must stay
 //! size-preserving, snapshot-first, and fully revertible, and they never run
 //! while the game is open.

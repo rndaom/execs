@@ -4,6 +4,9 @@ import {
   ArrowRight,
   MagnifyingGlass,
   Play,
+  SpeakerHigh,
+  SpeakerLow,
+  SpeakerSlash,
   Star,
   Stop,
   Trash,
@@ -64,6 +67,7 @@ import {
   pageSoundLibrary,
   parseSoundPageJump,
   readSoundFavorites,
+  readSoundPreviewLevel,
   SOUND_FILTERS,
   SOUND_LIBRARY_PAGE_SIZE,
   SOUND_SORTS,
@@ -75,6 +79,7 @@ import {
   soundPageLinks,
   stockEntries,
   writeSoundFavorites,
+  writeSoundPreviewLevel,
 } from "./lib/sound-library";
 
 const SLOT_TITLES: Record<HitsoundKind, string> = {
@@ -164,6 +169,7 @@ export function SoundsPane({
   const [sort, setSort] = useState<SoundSort>("suggested");
   const [filter, setFilter] = useState<SoundFilter>("all");
   const [favorites, setFavorites] = useState<Set<string>>(readSoundFavorites);
+  const [previewLevel, setPreviewLevel] = useState(readSoundPreviewLevel);
   const searchRef = useRef<HTMLInputElement>(null);
   const customFilesKey = useMemo(
     () =>
@@ -243,6 +249,18 @@ export function SoundsPane({
 
   // Leaving the pane must not leave a sound playing in the background.
   useEffect(() => () => player.stop(), [player.stop]);
+  const { setPreviewVolume } = player;
+  useEffect(() => {
+    setPreviewVolume(previewLevel.muted ? 0 : previewLevel.volume);
+  }, [setPreviewVolume, previewLevel]);
+  function changePreviewLevel(next: { volume?: number; muted?: boolean }) {
+    setPreviewLevel((current) => {
+      const level = { ...current, ...next };
+      writeSoundPreviewLevel(level);
+      return level;
+    });
+  }
+  const previewAudible = previewLevel.muted ? 0 : previewLevel.volume;
 
   const library = useMemo<SoundLibraryEntry[]>(
     () => [
@@ -694,7 +712,7 @@ export function SoundsPane({
                 </span>
                 <button
                   type="button"
-                  className="sound-favorite"
+                  className="sound-icon-button"
                   data-testid={`sounds-favorite-${entry.id}`}
                   aria-pressed={favorites.has(entry.id)}
                   aria-label={`Favorite ${clipName}`}
@@ -781,6 +799,59 @@ export function SoundsPane({
         </button>
         ; each clip belongs to its creator.
       </p>
+
+      {/* Stays in reach at any scroll position: previews are often loud. */}
+      <fieldset
+        className="sound-preview-dock"
+        title="Only for previews in execs. TF2 plays each sound at its slot's Volume."
+      >
+        <legend className="sr-only">Sound previews</legend>
+        <button
+          type="button"
+          className="sound-icon-button"
+          data-testid="sounds-preview-mute"
+          aria-pressed={previewLevel.muted}
+          aria-label="Mute previews"
+          onClick={() => changePreviewLevel({ muted: !previewLevel.muted })}
+        >
+          {previewAudible === 0 ? (
+            <SpeakerSlash size={16} aria-hidden="true" />
+          ) : previewAudible < 50 ? (
+            <SpeakerLow size={16} aria-hidden="true" />
+          ) : (
+            <SpeakerHigh size={16} aria-hidden="true" />
+          )}
+        </button>
+        <label htmlFor="sounds-preview-volume" className="t-meta shrink-0">
+          Preview volume
+        </label>
+        <input
+          id="sounds-preview-volume"
+          data-testid="sounds-preview-volume"
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={previewLevel.volume}
+          onChange={(event) =>
+            changePreviewLevel({ volume: Number(event.target.value), muted: false })
+          }
+          className="range w-40"
+        />
+        <output htmlFor="sounds-preview-volume" className="tnum w-10 text-[13px] text-ink-muted">
+          {previewAudible}%
+        </output>
+        <span aria-hidden="true" className="h-5 w-px bg-edge" />
+        <button
+          type="button"
+          className="btn btn-quiet"
+          data-testid="sounds-preview-stop"
+          disabled={!player.playing}
+          onClick={player.stop}
+        >
+          <Stop size={14} aria-hidden="true" /> Stop
+        </button>
+      </fieldset>
     </section>
   );
 }

@@ -16,6 +16,19 @@ import {
 } from "./release-version.mjs";
 import { verifyMinisign, verifyRelease } from "./verify-release.mjs";
 
+test("packaged credits match the public third-party source", () => {
+  const credits = readFileSync(new URL("../THIRD_PARTY.md", import.meta.url), "utf8");
+  const packaged = readFileSync(
+    new URL("../apps/desktop/src-tauri/notices/CREDITS.txt", import.meta.url),
+    "utf8",
+  );
+  assert.equal(
+    packaged,
+    credits.replace(/\r\n/g, "\n"),
+    "Run node scripts/third-party-notices.mjs",
+  );
+});
+
 function removeFixture(directory) {
   const target = resolve(directory);
   assert.equal(dirname(target), resolve(tmpdir()));

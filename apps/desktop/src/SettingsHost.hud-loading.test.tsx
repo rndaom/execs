@@ -60,7 +60,7 @@ let root: Root;
 let container: HTMLDivElement;
 let refreshKey: number;
 let running: boolean;
-let onPendingChange: ReturnType<typeof vi.fn>;
+let onPendingChange: ReturnType<typeof vi.fn<(pending: boolean) => void>>;
 function makeApi() {
   return {
     getFilesContext: vi.fn(async () => ({ profileId, root: "fixture", layer: "vanilla" })),

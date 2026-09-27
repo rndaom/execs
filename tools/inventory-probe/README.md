@@ -74,7 +74,7 @@ The standalone diagnostic emits a prefixed JSON result containing SteamID and
 item identities; do not publish its raw output. It stores no credentials or files.
 Steam must be running and signed in, and TF2 must be closed. Connecting can briefly
 show the account as playing TF2 without launching the game. Use the same OS user,
-elevation and package context as Steam (see the root AGENTS.md Explorer launch rule).
+elevation and package context as Steam (see the [architecture guide](../../docs/ARCHITECTURE.md#platform-constraints) Explorer launch rule).
 The transport currently targets x64; native Linux connectivity is not verified.
 
 ## Verification recorded on 2026-09-19
