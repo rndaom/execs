@@ -6,7 +6,7 @@ import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { findOwnedNativeProcess } from "./linux-native-active-close.mjs";
 import { assertNativeRuntime } from "./linux-native-smoke.mjs";
-import { NativeWebDriver, waitUntil } from "./linux-native-webdriver.mjs";
+import { NativeWebDriver, waitForStartupScreen, waitUntil } from "./linux-native-webdriver.mjs";
 import { assertNoSteamDirectories, linuxSteamCandidates } from "./package-smoke-fixture.mjs";
 
 export const ACTIVE_NATIVE_STATE = `return {
@@ -122,6 +122,7 @@ export class LinuxActiveSession {
       },
       30_000,
     );
+    await waitForStartupScreen(this.driver);
     assertNativeRuntime(state);
     this.nativeProcess = findOwnedNativeProcess(this.process.pid, this.binary);
     this.report.checks.push({

@@ -85,12 +85,6 @@ fn now() -> u64 {
         .try_into()
         .unwrap_or(u64::MAX)
 }
-fn development() -> Result<(), CommandError> {
-    if !cfg!(debug_assertions) {
-        return Err(error("Live inventory operations are available only in development builds until release qualification passes."));
-    }
-    Ok(())
-}
 fn kind(operation: &Operation) -> &'static str {
     match operation {
         Operation::Layout { .. } => "layout",
@@ -357,7 +351,6 @@ pub async fn prepare_inventory_operation(
     request: PrepareRequest,
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<Review, CommandError> {
-    development()?;
     let _guard = gate.lock_for_interrupted_recovery().await?;
     super::super::shared::with_root(move |root| {
         execs_core::refuse_if_running()?;
@@ -514,7 +507,6 @@ pub async fn execute_inventory_operation(
     token: String,
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<Response, CommandError> {
-    development()?;
     let _guard = gate.lock_for_interrupted_recovery().await?;
     super::super::shared::with_root(move |root| {
         let prepared = {
@@ -570,7 +562,6 @@ pub async fn reconcile_inventory_operation(
     steam_id: String,
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<Response, CommandError> {
-    development()?;
     let _guard = gate.lock_for_interrupted_recovery().await?;
     super::super::shared::with_root(move |root| {
         execs_core::refuse_if_running()?;

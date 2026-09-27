@@ -1,6 +1,6 @@
 # Native Inventory development testing
 
-The September 27 native implementation supports reviewed Steam layout changes, four metal conversions and single-item deletion in debug builds. The browser test backpack remains a separate simulator. Production Inventory stays gated until Windows/Linux live and packaged acceptance passes.
+The September 27 native implementation supports reviewed Steam layout changes, four metal conversions and single-item deletion. The browser test backpack remains a separate simulator. On September 27, 2026 the owner decided that Inventory ships in 0.2.0, so release builds include it; the steps below remain the manual checks, and no Linux or packaged result has been recorded ([readiness](../../release-0.2.0-readiness.md)).
 
 ## What changed
 

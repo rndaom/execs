@@ -14,6 +14,7 @@ import {
   assertMenuGeometry,
   classifyClickTrace,
   NativeWebDriver,
+  waitForStartupScreen,
   waitUntil,
 } from "./linux-native-webdriver.mjs";
 import { assertNoSteamDirectories, linuxSteamCandidates } from "./package-smoke-fixture.mjs";
@@ -208,6 +209,7 @@ export async function main() {
       },
       30_000,
     );
+    await waitForStartupScreen(driver);
     assertNativeRuntime(state);
     report.checks.push({ label, state, capabilities: driver.capabilities });
     if (

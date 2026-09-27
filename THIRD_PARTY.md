@@ -38,7 +38,7 @@ contain an installed HUD or mod; its sharing rights remain the user's to check.
 
 ## Design inspiration
 
-The inventory organizer under development is inspired by
+The Inventory pane is inspired by
 [Jengerer's Item Manager (JIM)](https://www.jengerer.com/item_manager/), by
 Jengerer and its contributors. No JIM code or assets are copied or distributed.
 No reuse license was identified in its public repository. The standalone
@@ -72,7 +72,7 @@ The repository and installers do not package Valve's game archive files.
 execs reads sprites, sounds and weapon scripts from the player's own install to
 build profile content. A user-initiated profile ZIP export copies the profile's
 packs, which may contain game-derived bytes or third-party content. The player
-controls whether to share that ZIP. The development Inventory shows Valve's own
+controls whether to share that ZIP. Inventory shows Valve's own
 item images and descriptions for the player's public Steam inventory, fetched
 from Steam Community on use and cached locally; they are never packaged,
 exported or shared. The [D7 register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md)

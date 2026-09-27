@@ -26,6 +26,7 @@ import {
   classifyClickTrace,
   ELEMENT_KEY,
   NativeWebDriver,
+  waitForStartupScreen,
   waitUntil,
 } from "./linux-native-webdriver.mjs";
 import { assertNoSteamDirectories, linuxSteamCandidates } from "./package-smoke-fixture.mjs";
@@ -395,4 +396,18 @@ test("bounded polling keeps the last failure and never turns timeout into a pass
     },
   );
   assert.equal(await waitUntil("already ready", () => "ready", 1), "ready");
+});
+
+test("interaction waits until the startup screen has left, not just until the library renders", async () => {
+  const scripts = [];
+  let reads = 0;
+  const driver = {
+    read: async (script) => {
+      scripts.push(script);
+      return ++reads >= 3;
+    },
+  };
+  assert.equal(await waitForStartupScreen(driver), true);
+  assert.equal(reads, 3);
+  assert.ok(scripts.every((script) => script.includes("[data-testid=boot-splash]")));
 });

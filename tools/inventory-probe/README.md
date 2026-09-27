@@ -1,10 +1,10 @@
 # Inventory development
 
-The development app's **Inventory** pane connects through the existing signed-in
+The app's **Inventory** pane connects through the existing signed-in
 Steam client. Read sessions return an account-bound snapshot and disconnect.
 Separate reviewed operation sessions support backpack moves, four basic metal
-conversions and one-item deletion. These native operations are implemented for
-development testing; live Windows/Linux and packaged qualification remains pending.
+conversions and one-item deletion. The owner reported live crafting working in the
+Windows development app; Linux and packaged builds have not been exercised live.
 The pane supports 50-slot pages, sorting, page jumps, search,
 quality filters, and item details. It refreshes on first visible, focused use,
 every two minutes while visible and focused, and after TF2 closes. Reads pause
@@ -12,15 +12,15 @@ while the app is hidden, unfocused, busy, or in-game; failed connections back
 off from 30 seconds to five minutes. A failed read keeps the last snapshot
 marked stale and offers Retry. Refresh backpack also starts a manual read.
 
-The sidebar entry is excluded from production frontend builds. Release native
-commands and the helper entry point also refuse inventory access. The owner requested
-this manager for 0.2.0; live/platform acceptance and a new candidate remain required.
+The owner requested this manager for 0.2.0 and decided on September 27, 2026 that it
+ships: release builds include the sidebar entry, the native commands and the helper
+entry points. A refreshed release candidate must include it.
 
 ## Architecture
 
 - `src/native.rs` and `src/protocol.rs` implement the Steam session and minimal
   protobuf fields. No JIM code or assets are copied.
-- The debug desktop executable invokes itself with `--inventory-read` before
+- The desktop executable invokes itself with `--inventory-read` before
   Tauri initialization. The child owns Steam environment variables, callbacks,
   and SDK shutdown. The parent serializes connection attempts with the native
   write gate and terminates a hung helper after 40 seconds.

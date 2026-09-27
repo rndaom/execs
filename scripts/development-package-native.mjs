@@ -16,7 +16,7 @@ import {
 import { copyEditorText } from "./linux-native-active-input.mjs";
 import { activeCaptureSettled } from "./linux-native-active-runtime.mjs";
 import { assertNativeRuntime } from "./linux-native-smoke.mjs";
-import { NativeWebDriver, waitUntil } from "./linux-native-webdriver.mjs";
+import { NativeWebDriver, waitForStartupScreen, waitUntil } from "./linux-native-webdriver.mjs";
 
 const nativeState = `return {
   native: typeof window.__TAURI_INTERNALS__?.invoke === 'function', href: location.href,
@@ -282,6 +282,7 @@ export class DevelopmentPackageSession {
       },
       30_000,
     );
+    await waitForStartupScreen(this.driver);
     assertNativeRuntime(state);
     const identity = parseOwnedProcessRows(
       execFileSync("ps", ["-eo", "pid=,pgid=,comm="], { encoding: "utf8" }),
