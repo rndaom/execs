@@ -158,8 +158,8 @@ User-facing changes only. The release workflow publishes the matching
   sound from a simpler list.
 - Each pane and App settings keeps its own scroll position; changing profiles resets the
   profile-specific ones.
-- A turning cog shows wherever execs is loading, checking or saving, and stays still with reduced
-  motion.
+- The TF2 emblem spinner shows wherever execs is loading, checking or saving, and stays still with
+  reduced motion.
 - Promotional game captures are replaced with text and browser preview media.
 
 ## [0.1.8] - 2026-09-20
