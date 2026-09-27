@@ -89,6 +89,7 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Escape closes profile actions and returns focus to their button before closing the Profiles menu.
 - Binds, Gameplay, Crosshair and Sounds read your settings again when Comfig uses a preset other
   than the default, including Custom. The preset line mastercomfig reads first no longer stops
   them with "Cannot derive startup settings".
@@ -170,6 +171,10 @@ User-facing changes only. The release workflow publishes the matching
 - The TF2 emblem spinner shows wherever execs is loading, checking or saving, and stays still with
   reduced motion.
 - Promotional game captures are replaced with text and browser preview media.
+
+### Security
+
+- Updated the updater's TLS dependency to reject handshake messages sent across incorrect encryption boundaries.
 
 ## [0.1.8] - 2026-09-20
 

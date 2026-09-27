@@ -128,7 +128,7 @@ If the game looks wrong afterwards, verify game files in Steam.
 
 ## Bugs
 
-[Open an issue](https://github.com/rndaom/execs/issues/new/choose). **App settings** has **Report a bug** and **Copy diagnostics**; review copied diagnostics for personal details before posting them. Questions go in [Discussions](https://github.com/rndaom/execs/discussions). A vulnerability that could write the wrong file belongs in [SECURITY.md](SECURITY.md), not a public issue.
+[Open an issue](https://github.com/rndaom/execs/issues/new/choose). **App settings** has **Report a bug** and **Copy diagnostics**; the first-run footer links there. Review copied diagnostics for personal details before posting them. Questions go in [Discussions](https://github.com/rndaom/execs/discussions). A vulnerability that could write the wrong file belongs in [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Credits
 

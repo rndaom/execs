@@ -28,7 +28,7 @@ let container: HTMLDivElement;
 let root: Root;
 let store: ReturnType<typeof createFilesDraftStore>;
 let onSave: ReturnType<typeof vi.fn<(...args: [string, string, unknown?]) => Promise<boolean>>>;
-let setError: ReturnType<typeof vi.fn>;
+let setError: ReturnType<typeof vi.fn<(message: string | null, source?: string) => void>>;
 let files: { path: string; text: string }[];
 let running: boolean;
 

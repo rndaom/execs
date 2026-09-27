@@ -1,13 +1,14 @@
 # Releases
 
 Users install published GitHub Releases. Development stays on Linear and
-`main`. This file is the playbook; `AGENTS.md` keeps the durable rules.
+`main`. This file is the playbook; [ARCHITECTURE.md](ARCHITECTURE.md) keeps the durable rules.
 
-September 27 Inventory readiness update: the previously qualified 0.2.0 scope
-remains accepted. New manager implementation and positive owner development-app
-feedback are recorded in [0.2.0 readiness](release-0.2.0-readiness.md), along with
-the remaining production Inventory and revised-candidate gates. The owner
-requested readiness updates and commits only; no tag or publication is authorized.
+September 27 release audit: the previously qualified 0.2.0 scope remains
+accepted. [0.2.0 readiness](release-0.2.0-readiness.md) records the Inventory
+merge, positive owner development-app feedback, the production Sounds/control
+changes, the audit fixes and the required fresh installer tests.
+The existing signed draft predates those changes; public v0.1.8 remains latest.
+No tag or publication is authorized.
 
 Current public version: **0.1.8** (`v0.1.8`), published September 21, 2026 at
 02:26:18 UTC. [Release PR #59](https://github.com/rndaom/execs/pull/59) merged the

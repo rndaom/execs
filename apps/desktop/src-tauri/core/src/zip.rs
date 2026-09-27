@@ -3935,7 +3935,7 @@ mod tests {
     #[test]
     fn import_rejects_entries_outside_the_file_safe_surface() {
         // The old denylist accepted both of these: the game binary and the
-        // `tf/cfg/user/` folder AGENTS.md forbids twice. A manifest file is
+        // `tf/cfg/user/` folder docs/ARCHITECTURE.md forbids twice. A manifest file is
         // copied straight into the live tree by the next switch.
         for (entry, storage_path) in [
             ("files/bin/x64/client.dll", "bin/x64/client.dll"),

@@ -377,11 +377,15 @@ mod tests {
     #[test]
     fn links_are_neither_measured_nor_followed_when_clearing() {
         let dir = fixture();
+        let before = inspect_storage(&dir).unwrap();
         let outside = crate::test_temp_dir();
         write(&outside, "precious.bin", 50);
         std::os::unix::fs::symlink(&outside, dir.join("hud-catalog/linked")).unwrap();
         let report = inspect_storage(&dir).unwrap();
-        assert_eq!(group(&report, StorageGroupId::Downloads).bytes, 1380);
+        // A link changes neither the counts nor any group's classification.
+        // Compare against the fixture itself so new cache sources cannot leave
+        // an unrelated platform-specific byte total stale.
+        assert_eq!(report, before);
         let cleared = clear_download_caches(&dir).unwrap();
         assert_eq!(cleared.failed, vec!["hud-catalog".to_string()]);
         assert!(outside.join("precious.bin").is_file());
