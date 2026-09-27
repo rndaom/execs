@@ -19,6 +19,7 @@ it("uses a native review token for live crafting and accepts only a verified con
   const snapshot = await simulation.getInventory();
   const selectedIds = snapshot.items
     .filter((item) => item.definition === 5000)
+    .slice(0, 3)
     .map((item) => item.id);
   const api = {
     craftInventory: vi.fn(simulation.craftInventory),
@@ -60,6 +61,7 @@ it("uses a native review token for live crafting and accepts only a verified con
     expect(api.craftInventory).not.toHaveBeenCalled();
     expect(onResult).toHaveBeenCalledWith(
       expect.objectContaining({ status: "confirmed", consumedIds: selectedIds }),
+      "combine_scrap",
     );
   } finally {
     await act(async () => root.unmount());
@@ -146,13 +148,15 @@ async function harness() {
   };
 }
 
-it("shows every exact off-page ingredient immediately and closing sends nothing", async () => {
+it("shows every exact off-page ingredient by slot and closing sends nothing", async () => {
   const h = await harness();
   try {
     const list = h.box.querySelector('[aria-label="Exact crafting ingredients"]');
     expect(list?.children).toHaveLength(3);
-    for (const item of h.snapshot.items) expect(list?.textContent).toContain(item.id);
-    expect(list?.textContent).toContain("slot 51");
+    // Item numbers are not something a player reads; slots are.
+    for (const item of h.snapshot.items) expect(list?.textContent).not.toContain(item.id);
+    expect(list?.textContent).toContain("Scrap Metal");
+    expect(list?.textContent).toContain("Slot 51");
     expect(h.box.textContent).toContain("no Undo");
     expect(h.box.querySelector('[role="dialog"]')).toBeNull();
     expect([...h.box.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
@@ -166,7 +170,7 @@ it("shows every exact off-page ingredient immediately and closing sends nothing"
   }
 });
 
-it("derives the output from selected metals without a recipe picker", async () => {
+it("derives the output from selected metals and offers a choice only when there is one", async () => {
   const h = await harness();
   try {
     expect(h.box.querySelector("fieldset")).toBeNull();
@@ -175,17 +179,71 @@ it("derives the output from selected metals without a recipe picker", async () =
     refined.items[0].definition = 5002;
     await h.hide();
     await h.render({ snapshot: refined, selectedIds: [refined.items[0].id] });
+    expect(h.box.querySelector("fieldset")).toBeNull();
     expect(h.box.textContent).toContain("1 Refined Metal → 3 Reclaimed Metal");
 
-    expect(h.box.textContent).toContain("Create 3 Reclaimed Metal");
     await h.hide();
     await h.render({ selectedIds: refined.items.map((item) => item.id) });
     expect(h.button("Simulate craft").disabled).toBe(true);
-    expect(h.box.textContent).toContain(
-      "Select 3 Scrap Metal, 3 Reclaimed Metal, 1 Reclaimed Metal or 1 Refined Metal.",
-    );
+    expect(h.box.textContent).toContain("Select Scrap, Reclaimed or Refined Metal of one kind.");
+
+    // Three refined metal can be a random hat or three smelts; the hat comes first.
+    const allRefined = structuredClone(h.snapshot);
+    for (const item of allRefined.items) item.definition = 5002;
+    await h.hide();
+    await h.render({ snapshot: allRefined, selectedIds: allRefined.items.map((item) => item.id) });
+    const choices = [...h.box.querySelectorAll("fieldset label")].map((label) => label.textContent);
+    expect(choices).toEqual(["Random hat", "Smelt"]);
+    expect(h.box.textContent).toContain("3 Refined Metal → 1 random hat");
+    expect(h.box.textContent).toContain("premium TF2 account");
   } finally {
     await h.close();
+  }
+});
+
+it("runs a batch of crafts one after another from each confirmed backpack", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const simulation = createInventorySimulation();
+  const snapshot = await simulation.getInventory();
+  const scrap = snapshot.items.filter((item) => item.definition === 5000).map((item) => item.id);
+  expect(scrap).toHaveLength(9);
+  const api = { craftInventory: vi.fn(simulation.craftInventory) };
+  const onResult = vi.fn();
+  const box = document.createElement("div");
+  const root = createRoot(box);
+  try {
+    await act(async () =>
+      root.render(
+        <InventoryCrafting
+          snapshot={snapshot}
+          selectedIds={scrap.slice(0, 8)}
+          protectedIds={new Set()}
+          capability="simulation"
+          api={api}
+          onResult={onResult}
+        />,
+      ),
+    );
+    expect(box.textContent).toContain("6 Scrap Metal → 2 Reclaimed Metal");
+    expect(box.textContent).toContain("2 crafts, one after another.");
+    expect(box.textContent).toContain("2 Scrap Metal stay in your backpack.");
+    const run = [...box.querySelectorAll("button")].find(
+      (button) => button.textContent === "Simulate 2 crafts",
+    );
+    await act(async () => run?.click());
+    expect(api.craftInventory).toHaveBeenCalledTimes(2);
+    // The second craft starts from the backpack the first one produced.
+    expect(api.craftInventory.mock.calls[1][0].baseline).not.toBe(
+      api.craftInventory.mock.calls[0][0].baseline,
+    );
+    const [result, recipe] = onResult.mock.calls[0];
+    expect(recipe).toBe("combine_scrap");
+    expect(result.status).toBe("simulated");
+    expect(result.consumedIds).toHaveLength(6);
+    expect(result.acquiredIds).toHaveLength(2);
+    expect(result.message).toContain("Simulated 2 crafts: 2 Reclaimed Metal.");
+  } finally {
+    await act(async () => root.unmount());
   }
 });
 
@@ -212,7 +270,7 @@ it("submits once during a delayed result and publishes only verified simulated c
     if (!sent || !finish) throw new Error("Craft did not start");
     const result = simulateInventoryCraft(h.snapshot, sent);
     await act(async () => finish?.(result));
-    expect(h.onResult).toHaveBeenCalledWith(result);
+    expect(h.onResult).toHaveBeenCalledWith(result, "combine_scrap");
     expect(h.onBusyChange.mock.calls).toEqual([[true], [false]]);
     expect(h.box.textContent).toContain("Steam items were not changed");
   } finally {

@@ -251,15 +251,45 @@ fn build_operation(
                 ));
             }
             let operation = if request.kind == "craft" {
-                let recipe = schema
-                    .metal_recipe(
-                        request
-                            .recipe
-                            .as_deref()
-                            .ok_or_else(|| error("Choose an explicit supported recipe."))?,
+                let key = request
+                    .recipe
+                    .as_deref()
+                    .ok_or_else(|| error("Choose an explicit supported recipe."))?;
+                // (recipe, input, count, output, output count, possible outputs)
+                let (
+                    recipe_id,
+                    input_definition,
+                    input_count,
+                    output_definition,
+                    output_count,
+                    output_choices,
+                ) = if key == "craft_hat" {
+                    // Valve reserves this recipe for premium accounts; a free
+                    // account's backpack has exactly 50 slots.
+                    if snapshot.capacity < 300 {
+                        return Err(error("Crafting a random hat needs a premium TF2 account."));
+                    }
+                    let recipe = schema.hat_recipe().map_err(error)?;
+                    (
+                        recipe.recipe_id,
+                        recipe.input_definition,
+                        recipe.input_count,
+                        0,
+                        1,
+                        recipe.output_definitions,
                     )
-                    .map_err(error)?;
-                if request.input_ids.len() != recipe.input_count
+                } else {
+                    let recipe = schema.metal_recipe(key).map_err(error)?;
+                    (
+                        recipe.recipe_id,
+                        recipe.input_definition,
+                        recipe.input_count,
+                        recipe.output_definition,
+                        recipe.output_count,
+                        Vec::new(),
+                    )
+                };
+                if request.input_ids.len() != input_count
                     || request.input_ids.iter().collect::<BTreeSet<_>>().len()
                         != request.input_ids.len()
                 {
@@ -270,7 +300,7 @@ fn build_operation(
                 for id in &request.input_ids {
                     let item = consume_item(snapshot, id, &protected)?;
                     let eligible = schema.eligibility(&eligibility_input(item));
-                    if item.definition != recipe.input_definition
+                    if item.definition != input_definition
                         || !eligible.craftable
                         || !eligible.tradable
                         || eligible.customized
@@ -282,8 +312,8 @@ fn build_operation(
                 if snapshot
                     .items
                     .len()
-                    .saturating_sub(recipe.input_count)
-                    .saturating_add(recipe.output_count)
+                    .saturating_sub(input_count)
+                    .saturating_add(output_count)
                     > snapshot.capacity as usize
                 {
                     return Err(error(
@@ -291,10 +321,11 @@ fn build_operation(
                     ));
                 }
                 Operation::Craft {
-                    recipe_id: recipe.recipe_id,
+                    recipe_id,
                     input_ids: request.input_ids.clone(),
-                    output_definition: recipe.output_definition,
-                    output_count: recipe.output_count as u32,
+                    output_definition,
+                    output_count: output_count as u32,
+                    output_choices,
                 }
             } else {
                 let item_id = request

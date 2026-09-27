@@ -197,6 +197,45 @@ pub async fn get_inventory_icons(
     with_root(move |root| execs_core::inventory::icons(&root, &paths).map_err(failure)).await
 }
 
+/// Valve's descriptions for items in the player's public inventory. The
+/// snapshot stays authoritative; this only improves art and item text.
+#[tauri::command]
+pub async fn get_inventory_steam_items(
+    steam_id: String,
+    asset_ids: Vec<String>,
+    refresh: bool,
+) -> Result<crate::steam_items_fetch::SteamItems, CommandError> {
+    if !cfg!(debug_assertions) {
+        return Err(failure(
+            "Inventory is currently available only in development builds.",
+        ));
+    }
+    super::shared::blocking(move || {
+        let data = execs_core::try_execs_data_dir().map_err(failure)?;
+        crate::steam_items_fetch::items(&data, &steam_id, &asset_ids, refresh).map_err(failure)
+    })
+    .await
+}
+
+/// One rendered item image as PNG bytes.
+#[tauri::command]
+pub async fn get_inventory_steam_image(
+    image: String,
+    size: u32,
+) -> Result<tauri::ipc::Response, CommandError> {
+    if !cfg!(debug_assertions) {
+        return Err(failure(
+            "Inventory is currently available only in development builds.",
+        ));
+    }
+    let bytes = super::shared::blocking(move || {
+        let data = execs_core::try_execs_data_dir().map_err(failure)?;
+        crate::steam_items_fetch::image(&data, &image, size).map_err(failure)
+    })
+    .await?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[cfg(test)]
 mod operation_gate_tests {
     use super::*;

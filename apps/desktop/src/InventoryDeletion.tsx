@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import type { InventorySnapshot } from "./lib/bridge";
 import {
   type InventoryDeleteRequest,
@@ -10,7 +10,7 @@ import {
   executeReviewedInventoryOperation,
   type InventoryLiveApi,
 } from "./lib/inventory-operations";
-import { itemName } from "./lib/inventory-ui";
+import { itemName, qualityColor } from "./lib/inventory-ui";
 
 const pendingDeletes = new WeakMap<InventoryLiveApi["executeInventoryOperation"], Set<string>>();
 function pendingFor(api: InventoryLiveApi) {
@@ -35,7 +35,11 @@ export function InventoryDeletion({
   disabledReason,
   onBusyChange,
   onResult,
+  onCancel,
+  cancelRef,
 }: {
+  onCancel?: () => void;
+  cancelRef?: RefObject<HTMLButtonElement | null>;
   snapshot: InventorySnapshot;
   selectedIds: readonly string[];
   protectedIds: ReadonlySet<string>;
@@ -166,49 +170,64 @@ export function InventoryDeletion({
     }
   }
   return (
-    <section aria-label="Single item deletion" className="space-y-3">
-      <p className="t-body">
-        Permanently delete this one item
-        {capability === "simulation" ? " from the test backpack" : " from Steam"}? Deletion cannot
-        be undone.
+    <section aria-label="Single item deletion" className="mt-4 space-y-4">
+      <div className="inventory-delete-target">
+        <p
+          className="t-row break-words"
+          style={{ color: item ? qualityColor(review.baseline, item.quality) : undefined }}
+        >
+          {item ? itemName(review.baseline, item) : "No single item selected"}
+        </p>
+        <p className="t-meta break-all">
+          {item ? (item.position ? `Slot ${item.position}` : "Unplaced") : ""}
+          {item ? " · " : ""}Item {review.itemId || "not selected"}
+        </p>
+      </div>
+      <p className="t-meta">
+        {capability === "simulation"
+          ? "Test backpack only; Steam is not changed. Deletion cannot be undone."
+          : `Permanently removes this item from Steam account ${review.steamId}. Deletion cannot be undone.`}
       </p>
-      <p className="t-row break-words">
-        {item ? itemName(review.baseline, item) : "No single item selected"}
-      </p>
-      <p className="t-meta break-all">
-        Item {review.itemId || "not selected"} · Steam account {review.steamId}
-      </p>
-      {item ? (
-        <p className="t-meta">{item.position ? `Slot ${item.position}` : "Unplaced item"}</p>
-      ) : null}
-      {capability === "simulation" ? (
-        <p className="t-meta">Simulation only. Your Steam item will not be deleted.</p>
-      ) : null}
       {refusal || disabledReason ? (
         <p role="alert" className="t-meta text-warn">
           {refusal || disabledReason}
         </p>
       ) : null}
       {message ? (
-        <p role={pending.has(review.steamId) ? "alert" : "status"}>{message}</p>
+        <p role={pending.has(review.steamId) ? "alert" : "status"} className="t-meta">
+          {message}
+        </p>
       ) : pending.has(review.steamId) && !busy ? (
-        <p role="alert">
+        <p role="alert" className="t-meta text-warn">
           A deletion outcome is unresolved for this account. Reconcile before trying another
           operation.
         </p>
       ) : null}
-      <button
-        type="button"
-        className="btn btn-primary"
-        disabled={blocked}
-        onClick={() => void remove()}
-      >
-        {busy
-          ? "Deleting…"
-          : capability === "simulation"
-            ? "Simulate deletion"
-            : "Delete item permanently"}
-      </button>
+      <div className="modal-actions">
+        {onCancel ? (
+          <button
+            ref={cancelRef}
+            type="button"
+            className="btn btn-ghost"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="btn btn-danger"
+          disabled={blocked}
+          onClick={() => void remove()}
+        >
+          {busy
+            ? "Deleting…"
+            : capability === "simulation"
+              ? "Simulate deletion"
+              : "Delete item permanently"}
+        </button>
+      </div>
     </section>
   );
 }

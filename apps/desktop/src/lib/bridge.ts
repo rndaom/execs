@@ -147,6 +147,34 @@ export function getInventoryIcons(
   return call("get_inventory_icons", { paths });
 }
 
+/** Valve's description of one item in the player's public Steam inventory. */
+export type SteamItemLine = { text: string; color: string | null; user: boolean };
+export type SteamItem = {
+  image: string;
+  name: string;
+  marketName: string | null;
+  nameColor: string | null;
+  typeLine: string;
+  lines: SteamItemLine[];
+  originalName: string | null;
+};
+export type SteamItems = {
+  status: "ready" | "private" | "busy" | "unavailable";
+  message: string | null;
+  items: Record<string, SteamItem>;
+};
+export function getInventorySteamItems(
+  steamId: string,
+  assetIds: string[],
+  refresh: boolean,
+): Promise<SteamItems> {
+  return call("get_inventory_steam_items", { steamId, assetIds, refresh });
+}
+/** Valve's rendered PNG for an item image name at 192 or 360 pixels. */
+export function getInventorySteamImage(image: string, size: 192 | 360): Promise<ArrayBuffer> {
+  return call<ArrayBuffer>("get_inventory_steam_image", { image, size });
+}
+
 export type Tf2Install = {
   path: string;
 };

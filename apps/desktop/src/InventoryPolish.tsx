@@ -1,5 +1,6 @@
-import { BookmarkSimple, ShieldCheck, Star } from "@phosphor-icons/react";
+import { BookmarkSimple, X } from "@phosphor-icons/react";
 import { useMemo, useRef, useState } from "react";
+import { Segmented } from "./components/ui/Segmented";
 import type { InventorySnapshot } from "./lib/bridge";
 import {
   INVENTORY_PREFERENCES_LIMITS,
@@ -14,7 +15,7 @@ import {
   validInventoryPreferences,
   writeInventoryPreferences,
 } from "./lib/inventory-preferences";
-import { type InventorySort, itemName } from "./lib/inventory-ui";
+import { type InventorySort, QUALITY_NAMES } from "./lib/inventory-ui";
 
 function localStorageOrNull(): PreferenceStorage | null {
   try {
@@ -115,9 +116,9 @@ export function useInventoryPreferences(account: string | undefined) {
 }
 
 export type InventoryPreferencesController = ReturnType<typeof useInventoryPreferences>;
+export type InventoryPolishTab = "searches" | "layouts" | "history";
 export type InventoryPolishProps = {
   snapshot: InventorySnapshot;
-  selectedIds: readonly string[] | ReadonlySet<string>;
   query: string;
   quality: number | null;
   sort: InventorySort;
@@ -125,17 +126,30 @@ export type InventoryPolishProps = {
   preferences: InventoryPreferencesController;
   onSearch: (search: InventorySearch) => void;
   onRestoreLayout: (positions: Record<string, number>) => void;
-  onSelectIds: (ids: string[]) => void;
   disabled?: boolean;
+  initialTab?: InventoryPolishTab;
 };
 
 export function InventoryPolish(props: InventoryPolishProps) {
   // Account changes also discard unsaved names and feedback, not just saved records.
   return <AccountInventoryPolish key={props.snapshot.steamId} {...props} />;
 }
+
+const OUTCOMES: Record<InventoryOperation["outcome"], string> = {
+  simulated: "Simulated · Steam unchanged",
+  confirmed: "Confirmed",
+  partial: "Partially confirmed",
+  unknown: "Unknown outcome",
+  refused: "Refused",
+};
+const KINDS: Record<InventoryOperation["kind"], string> = {
+  move: "Move",
+  craft: "Craft",
+  delete: "Delete",
+};
+
 function AccountInventoryPolish({
   snapshot,
-  selectedIds,
   query,
   quality,
   sort,
@@ -143,18 +157,20 @@ function AccountInventoryPolish({
   preferences: controller,
   onSearch,
   onRestoreLayout,
-  onSelectIds,
   disabled = false,
+  initialTab = "searches",
 }: InventoryPolishProps) {
+  const [tab, setTab] = useState<InventoryPolishTab>(initialTab);
   const [searchName, setSearchName] = useState("");
   const [layoutName, setLayoutName] = useState("");
   const [feedback, setFeedback] = useState<{ text: string; error: boolean } | null>(null);
-  const { preferences, protectedIds, favoriteIds, storageError } = controller;
-  const present = new Set(snapshot.items.map((item) => item.id));
-  const selected = [...selectedIds].filter((id) => present.has(id));
-  const favorites = snapshot.items.filter((item) => favoriteIds.has(item.id));
-  const protectedItems = snapshot.items.filter((item) => protectedIds.has(item.id));
-  const unplaced = snapshot.items.filter((item) => (positions[item.id] ?? item.position) === 0);
+  const { preferences, protectedIds, storageError } = controller;
+  const currentSearch = [
+    query.trim() ? `“${query.trim()}”` : "",
+    quality === null ? "" : (QUALITY_NAMES[quality] ?? `Quality ${quality}`),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   function act(action: () => void, message: string) {
     try {
       action();
@@ -167,298 +183,204 @@ function AccountInventoryPolish({
     }
   }
   return (
-    <section aria-label="Inventory tools" className="my-4 border-y border-edge py-3">
+    <section aria-label="Inventory tools" className="mt-4">
+      <Segmented
+        label="Inventory tools"
+        size="sm"
+        value={tab}
+        options={[
+          { id: "searches", label: `Searches · ${preferences.searches.length}` },
+          { id: "layouts", label: `Layouts · ${preferences.layouts.length}` },
+          { id: "history", label: `History · ${preferences.history.length}` },
+        ]}
+        onChange={(next) => {
+          setTab(next);
+          setFeedback(null);
+        }}
+      />
       {storageError ? (
-        <p role="alert" className="t-meta mb-3 text-warn">
+        <p role="alert" className="t-meta mt-3 text-warn">
           {storageError}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={disabled || unplaced.length === 0}
-          onClick={() => onSelectIds(unplaced.map((item) => item.id))}
-        >
-          Select unplaced ({unplaced.length})
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={disabled || favorites.length === 0}
-          onClick={() => onSelectIds(favorites.map((item) => item.id))}
-        >
-          <Star size={14} aria-hidden="true" /> Favorites ({favorites.length})
-        </button>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={disabled || protectedItems.length === 0}
-          onClick={() => onSelectIds(protectedItems.map((item) => item.id))}
-        >
-          <ShieldCheck size={14} aria-hidden="true" /> Protected ({protectedItems.length})
-        </button>
-      </div>
-      <details className="mt-3">
-        <summary className="t-meta cursor-pointer hover:text-ink">
-          Favorites and protection · {selected.length} selected
-        </summary>
-        <p className="t-meta mt-2">
-          Favorites are protected too. Protected items stay out of crafting and arrangement changes.
-          These choices belong to this Steam account on this device.
-        </p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={disabled || selected.length === 0}
-            onClick={() =>
-              act(
-                () => controller.setFavorite(selected, true),
-                `Favorited ${selected.length} selected items.`,
-              )
-            }
-          >
-            Favorite selected
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={disabled || !selected.some((id) => favoriteIds.has(id))}
-            onClick={() =>
-              act(
-                () => controller.setFavorite(selected, false),
-                "Removed favorites. Explicit protections remain.",
-              )
-            }
-          >
-            Remove favorite
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={disabled || selected.length === 0}
-            onClick={() =>
-              act(
-                () => controller.setProtected(selected, true),
-                `Protected ${selected.length} selected items.`,
-              )
-            }
-          >
-            Protect selected
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={disabled || !selected.some((id) => preferences.protectedIds.includes(id))}
-            onClick={() =>
-              act(
-                () => controller.setProtected(selected, false),
-                "Removed explicit protection. Favorites remain protected.",
-              )
-            }
-          >
-            Remove protection
-          </button>
-        </div>
-        {selected.length > 0 ? (
-          <p className="t-meta mt-2 break-words">
-            Selected:{" "}
-            {selected
-              .slice(0, 5)
-              .map((id) => {
-                const item = snapshot.items.find((entry) => entry.id === id);
-                return item ? itemName(snapshot, item) : id;
-              })
-              .join(", ")}
-            {selected.length > 5 ? ` and ${selected.length - 5} more` : ""}.
-          </p>
-        ) : null}
-      </details>
-      <details className="mt-3">
-        <summary className="t-meta cursor-pointer hover:text-ink">
-          Saved searches ({preferences.searches.length}) and layouts ({preferences.layouts.length})
-        </summary>
-        <div className="mt-3 space-y-4">
-          <form
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (disabled) return;
-              act(() => {
-                controller.saveSearch(searchName, { query, quality, sort });
-                setSearchName("");
-              }, "Saved the current search, quality filter and view order.");
-            }}
-          >
-            <label className="t-meta flex min-w-0 flex-1 flex-col gap-1">
-              Search name
-              <input
-                className="input w-full"
-                value={searchName}
-                maxLength={60}
-                onChange={(event) => setSearchName(event.target.value)}
-                placeholder="e.g. Scout weapons"
-              />
-            </label>
-            <button
-              type="submit"
-              className="btn btn-ghost"
-              disabled={disabled || !searchName.trim()}
+      <div className="mt-4 min-h-44">
+        {tab === "searches" ? (
+          <>
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (disabled) return;
+                act(() => {
+                  controller.saveSearch(searchName, { query, quality, sort });
+                  setSearchName("");
+                }, "Saved the current search.");
+              }}
             >
-              <BookmarkSimple size={14} aria-hidden="true" /> Save current search
-            </button>
-          </form>
-          {preferences.searches.length > 0 ? (
-            <ul className="space-y-2" aria-label="Saved searches">
-              {preferences.searches.map((search) => (
-                <li className="flex flex-wrap items-center gap-2" key={search.name}>
-                  <button
-                    type="button"
-                    className="btn btn-ghost max-w-full break-words"
-                    disabled={disabled}
-                    onClick={() => onSearch(search)}
-                  >
-                    {search.name}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    disabled={disabled}
-                    aria-label={`Remove saved search ${search.name}`}
-                    onClick={() =>
-                      act(() => controller.removeSearch(search.name), "Removed saved search.")
-                    }
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <p className="t-meta">
-            Save the current draft positions. Restoring a layout changes the draft only; review and
-            Apply separately. Items acquired since saving and protected items keep their current
-            draft positions. Missing items are skipped; conflicts refuse the restore.
-          </p>
-          <form
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (disabled) return;
-              act(() => {
-                controller.saveLayout(layoutName, positions, snapshot.capacity);
-                setLayoutName("");
-              }, "Saved current draft positions for this account.");
-            }}
-          >
-            <label className="t-meta flex min-w-0 flex-1 flex-col gap-1">
-              Layout name
-              <input
-                className="input w-full"
-                value={layoutName}
-                maxLength={60}
-                onChange={(event) => setLayoutName(event.target.value)}
-                placeholder="e.g. Class pages"
-              />
-            </label>
-            <button
-              type="submit"
-              className="btn btn-ghost"
-              disabled={disabled || !layoutName.trim()}
-            >
-              Save current layout
-            </button>
-          </form>
-          {preferences.layouts.length > 0 ? (
-            <ul className="space-y-2" aria-label="Saved layouts">
-              {preferences.layouts.map((layout) => (
-                <li className="flex flex-wrap items-center gap-2" key={layout.name}>
-                  <span className="t-meta min-w-0 flex-1 break-words">{layout.name}</span>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    disabled={disabled}
-                    aria-label={`Restore ${layout.name} as draft`}
-                    onClick={() => {
-                      try {
-                        const result = restoreInventoryLayout(
-                          layout,
-                          snapshot,
-                          positions,
-                          protectedIds,
-                        );
-                        onRestoreLayout(result.positions);
-                        setFeedback({
-                          text: `Restored as a draft. ${result.missing} missing items skipped; ${result.retained} items kept their current positions. Review before Apply.`,
-                          error: false,
-                        });
-                      } catch (error) {
-                        setFeedback({
-                          text:
-                            error instanceof Error ? error.message : "Could not restore layout.",
-                          error: true,
-                        });
+              <label className="min-w-0 flex-1">
+                <span className="sr-only">Search name</span>
+                <input
+                  className="input w-full"
+                  value={searchName}
+                  maxLength={60}
+                  onChange={(event) => setSearchName(event.target.value)}
+                  placeholder={
+                    currentSearch ? `Name ${currentSearch}` : "Search the backpack first"
+                  }
+                />
+              </label>
+              <button
+                type="submit"
+                className="btn btn-ghost"
+                disabled={disabled || !searchName.trim()}
+              >
+                <BookmarkSimple size={14} aria-hidden="true" /> Save search
+              </button>
+            </form>
+            {preferences.searches.length ? (
+              <ul className="inventory-saved-list" aria-label="Saved searches">
+                {preferences.searches.map((search) => (
+                  <li key={search.name}>
+                    <button
+                      type="button"
+                      className="inventory-saved-open"
+                      disabled={disabled}
+                      onClick={() => onSearch(search)}
+                    >
+                      {search.name}
+                    </button>
+                    <button
+                      type="button"
+                      className="inventory-icon-button"
+                      disabled={disabled}
+                      aria-label={`Remove saved search ${search.name}`}
+                      title="Remove"
+                      onClick={() =>
+                        act(() => controller.removeSearch(search.name), "Removed saved search.")
                       }
-                    }}
-                  >
-                    Restore as draft
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    disabled={disabled}
-                    aria-label={`Remove saved layout ${layout.name}`}
-                    onClick={() =>
-                      act(() => controller.removeLayout(layout.name), "Removed saved layout.")
-                    }
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      </details>
-      <details className="mt-3">
-        <summary className="t-meta cursor-pointer hover:text-ink">
-          Local operation history ({preferences.history.length})
-        </summary>
-        <p className="t-meta mt-2">
-          The last 50 reported outcomes on this device. This is not Steam's transaction history.
-          Simulations do not change Steam; unknown outcomes require a fresh check before retrying.
-        </p>
-        {preferences.history.length === 0 ? (
-          <p className="t-meta mt-2">No operations recorded.</p>
-        ) : (
-          <ol className="mt-2 space-y-3">
+                    >
+                      <X size={14} aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="t-meta mt-3 text-ink-faint">No saved searches.</p>
+            )}
+          </>
+        ) : tab === "layouts" ? (
+          <>
+            <form
+              className="flex items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (disabled) return;
+                act(() => {
+                  controller.saveLayout(layoutName, positions, snapshot.capacity);
+                  setLayoutName("");
+                }, "Saved the current draft positions.");
+              }}
+            >
+              <label className="min-w-0 flex-1">
+                <span className="sr-only">Layout name</span>
+                <input
+                  className="input w-full"
+                  value={layoutName}
+                  maxLength={60}
+                  onChange={(event) => setLayoutName(event.target.value)}
+                  placeholder="Name the current layout"
+                />
+              </label>
+              <button
+                type="submit"
+                className="btn btn-ghost"
+                disabled={disabled || !layoutName.trim()}
+              >
+                Save layout
+              </button>
+            </form>
+            {preferences.layouts.length ? (
+              <ul className="inventory-saved-list" aria-label="Saved layouts">
+                {preferences.layouts.map((layout) => (
+                  <li key={layout.name}>
+                    <span className="min-w-0 flex-1 truncate">{layout.name}</span>
+                    <button
+                      type="button"
+                      className="btn btn-quiet"
+                      disabled={disabled}
+                      aria-label={`Restore ${layout.name} as draft`}
+                      onClick={() => {
+                        try {
+                          const result = restoreInventoryLayout(
+                            layout,
+                            snapshot,
+                            positions,
+                            protectedIds,
+                          );
+                          onRestoreLayout(result.positions);
+                          setFeedback({
+                            text: `Restored as a draft. ${result.missing} missing items skipped; ${result.retained} items kept their current positions. Review before Apply.`,
+                            error: false,
+                          });
+                        } catch (error) {
+                          setFeedback({
+                            text:
+                              error instanceof Error ? error.message : "Could not restore layout.",
+                            error: true,
+                          });
+                        }
+                      }}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      className="inventory-icon-button"
+                      disabled={disabled}
+                      aria-label={`Remove saved layout ${layout.name}`}
+                      title="Remove"
+                      onClick={() =>
+                        act(() => controller.removeLayout(layout.name), "Removed saved layout.")
+                      }
+                    >
+                      <X size={14} aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="t-meta mt-3 text-ink-faint">
+                Restoring a layout only changes the draft. New and protected items keep their place.
+              </p>
+            )}
+          </>
+        ) : preferences.history.length ? (
+          <ol className="inventory-history" aria-label="Operation history">
             {preferences.history.map((operation) => (
-              <li key={operation.at} className="t-meta break-words">
-                <strong className="text-ink">
-                  {operation.outcome === "simulated"
-                    ? "Simulated · Steam unchanged"
-                    : operation.outcome === "confirmed"
-                      ? "Confirmed"
-                      : operation.outcome === "partial"
-                        ? "Partially confirmed"
-                        : operation.outcome === "unknown"
-                          ? "Unknown outcome"
-                          : "Refused"}
-                </strong>{" "}
-                ·{" "}
-                {operation.kind === "craft"
-                  ? "Craft"
-                  : operation.kind === "delete"
-                    ? "Delete"
-                    : "Move"}{" "}
-                ·{" "}
-                <time dateTime={new Date(operation.at).toISOString()}>
-                  {new Date(operation.at).toLocaleString()}
-                </time>
-                <p>{operation.summary}</p>
-                <details>
-                  <summary className="cursor-pointer">
+              <li key={operation.at}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="t-row">
+                    {KINDS[operation.kind]}{" "}
+                    <span
+                      className={
+                        operation.outcome === "unknown" || operation.outcome === "partial"
+                          ? "font-normal text-warn"
+                          : "font-normal text-ink-muted"
+                      }
+                    >
+                      · {OUTCOMES[operation.outcome]}
+                    </span>
+                  </span>
+                  <time
+                    className="t-meta tnum shrink-0"
+                    dateTime={new Date(operation.at).toISOString()}
+                  >
+                    {new Date(operation.at).toLocaleString()}
+                  </time>
+                </div>
+                <p className="t-meta break-words">{operation.summary}</p>
+                <details className="t-meta">
+                  <summary className="cursor-pointer text-ink-faint hover:text-ink">
                     {operation.itemIds.length} item identities
                   </summary>
                   <p className="mt-1 break-all">{operation.itemIds.join(", ") || "None"}</p>
@@ -466,8 +388,12 @@ function AccountInventoryPolish({
               </li>
             ))}
           </ol>
+        ) : (
+          <p className="t-meta text-ink-faint">
+            Outcomes on this device appear here. This is not Steam's transaction history.
+          </p>
         )}
-      </details>
+      </div>
       {feedback ? (
         <p
           className={`t-meta mt-3 ${feedback.error ? "text-warn" : ""}`}

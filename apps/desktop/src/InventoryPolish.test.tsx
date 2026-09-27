@@ -105,7 +105,6 @@ it("handles a denied browser storage getter", async () => {
 it("loads saved search and restores a layout only through a draft callback", async () => {
   const onSearch = vi.fn();
   const onRestoreLayout = vi.fn();
-  const onSelectIds = vi.fn();
   const snapshot = {
     steamId: "account-a",
     capacity: 50,
@@ -118,7 +117,6 @@ it("loads saved search and restores a layout only through a draft callback", asy
     return (
       <InventoryPolish
         snapshot={snapshot}
-        selectedIds={["123"]}
         query="scout"
         quality={6}
         sort="name"
@@ -126,7 +124,6 @@ it("loads saved search and restores a layout only through a draft callback", asy
         preferences={controller}
         onSearch={onSearch}
         onRestoreLayout={onRestoreLayout}
-        onSelectIds={onSelectIds}
       />
     );
   }
@@ -149,6 +146,7 @@ it("loads saved search and restores a layout only through a draft callback", asy
       quality: 6,
       sort: "name",
     });
+    await act(async () => box.querySelector<HTMLInputElement>('input[value="layouts"]')?.click());
     await act(async () =>
       box.querySelector<HTMLButtonElement>('[aria-label="Restore Page two as draft"]')?.click(),
     );
@@ -159,12 +157,6 @@ it("loads saved search and restores a layout only through a draft callback", asy
     );
     expect(onRestoreLayout).toHaveBeenCalledWith({ "123": 2 });
     expect(box.querySelector('[role="status"]')?.textContent).toContain("Review before Apply");
-    await act(async () =>
-      [...box.querySelectorAll("button")]
-        .find((button) => button.textContent === "Favorite selected")
-        ?.click(),
-    );
-    expect(controller.protectedIds.has("123")).toBe(true);
   } finally {
     await act(async () => root.unmount());
   }

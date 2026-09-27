@@ -35,7 +35,7 @@ it("deletes exactly one reviewed fixture identity and retains every other item",
   const result = simulateInventoryDelete(baseline, request);
   expect(result.deletedIds).toEqual([request.itemId]);
   expect(result.snapshot?.items).toEqual(baseline.items.slice(1));
-  expect(baseline.items).toHaveLength(12);
+  expect(baseline.items).toHaveLength(20);
   expect(verifyInventoryDeleteResult(baseline, request, result).status).toBe("simulated");
   expect(
     verifyInventoryDeleteResult(baseline, request, { ...result, status: "confirmed" }).status,

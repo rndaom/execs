@@ -1,274 +1,234 @@
+import { ArrowRight } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Modal } from "./components/ui/Modal";
 import type { InventoryCapabilities, InventorySnapshot } from "./lib/bridge";
-import type { InventoryMove, OrganizerHistory } from "./lib/inventory-organizer";
-import { itemName } from "./lib/inventory-ui";
+import type { InventoryMove } from "./lib/inventory-organizer";
+import { INVENTORY_PAGE_SIZE, itemName, qualityColor } from "./lib/inventory-ui";
 
-export function InventoryOrganizer({
+const SHEET =
+  "fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6";
+
+function slotLabel(slot: number) {
+  if (!slot) return "Unplaced";
+  const page = Math.ceil(slot / INVENTORY_PAGE_SIZE);
+  return `Page ${page} · ${slot - (page - 1) * INVENTORY_PAGE_SIZE}`;
+}
+
+/** Lists every affected item, including swaps and items outside the current page. */
+export function InventoryReviewDialog({
+  open,
   snapshot,
-  selectedIds,
-  hiddenCount,
-  history,
   moves,
   capability,
   disabled,
   stale,
   error,
-  message,
   applying,
-  onMove,
-  onUndo,
-  onRedo,
-  onReset,
-  onClear,
-  onSelectVisible,
+  onClose,
   onApply,
 }: {
+  open: boolean;
   snapshot: InventorySnapshot;
-  selectedIds: readonly string[];
-  hiddenCount: number;
-  history: OrganizerHistory;
   moves: InventoryMove[];
   capability: InventoryCapabilities | null;
   disabled: boolean;
   stale: boolean;
   error: string | null;
-  message: string | null;
   applying: boolean;
-  onMove: (destination: number) => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  onReset: () => void;
-  onClear: () => void;
-  onSelectVisible: () => void;
+  onClose: () => void;
   onApply: () => Promise<void>;
 }) {
-  const [destinationPage, setDestinationPage] = useState("1");
+  const canApply = capability?.organizer === "simulation" || capability?.organizer === "live";
+  return (
+    <Modal
+      open={open}
+      title={`Review ${moves.length} ${moves.length === 1 ? "move" : "moves"}`}
+      className={`${SHEET} w-[min(560px,calc(100vw-2rem))]`}
+      onClose={() => {
+        if (!applying) onClose();
+      }}
+      description={
+        capability?.organizer === "simulation"
+          ? "Test backpack. Steam is never contacted."
+          : capability?.organizer === "live"
+            ? `Applies these exact positions to Steam account ${snapshot.steamId}.`
+            : "This connection cannot apply backpack changes."
+      }
+    >
+      <ul className="inventory-review-list" aria-label="Arrangement changes">
+        {moves.map((move) => {
+          const item = snapshot.items.find((entry) => entry.id === move.id);
+          return (
+            <li key={move.id}>
+              <span className="min-w-0">
+                <span
+                  className="block truncate text-ink"
+                  style={{ color: item ? qualityColor(snapshot, item.quality) : undefined }}
+                >
+                  {item ? itemName(snapshot, item) : move.id}
+                </span>
+                <span className="block truncate text-ink-faint text-xs">{move.id}</span>
+              </span>
+              <span className="inventory-review-slots tnum">
+                <span>{slotLabel(move.from)}</span>
+                <ArrowRight size={12} aria-hidden="true" />
+                <span className="text-ink">{slotLabel(move.to)}</span>
+                <span className="sr-only">
+                  , slot {move.from || "unplaced"} to {move.to}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {error ? (
+        <p role="alert" className="t-meta mt-3 text-warn">
+          {error}
+        </p>
+      ) : null}
+      <div className="modal-actions">
+        <button type="button" className="btn btn-ghost" disabled={applying} onClick={onClose}>
+          Back to draft
+        </button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={disabled || stale || !canApply || !moves.length}
+          onClick={async () => {
+            await onApply();
+            onClose();
+          }}
+        >
+          {applying
+            ? "Applying…"
+            : capability?.organizer === "live"
+              ? "Apply to Steam"
+              : "Apply simulation"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Moves the selection to an exact page and slot, for targets far from the current page. */
+export function InventoryMoveDialog({
+  open,
+  snapshot,
+  selectedCount,
+  initialPage,
+  disabled,
+  onClose,
+  onMove,
+}: {
+  open: boolean;
+  snapshot: InventorySnapshot;
+  selectedCount: number;
+  initialPage: number;
+  disabled: boolean;
+  onClose: () => void;
+  onMove: (destination: number) => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      title={`Move ${selectedCount} ${selectedCount === 1 ? "item" : "items"}`}
+      className={`${SHEET} w-[min(380px,calc(100vw-2rem))]`}
+      onClose={onClose}
+    >
+      {open ? (
+        <MoveFields
+          snapshot={snapshot}
+          selectedCount={selectedCount}
+          initialPage={initialPage}
+          disabled={disabled}
+          onClose={onClose}
+          onMove={onMove}
+        />
+      ) : null}
+    </Modal>
+  );
+}
+
+function MoveFields({
+  snapshot,
+  selectedCount,
+  initialPage,
+  disabled,
+  onClose,
+  onMove,
+}: {
+  snapshot: InventorySnapshot;
+  selectedCount: number;
+  initialPage: number;
+  disabled: boolean;
+  onClose: () => void;
+  onMove: (destination: number) => void;
+}) {
+  const pages = Math.ceil(snapshot.capacity / INVENTORY_PAGE_SIZE);
+  const [destinationPage, setDestinationPage] = useState(String(initialPage));
   const [destinationSlot, setDestinationSlot] = useState("1");
-  const [review, setReview] = useState(false);
-  const destination = (Number(destinationPage) - 1) * 50 + Number(destinationSlot);
+  const destination = (Number(destinationPage) - 1) * INVENTORY_PAGE_SIZE + Number(destinationSlot);
   const validDestination =
     Number.isInteger(Number(destinationPage)) &&
     Number(destinationPage) >= 1 &&
     Number.isInteger(Number(destinationSlot)) &&
     Number(destinationSlot) >= 1 &&
-    Number(destinationSlot) <= 50 &&
+    Number(destinationSlot) <= INVENTORY_PAGE_SIZE &&
     destination <= snapshot.capacity;
   return (
-    <section aria-label="Backpack organizer" className="inventory-organizer">
-      <h2 className="sr-only">Arrange backpack</h2>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <p role="status" className="t-meta text-ink">
-            {selectedIds.length} selected
-            {hiddenCount ? ` · ${hiddenCount} outside this page or filter` : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-1">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={disabled || !history.past.length}
-            aria-label="Undo draft"
-            title="Undo draft"
-            onClick={onUndo}
-          >
-            Undo
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={disabled || !history.future.length}
-            aria-label="Redo draft"
-            title="Redo draft"
-            onClick={onRedo}
-          >
-            Redo
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={disabled || !moves.length}
-            aria-label="Reset draft"
-            title="Reset draft"
-            onClick={onReset}
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={disabled || !moves.length || stale}
-            onClick={() => setReview(true)}
-          >
-            Review {moves.length || ""} changes
-          </button>
-        </div>
+    <form
+      className="mt-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!selectedCount || !validDestination || disabled) return;
+        onMove(destination);
+        onClose();
+      }}
+    >
+      <fieldset disabled={disabled} className="grid grid-cols-2 gap-3">
+        <legend className="sr-only">Move to page / slot</legend>
+        <label className="t-meta flex flex-col gap-1">
+          Page
+          <input
+            className="input tnum"
+            aria-label="Destination page"
+            type="number"
+            min={1}
+            max={pages}
+            value={destinationPage}
+            onChange={(event) => setDestinationPage(event.target.value)}
+          />
+        </label>
+        <label className="t-meta flex flex-col gap-1">
+          Slot
+          <input
+            className="input tnum"
+            aria-label="Destination slot on page"
+            type="number"
+            min={1}
+            max={INVENTORY_PAGE_SIZE}
+            value={destinationSlot}
+            onChange={(event) => setDestinationSlot(event.target.value)}
+          />
+        </label>
+      </fieldset>
+      <p className="t-meta mt-2">
+        {selectedCount > 1
+          ? "Items fill free slots from here, in backpack order."
+          : "An item already there swaps places."}
+      </p>
+      <div className="modal-actions">
+        <button type="button" className="btn btn-ghost" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={disabled || !selectedCount || !validDestination}
+        >
+          Move selected in draft
+        </button>
       </div>
-      <details className="inventory-move-menu">
-        <summary className="btn btn-ghost">More</summary>
-        <div className="surface p-3">
-          <div className="space-y-2">
-            <p className="t-meta">
-              Drag to move. Ctrl-click adds or removes; Shift-click selects a range.
-            </p>
-            <div className="flex flex-wrap items-center gap-1">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={disabled}
-                onClick={onSelectVisible}
-              >
-                Select visible items
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={!selectedIds.length || disabled}
-                onClick={onClear}
-              >
-                Clear selection
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
-            <div className="t-meta">
-              <fieldset disabled={disabled} className="mt-2 flex flex-wrap items-end gap-2">
-                <legend>Move to page / slot</legend>
-                <label>
-                  Destination page
-                  <input
-                    className="input mt-1 block w-20"
-                    aria-label="Destination page"
-                    type="number"
-                    min={1}
-                    max={Math.ceil(snapshot.capacity / 50)}
-                    value={destinationPage}
-                    onChange={(event) => setDestinationPage(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Slot on page
-                  <input
-                    className="input mt-1 block w-20"
-                    aria-label="Destination slot on page"
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={destinationSlot}
-                    onChange={(event) => setDestinationSlot(event.target.value)}
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={!selectedIds.length || !validDestination}
-                  onClick={() => onMove(destination)}
-                >
-                  Move selected in draft
-                </button>
-              </fieldset>
-            </div>
-          </div>
-        </div>
-      </details>
-      {stale ? (
-        <p role="alert" className="t-meta text-warn">
-          This backpack changed after the draft began. Reset the draft before making new moves.
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="t-meta text-warn">
-          {error}
-        </p>
-      ) : null}
-      {message ? (
-        <p role="status" className="t-meta">
-          {message}
-        </p>
-      ) : null}
-      <Modal
-        open={review}
-        title="Review backpack arrangement"
-        className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
-        onClose={() => {
-          if (!applying) setReview(false);
-        }}
-        description={`Steam account ${snapshot.steamId} · ${snapshot.capacity} slots`}
-      >
-        <p className="t-meta mb-3">
-          Every affected item is listed, including swapped items and selections outside the current
-          view. Undo applies only to drafts.
-        </p>
-        <div className="max-h-80 overflow-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>From</th>
-                <th>To</th>
-              </tr>
-            </thead>
-            <tbody>
-              {moves.map((move) => (
-                <tr key={move.id}>
-                  <td className="py-2">
-                    {(() => {
-                      const item = snapshot.items.find((item) => item.id === move.id);
-                      return item ? itemName(snapshot, item) : move.id;
-                    })()}
-                    <span className="t-meta block break-all">{move.id}</span>
-                  </td>
-                  <td>{move.from || "Unplaced"}</td>
-                  <td>{move.to}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {error ? (
-          <p role="alert" className="text-warn">
-            {error}
-          </p>
-        ) : null}
-        <p className="t-meta my-3">
-          {capability?.organizer === "simulation"
-            ? "Apply changes only this browser fixture. Steam is never contacted."
-            : capability?.organizer === "live"
-              ? "Apply these exact positions to your Steam backpack."
-              : "This connection cannot apply backpack changes."}
-        </p>
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={applying}
-            onClick={() => setReview(false)}
-          >
-            Back to draft
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={
-              disabled ||
-              stale ||
-              (capability?.organizer !== "simulation" && capability?.organizer !== "live") ||
-              !moves.length
-            }
-            onClick={async () => {
-              await onApply();
-              setReview(false);
-            }}
-          >
-            {applying
-              ? "Applying…"
-              : capability?.organizer === "live"
-                ? "Apply to Steam"
-                : "Apply simulation"}
-          </button>
-        </div>
-      </Modal>
-    </section>
+    </form>
   );
 }

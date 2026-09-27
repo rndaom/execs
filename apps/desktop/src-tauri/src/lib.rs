@@ -8,6 +8,7 @@ mod hud_stats;
 mod mods_fetch;
 mod net;
 mod startup_error;
+mod steam_items_fetch;
 
 /// Isolated release verification; absent from ordinary application builds.
 #[cfg(feature = "release-probes")]
@@ -657,6 +658,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::inventory::get_inventory,
             commands::inventory::get_inventory_icons,
+            commands::inventory::get_inventory_steam_items,
+            commands::inventory::get_inventory_steam_image,
             commands::inventory::get_inventory_capabilities,
             commands::inventory::apply_inventory_layout,
             commands::inventory::craft_inventory,

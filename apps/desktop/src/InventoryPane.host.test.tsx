@@ -3,6 +3,7 @@ import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import { App } from "./App";
+import { moveSelectedInDraft } from "./lib/inventory-test-helpers";
 import { createPreviewApi } from "./lib/preview-bridge";
 
 it("applies an arrangement through the complete App and settings draft guard", async () => {
@@ -39,7 +40,7 @@ it("applies an arrangement through the complete App and settings draft guard", a
         )
         ?.click(),
     );
-    await act(async () => button("Move selected in draft")?.click());
+    await moveSelectedInDraft(box);
     await act(async () => button("Undo draft")?.click());
     await act(async () => button("Redo draft")?.click());
     await act(async () => button("Review 2 changes")?.click());

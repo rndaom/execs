@@ -39,6 +39,14 @@ works.” This records positive owner feedback on the current interaction flow.
 It does not invent individual crafting/deletion, Linux, or packaged acceptance
 results that were not supplied. Agents did not move, consume or delete live items.
 
+A later pass the same day, which the owner called "absolutely perfect", adds
+Valve's own item renders and description lines for a public Steam inventory
+(painted weapons, war paints and kits look as in game), quoted Name Tags with
+the original name, description tags, a TF2-style Inspect panel, batched metal
+crafting and Valve's premium-only random hat recipe with a reveal. Those crafts
+were exercised only in the simulator; a read-only test fetched the owner's real
+inventory art through the app's network client.
+
 ## Remaining delta before shipping Inventory
 
 Inventory is **still development-only in source**: production navigation and
@@ -48,8 +56,8 @@ new manager is already in the signed release candidate.
 
 1. Complete and record Inventory-specific live/platform acceptance using
    [LIVE-TESTING.md](audits/2026-09-27-inventory-usability/LIVE-TESTING.md), including
-   exact in-game positions, four supported metal recipes, deletion, refusal and
-   unknown-outcome recovery. Preserve the owner's positive interaction feedback.
+   exact in-game positions, the four metal recipes including a batch, a random
+   hat, deletion, refusal and unknown-outcome recovery, and Steam item art. Preserve the owner's positive interaction feedback.
 2. Enable the production Inventory surface and native entry points only with
    that qualification, then integrate the final changes into the release branch.
 3. Refresh hosted checks and the private signed candidate on the resulting
@@ -61,6 +69,10 @@ The earlier whole-application sign-offs remain intact. The work above is the
 incremental Inventory/revised-candidate gate, tracked under existing RND-208.
 
 ## Validation of this checkpoint
+
+Art and crafting pass: 1,219 desktop tests, 170 cfglint tests, 1,039 Rust
+workspace tests and 27 helper tests passed; Biome, workspace/helper Clippy,
+rustfmt and the production build passed. Earlier counts follow.
 
 - Full frontend suite: 1,206 desktop tests, 170 cfglint tests and 110 script
   checks passed; five platform-dependent script checks skipped.

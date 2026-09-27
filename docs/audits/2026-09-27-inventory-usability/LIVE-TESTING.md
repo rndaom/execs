@@ -16,12 +16,14 @@ Use the disposable account, with Steam signed in and TF2 closed. Verify the disp
 
 1. Drag one expendable item into an empty slot. Choose Review changes, check the item and before/after positions, then Apply to Steam. Wait for a confirmed result. Refresh, then check the position in TF2. Restoring the old position is a new reviewed move.
 2. Check a single-item swap, a selected group across a page boundary, and placement of an unplaced item. For both one item and a selected group, hold the drag over Next or Previous: pages should turn every 650 ms while held, wrapping at either end. Move off the arrow to stop paging, then drop onto the desired slot. Cancelling the drag or releasing on the arrow must leave item positions unchanged. Confirm that unrelated items keep their positions. Choose Sort by name, quality or type: the whole backpack should fill actual draft slots, leaving protected items fixed. Check Undo/Redo, then drag a sorted item, review the final destinations and Apply to Steam. Reopen TF2 to verify those exact positions. Search/quality filters only find items; clear them before dragging. Sorting clears filters and returns to the full slot grid.
-3. Select exactly three plain tradable scrap, three reclaimed, one reclaimed, or one refined. Craft selected shows the exact IDs and resulting metal. Confirm only the disposable ingredients you intend to consume. Check the new output after reconnecting. Customized, protected, restricted, equipped, stacked or incompletely described ingredients refuse.
-4. Select exactly one disposable item, open Delete selected, and verify its name and ID. Cancel first; it must remain present. Reopen and confirm only when ready to permanently remove it. Verify absence after reconnecting. Deletion has no Undo.
-5. Check protected/favorite refusal, an expired review, changed account, TF2 running, and changed inventory. A stale review must never silently substitute other items.
-6. If an operation reports an unknown result, use Reconcile. Do not repeat it. Record the operation type, message and observed before/after state. Keep full account/item records private; sanitized evidence is sufficient for the release checklist.
+3. Select plain tradable metal of one kind. Craft selected shows each recipe the selection supports (Combine, Random hat, Smelt), the ingredients by slot and how many whole crafts run; leftovers stay in the backpack. Start with three disposable scrap (one craft), then a batch such as six scrap (two crafts, each prepared from the previous confirmed backpack). Check the outputs after reconnecting.
+4. Select three disposable Refined Metal on a premium account and choose Random hat. Confirm only when ready to consume them. The sheet should report the craft, then show the hat Steam picked with its art; verify the same hat appears in TF2. A free account (50-slot backpack) must be refused before anything is sent.
+5. Select exactly one disposable item, open Delete selected, and verify its name and ID. Cancel first; it must remain present. Reopen and confirm only when ready to permanently remove it. Verify absence after reconnecting. Deletion has no Undo.
+6. Check protected/favorite refusal, an expired review, changed account, TF2 running, and changed inventory. A stale review must never silently substitute other items.
+7. If an operation reports an unknown result, use Reconcile. Do not repeat it. Record the operation type, message and observed before/after state. Keep full account/item records private; sanitized evidence is sufficient for the release checklist.
+8. With the Steam inventory public, painted weapons, war paints, killstreak kits and painted cosmetics should show TF2's own renders in the grid, on hover and in Inspect, with Valve's description lines. Renamed items show the quoted name with the original name beneath; description tags show in quotes. With the inventory set to private, Inspect should say so and the installed art should remain.
 
-Only the four listed metal recipes are currently supported. Weapon recipes, tools, equipping and automatic crafting are not implemented.
+Supported recipes are the four metal conversions (batched) and Valve's random hat recipe. Weapon recipes, tools, equipping and automatic crafting are not implemented.
 
 ## Evidence and release boundary
 
@@ -30,6 +32,12 @@ Automated protocol/session tests use synthetic caches and replies. Native author
 A read-only run of the updated helper returned 1,347 items / 1,900 slots with cache-version and raw-item evidence. The 201 metal items had quantity 1, craft origin, no extra attributes and ordinary/free-account-trading flags. No mutation was sent during this check.
 
 After testing the latest development app, the owner reported “Okay, I think it works.” This is positive interaction feedback; individual crafting/deletion, Linux and packaged outcomes were not specified. Remaining Inventory-specific acceptance and candidate integration are tracked in [the current 0.2.0 readiness record](../../release-0.2.0-readiness.md). Previous whole-application release sign-offs remain accepted. The previous signed candidate hid Inventory and does not qualify this new implementation.
+
+## Art and crafting follow-up (September 27)
+
+After the owner's review, the Inventory reads Valve's own item renders and descriptions for a public inventory, because TF2 draws painted weapons, war paints and kits as live 3D renders that installed files cannot reproduce (a painted weapon's pattern is a UV sheet or a compositing tree, not an icon). 172 of 321 installed painted weapon definitions keep their texture in per-weapon compositor definitions, so the former swatch was missing for them; Valve's renders replace that path. Two 4096-pixel pattern layers that previously exceeded the fallback limits now decode from a small mip.
+
+A read-only opt-in test fetched the owner's public inventory (1,347 items, one page) through the app's own network client and cached real 192 and 360 pixel renders. The installed schema resolves random hat recipe 6 (premium only, three Refined Metal, `craft_class` hat) with its hat definition list. Batch crafting and the hat reveal were exercised only in the simulator; no live item was crafted, moved or deleted.
 
 ## Local validation record
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { InventoryPane } from "./InventoryPane";
 import type { Api } from "./lib/api";
 import { createInventorySimulation } from "./lib/inventory-simulation";
+import { chooseInventoryMenu, moveSelectedInDraft } from "./lib/inventory-test-helpers";
 import { createPreviewApi } from "./lib/preview-bridge";
 
 const originalScrollIntoView = Object.getOwnPropertyDescriptor(
@@ -25,11 +26,7 @@ async function clickButton(box: HTMLElement, name: string) {
   await act(async () => found.click());
 }
 async function sortBackpack(box: HTMLElement, value: string) {
-  await act(async () => {
-    const select = element<HTMLSelectElement>(box, "#inventory-sort");
-    select.value = value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await chooseInventoryMenu(box, "Sort backpack", `By ${value}`);
 }
 function dragTransfer() {
   return {
@@ -137,7 +134,7 @@ it.each(["name", "quality", "type"])(
       await sortBackpack(box, order);
       expect(box.querySelectorAll('[aria-label="Backpack items"] > button')).toHaveLength(50);
       expect(element<HTMLInputElement>(box, '[aria-label="Backpack page"]').value).toBe("1");
-      expect(box.textContent).toContain("Backpack sorted in the draft");
+      expect(box.textContent).toContain(`Sorted by ${order}`);
       expect((await api.getInventory()).items).toEqual(before.items);
       await clickButton(box, "Undo draft");
       expect(element(box, '[aria-label="Scattergun, Unique, slot 1"]')).toBeTruthy();
@@ -176,23 +173,89 @@ it.each(["name", "quality", "type"])(
   },
 );
 
+it("previews where a dragged group lands and refuses an occupied slot for an unplaced item", async () => {
+  await fixtureInteraction(async ({ box }) => {
+    const first = element<HTMLButtonElement>(box, '[aria-label="Scattergun, Unique, slot 1"]');
+    await act(async () => first.click());
+    await act(async () =>
+      element(box, '[aria-label="Skull Cracked War Paint, Decorated, slot 2"]').dispatchEvent(
+        new MouseEvent("click", { bubbles: true, ctrlKey: true }),
+      ),
+    );
+    const transfer = dragTransfer();
+    await dispatchDrag(first, "dragstart", transfer);
+    expect(first.hasAttribute("data-dragging")).toBe(true);
+    expect(box.textContent).toContain("Moving 2 items");
+    await dispatchDrag(element(box, '[aria-label="Empty slot 21"]'), "dragover", transfer);
+    expect(
+      [...box.querySelectorAll('[data-drop="ok"]')].map((slot) => slot.getAttribute("aria-label")),
+    ).toEqual(["Empty slot 21", "Empty slot 22"]);
+    await dispatchDrag(first, "dragend", transfer);
+    expect(box.querySelector("[data-drop]")).toBeNull();
+    expect(first.hasAttribute("data-dragging")).toBe(false);
+
+    const unplaced = element<HTMLButtonElement>(
+      box,
+      '[aria-label="Refined Metal, Unique, unplaced"]',
+    );
+    const second = dragTransfer();
+    await dispatchDrag(unplaced, "dragstart", second);
+    const occupied = element(box, '[aria-label="Scrap Metal, Unique, slot 4"]');
+    expect((await dispatchDrag(occupied, "dragover", second)).defaultPrevented).toBe(false);
+    expect(occupied.getAttribute("data-drop")).toBe("refused");
+    expect(box.textContent).toContain("An unplaced item needs an empty destination slot");
+    await dispatchDrag(unplaced, "dragend", second);
+  });
+});
+
+it("keeps favorites in place and undoes draft moves from the keyboard", async () => {
+  await fixtureInteraction(async ({ box }) => {
+    const first = element<HTMLButtonElement>(box, '[aria-label="Scattergun, Unique, slot 1"]');
+    await act(async () => first.click());
+    await clickButton(box, "Favorite selected");
+    expect(element(box, '[aria-label="Favorite selected"]').getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(first.draggable).toBe(false);
+    expect((await dispatchDrag(first, "dragstart")).defaultPrevented).toBe(true);
+    expect(box.textContent).toContain("Favorites stay in place");
+    await clickButton(box, "Favorite selected");
+    expect(first.draggable).toBe(true);
+
+    const transfer = dragTransfer();
+    await dispatchDrag(first, "dragstart", transfer);
+    await dispatchDrag(element(box, '[aria-label="Empty slot 30"]'), "drop", transfer);
+    expect(element(box, '[aria-label="Scattergun, Unique, slot 30"]')).toBeTruthy();
+    const key = async (value: string, init: KeyboardEventInit = {}) =>
+      act(async () =>
+        element(box, '[aria-label="Backpack items"]').dispatchEvent(
+          new KeyboardEvent("keydown", { key: value, bubbles: true, ctrlKey: true, ...init }),
+        ),
+      );
+    await key("z");
+    expect(element(box, '[aria-label="Scattergun, Unique, slot 1"]')).toBeTruthy();
+    await key("y");
+    expect(element(box, '[aria-label="Scattergun, Unique, slot 30"]')).toBeTruthy();
+    await key("z");
+    await key("z", { shiftKey: true });
+    expect(element(box, '[aria-label="Scattergun, Unique, slot 30"]')).toBeTruthy();
+  });
+});
+
 it("disables sorting during TF2 and prevents dragging compressed filter results", async () => {
   await fixtureInteraction(async ({ box, api, root }) => {
     await act(async () => root.render(<InventoryPane api={api} active running busy={false} />));
-    expect(element<HTMLSelectElement>(box, "#inventory-sort").disabled).toBe(true);
+    expect(element<HTMLButtonElement>(box, '[aria-label="Sort backpack"]').disabled).toBe(true);
     await act(async () =>
       root.render(<InventoryPane api={api} active running={false} busy={false} />),
     );
-    await act(async () => {
-      const select = element<HTMLSelectElement>(box, "#inventory-quality");
-      select.value = "6";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await chooseInventoryMenu(box, "Filter quality", "Unique");
+    expect(box.textContent).toContain("clear filters to move items");
     const source = element<HTMLButtonElement>(box, '[aria-label="Scattergun, Unique, slot 1"]');
     expect(source.draggable).toBe(false);
     expect((await dispatchDrag(source, "dragstart")).defaultPrevented).toBe(true);
     await sortBackpack(box, "type");
-    expect(element<HTMLSelectElement>(box, "#inventory-quality").value).toBe("all");
+    expect(element(box, '[aria-label="Filter quality"]').textContent).toBe("All qualities");
     expect(box.querySelectorAll('[aria-label="Backpack items"] > button')).toHaveLength(50);
     expect(
       box.querySelector('[aria-label="Backpack items"] > button[draggable="true"]'),
@@ -207,7 +270,7 @@ it("reviews one-item deletion, cancels without sending, and records only the con
     const before = await api.getInventory();
     await clickButton(box, "Scattergun, Unique, slot 1");
     await clickButton(box, "Delete selected");
-    expect(box.textContent).toContain("Permanently delete this one item");
+    expect(box.textContent).toContain("Deletion cannot be undone");
     expect(document.activeElement?.textContent).toBe("Cancel");
     await clickButton(box, "Cancel");
     expect(prepare).not.toHaveBeenCalled();
@@ -486,7 +549,8 @@ it("crafts the three exact selected scrap items through the complete preview API
     await act(async () =>
       root.render(<InventoryPane api={api} active running={false} busy={false} />),
     );
-    for (const [index, item] of before.items.filter((item) => item.definition === 5000).entries()) {
+    const scrap = before.items.filter((item) => item.definition === 5000).slice(0, 3);
+    for (const [index, item] of scrap.entries()) {
       await act(async () =>
         box
           .querySelector<HTMLButtonElement>(
@@ -498,18 +562,18 @@ it("crafts the three exact selected scrap items through the complete preview API
     await clickButton(box, "Craft selected");
     expect(button("Simulate craft")?.disabled).toBe(false);
     expect(box.querySelectorAll('[aria-label="Exact crafting ingredients"] li')).toHaveLength(3);
-    for (const item of before.items.filter((item) => item.definition === 5000)) {
+    for (const item of scrap) {
       expect(element(box, '[aria-label="Exact crafting ingredients"]').textContent).toContain(
-        item.id,
+        `Slot ${item.position}`,
       );
     }
     await act(async () => button("Simulate craft")?.click());
     expect(craft).toHaveBeenCalledOnce();
     const after = await api.getInventory();
-    expect(after.items.filter((item) => item.definition === 5000)).toHaveLength(0);
+    expect(after.items.filter((item) => item.definition === 5000)).toHaveLength(6);
     expect(after.items.filter((item) => item.definition === 5001)).toHaveLength(4);
     expect(box.textContent).toContain("0 selected");
-    expect(box.textContent).toContain("Simulated");
+    expect(box.textContent).toContain("Simulation complete");
   } finally {
     await act(async () => root.unmount());
     box.remove();
@@ -522,7 +586,8 @@ it("cancels the exact crafting review without consuming selected ingredients", a
   await fixtureInteraction(async ({ box, api }) => {
     const before = await api.getInventory();
     const craft = vi.spyOn(api, "craftInventory");
-    for (const [index, item] of before.items.filter((item) => item.definition === 5000).entries()) {
+    const scrap = before.items.filter((item) => item.definition === 5000).slice(0, 3);
+    for (const [index, item] of scrap.entries()) {
       await act(async () =>
         element(box, `[aria-label="Scrap Metal, Unique, slot ${item.position}"]`).dispatchEvent(
           new MouseEvent("click", { bubbles: true, ctrlKey: index > 0 }),
@@ -572,7 +637,7 @@ it("reviews occupied-slot swaps and applies only through the simulation adapter"
         )
         ?.click(),
     );
-    await act(async () => button("Move selected in draft")?.click());
+    await moveSelectedInDraft(box);
     expect(apply).not.toHaveBeenCalled();
     expect(
       box.querySelector('[aria-label="Skull Cracked War Paint, Decorated, slot 1"]'),
@@ -634,9 +699,9 @@ it("retains multi-selection across pages and refuses moving protected items", as
     await act(async () =>
       box.querySelector<HTMLButtonElement>('[aria-label="Next page"]')?.click(),
     );
-    expect(box.textContent).toContain("2 outside this page or filter");
+    expect(box.textContent).toContain("2 not shown");
     await act(async () => button("Protect selected")?.click());
-    await act(async () => button("Move selected in draft")?.click());
+    await moveSelectedInDraft(box);
     expect(box.textContent).toContain("Unprotect selected items before moving");
     expect(button("Undo draft")?.disabled).toBe(true);
   } finally {
@@ -683,7 +748,7 @@ it("does not replay an unverified arrangement and requires a fresh read before a
         )
         ?.click(),
     );
-    await act(async () => button("Move selected in draft")?.click());
+    await moveSelectedInDraft(box);
     await act(async () => button("Review 2 changes")?.click());
     await act(async () => button("Apply simulation")?.click());
     expect(apply).toHaveBeenCalledOnce();
@@ -738,7 +803,9 @@ it("loads automatically and retains a clearly stale snapshot on a failed refresh
     );
     expect(getInventory).toHaveBeenCalledTimes(1);
     expect(box.textContent).not.toContain("Refresh backpack");
+    await clickButton(box, "About this backpack");
     expect(box.textContent).toContain("Steam account test-account");
+    await clickButton(box, "About this backpack");
     expect(box.querySelector("header")?.textContent).toContain("Test player");
     expect(box.querySelector('img[alt="Steam avatar"]')?.getAttribute("src")).toBe(
       "data:image/png;base64,avatar",
@@ -749,9 +816,10 @@ it("loads automatically and retains a clearly stale snapshot on a failed refresh
     ).toBe(true);
     expect(box.querySelectorAll('[aria-label="Backpack items"] > *')).toHaveLength(50);
     expect(
-      box.querySelector<HTMLButtonElement>('[aria-label="Scattergun, Unique, slot 1"]')?.style
-        .borderColor,
-    ).toBe("rgb(255, 215, 0)");
+      box
+        .querySelector<HTMLButtonElement>('[aria-label="Scattergun, Unique, slot 1"]')
+        ?.style.getPropertyValue("--quality"),
+    ).toBe("#FFD700");
     expect(
       box.querySelector<HTMLButtonElement>('[aria-label="Scattergun, Unique, slot 1"]')?.style
         .borderWidth,
@@ -760,10 +828,12 @@ it("loads automatically and retains a clearly stale snapshot on a failed refresh
       box.querySelector<HTMLButtonElement>('[aria-label="Scattergun, Unique, slot 1"]')?.click(),
     );
     await clickButton(box, "Inspect");
-    expect(box.querySelector('[aria-label="Item details"]')?.textContent).toContain("Item 123");
-    expect(box.querySelector<HTMLElement>('[aria-label="Item details"]')?.style.borderColor).toBe(
-      "rgb(255, 215, 0)",
-    );
+    // TF2's panel: name, type line and slot; the item number is not shown.
+    const details = element<HTMLElement>(box, '[aria-label="Item details"]');
+    expect(details.textContent).toContain("Scattergun");
+    expect(details.textContent).toContain("Slot 1");
+    expect(details.textContent).not.toContain("Item 123");
+    expect(details.style.getPropertyValue("--quality")).toBe("#FFD700");
     await clickButton(box, "Close details");
     vi.useFakeTimers();
     getInventory.mockRejectedValueOnce(new Error("Steam disconnected"));
@@ -969,7 +1039,10 @@ it("reveals the first slot only when the displayed page changes", async () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
     await click('[aria-label="Next page"]');
     expect(box.querySelector<HTMLInputElement>('[aria-label="Backpack page"]')?.value).toBe("2");
-    expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: "start", behavior: "instant" });
+    expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({
+      block: "nearest",
+      behavior: "instant",
+    });
     expect(scrollIntoView.mock.contexts[0]).toBe(
       box.querySelector('[aria-label="Backpack items"]'),
     );
@@ -1126,4 +1199,105 @@ it("retries an omitted path alone when an icon batch hits its native byte budget
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   }
+});
+
+it("prefers Valve's render and text, keeping the original name and description tag", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  const createObjectURL = vi.fn(() => "blob:steam-render");
+  vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }));
+  const image = "fWFc82js0fmoRAP-qOIPu5THSWqfSmTELLqcUywGkijVjZUL";
+  const getInventorySteamImage = vi.fn().mockResolvedValue(new ArrayBuffer(8));
+  const getInventorySteamItems = vi.fn().mockResolvedValue({
+    status: "ready",
+    message: null,
+    items: {
+      named: {
+        image,
+        name: "''brat.''",
+        marketName: "Strange Scattergun",
+        nameColor: "#CF6A32",
+        typeLine: "Strange Scattergun - Kills: 4",
+        lines: [{ text: "''A description tag.''", color: null, user: true }],
+        originalName: "Scattergun",
+      },
+    },
+  });
+  const api = {
+    getInventory: vi.fn().mockResolvedValue({
+      steamId: "76561198000000000",
+      capacity: 100,
+      warning: null,
+      items: [
+        {
+          id: "named",
+          definition: 13,
+          position: 1,
+          quality: 11,
+          level: 1,
+          customName: "brat.",
+          customDescription: "A description tag.",
+        },
+      ],
+      definitions: { "13": { name: "Scattergun", kind: "Scattergun", classes: [], icon: null } },
+    }),
+    getInventoryIcons: vi.fn().mockResolvedValue({}),
+    getInventorySteamItems,
+    getInventorySteamImage,
+    openExternal: vi.fn(),
+  } as unknown as Api;
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  try {
+    await act(async () =>
+      root.render(<InventoryPane api={api} active running={false} busy={false} />),
+    );
+    expect(getInventorySteamItems).toHaveBeenCalledWith("76561198000000000", ["named"], false);
+    expect(getInventorySteamImage).toHaveBeenCalledWith(image, 192);
+    const tile = element<HTMLButtonElement>(box, '[aria-label="“brat.”, Strange, slot 1"]');
+    expect(tile.querySelector("img")?.getAttribute("src")).toBe("blob:steam-render");
+    await act(async () => tile.click());
+    await clickButton(box, "Inspect");
+    expect(getInventorySteamImage).toHaveBeenCalledWith(image, 360);
+    const details = element(box, '[aria-label="Item details"]');
+    expect(details.textContent).toContain("“brat.”");
+    expect(details.textContent).toContain("Strange Scattergun");
+    expect(details.textContent).toContain("Strange Scattergun - Kills: 4");
+    expect(details.querySelector("[data-user]")?.textContent).toBe("“A description tag.”");
+    expect(details.textContent).not.toContain("named");
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
+});
+
+it("crafts a random hat from three refined metal and shows the hat Steam picked", async () => {
+  await fixtureInteraction(async ({ box, api }) => {
+    const before = await api.getInventory();
+    const refined = before.items
+      .filter((item) => item.definition === 5002 && item.position > 0)
+      .slice(0, 3);
+    expect(refined).toHaveLength(3);
+    for (const [index, item] of refined.entries()) {
+      await act(async () =>
+        element(box, `[aria-label="Refined Metal, Unique, slot ${item.position}"]`).dispatchEvent(
+          new MouseEvent("click", { bubbles: true, ctrlKey: index > 0 }),
+        ),
+      );
+    }
+    await clickButton(box, "Craft selected");
+    expect(box.textContent).toContain("3 Refined Metal → 1 random hat");
+    await clickButton(box, "Simulate craft");
+    const reveal = element(box, '[aria-label="Crafted hats"]');
+    const after = await api.getInventory();
+    const hat = after.items.find((item) => !before.items.some((old) => old.id === item.id));
+    expect(hat).toBeDefined();
+    expect(reveal.textContent).toContain(after.definitions[hat?.definition ?? 0]?.name);
+    expect(box.textContent).toContain("You crafted a hat");
+    await clickButton(box, "Done");
+    expect(box.querySelector('[aria-label="Crafted hats"]')).toBeNull();
+  });
 });

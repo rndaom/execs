@@ -40,7 +40,8 @@ mod tests {
             .map(|(i, name)| format!("\"{i}\" {{ \"name\" \"{name}\" }}"))
             .collect::<Vec<_>>()
             .join("\n");
-        let items = (5000..=5002).map(|id| format!("\"{id}\" {{ \"name\" \"metal{id}\" \"craft_material_type\" \"craft_bar\" \"item_class\" \"craft_item\" }}")).collect::<Vec<_>>().join("\n");
+        let mut items = (5000..=5002).map(|id| format!("\"{id}\" {{ \"name\" \"metal{id}\" \"craft_material_type\" \"craft_bar\" \"item_class\" \"craft_item\" }}")).collect::<Vec<_>>().join("\n");
+        items.push_str("\n\"30\" { \"name\" \"hat30\" \"prefab\" \"hat\" } \"31\" { \"name\" \"notahat\" \"craft_class\" \"weapon\" }");
         let mut recipes = String::new();
         for (index, input, count, output, out_count) in [
             (4, 5000, 3, 5001, 1),
@@ -57,7 +58,8 @@ mod tests {
                 .join("\n");
             recipes.push_str(&format!("\"{index}\" {{ \"disabled\" \"0\" \"premium_only\" \"0\" \"always_known\" \"1\" \"input_items\" {{ \"{count}\" {{ {} }} }} \"output_items\" {{ {outputs} }} }}", criterion(input)));
         }
-        format!("\"items_game\" {{ \"attributes\" {{ {attrs} }} \"items\" {{ {items} }} \"recipes\" {{ {recipes} }} }}")
+        recipes.push_str("\"6\" { \"disabled\" \"0\" \"premium_only\" \"1\" \"always_known\" \"1\" \"input_items\" { \"3\" { \"conditions\" { \"0\" { \"field\" \"name\" \"operator\" \"string==\" \"value\" \"metal5002\" \"required\" \"1\" } } } } \"output_items\" { \"item1\" { \"conditions\" { \"0\" { \"field\" \"craft_class\" \"operator\" \"string==\" \"value\" \"hat\" \"required\" \"1\" } } } } }");
+        format!("\"items_game\" {{ \"attributes\" {{ {attrs} }} \"prefabs\" {{ \"hat\" {{ \"craft_class\" \"hat\" }} }} \"items\" {{ {items} }} \"recipes\" {{ {recipes} }} }}")
     }
 
     fn metal() -> EligibilityInput<'static> {
@@ -106,6 +108,22 @@ mod tests {
             let changed = OperationSchema::parse(&text).unwrap();
             assert_ne!(changed.revision, schema.revision);
             assert!(changed.metal_recipe("combine_scrap").is_err());
+        }
+    }
+
+    #[test]
+    fn hat_recipe_names_every_installed_hat_and_refuses_changed_criteria() {
+        let text = fixture();
+        let recipe = OperationSchema::parse(&text).unwrap().hat_recipe().unwrap();
+        assert_eq!(recipe.recipe_id, 6);
+        assert_eq!(recipe.input_definition, 5002);
+        assert_eq!(recipe.output_definitions, vec![30]);
+        for changed in [
+            text.replace("\"value\" \"hat\"", "\"value\" \"weapon\""),
+            text.replace("\"6\" { \"disabled\" \"0\"", "\"66\" { \"disabled\" \"0\""),
+            text.replace("\"input_items\" { \"3\" { \"conditions\" { \"0\" { \"field\" \"name\" \"operator\" \"string==\" \"value\" \"metal5002\"", "\"input_items\" { \"2\" { \"conditions\" { \"0\" { \"field\" \"name\" \"operator\" \"string==\" \"value\" \"metal5002\""),
+        ] {
+            assert!(OperationSchema::parse(&changed).unwrap().hat_recipe().is_err());
         }
     }
 
@@ -184,6 +202,9 @@ mod tests {
             return;
         };
         let schema = OperationSchema::load(Path::new(&root)).unwrap();
+        let hats = schema.hat_recipe().unwrap();
+        assert_eq!(hats.recipe_id, 6);
+        assert!(hats.output_definitions.len() > 100);
         for key in [
             "combine_scrap",
             "combine_reclaimed",
@@ -211,6 +232,17 @@ pub struct MetalRecipe {
     pub input_count: usize,
     pub output_definition: u32,
     pub output_count: usize,
+}
+
+/// Bounds the craftable hat list a review may carry to the helper.
+pub const MAX_HAT_OUTPUTS: usize = 20_000;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HatRecipe {
+    pub recipe_id: i16,
+    pub input_definition: u32,
+    pub input_count: usize,
+    pub output_definitions: Vec<u32>,
 }
 
 pub struct EligibilityInput<'a> {
@@ -259,7 +291,7 @@ fn unique(map: &VdfMap) -> Result<(), String> {
     Ok(())
 }
 
-fn exact_name_condition(map: &VdfMap, name: &str) -> bool {
+fn exact_condition(map: &VdfMap, field: &str, value: &str) -> bool {
     if unique(map).is_err() || map.entries.len() != 1 {
         return false;
     }
@@ -274,9 +306,9 @@ fn exact_name_condition(map: &VdfMap, name: &str) -> bool {
     };
     unique(condition).is_ok()
         && condition.entries.len() == 4
-        && string(condition, "field") == Some("name")
+        && string(condition, "field") == Some(field)
         && string(condition, "operator") == Some("string==")
-        && string(condition, "value") == Some(name)
+        && string(condition, "value") == Some(value)
         && string(condition, "required") == Some("1")
 }
 
@@ -389,17 +421,83 @@ impl OperationSchema {
                 "smelt_refined" => (23, 5002, 1, 5001, 3),
                 _ => return Err("Unsupported metal recipe".into()),
             };
-        let input = self.definition(input_definition)?;
-        let output = self.definition(output_definition)?;
-        for item in [&input, &output] {
-            if string(item, "craft_material_type") != Some("craft_bar")
-                || string(item, "item_class") != Some("craft_item")
-            {
-                return Err("Installed metal definition changed".into());
-            }
-        }
+        let input = self.metal_definition(input_definition)?;
+        let output = self.metal_definition(output_definition)?;
         let input_name = string(&input, "name").ok_or("Missing input name")?;
         let output_name = string(&output, "name").ok_or("Missing output name")?;
+        let recipe_id = self.unique_recipe(
+            expected_index,
+            false,
+            input_name,
+            input_count,
+            output_count,
+            |item| exact_condition(item, "name", output_name),
+        )?;
+        Ok(MetalRecipe {
+            recipe_id,
+            input_definition,
+            input_count,
+            output_definition,
+            output_count,
+        })
+    }
+
+    /// Three Refined Metal for one random craftable hat (Valve's recipe 6).
+    /// The coordinator chooses the output, so the review names every installed
+    /// hat definition it may produce instead of one output.
+    pub fn hat_recipe(&self) -> Result<HatRecipe, String> {
+        let input = self.metal_definition(5002)?;
+        let input_name = string(&input, "name").ok_or("Missing input name")?;
+        let recipe_id = self.unique_recipe(6, true, input_name, 3, 1, |item| {
+            exact_condition(item, "craft_class", "hat")
+        })?;
+        let items = object(&self.game, "items").ok_or("Missing item definitions")?;
+        let empty = VdfMap::default();
+        let prefabs = object(&self.game, "prefabs").unwrap_or(&empty);
+        let mut outputs = BTreeSet::new();
+        for (id, value) in &items.entries {
+            let (Ok(id), Some(item)) = (id.parse::<u32>(), value.as_obj()) else {
+                continue;
+            };
+            // Hats whose prefabs cannot be resolved are not accepted outputs.
+            if inherited(item, prefabs, 0)
+                .is_ok_and(|item| string(&item, "craft_class") == Some("hat"))
+            {
+                outputs.insert(id);
+            }
+        }
+        if outputs.is_empty() || outputs.len() > MAX_HAT_OUTPUTS {
+            return Err("The installed schema has no usable list of craftable hats".into());
+        }
+        Ok(HatRecipe {
+            recipe_id,
+            input_definition: 5002,
+            input_count: 3,
+            output_definitions: outputs.into_iter().collect(),
+        })
+    }
+
+    fn metal_definition(&self, id: u32) -> Result<VdfMap, String> {
+        let item = self.definition(id)?;
+        if string(&item, "craft_material_type") != Some("craft_bar")
+            || string(&item, "item_class") != Some("craft_item")
+        {
+            return Err("Installed metal definition changed".into());
+        }
+        Ok(item)
+    }
+
+    /// The single enabled recipe with exactly these criteria. It must be the
+    /// expected index, so a changed schema cannot redirect a supported recipe.
+    fn unique_recipe(
+        &self,
+        expected_index: i16,
+        premium_allowed: bool,
+        input_name: &str,
+        input_count: usize,
+        output_count: usize,
+        output: impl Fn(&VdfMap) -> bool,
+    ) -> Result<i16, String> {
         let recipes = object(&self.game, "recipes").ok_or("Missing recipes")?;
         unique(recipes)?;
         let mut matches = Vec::new();
@@ -407,9 +505,10 @@ impl OperationSchema {
             let Some(recipe) = value.as_obj() else {
                 continue;
             };
+            let premium = string(recipe, "premium_only");
             if unique(recipe).is_err()
                 || string(recipe, "disabled") != Some("0")
-                || string(recipe, "premium_only") != Some("0")
+                || !(premium == Some("0") || premium_allowed && premium == Some("1"))
                 || string(recipe, "always_known") != Some("1")
             {
                 continue;
@@ -453,12 +552,11 @@ impl OperationSchema {
                 || !inputs.entries[0]
                     .1
                     .as_obj()
-                    .is_some_and(|item| exact_name_condition(item, input_name))
-                || !outputs.entries.iter().all(|(_, value)| {
-                    value
-                        .as_obj()
-                        .is_some_and(|item| exact_name_condition(item, output_name))
-                })
+                    .is_some_and(|item| exact_condition(item, "name", input_name))
+                || !outputs
+                    .entries
+                    .iter()
+                    .all(|(_, value)| value.as_obj().is_some_and(&output))
             {
                 continue;
             }
@@ -469,15 +567,9 @@ impl OperationSchema {
             matches.push(recipe_id);
         }
         if matches.len() != 1 || matches[0] != expected_index {
-            return Err("The installed schema has no unambiguous supported metal recipe".into());
+            return Err("The installed schema has no unambiguous supported recipe".into());
         }
-        Ok(MetalRecipe {
-            recipe_id: matches[0],
-            input_definition,
-            input_count,
-            output_definition,
-            output_count,
-        })
+        Ok(matches[0])
     }
 
     pub fn eligibility(&self, item: &EligibilityInput<'_>) -> Eligibility {

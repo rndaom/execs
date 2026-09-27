@@ -6,17 +6,24 @@ import {
   type InventoryPreparedOperation,
   type InventoryPrepareRequest,
   type InventorySnapshot,
+  type SteamItems,
 } from "./bridge";
 import {
+  type CraftRecipeId,
   type InventoryCraftRequest,
   inventoryCraftBaseline,
-  type MetalRecipeId,
   simulateInventoryCraft,
 } from "./inventory-crafting";
 import { simulateInventoryDelete } from "./inventory-deletion";
 
 export function inventoryFixture(): InventorySnapshot {
   const metals = [5000, 5000, 5000, 5001, 5001, 5001, 5002];
+  // The last row holds enough metal for a batch of scrap crafts and a random hat.
+  const extras = [
+    [42, 5002],
+    [43, 5002],
+    ...[44, 45, 46, 47, 48, 49].map((position) => [position, 5000]),
+  ];
   const items = [
     { id: "preview-1", definition: 13, position: 1, quality: 6, level: 1, customName: null },
     {
@@ -35,12 +42,21 @@ export function inventoryFixture(): InventorySnapshot {
       quality: 11,
       level: 10,
       customName: "A familiar scattergun",
+      customDescription: "Found it under the bed.",
     },
     { id: "preview-3", definition: 5002, position: 0, quality: 6, level: 1, customName: null },
     ...metals.map((definition, index) => ({
       id: `preview-metal-${index + 1}`,
       definition,
       position: index + 4,
+      quality: 6,
+      level: 1,
+      customName: null,
+    })),
+    ...extras.map(([position, definition], index) => ({
+      id: `preview-extra-${index + 1}`,
+      definition,
+      position,
       quality: 6,
       level: 1,
       customName: null,
@@ -100,6 +116,72 @@ export function inventoryFixture(): InventorySnapshot {
   };
 }
 
+/** Steam's own text for a few fixture items, labeled like the fixture itself. */
+export function inventorySteamFixture(snapshot: InventorySnapshot): SteamItems {
+  const blue = "#7EA9D1";
+  const byName = (name: string | null, definition: number) =>
+    snapshot.items.find(
+      (item) => item.definition === definition && (name === null || item.customName === name),
+    )?.id;
+  const items: SteamItems["items"] = {};
+  const named = byName("A familiar scattergun", 13);
+  if (named)
+    items[named] = {
+      image: "preview-named-scattergun-image",
+      name: "''A familiar scattergun''",
+      marketName: "Strange Scattergun",
+      nameColor: "#CF6A32",
+      typeLine: "Strange Scattergun - Kills: 4",
+      lines: [{ text: "''Found it under the bed.''", color: null, user: true }],
+      originalName: "Scattergun",
+    };
+  const kit = byName(null, 6526);
+  if (kit)
+    items[kit] = {
+      image: "preview-killstreak-kit-image",
+      name: "Professional Killstreak Rocket Launcher Kit",
+      marketName: "Professional Killstreak Rocket Launcher Kit",
+      nameColor: "#7D6D00",
+      typeLine: "Level 1 Killstreak Kit",
+      lines: [
+        { text: "Killstreaks Active", color: blue, user: false },
+        { text: "Sheen: Team Shine", color: blue, user: false },
+        { text: "Killstreaker: Fire Horns", color: blue, user: false },
+        {
+          text: "This Killstreak Kit can be applied to a Rocket Launcher.",
+          color: null,
+          user: false,
+        },
+        { text: " ", color: null, user: false },
+        { text: "This is a limited use item. Uses: 1", color: "#00A000", user: false },
+      ],
+      originalName: null,
+    };
+  const paint = byName(null, 17286);
+  if (paint)
+    items[paint] = {
+      image: "preview-war-paint-image",
+      name: "Skull Cracked War Paint",
+      marketName: "Skull Cracked War Paint (Minimal Wear)",
+      nameColor: "#FAFAFA",
+      typeLine: "",
+      lines: [
+        { text: "Mercenary Grade War Paint (Minimal Wear)", color: "#4B69FF", user: false },
+        {
+          text: "Can be redeemed for an item with the same pattern.",
+          color: null,
+          user: false,
+        },
+      ],
+      originalName: null,
+    };
+  return {
+    status: "ready",
+    message: "Preview data: fixture descriptions, no Steam art.",
+    items,
+  };
+}
+
 function reject(message: string): never {
   throw new BridgeError(message, "InventoryConflict");
 }
@@ -122,6 +204,12 @@ export function createInventorySimulation(seed: InventorySnapshot = inventoryFix
   const simulator = {
     async getInventory() {
       return structuredClone(snapshot);
+    },
+    async getInventorySteamItems(): Promise<SteamItems> {
+      return inventorySteamFixture(snapshot);
+    },
+    async getInventorySteamImage(): Promise<ArrayBuffer> {
+      throw new BridgeError("Preview data has no Steam item art.", "InventoryUnavailable");
     },
     async getInventoryCapabilities() {
       return {
@@ -210,7 +298,7 @@ export function createInventorySimulation(seed: InventorySnapshot = inventoryFix
         simulateInventoryCraft(snapshot, {
           steamId: request.steamId,
           baseline: inventoryCraftBaseline(snapshot),
-          recipe: request.recipe as MetalRecipeId,
+          recipe: request.recipe as CraftRecipeId,
           inputIds: request.inputIds ?? [],
           protectedIds: request.protectedIds,
         });
@@ -255,7 +343,7 @@ export function createInventorySimulation(seed: InventorySnapshot = inventoryFix
           ...(await simulator.craftInventory({
             steamId: request.steamId,
             baseline: inventoryCraftBaseline(snapshot),
-            recipe: request.recipe as MetalRecipeId,
+            recipe: request.recipe as CraftRecipeId,
             inputIds: request.inputIds ?? [],
             protectedIds: request.protectedIds,
           })),

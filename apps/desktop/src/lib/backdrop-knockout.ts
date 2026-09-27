@@ -5,10 +5,10 @@
 
 /**
  * Controls are cleared as whole boxes and their insides are not read. The code
- * editor counts as one: a solid surface full of lines.
+ * editor and the backpack grid count as one each: solid surfaces full of controls.
  */
 const CONTROLS =
-  "button, input, textarea, select, [role='switch'], [role='slider'], svg, img, canvas, .cm-editor";
+  "button, input, textarea, select, [role='switch'], [role='slider'], svg, img, canvas, .cm-editor, .inventory-grid";
 /** Transitions of these properties can move text; colour and opacity cannot. */
 const MOVES_TEXT =
   /^(transform|translate|scale|rotate|width|height|inset|top|right|bottom|left|margin|padding|content-visibility)/;

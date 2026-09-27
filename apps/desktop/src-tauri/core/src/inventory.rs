@@ -520,11 +520,13 @@ pub fn icons(root: &Path, paths: &[String]) -> Result<BTreeMap<String, Icon>, St
         return Err("Invalid inventory icon request".into());
     }
     let wanted: BTreeSet<_> = paths.iter().map(String::as_str).collect();
+    // The largest installed pattern layers are about 22 MiB (4096px DXT5 with
+    // mips); the renderer requests patterns one at a time.
     let archive = vpk::read_vpk_dir_file_filtered_bounded_partial(
         &root.join("tf/tf2_textures_dir.vpk"),
         &|p| wanted.contains(p),
-        16 * 1024 * 1024,
         32 * 1024 * 1024,
+        64 * 1024 * 1024,
     )
     .map_err(|e| e.message())?;
     let mut result = BTreeMap::new();
@@ -536,7 +538,7 @@ pub fn icons(root: &Path, paths: &[String]) -> Result<BTreeMap<String, Icon>, St
         let height = u16::from_le_bytes([bytes[18], bytes[19]]);
         // Pattern layers can be larger than backpack icons. Bound source bytes
         // and dimensions, then decode only the mip needed for a 192px preview.
-        if width == 0 || height == 0 || width > 2048 || height > 2048 {
+        if width == 0 || height == 0 || width > 4096 || height > 4096 {
             continue;
         }
         let Ok(decoded) = vtf_read::decode_vtf_frame0_with_max_dimension(&bytes, 192) else {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inventoryCraftBaseline } from "./inventory-crafting";
+import { inventoryCraftBaseline, SIMULATED_HATS } from "./inventory-crafting";
 import { createInventorySimulation, inventoryFixture } from "./inventory-simulation";
 
 describe("inventory simulation authority", () => {
@@ -8,6 +8,7 @@ describe("inventory simulation authority", () => {
     const baseline = await api.getInventory();
     const inputIds = baseline.items
       .filter((item) => item.definition === 5000)
+      .slice(0, 3)
       .map((item) => item.id);
     const request = {
       steamId: baseline.steamId,
@@ -27,6 +28,29 @@ describe("inventory simulation authority", () => {
       5001,
     );
     await expect(api.craftInventory(request)).rejects.toThrow("backpack changed");
+  });
+  it("crafts a random fixture hat from three refined metal and labels its Steam text", async () => {
+    const api = createInventorySimulation();
+    const baseline = await api.getInventory();
+    const inputIds = baseline.items
+      .filter((item) => item.definition === 5002 && item.position > 0)
+      .slice(0, 3)
+      .map((item) => item.id);
+    expect(inputIds).toHaveLength(3);
+    const result = await api.craftInventory({
+      steamId: baseline.steamId,
+      baseline: inventoryCraftBaseline(baseline),
+      recipe: "craft_hat",
+      inputIds,
+      protectedIds: [],
+    });
+    expect(result.status).toBe("simulated");
+    const hat = result.snapshot?.items.find((item) => item.id === result.acquiredIds[0]);
+    expect(Object.keys(SIMULATED_HATS).map(Number)).toContain(hat?.definition);
+    expect(result.snapshot?.definitions[hat?.definition ?? 0]?.kind).toBe("Hat");
+    const steam = await api.getInventorySteamItems();
+    expect(steam.message).toContain("Preview data");
+    await expect(api.getInventorySteamImage()).rejects.toThrow("no Steam item art");
   });
   it("applies a reviewed swap, preserves item identities and rejects replay", async () => {
     const api = createInventorySimulation();

@@ -29,6 +29,10 @@ pub enum Operation {
         input_ids: Vec<String>,
         output_definition: u32,
         output_count: u32,
+        /// The random hat recipe: every definition the coordinator may choose.
+        /// Empty for the deterministic metal conversions.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        output_choices: Vec<u32>,
     },
     Delete {
         item_id: String,
@@ -132,6 +136,9 @@ pub fn same_inventory(left: &Snapshot, right: &Snapshot) -> bool {
             .is_some_and(|(a, b)| a == b)
 }
 
+/// The random hat recipe names at most this many possible outputs.
+pub const MAX_OUTPUT_CHOICES: usize = 20_000;
+
 pub(crate) struct Session {
     request: OperationRequest,
     pub sent: bool,
@@ -219,6 +226,7 @@ impl Session {
                 input_ids,
                 output_definition,
                 output_count,
+                output_choices,
             } => {
                 let ids = input_ids
                     .iter()
@@ -234,23 +242,37 @@ impl Session {
                     .map(|id| items[id.as_str()].definition)
                     .collect::<BTreeSet<_>>();
                 let input_definition = definitions.first().copied().unwrap_or(0);
-                // Only the four reviewed deterministic metal conversions can reach the wire.
+                // Only the four reviewed deterministic metal conversions and the
+                // random hat recipe with its reviewed output list can reach the wire.
+                let random_hat = (
+                    *recipe_id,
+                    input_definition,
+                    input_ids.len(),
+                    *output_definition,
+                    *output_count,
+                ) == (6, 5002, 3, 0, 1);
                 if definitions.len() != 1
-                    || !matches!(
-                        (
-                            *recipe_id,
-                            input_definition,
-                            input_ids.len(),
-                            *output_definition,
-                            *output_count
-                        ),
-                        (4, 5000, 3, 5001, 1)
-                            | (5, 5001, 3, 5002, 1)
-                            | (22, 5001, 1, 5000, 3)
-                            | (23, 5002, 1, 5001, 3)
-                    )
+                    || !(random_hat
+                        || output_choices.is_empty()
+                            && matches!(
+                                (
+                                    *recipe_id,
+                                    input_definition,
+                                    input_ids.len(),
+                                    *output_definition,
+                                    *output_count
+                                ),
+                                (4, 5000, 3, 5001, 1)
+                                    | (5, 5001, 3, 5002, 1)
+                                    | (22, 5001, 1, 5000, 3)
+                                    | (23, 5002, 1, 5001, 3)
+                            ))
+                    || random_hat
+                        && (output_choices.is_empty()
+                            || output_choices.len() > MAX_OUTPUT_CHOICES
+                            || !output_choices.windows(2).all(|pair| pair[0] < pair[1]))
                 {
-                    return Err("Unsupported metal conversion".into());
+                    return Err("Unsupported crafting recipe".into());
                 }
                 if snapshot.items.len() + *output_count as usize
                     > snapshot.capacity as usize + input_ids.len()
@@ -373,6 +395,7 @@ impl Session {
                 input_ids,
                 output_definition,
                 output_count,
+                output_choices,
             } => {
                 let Some(reply) = &self.craft_reply else {
                     return Ok(None);
@@ -389,8 +412,29 @@ impl Session {
                     let Some(item) = new.get(id.as_str()) else {
                         return Ok(None);
                     };
-                    if old.contains_key(id.as_str())
-                        || item.definition != *output_definition
+                    if old.contains_key(id.as_str()) {
+                        return Err("Craft output differs from the reviewed output".into());
+                    }
+                    // A random hat is whichever reviewed hat the coordinator chose.
+                    // Its quality, origin, craft number and maker attributes are its own.
+                    if !output_choices.is_empty() {
+                        if !output_choices.contains(&item.definition)
+                            || item.quantity != Some(1)
+                            || item.in_use.unwrap_or(false)
+                            || item.custom_name.as_ref().is_some_and(|s| !s.is_empty())
+                            || item
+                                .custom_description
+                                .as_ref()
+                                .is_some_and(|s| !s.is_empty())
+                            || item.interior_item.is_some()
+                            || !item.equipped_state.is_empty()
+                        {
+                            return Err("Craft output is not one of the reviewed hats".into());
+                        }
+                        acquired.insert(id);
+                        continue;
+                    }
+                    if item.definition != *output_definition
                         || item.quantity != Some(1)
                         || item.quality != 6
                         || item.origin != Some(4)
@@ -606,6 +650,7 @@ mod tests {
                 input_ids: vec!["1".into(), "2".into(), "3".into()],
                 output_definition: 5001,
                 output_count: 1,
+                output_choices: vec![],
             },
         );
         let mut session = Session::new(req.clone()).unwrap();
@@ -628,6 +673,45 @@ mod tests {
         reply[2..6].copy_from_slice(&1u32.to_le_bytes());
         denied.observe(1003, &reply).unwrap();
         assert!(denied.confirm(&after).is_err());
+    }
+
+    #[test]
+    fn random_hat_accepts_only_a_reviewed_hat_output() {
+        let before = snapshot(1, &[(1, 5002, 1), (2, 5002, 2), (3, 5002, 3), (9, 13, 9)]);
+        let hat = |choices: Vec<u32>, recipe_id: i16| {
+            request(
+                before.clone(),
+                Operation::Craft {
+                    recipe_id,
+                    input_ids: vec!["1".into(), "2".into(), "3".into()],
+                    output_definition: 0,
+                    output_count: 1,
+                    output_choices: choices,
+                },
+            )
+        };
+        let req = hat(vec![30, 31], 6);
+        let mut session = Session::new(req.clone()).unwrap();
+        assert_eq!(session.prepare_send(&req.baseline).unwrap().0, 1002);
+        let mut reply = 6i16.to_le_bytes().to_vec();
+        reply.extend(0u32.to_le_bytes());
+        reply.extend(1u16.to_le_bytes());
+        reply.extend(4u64.to_le_bytes());
+        session.observe(1003, &reply).unwrap();
+        let result = session
+            .confirm(&snapshot(2, &[(4, 31, 1), (9, 13, 9)]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.acquired_ids, ["4"]);
+        assert!(session
+            .confirm(&snapshot(2, &[(4, 5001, 1), (9, 13, 9)]))
+            .is_err());
+        // No list, an unsorted list, or a list on a metal recipe never reaches the wire.
+        for bad in [hat(vec![], 6), hat(vec![31, 30], 6), hat(vec![30], 5)] {
+            assert!(Session::new(bad.clone())
+                .and_then(|mut session| session.prepare_send(&bad.baseline))
+                .is_err());
+        }
     }
 
     fn destroy(owner: u64, id: u64, version: u64) -> Vec<u8> {
@@ -695,6 +779,7 @@ mod tests {
                 input_ids: vec!["1".into()],
                 output_definition: 5000,
                 output_count: 3,
+                output_choices: vec![],
             },
         );
         assert!(Session::new(req).is_err());
@@ -710,6 +795,7 @@ mod tests {
                 input_ids: vec!["1".into()],
                 output_definition: 5000,
                 output_count: 3,
+                output_choices: vec![],
             },
         );
         req.baseline.items[0].flags = Some(4);

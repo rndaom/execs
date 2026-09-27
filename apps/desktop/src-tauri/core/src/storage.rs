@@ -100,6 +100,8 @@ fn classify(data_dir: &Path, path: &Path) -> StorageGroupId {
         "logs" => StorageGroupId::Logs,
         // Catalog, statistics, albums and HUD option schemas re-download on use.
         "hud-catalog" => StorageGroupId::Downloads,
+        // Valve's rendered inventory art and descriptions re-download on use.
+        "inventory-art" => StorageGroupId::Downloads,
         // Retired Venom crosshair and Yttrium studio downloads; profiles keep
         // their own copies of anything they installed.
         "crosshair-cache" | "studio" => StorageGroupId::Retired,

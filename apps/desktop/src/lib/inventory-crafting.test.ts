@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { InventorySnapshot } from "./bridge";
 import {
+  type CraftRecipeId,
+  craftPlans,
   type InventoryCraftEligibility,
   type InventoryCraftRequest,
   inventoryCraftBaseline,
+  MAX_CRAFT_BATCH,
   METAL_RECIPES,
-  type MetalRecipeId,
   selectedMetalRecipe,
   simulateInventoryCraft,
   validateInventoryCraft,
@@ -37,7 +39,7 @@ function snapshot(
 }
 function request(
   before: InventorySnapshot,
-  recipe: MetalRecipeId = "combine_scrap",
+  recipe: CraftRecipeId = "combine_scrap",
 ): InventoryCraftRequest {
   return {
     steamId: before.steamId,
@@ -343,5 +345,63 @@ describe("explicit metal crafting", () => {
       alter(changed.snapshot);
       expect(verifyInventoryCraftResult(before, craft, changed).status).toBe("unknown");
     }
+  });
+});
+
+describe("crafting plans", () => {
+  it("splits a pile into whole crafts in slot order and names what stays", () => {
+    const before = snapshot(5000, 17);
+    before.items.reverse();
+    const [plan, ...others] = craftPlans(
+      before,
+      before.items.map((item) => item.id),
+    );
+    expect(others).toHaveLength(0);
+    expect(plan.recipe.id).toBe("combine_scrap");
+    expect(plan.batches).toHaveLength(5);
+    expect(plan.batches[0]).toEqual(
+      before.items
+        .filter((item) => item.position <= 3)
+        .sort((a, b) => a.position - b.position)
+        .map((item) => item.id),
+    );
+    expect(plan.unused).toHaveLength(2);
+  });
+  it("offers a hat or smelting for refined metal, and nothing for mixed metal", () => {
+    const refined = snapshot(5002, 3);
+    expect(
+      craftPlans(
+        refined,
+        refined.items.map((item) => item.id),
+      ).map((p) => p.recipe.id),
+    ).toEqual(["craft_hat", "smelt_refined"]);
+    const mixed = snapshot(5000, 3);
+    mixed.items[0].definition = 5001;
+    expect(
+      craftPlans(
+        mixed,
+        mixed.items.map((item) => item.id),
+      ),
+    ).toEqual([]);
+    const reclaimed = snapshot(5001, 1);
+    expect(craftPlans(reclaimed, [reclaimed.items[0].id]).map((p) => p.recipe.id)).toEqual([
+      "smelt_reclaimed",
+    ]);
+  });
+  it("bounds one review to a fixed number of crafts", () => {
+    const pile = snapshot(5000, (MAX_CRAFT_BATCH + 5) * 3);
+    pile.capacity = 1000;
+    const [plan] = craftPlans(
+      pile,
+      pile.items.map((item) => item.id),
+    );
+    expect(plan.batches).toHaveLength(MAX_CRAFT_BATCH);
+  });
+  it("simulates a random hat and verifies it without a fixed output", () => {
+    const before = snapshot(5002, 3);
+    const craft = request(before, "craft_hat");
+    const result = simulateInventoryCraft(before, craft);
+    expect(result.acquiredIds).toHaveLength(1);
+    expect(verifyInventoryCraftResult(before, craft, result).status).toBe("simulated");
   });
 });

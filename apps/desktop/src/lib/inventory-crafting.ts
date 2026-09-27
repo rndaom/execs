@@ -37,6 +37,26 @@ export const METAL_RECIPES = [
 ] as const;
 export type MetalRecipeId = (typeof METAL_RECIPES)[number]["id"];
 export type MetalRecipe = (typeof METAL_RECIPES)[number];
+/** Three Refined Metal for one random hat. The coordinator picks the hat. */
+export const HAT_RECIPE = {
+  id: "craft_hat",
+  name: "Random hat",
+  input: 5002,
+  inputCount: 3,
+  output: null,
+  outputCount: 1,
+} as const;
+export const CRAFT_RECIPES = [...METAL_RECIPES, HAT_RECIPE] as const;
+export type CraftRecipe = (typeof CRAFT_RECIPES)[number];
+export type CraftRecipeId = CraftRecipe["id"];
+/** One review runs at most this many crafts, one after another. */
+export const MAX_CRAFT_BATCH = 100;
+/** A way to craft the selection: whole crafts in slot order, plus what stays unused. */
+export type CraftPlan = {
+  recipe: CraftRecipe;
+  batches: string[][];
+  unused: string[];
+};
 export type InventoryCraftEligibility = {
   /** Missing, incomplete, or unqualified native evidence stays null. */
   craftable: boolean | null;
@@ -46,7 +66,7 @@ export type InventoryCraftEligibility = {
 export type InventoryCraftRequest = {
   steamId: string;
   baseline: string;
-  recipe: MetalRecipeId;
+  recipe: CraftRecipeId;
   inputIds: string[];
   protectedIds: string[];
 };
@@ -76,6 +96,58 @@ export function selectedMetalRecipe(
   );
   return matches.length === 1 ? matches[0] : null;
 }
+/** Every recipe the selection could run, in the order the Craft sheet offers them. */
+export function craftPlans(
+  snapshot: InventorySnapshot,
+  selectedIds: readonly string[],
+): CraftPlan[] {
+  if (!selectedIds.length || new Set(selectedIds).size !== selectedIds.length) return [];
+  const byId = new Map(snapshot.items.map((item) => [item.id, item]));
+  const items = selectedIds.map((id) => byId.get(id));
+  if (items.some((item) => !item)) return [];
+  const definition = items[0]?.definition;
+  if (!items.every((item) => item?.definition === definition)) return [];
+  const ordered = (items as InventoryItem[])
+    .slice()
+    .sort(
+      (a, b) =>
+        (a.position || Number.MAX_SAFE_INTEGER) - (b.position || Number.MAX_SAFE_INTEGER) ||
+        a.id.localeCompare(b.id),
+    )
+    .map((item) => item.id);
+  // Combining and hats come first: they are what a pile of metal is usually for.
+  const order: CraftRecipeId[] = [
+    "combine_scrap",
+    "combine_reclaimed",
+    "craft_hat",
+    "smelt_reclaimed",
+    "smelt_refined",
+  ];
+  return order.flatMap((id) => {
+    const recipe = CRAFT_RECIPES.find((entry) => entry.id === id);
+    if (!recipe || recipe.input !== definition) return [];
+    const count = Math.min(Math.floor(ordered.length / recipe.inputCount), MAX_CRAFT_BATCH);
+    if (count < 1) return [];
+    const used = count * recipe.inputCount;
+    return [
+      {
+        recipe,
+        batches: Array.from({ length: count }, (_, index) =>
+          ordered.slice(index * recipe.inputCount, (index + 1) * recipe.inputCount),
+        ),
+        unused: ordered.slice(used),
+      },
+    ];
+  });
+}
+
+/** Fixture hats the simulator can award. Live hats come from the coordinator. */
+export const SIMULATED_HATS: Record<number, string> = {
+  30001: "Modest Pile of Hat",
+  30002: "Towering Pillar of Hats",
+  30003: "Noble Amassment of Hats",
+};
+
 const MAX_ITEM_ID = 18446744073709551615n;
 function validId(id: string): boolean {
   return /^[1-9][0-9]{0,19}$/.test(id) && BigInt(id) <= MAX_ITEM_ID;
@@ -153,11 +225,11 @@ export function craftingItemRefusal(
 export function validateInventoryCraft(
   snapshot: InventorySnapshot,
   request: InventoryCraftRequest,
-): { recipe: MetalRecipe; inputs: InventoryItem[] } {
+): { recipe: CraftRecipe; inputs: InventoryItem[] } {
   validateSnapshot(snapshot);
   if (request.steamId !== snapshot.steamId || request.baseline !== inventoryCraftBaseline(snapshot))
     throw new Error("The backpack changed. Review the ingredients again.");
-  const recipe = METAL_RECIPES.find((candidate) => candidate.id === request.recipe);
+  const recipe = CRAFT_RECIPES.find((candidate) => candidate.id === request.recipe);
   if (!recipe) throw new Error("This recipe is not supported.");
   if (
     request.inputIds.length !== recipe.inputCount ||
@@ -211,12 +283,22 @@ export function simulateInventoryCraft(
     occupied.add(position);
     const itemId = id.toString();
     acquiredIds.push(itemId);
+    const hats = Object.keys(SIMULATED_HATS).map(Number);
+    const definition =
+      recipe.output ?? hats[Math.min(hats.length - 1, Math.floor(Math.random() * hats.length))];
+    if (recipe.output === null)
+      next.definitions[definition] ??= {
+        name: SIMULATED_HATS[definition],
+        kind: "Hat",
+        classes: [],
+        icon: null,
+      };
     next.items.push({
       id: itemId,
-      definition: recipe.output,
+      definition,
       position,
       quality: 6,
-      level: 1,
+      level: recipe.output === null ? 1 + Math.floor(Math.random() * 100) : 1,
       customName: null,
     });
     next.craftingEligibility[itemId] = {
@@ -226,19 +308,24 @@ export function simulateInventoryCraft(
       deletable: true,
     };
   }
-  next.definitions[recipe.output] ??= {
-    name: METAL_NAMES[recipe.output],
-    kind: "Crafting Item",
-    classes: [],
-    icon: null,
-  };
+  if (recipe.output !== null)
+    next.definitions[recipe.output] ??= {
+      name: METAL_NAMES[recipe.output],
+      kind: "Crafting Item",
+      classes: [],
+      icon: null,
+    };
   next.craftingRevision = `simulation:${crypto.randomUUID()}`;
+  const created =
+    recipe.output === null
+      ? (next.definitions[next.items[next.items.length - 1].definition]?.name ?? "a hat")
+      : `${recipe.outputCount} ${METAL_NAMES[recipe.output]}`;
   return {
     operationId: crypto.randomUUID(),
     kind: "craft",
     status: "simulated",
     snapshot: next,
-    message: `Simulation complete: created ${recipe.outputCount} ${METAL_NAMES[recipe.output]}. Steam items were not changed.`,
+    message: `Simulation complete: created ${created}. Steam items were not changed.`,
     consumedIds: [...request.inputIds],
     acquiredIds,
   };
@@ -294,6 +381,7 @@ export function verifyInventoryCraftResult(
         throw new Error("Unrelated item changed");
     }
     if (mode === "simulation") {
+      // A simulated hat adds its own definition; existing ones must not change.
       for (const [definition, description] of Object.entries(before.definitions)) {
         if (JSON.stringify(after.definitions[definition]) !== JSON.stringify(description))
           throw new Error("Existing item definition changed");
@@ -303,7 +391,13 @@ export function verifyInventoryCraftResult(
       throw new Error("Unexpected item count");
     for (const id of acquired) {
       const item = afterById.get(id);
-      if (!item || item.definition !== recipe.output || craftingItemRefusal(after, item, new Set()))
+      // The native review verified a hat against the installed hat list.
+      if (
+        !item ||
+        (recipe.output === null
+          ? item.definition in METAL_NAMES
+          : item.definition !== recipe.output || craftingItemRefusal(after, item, new Set()))
+      )
         throw new Error("Unexpected recipe output");
     }
     return result;

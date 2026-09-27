@@ -96,6 +96,10 @@ pub enum RemoteSource {
     GameBananaDownload,
     ComfigApp,
     Tf2Huds,
+    /// The signed-in player's own public TF2 inventory descriptions.
+    SteamInventory,
+    /// Valve's rendered item images named by those descriptions.
+    SteamItemImage,
 }
 
 impl RemoteSource {
@@ -119,6 +123,8 @@ impl RemoteSource {
             ],
             Self::ComfigApp => &["comfig.app", "www.comfig.app"],
             Self::Tf2Huds => &["tf2huds.dev", "www.tf2huds.dev"],
+            Self::SteamInventory => &["steamcommunity.com"],
+            Self::SteamItemImage => &["community.akamai.steamstatic.com"],
         }
     }
 
@@ -164,6 +170,17 @@ impl RemoteSource {
             }
             Self::ComfigApp => path.starts_with("/huds"),
             Self::Tf2Huds => path == "/" || path.starts_with("/huds/") || path.starts_with("/hud/"),
+            Self::SteamInventory => {
+                let parts: Vec<_> = path.split('/').collect();
+                parts.len() == 5
+                    && parts[0].is_empty()
+                    && parts[1] == "inventory"
+                    && parts[2].len() == 17
+                    && parts[2].bytes().all(|b| b.is_ascii_digit())
+                    && parts[3] == "440"
+                    && parts[4] == "2"
+            }
+            Self::SteamItemImage => path.starts_with("/economy/image/"),
         }
     }
 }
@@ -187,6 +204,8 @@ fn source_for_url(url: &reqwest::Url) -> Option<RemoteSource> {
         "files.gamebanana.com" => RemoteSource::GameBananaDownload,
         "comfig.app" | "www.comfig.app" => RemoteSource::ComfigApp,
         "tf2huds.dev" | "www.tf2huds.dev" => RemoteSource::Tf2Huds,
+        "steamcommunity.com" => RemoteSource::SteamInventory,
+        "community.akamai.steamstatic.com" => RemoteSource::SteamItemImage,
         _ => return None,
     })
 }
@@ -909,6 +928,29 @@ pub fn get_text_for_limit(
         return Err(format!("Could not download {url} ({})", response.status));
     }
     Ok(text_from_bytes(response.body))
+}
+
+/// GET with the API timeout policy, returning a completed non-success status
+/// to the caller instead of an error string, so it can explain the reason
+/// (a private inventory, a rate limit).
+pub fn get_bytes_or_status_for(
+    client: &Client,
+    url: &str,
+    source: RemoteSource,
+    max_bytes: u64,
+) -> Result<Result<Vec<u8>, reqwest::StatusCode>, String> {
+    let response = send_get(
+        client,
+        url,
+        source,
+        Some(API_TIMEOUT),
+        max_bytes.min(API_MAX_BYTES),
+    )?;
+    Ok(if response.status.is_success() {
+        Ok(response.body)
+    } else {
+        Err(response.status)
+    })
 }
 
 /// GET a JSON document with the API timeout policy, under the same ceiling.
