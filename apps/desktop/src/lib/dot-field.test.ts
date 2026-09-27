@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fieldLayout, type Lens, lensInfluence, stepLens } from "./dot-field";
+import { fadeTrail, fieldLayout, lightAlong, trailPresence } from "./dot-field";
 import { insideTf2Emblem } from "./tf2-emblem";
 
 describe("insideTf2Emblem", () => {
@@ -37,27 +37,40 @@ describe("fieldLayout", () => {
   });
 });
 
-describe("the pointer lens", () => {
-  it("appears under the pointer, follows with an ease and fades when it leaves", () => {
-    const lens: Lens = { x: 0, y: 0, strength: 0 };
-    stepLens(lens, { x: 400, y: 300 }, 16);
-    expect(lens.x).toBe(400);
-    expect(lens.strength).toBeGreaterThan(0);
-    stepLens(lens, { x: 500, y: 300 }, 16);
-    expect(lens.x).toBeGreaterThan(400);
-    expect(lens.x).toBeLessThan(500);
-    let settled = false;
-    for (let frame = 0; frame < 200 && !settled; frame += 1) {
-      settled = stepLens(lens, { x: 500, y: 300 }, 16);
-    }
-    expect(settled).toBe(true);
-    expect(lensInfluence(lens, 500, 300)).toBeGreaterThan(0.95);
-    expect(lensInfluence(lens, 800, 300)).toBe(0);
-    settled = false;
-    for (let frame = 0; frame < 300 && !settled; frame += 1) {
-      settled = stepLens(lens, null, 16);
-    }
-    expect(settled).toBe(true);
-    expect(lensInfluence(lens, 500, 300)).toBeLessThan(0.01);
+describe("the pointer trail", () => {
+  it("lights dots along the cursor's path and fades them out", () => {
+    const { dots } = fieldLayout(1000, 740);
+    const energy = new Float32Array(dots.length);
+    const nearest = (x: number, y: number) =>
+      dots.reduce(
+        (best, dot, index) =>
+          Math.hypot(dot.x - x, dot.y - y) < Math.hypot(dots[best].x - x, dots[best].y - y)
+            ? index
+            : best,
+        0,
+      );
+    const start = nearest(700, 500);
+    const middle = nearest(800, 500);
+    const away = nearest(700, 300);
+    lightAlong(dots, energy, { x: 700, y: 500 }, { x: 900, y: 500 });
+    expect(energy[start]).toBeGreaterThan(0.8);
+    // A fast move still lights the dots it passed between two events.
+    expect(energy[middle]).toBeGreaterThan(0.8);
+    expect(energy[away]).toBe(0);
+    const peak = energy[middle];
+    expect(fadeTrail(energy, 200)).toBe(true);
+    expect(energy[middle]).toBeLessThan(peak);
+    let glowing = true;
+    for (let frame = 0; frame < 400 && glowing; frame += 1) glowing = fadeTrail(energy, 16);
+    expect(glowing).toBe(false);
+    expect(Math.max(...energy)).toBe(0);
+  });
+
+  it("lights fully over the emblem and dissolves with the field toward the top-left", () => {
+    const { dots } = fieldLayout(1000, 740);
+    const ink = dots.find((dot) => dot.ink > 0);
+    const farthest = dots.reduce((best, dot) => (dot.x + dot.y < best.x + best.y ? dot : best));
+    expect(ink && trailPresence(ink)).toBe(1);
+    expect(trailPresence(farthest)).toBeLessThan(0.2);
   });
 });

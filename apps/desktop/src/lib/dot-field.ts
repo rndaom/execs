@@ -22,7 +22,7 @@ export type FieldDot = {
 
 export type FieldLayout = {
   dots: FieldDot[];
-  /** Emblem centre and outer radius in CSS px, for the entrance and the lens. */
+  /** Emblem centre and outer radius in CSS px. */
   cx: number;
   cy: number;
   radius: number;
@@ -79,45 +79,71 @@ export function fieldLayout(width: number, height: number, spacing = FIELD_SPACI
   return { dots, cx, cy, radius };
 }
 
-/** A soft lens that trails the pointer: position and strength ease, never snap. */
-export type Lens = { x: number; y: number; strength: number };
-
-export const LENS_RADIUS = 150;
-
 export function smoothstep(value: number): number {
   const t = Math.min(1, Math.max(0, value));
   return t * t * (3 - 2 * t);
 }
 
 /**
- * Ease the lens toward the pointer for `dt` ms. Returns true once it has
- * arrived and its strength has settled, so drawing can stop.
+ * The pointer lights dots like an LED matrix: every dot within reach of the
+ * path the cursor just travelled takes on energy, which then fades out. The
+ * result is a narrow, crisp trail of lit dots, never a moving blob.
  */
-export function stepLens(
-  lens: Lens,
-  pointer: { x: number; y: number } | null,
-  dt: number,
-): boolean {
-  const follow = 1 - Math.exp(-Math.max(0, dt) / 110);
-  const fade = 1 - Math.exp(-Math.max(0, dt) / 180);
-  if (pointer) {
-    if (lens.strength < 0.01) {
-      // A fresh lens appears where the pointer is rather than sliding in.
-      lens.x = pointer.x;
-      lens.y = pointer.y;
-    } else {
-      lens.x += (pointer.x - lens.x) * follow;
-      lens.y += (pointer.y - lens.y) * follow;
-    }
-  }
-  const target = pointer ? 1 : 0;
-  lens.strength += (target - lens.strength) * fade;
-  const moving = pointer !== null && Math.hypot(pointer.x - lens.x, pointer.y - lens.y) > 0.3;
-  return !moving && Math.abs(target - lens.strength) < 0.004;
+export const TRAIL_RADIUS = 24;
+/** Dots this close to the path light fully; beyond it they dim to the edge. */
+const TRAIL_CORE = 0.4;
+/** How long a lit dot takes to fade to about a third of its brightness, in ms. */
+export const TRAIL_FADE = 520;
+
+/**
+ * How strongly a dot can light, 0–1: fully inside the emblem and near it,
+ * dissolving with the field toward the top-left so the trail never ends at an
+ * edge.
+ */
+export function trailPresence(dot: FieldDot): number {
+  if (dot.ink > 0) return 1;
+  return smoothstep(Math.sqrt(dot.field) * 1.6);
 }
 
-/** How strongly the lens touches a dot, 0–1. */
-export function lensInfluence(lens: Lens, x: number, y: number, radius = LENS_RADIUS): number {
-  if (lens.strength <= 0) return 0;
-  return smoothstep(1 - Math.hypot(x - lens.x, y - lens.y) / radius) * lens.strength;
+/** Light the dots near the segment `from`→`to`; energy only ever rises here. */
+export function lightAlong(
+  dots: readonly FieldDot[],
+  energy: Float32Array,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  radius = TRAIL_RADIUS,
+): void {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length2 = dx * dx + dy * dy;
+  const minX = Math.min(from.x, to.x) - radius;
+  const maxX = Math.max(from.x, to.x) + radius;
+  const minY = Math.min(from.y, to.y) - radius;
+  const maxY = Math.max(from.y, to.y) + radius;
+  for (let index = 0; index < dots.length; index += 1) {
+    const dot = dots[index];
+    if (dot.x < minX || dot.x > maxX || dot.y < minY || dot.y > maxY) continue;
+    // Distance from the dot to the travelled segment.
+    const t =
+      length2 === 0
+        ? 0
+        : Math.min(1, Math.max(0, ((dot.x - from.x) * dx + (dot.y - from.y) * dy) / length2));
+    const distance = Math.hypot(dot.x - (from.x + t * dx), dot.y - (from.y + t * dy));
+    const core = radius * TRAIL_CORE;
+    const lit = distance <= core ? 1 : smoothstep(1 - (distance - core) / (radius - core));
+    if (lit > energy[index]) energy[index] = lit;
+  }
+}
+
+/** Fade every lit dot for `dt` ms. Returns true while anything is still lit. */
+export function fadeTrail(energy: Float32Array, dt: number, fade = TRAIL_FADE): boolean {
+  const keep = Math.exp(-Math.max(0, dt) / fade);
+  let lit = false;
+  for (let index = 0; index < energy.length; index += 1) {
+    if (energy[index] === 0) continue;
+    const next = energy[index] * keep;
+    energy[index] = next < 0.01 ? 0 : next;
+    if (energy[index] > 0) lit = true;
+  }
+  return lit;
 }

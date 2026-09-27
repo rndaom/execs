@@ -1,17 +1,19 @@
 import { useEffect, useRef } from "react";
 import {
   type FieldLayout,
+  fadeTrail,
   fieldLayout,
-  LENS_RADIUS,
-  type Lens,
-  lensInfluence,
-  stepLens,
+  lightAlong,
+  trailPresence,
 } from "../lib/dot-field";
 
 const INK_RADIUS = 2.5;
 const FIELD_RADIUS = 1.05;
 const INK_ALPHA = 0.3;
 const FIELD_ALPHA = 0.07;
+/** A fully lit dot: every LED the same size and colour, like a real matrix. */
+const LIT_RADIUS = 1.9;
+const LIT_ALPHA = 0.7;
 
 function reducedMotion() {
   return (
@@ -26,11 +28,11 @@ function token(name: string, fallback: string) {
 }
 
 /**
- * The backdrop behind every page: the TF2 emblem as a quiet halftone of dots in the
- * bottom-right corner. Near the pointer a soft lens swells the dots and warms
- * them toward the accent, trailing the cursor with an ease. The static field is
- * drawn once per size; frames run only while the lens moves or fades, and
- * reduced motion keeps the still image.
+ * The backdrop behind every page: the TF2 emblem as a quiet halftone of dots in
+ * the bottom-right corner. It answers the pointer like an LED dot matrix: dots
+ * the cursor passes light up and fade out, leaving a short trail. Dots never
+ * move. The static field is drawn once per size; frames run only while
+ * something is lit, and reduced motion keeps the still image.
  */
 export function DotBackdrop() {
   const host = useRef<HTMLDivElement | null>(null);
@@ -43,6 +45,7 @@ export function DotBackdrop() {
     // The context is requested once the surface has a real size.
     let context: CanvasRenderingContext2D | null = null;
     const accent = token("--color-brand", "#d98449");
+    const lit = token("--color-brand-hover", "#e69a61");
     const faint = token("--color-ink-faint", "#ada59e");
     const still = reducedMotion();
 
@@ -51,7 +54,7 @@ export function DotBackdrop() {
     let height = 0;
     let ratio = 1;
     const layer = document.createElement("canvas");
-    const lens: Lens = { x: 0, y: 0, strength: 0 };
+    let energy = new Float32Array(0);
     let pointer: { x: number; y: number } | null = null;
     let frame = 0;
     let last = 0;
@@ -88,29 +91,21 @@ export function DotBackdrop() {
       context.setTransform(1, 0, 0, 1, 0, 0);
       context.clearRect(0, 0, element?.width ?? 0, element?.height ?? 0);
       context.drawImage(layer, 0, 0);
-      if (lens.strength < 0.004) return;
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      for (const point of layout.dots) {
-        if (Math.abs(point.x - lens.x) > LENS_RADIUS || Math.abs(point.y - lens.y) > LENS_RADIUS) {
-          continue;
-        }
-        const influence = lensInfluence(lens, point.x, point.y);
-        if (influence < 0.01) continue;
-        // Draw over the resting dot: larger and warmer, never moved.
-        if (point.ink > 0) {
-          context.globalAlpha = Math.min(1, INK_ALPHA * point.weight + 0.42 * influence);
-          context.fillStyle = accent;
-          dot(
-            context,
-            point.x,
-            point.y,
-            INK_RADIUS * (0.4 + 0.6 * point.ink) * (1 + 0.5 * influence),
-          );
-        } else if (point.field > 0.02) {
-          context.globalAlpha = Math.min(1, 0.2 * influence * (0.4 + point.field));
-          context.fillStyle = accent;
-          dot(context, point.x, point.y, FIELD_RADIUS * (1 + 0.7 * influence));
-        }
+      const dots = layout.dots;
+      for (let index = 0; index < dots.length; index += 1) {
+        const glow = energy[index];
+        if (glow === 0) continue;
+        const point = dots[index];
+        const level = glow * trailPresence(point);
+        if (level < 0.02) continue;
+        // A lit dot is redrawn over its resting self in the same place: an
+        // orange LED that dims back to the halftone.
+        const rest = point.ink > 0 ? INK_RADIUS * (0.4 + 0.6 * point.ink) : FIELD_RADIUS;
+        const peak = point.ink > 0 ? Math.max(rest, LIT_RADIUS * 1.2) : LIT_RADIUS;
+        context.globalAlpha = LIT_ALPHA * level * (0.7 + 0.3 * point.weight);
+        context.fillStyle = level > 0.6 ? lit : accent;
+        dot(context, point.x, point.y, rest + (peak - rest) * level);
       }
       context.globalAlpha = 1;
     }
@@ -127,6 +122,7 @@ export function DotBackdrop() {
       element.width = Math.round(width * ratio);
       element.height = Math.round(height * ratio);
       layout = fieldLayout(width, height);
+      energy = new Float32Array(layout.dots.length);
       paintStatic();
       draw();
     }
@@ -140,9 +136,9 @@ export function DotBackdrop() {
       }
       const dt = Math.min(48, now - last);
       last = now;
-      const settled = stepLens(lens, pointer, dt);
+      const glowing = fadeTrail(energy, dt);
       draw();
-      if (!settled) frame = requestAnimationFrame(tick);
+      if (glowing) frame = requestAnimationFrame(tick);
     }
 
     function wake() {
@@ -152,28 +148,23 @@ export function DotBackdrop() {
     }
 
     function onPointerMove(event: PointerEvent) {
-      if (!element || !context) return;
+      if (!element || !context || still) return;
       const bounds = element.getBoundingClientRect();
       const x = event.clientX - bounds.left;
       const y = event.clientY - bounds.top;
-      // The lens only wakes where the emblem is; the thin field elsewhere
-      // would show nothing for the work.
-      const near =
-        x >= 0 &&
-        y >= 0 &&
-        x <= bounds.width &&
-        y <= bounds.height &&
-        Math.hypot(x - layout.cx, y - layout.cy) < layout.radius * 1.35;
-      const next = near ? { x, y } : null;
-      if (next === null && pointer === null) return;
+      const inside = x >= 0 && y >= 0 && x <= bounds.width && y <= bounds.height;
+      if (!inside) {
+        pointer = null;
+        return;
+      }
+      const next = { x, y };
+      lightAlong(layout.dots, energy, pointer ?? next, next);
       pointer = next;
       wake();
     }
 
     function onLeave() {
-      if (pointer === null) return;
       pointer = null;
-      wake();
     }
 
     // A surface without layout (a test DOM, a hidden window) gets nothing:

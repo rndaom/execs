@@ -13,7 +13,8 @@ User-facing changes only. The release workflow publishes the matching
   files. execs follows your system's reduced-motion setting, or your own Reduce preference in App
   settings.
 - A quiet dot field sits behind every page: the TF2 emblem in orange dots, anchored in the bottom
-  right corner. Where your pointer passes over it, the dots gently swell and warm, then settle.
+  right corner. Your pointer lights the dots it passes like an LED matrix, leaving a short orange
+  trail that fades back.
 - The orange execs dot now means "a change": it breathes while a change saves and pops when it is
   saved, and marks any pane whose changes are still waiting, such as Files edits you have not
   saved. The sidebar highlight, tab underlines and choice buttons glide to your selection, and
