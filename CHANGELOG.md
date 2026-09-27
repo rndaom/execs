@@ -166,9 +166,9 @@ User-facing changes only. The release workflow publishes the matching
 - Comfig modules no longer repeat the selected level as small text beside each module name.
 - Viewmodels builds from your own installed TF2 files instead of downloaded CompVMInstaller
   animations, and generated previews are gone. Packs built by earlier versions keep working.
-- New Venom Crosshairs, TF2Hitsounds and comfig hosted-sound downloads are retired. Crosshairs and
-  sounds already in your profiles keep working; a saved downloaded sound needs a new source to
-  change its baked Boost.
+- New Venom Crosshairs and TF2Hitsounds downloads are retired. Crosshairs and sounds already in
+  your profiles keep working; a saved TF2Hitsounds sound needs a new source to change its baked
+  Boost.
 - New cueki mod-library downloads and choices are retired. Four direct-author Casual addons remain.
   Saved library choices still apply with their original verified cache; without it, a review can
   remove only those choices from an inactive profile before switching.
