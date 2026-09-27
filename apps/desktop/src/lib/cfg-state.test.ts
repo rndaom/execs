@@ -127,6 +127,34 @@ describe("profile startup settings", () => {
     });
   });
 
+  it.each(["custom", "low", "medium", "high", "ultra", "destitute"])(
+    "reads settings past mastercomfig's preset=%s selector in setup_hook.cfg",
+    (level) => {
+      const files = [
+        { path: "tf/cfg/config.cfg", text: "viewmodel_fov 70" },
+        { path: "tf/cfg/overrides/setup_hook.cfg", text: `preset=${level}\n` },
+        { path: "tf/cfg/overrides/autoexec.cfg", text: "viewmodel_fov 90\nbind w +forward" },
+      ];
+      expect(mapsFromFiles(files, "comfig")).toMatchObject({
+        complete: true,
+        reason: null,
+        effective: { viewmodel_fov: "90" },
+        binds: { w: "+forward" },
+      });
+    },
+  );
+
+  it("does not invent mastercomfig selectors for a vanilla autoexec", () => {
+    const files = [
+      { path: "tf/cfg/config.cfg", text: "viewmodel_fov 70" },
+      { path: "tf/cfg/autoexec.cfg", text: "preset=custom\nviewmodel_fov 90" },
+    ];
+    expect(mapsFromFiles(files, "vanilla")).toMatchObject({
+      complete: false,
+      issue: { path: "tf/cfg/autoexec.cfg", line: 1 },
+    });
+  });
+
   it("points to a likely startup typo without guessing its effect", () => {
     const files = [
       { path: "tf/cfg/config.cfg", text: "viewmodel_fov 70" },

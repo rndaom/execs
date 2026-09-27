@@ -1,3 +1,4 @@
+import { Check, Clock, WarningCircle, X } from "@phosphor-icons/react";
 import {
   createContext,
   type ReactNode,
@@ -7,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   failureMessage,
   TOAST_SAVING_DELAY_MS,
@@ -33,6 +35,8 @@ export type ToastApi = {
   resolveDraft: (source: string) => void;
   /** Explicitly discarding a failed draft resolves its feedback only. */
   clearSource: (source: string) => void;
+  /** A quiet autosave landed: no message, only the execs dot acknowledges it. */
+  noteQuietSave: () => void;
   dismiss: () => void;
 };
 
@@ -49,6 +53,7 @@ const NO_TOAST: ToastApi = {
   deferDraft: () => undefined,
   resolveDraft: () => undefined,
   clearSource: () => undefined,
+  noteQuietSave: () => undefined,
   dismiss: () => undefined,
 };
 
@@ -56,6 +61,49 @@ const ToastContext = createContext<ToastApi>(NO_TOAST);
 
 export function useToast(): ToastApi {
   return useContext(ToastContext);
+}
+
+type SlotRegistry = {
+  status: (element: HTMLElement | null) => void;
+  alert: (element: HTMLElement | null) => void;
+};
+
+/** What saving is doing right now, for the header's execs dot. */
+export type SaveActivity = { kind: "saving" | "saved" | null; saved: number };
+
+const SaveActivityContext = createContext<SaveActivity>({ kind: null, saved: 0 });
+
+/** The execs dot breathes while a change saves and pops once when it lands. */
+export function useSaveActivity(): SaveActivity {
+  return useContext(SaveActivityContext);
+}
+
+const SlotContext = createContext<SlotRegistry>({
+  status: () => undefined,
+  alert: () => undefined,
+});
+
+/**
+ * Where quiet save progress appears: a spot in the app header, visible however
+ * far the pane is scrolled. Without it the provider falls back to its own
+ * fixed position.
+ */
+export function SaveStatusSlot({ className = "" }: { className?: string }) {
+  const { status } = useContext(SlotContext);
+  return (
+    <span
+      ref={status}
+      role="status"
+      aria-live="polite"
+      className={`save-status-slot ${className}`}
+    />
+  );
+}
+
+/** Where a failed save stays until it succeeds or is dismissed: under the header. */
+export function SaveAlertSlot() {
+  const { alert } = useContext(SlotContext);
+  return <div ref={alert} aria-live="assertive" className="save-alert-slot" />;
 }
 
 /**
@@ -66,6 +114,10 @@ export function useToast(): ToastApi {
  */
 export function ToastProvider({ children }: { children?: ReactNode }) {
   const [feedback, setFeedback] = useState(toastInitial);
+  const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null);
+  const [alertSlot, setAlertSlot] = useState<HTMLElement | null>(null);
+  const slots = useMemo<SlotRegistry>(() => ({ status: setStatusSlot, alert: setAlertSlot }), []);
+  const [savedCount, setSavedCount] = useState(0);
   const toast = feedback.toast;
   const [inFlight, setInFlight] = useState<Record<string, number>>({});
 
@@ -99,6 +151,7 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
       deferDraft: (source) => send({ type: "defer", source }),
       resolveDraft: (source) => send({ type: "resolve-draft", source }),
       clearSource: (source) => send({ type: "clear-source", source }),
+      noteQuietSave: () => setSavedCount((count) => count + 1),
       dismiss: () => send({ type: "hide" }),
     }),
     [send, changeInFlight],
@@ -114,6 +167,18 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
     const timer = window.setTimeout(() => send({ type: "slow" }), TOAST_SAVING_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [activeSaves, send]);
+
+  // Every completion is a fresh toast object, so each one counts once.
+  useEffect(() => {
+    if (toast?.kind === "saved") setSavedCount((count) => count + 1);
+  }, [toast]);
+  const activity = useMemo<SaveActivity>(
+    () => ({
+      kind: toast?.kind === "saving" || toast?.kind === "saved" ? toast.kind : null,
+      saved: savedCount,
+    }),
+    [toast, savedCount],
+  );
 
   const linger = toastLingerMs(toast);
   useEffect(() => {
@@ -140,40 +205,63 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [dismissible, send, toast]);
 
+  const message = toast ? (
+    dismissible ? (
+      <button
+        type="button"
+        data-testid="toast"
+        data-kind={toast.kind}
+        data-source={toast.source}
+        aria-label={`Dismiss: ${toast.message}`}
+        onClick={() => send({ type: "hide", expected: toast })}
+        className={
+          alertSlot ? "save-alert enter-fade" : "save-alert save-alert-floating enter-fade"
+        }
+      >
+        <WarningCircle size={16} aria-hidden="true" className="shrink-0 text-error" />
+        <span className="min-w-0 flex-1">{toast.message}</span>
+        <X size={14} aria-hidden="true" className="shrink-0 text-ink-faint" />
+      </button>
+    ) : (
+      <span
+        data-testid="toast"
+        data-kind={toast.kind}
+        data-source={toast.source}
+        className={
+          statusSlot ? "save-status enter-fade" : "save-status save-status-floating enter-fade"
+        }
+      >
+        {toast.kind === "saving" ? (
+          <Loading size={12}>{toast.message}</Loading>
+        ) : (
+          <>
+            {toast.kind === "deferred" ? (
+              <Clock size={13} aria-hidden="true" className="shrink-0 text-warn" />
+            ) : (
+              <Check size={13} weight="bold" aria-hidden="true" className="shrink-0 text-ok" />
+            )}
+            <span className="truncate">{toast.message}</span>
+          </>
+        )}
+      </span>
+    )
+  ) : null;
+  const slot = toast ? (dismissible ? alertSlot : statusSlot) : null;
+
   return (
     <ToastContext.Provider value={api}>
-      {children}
-      {/* Padding, not a left offset, is what centres this over the content
-          column: it shifts the centre right by exactly half the sidebar. */}
+      <SaveActivityContext.Provider value={activity}>
+        <SlotContext.Provider value={slots}>{children}</SlotContext.Provider>
+      </SaveActivityContext.Provider>
+      {slot && message ? createPortal(message, slot) : null}
+      {/* Without a header (onboarding, single-pane tests) the message keeps
+          its own quiet spot over the content column. */}
       <div
         role="status"
         aria-live="polite"
         className="pointer-events-none fixed inset-x-0 bottom-12 z-50 flex justify-center px-4 min-[761px]:pl-(--sidebar-width)"
       >
-        {toast ? (
-          dismissible ? (
-            <button
-              type="button"
-              data-testid="toast"
-              data-kind={toast.kind}
-              data-source={toast.source}
-              aria-label={`Dismiss: ${toast.message}`}
-              onClick={() => send({ type: "hide", expected: toast })}
-              className="overlay enter-fade pointer-events-auto max-w-[34rem] border-error/60 px-4 py-2.5 text-left text-[13.5px] leading-5 text-ink"
-            >
-              {toast.message}
-            </button>
-          ) : (
-            <p
-              data-testid="toast"
-              data-kind={toast.kind}
-              data-source={toast.source}
-              className="overlay enter-fade pointer-events-auto max-w-[34rem] px-4 py-2.5 text-[13.5px] leading-5 text-ink"
-            >
-              {toast.kind === "saving" ? <Loading>{toast.message}</Loading> : toast.message}
-            </p>
-          )
-        ) : null}
+        {slot ? null : message}
       </div>
     </ToastContext.Provider>
   );

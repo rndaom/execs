@@ -1,4 +1,4 @@
-import { type ReactNode, useId } from "react";
+import { type ReactNode, useId, useLayoutEffect, useRef, useState } from "react";
 
 export type SegmentedOption<Id extends string> = {
   id: Id;
@@ -39,14 +39,68 @@ export function Segmented<Id extends string>({
   // (Boost under each sound slot) must not share a radio group or ids.
   const instance = useId();
   const name = `segmented-${label.replace(/\s+/g, "-").toLowerCase()}-${instance}`;
+  const group = useRef<HTMLFieldSetElement | null>(null);
+  const [thumb, setThumb] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    ready: boolean;
+  } | null>(null);
+  const selectedIndex = options.findIndex((option) => option.id === value);
+
+  // One raised thumb slides to the chosen label; the first placement snaps.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: labels re-measure when their text changes.
+  useLayoutEffect(() => {
+    const root = group.current;
+    if (!root) return;
+    const place = () => {
+      // Each option wrapper is positioned, so measure the wrapper: its offsets
+      // are relative to the fieldset, unlike the label inside it.
+      const items = root.querySelectorAll<HTMLElement>(".segmented-item");
+      const target = selectedIndex >= 0 ? items[selectedIndex] : undefined;
+      if (!target || target.offsetWidth === 0) {
+        setThumb(null);
+        return;
+      }
+      setThumb((current) => ({
+        x: target.offsetLeft,
+        y: target.offsetTop,
+        width: target.offsetWidth,
+        height: target.offsetHeight,
+        ready: current !== null,
+      }));
+    };
+    place();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(place);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [selectedIndex, options.length, options.map((option) => option.id).join("|")]);
+
   return (
     <fieldset
+      ref={group}
       className={`segmented ${size === "sm" ? "segmented-sm" : ""} ${
         disabled ? "segmented-disabled" : ""
       }`.trim()}
+      data-thumb={thumb ? "true" : undefined}
       disabled={disabled}
     >
       <legend className="sr-only">{label}</legend>
+      {thumb ? (
+        <span
+          aria-hidden="true"
+          className="segmented-thumb"
+          data-ready={thumb.ready ? "true" : "false"}
+          data-neutral={value === neutralValue ? "true" : undefined}
+          style={{
+            transform: `translate(${thumb.x}px, ${thumb.y}px)`,
+            width: thumb.width,
+            height: thumb.height,
+          }}
+        />
+      ) : null}
       {options.map((option) => {
         const selected = option.id === value;
         const id = `${name}-${option.id}`;

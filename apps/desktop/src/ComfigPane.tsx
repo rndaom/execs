@@ -1,6 +1,7 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
 import { useState } from "react";
 import { ClassTabs } from "./components/ui/ClassTabs";
+import { Disclosure } from "./components/ui/Disclosure";
 import { OptionTile } from "./components/ui/OptionTile";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
@@ -18,7 +19,6 @@ import {
   COMFIG_PRESETS,
   type ComfigModule,
   type ComfigModuleGroupId,
-  comfigPresetById,
   comfigPresetLabel,
   oldComfigPresetMessage,
 } from "./lib/comfig-catalog";
@@ -108,6 +108,18 @@ function ModuleControl({
   );
 }
 
+/**
+ * The fold's one-line summary. Custom has no preset values to differ from, so
+ * its modules are simply the ones set.
+ */
+export function comfigModulesSummary(preset: string, presetLabel: string, count: number): string {
+  const modules = `${count} ${count === 1 ? "module" : "modules"}`;
+  if (preset === "none") return count === 0 ? "No modules set yet" : `${modules} set`;
+  return count === 0
+    ? `Using ${presetLabel} for every module`
+    : `${modules} changed from ${presetLabel}`;
+}
+
 export function ComfigPane({
   detail,
   state,
@@ -139,7 +151,6 @@ export function ComfigPane({
   const packagesInstalled = hasBaseVpk(paths);
   const customImported = hasComfigCustom(paths);
   const selectedPresetLabel = comfigPresetLabel(state.preset);
-  const selectedPreset = comfigPresetById(state.preset);
   const oldPresetMessage = oldComfigPresetMessage(state.preset);
   const moduleOverrideCount = Object.values(state.modules).filter(Boolean).length;
   const activeGroup =
@@ -178,205 +189,190 @@ export function ComfigPane({
 
   return (
     <section data-testid="settings-comfig" className="min-w-0 text-left">
-      <div className="hero-row">
-        <div className="min-w-0">
-          <PaneHeader
-            title="Comfig"
-            actions={
-              statusProblem ? (
-                <p aria-live="polite" className="badge">
-                  {statusProblem}
-                </p>
-              ) : null
-            }
-          />
-
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <div className="min-w-0">
-              <h2 className="t-section">Preset</h2>
-              <p className="t-meta mt-1">Sets the default for every module.</p>
-            </div>
-          </div>
-
-          {oldPresetMessage ? (
-            <p data-testid="comfig-old-preset" className="t-meta mt-3 text-ink-muted">
-              {oldPresetMessage}
+      <PaneHeader
+        title="Comfig"
+        actions={
+          statusProblem ? (
+            <p aria-live="polite" className="badge">
+              {statusProblem}
             </p>
-          ) : null}
+          ) : null
+        }
+      />
 
-          <div data-testid="comfig-preset" className="mt-4 grid grid-cols-2 gap-2">
-            {COMFIG_PRESETS.map((item) => (
-              <OptionTile
-                key={item.id}
-                id={`comfig-preset-${item.id}`}
-                name="comfig-preset"
-                value={item.id}
-                title={item.label}
-                description={item.description}
-                selected={state.preset === item.id}
-                disabled={locked}
-                onSelect={() => {
-                  void onApplyPreset(item.id);
-                }}
-              />
-            ))}
-          </div>
-
-          <div className="pane-actions mt-3">
-            <button
-              type="button"
-              data-testid="comfig-preset-guide"
-              onClick={() => void openEmbeddedPage("comfig-docs")}
-              className="btn btn-ghost"
-            >
-              Preset guide
-              <ArrowSquareOut size={13} />
-            </button>
-          </div>
+      <section aria-labelledby="comfig-preset-heading">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <h2 id="comfig-preset-heading" className="t-section">
+            Preset
+          </h2>
+          <button
+            type="button"
+            data-testid="comfig-preset-guide"
+            onClick={() => void openEmbeddedPage("comfig-docs")}
+            className="btn btn-quiet"
+          >
+            Preset guide
+            <ArrowSquareOut size={13} />
+          </button>
         </div>
 
-        <aside className="surface hero-preview self-start p-5" aria-label="Selected preset details">
-          <p className="t-meta text-ink-faint">Selected preset</p>
-          <h3 className="t-section mt-2">{selectedPresetLabel}</h3>
-          <p className="t-meta mt-2">
-            {selectedPreset?.description ??
-              oldPresetMessage ??
-              "This saved preset is not offered by the current catalog."}
+        {oldPresetMessage ? (
+          <p data-testid="comfig-old-preset" className="t-meta mt-2 text-ink-muted">
+            {oldPresetMessage}
           </p>
-          <div className="mt-5 border-t border-edge pt-4">
-            <p className="t-row">
-              {moduleOverrideCount} module {moduleOverrideCount === 1 ? "override" : "overrides"}
-            </p>
-            <p className="t-meta mt-1">
-              Preset values apply unless a module below has its own setting. The preset guide opens
-              mastercomfig’s current reference.
-            </p>
-          </div>
-        </aside>
-      </div>
+        ) : null}
 
-      <div className="section pane-workspace comfig-workspace">
-        <PaneSection
-          id="comfig-modules"
-          title="Modules"
-          description="Overrides for your selected preset."
-          first
+        <div
+          data-testid="comfig-preset"
+          role="radiogroup"
+          aria-labelledby="comfig-preset-heading"
+          className="comfig-presets mt-3"
         >
-          <div data-testid="comfig-modules" className="mt-3">
-            <ClassTabs
-              tabs={COMFIG_MODULE_GROUPS.map((group) => ({
-                id: group.id,
-                label: group.label,
-              }))}
-              selected={activeGroupId}
-              label="Module categories"
-              idPrefix="comfig-module-tab"
-              panelId="comfig-module-panel"
-              onSelect={(id) => {
-                setActiveGroupId(id);
-                setModuleSearch("");
-                setShowAllModules(false);
+          {COMFIG_PRESETS.map((item) => (
+            <OptionTile
+              key={item.id}
+              id={`comfig-preset-${item.id}`}
+              name="comfig-preset"
+              value={item.id}
+              title={item.label}
+              description={item.description}
+              selected={state.preset === item.id}
+              disabled={locked}
+              onSelect={() => {
+                void onApplyPreset(item.id);
               }}
             />
-            <label className="mt-3 block">
-              <span className="sr-only">Search {activeGroup.label} modules</span>
-              <input
-                type="search"
-                value={moduleSearch}
-                onChange={(event) => {
-                  setModuleSearch(event.target.value);
-                  setShowAllModules(false);
-                }}
-                placeholder={`Search ${activeGroup.label.toLowerCase()}…`}
-                className="field w-full px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
-              />
-            </label>
-          </div>
+          ))}
+        </div>
+      </section>
 
-          <div
-            id="comfig-module-panel"
-            role="tabpanel"
-            aria-labelledby={`comfig-module-tab-${activeGroup.id}`}
-            className="mt-1"
-          >
-            {displayedModules.length > 0 ? (
-              <div>
-                {displayedModules.map((module) => (
-                  <div key={module.id} className="border-b border-edge">
-                    <ModuleControl
-                      module={module}
-                      value={state.modules[module.id] ?? ""}
-                      locked={locked}
-                      onChange={(value) => updateModule(module.id, value)}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="px-5 py-10 text-center">
-                <p className="t-body text-ink">
-                  No matching {activeGroup.label.toLowerCase()} modules.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setModuleSearch("")}
-                  className="btn btn-ghost mt-3"
-                >
-                  Clear search
-                </button>
-              </div>
-            )}
-          </div>
+      <PaneSection
+        id="comfig-addons"
+        title="Official addons"
+        meta={<span className="tnum">{state.addons.length} selected</span>}
+      >
+        <div className="comfig-addons mt-2">
+          {OFFICIAL_ADDONS.map((item) => (
+            <SwitchRow
+              key={item.id}
+              id={`comfig-addon-input-${item.id}`}
+              testId={`comfig-addon-${item.id}`}
+              label={item.label}
+              description={OFFICIAL_ADDON_DETAILS[item.id]}
+              checked={state.addons.includes(item.id)}
+              disabled={
+                locked ||
+                (item.id === "transparent-viewmodels" &&
+                  !canUseTransparentViewmodels(detail?.layer ?? null))
+              }
+              onChange={() => {
+                void onToggleAddon(item.id);
+              }}
+            />
+          ))}
+        </div>
+      </PaneSection>
 
-          {hiddenModuleCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => setShowAllModules(true)}
-              className="mt-3 w-full rounded-lg py-2.5 text-[13px] text-ink-muted transition-colors duration-150 hover:bg-panel hover:text-ink"
-            >
-              Show {hiddenModuleCount} more {activeGroup.label.toLowerCase()} modules
-            </button>
-          ) : showAllModules &&
-            !normalizedSearch &&
-            matchingModules.length > DEFAULT_VISIBLE_MODULES ? (
-            <button
-              type="button"
-              onClick={() => setShowAllModules(false)}
-              className="mt-3 w-full rounded-lg py-2.5 text-[13px] text-ink-muted transition-colors duration-150 hover:bg-panel hover:text-ink"
-            >
-              Show fewer modules
-            </button>
-          ) : null}
-        </PaneSection>
+      <Disclosure
+        profileId={detail?.id ?? null}
+        storageKey="comfig-modules"
+        testId="comfig-modules-disclosure"
+        className="section"
+        summary={
+          <span className="flex min-w-0 flex-1 items-center justify-between gap-4">
+            <span>Fine-tune modules</span>
+            <span data-testid="comfig-modules-summary" className="t-meta tnum">
+              {comfigModulesSummary(state.preset, selectedPresetLabel, moduleOverrideCount)}
+            </span>
+          </span>
+        }
+      >
+        <div data-testid="comfig-modules" className="mt-3">
+          <ClassTabs
+            tabs={COMFIG_MODULE_GROUPS.map((group) => ({
+              id: group.id,
+              label: group.label,
+            }))}
+            selected={activeGroupId}
+            label="Module categories"
+            idPrefix="comfig-module-tab"
+            panelId="comfig-module-panel"
+            onSelect={(id) => {
+              setActiveGroupId(id);
+              setModuleSearch("");
+              setShowAllModules(false);
+            }}
+          />
+          <label className="mt-3 block">
+            <span className="sr-only">Search {activeGroup.label} modules</span>
+            <input
+              type="search"
+              value={moduleSearch}
+              onChange={(event) => {
+                setModuleSearch(event.target.value);
+                setShowAllModules(false);
+              }}
+              placeholder={`Search ${activeGroup.label.toLowerCase()}…`}
+              className="field w-full px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+            />
+          </label>
+        </div>
 
-        <PaneSection
-          id="comfig-addons"
-          title="Official addons"
-          meta={<span className="tnum">{state.addons.length} selected</span>}
-          first
+        <div
+          id="comfig-module-panel"
+          role="tabpanel"
+          aria-labelledby={`comfig-module-tab-${activeGroup.id}`}
+          className="mt-1"
         >
-          <div className="mt-2">
-            {OFFICIAL_ADDONS.map((item) => (
-              <SwitchRow
-                key={item.id}
-                id={`comfig-addon-input-${item.id}`}
-                testId={`comfig-addon-${item.id}`}
-                label={item.label}
-                description={OFFICIAL_ADDON_DETAILS[item.id]}
-                checked={state.addons.includes(item.id)}
-                disabled={
-                  locked ||
-                  (item.id === "transparent-viewmodels" &&
-                    !canUseTransparentViewmodels(detail?.layer ?? null))
-                }
-                onChange={() => {
-                  void onToggleAddon(item.id);
-                }}
-              />
-            ))}
-          </div>
-        </PaneSection>
-      </div>
+          {displayedModules.length > 0 ? (
+            <div>
+              {displayedModules.map((module) => (
+                <div key={module.id} className="border-b border-edge">
+                  <ModuleControl
+                    module={module}
+                    value={state.modules[module.id] ?? ""}
+                    locked={locked}
+                    onChange={(value) => updateModule(module.id, value)}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="px-5 py-10 text-center">
+              <p className="t-body text-ink">
+                No matching {activeGroup.label.toLowerCase()} modules.
+              </p>
+              <button
+                type="button"
+                onClick={() => setModuleSearch("")}
+                className="btn btn-ghost mt-3"
+              >
+                Clear search
+              </button>
+            </div>
+          )}
+        </div>
+
+        {hiddenModuleCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowAllModules(true)}
+            className="mt-3 w-full rounded-lg py-2.5 text-[13px] text-ink-muted transition-colors duration-150 hover:bg-panel hover:text-ink"
+          >
+            Show {hiddenModuleCount} more {activeGroup.label.toLowerCase()} modules
+          </button>
+        ) : showAllModules &&
+          !normalizedSearch &&
+          matchingModules.length > DEFAULT_VISIBLE_MODULES ? (
+          <button
+            type="button"
+            onClick={() => setShowAllModules(false)}
+            className="mt-3 w-full rounded-lg py-2.5 text-[13px] text-ink-muted transition-colors duration-150 hover:bg-panel hover:text-ink"
+          >
+            Show fewer modules
+          </button>
+        ) : null}
+      </Disclosure>
 
       <section className="section" aria-label="Comfig packages">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

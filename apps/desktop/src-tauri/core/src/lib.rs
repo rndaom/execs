@@ -4,6 +4,7 @@ pub mod archive;
 pub mod blob;
 mod cfg_layer;
 pub mod cfg_script;
+pub mod class_icons;
 pub mod comfig;
 pub mod content_index;
 pub mod crosshair;

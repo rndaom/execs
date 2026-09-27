@@ -10,7 +10,7 @@ import {
 
 export { type CfgOrigin, classifyCfgOrigin, normalizeCfgPath } from "@execs/cfglint";
 
-import { startupCfgEntryPoints } from "./cfg-state";
+import { startupCfgAliases, startupCfgEntryPoints } from "./cfg-state";
 import type { GameplayLayer } from "./gameplay-ui";
 import { canWrite } from "./write-gate";
 
@@ -151,6 +151,7 @@ export function lintBundle(
   const result = lint(files, {
     ...engineManagedLintOptions(files, hudId),
     entryPoints: startupCfgEntryPoints(search, layer),
+    startupAliases: startupCfgAliases(layer),
   });
   return {
     ok: result.ok,

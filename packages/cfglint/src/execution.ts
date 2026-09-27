@@ -6,6 +6,8 @@ import type { Command, CvarValue } from "./types.ts";
 type ExecutionContext = {
   files: Map<string, { commands: Command[] }>;
   entryPoints: string[];
+  /** Loader-defined aliases available before the first entry point. */
+  startupAliases: Readonly<Record<string, string>>;
   resolveExec: (target: string) => string | null;
   payloadCommands: (payload: string, site: Command) => Command[];
   takeCommand: (at: Command) => boolean;
@@ -29,7 +31,12 @@ export function evaluateStartup(ctx: ExecutionContext): {
   const effective = new Map<string, CvarValue>();
   const binds = new Map<string, string>();
   const bindSources = new Map<string, { file: string; line: number }>();
-  const aliases = new Map<string, { payload: string; site: Command; malformed: boolean }>();
+  const aliases = new Map<string, { payload: string; site: Command | null; malformed: boolean }>();
+  // Loader definitions have no user file; their payload is reported at the
+  // line that invokes them.
+  for (const [name, payload] of Object.entries(ctx.startupAliases)) {
+    aliases.set(name.toLowerCase(), { payload, site: null, malformed: false });
+  }
   let complete = true;
 
   function stop(rule: string, message: string, at: Command) {
@@ -161,7 +168,10 @@ export function evaluateStartup(ctx: ExecutionContext): {
           );
           continue;
         }
-        commands(ctx.payloadCommands(alias.payload, alias.site), chain, [...aliasStack, name]);
+        commands(ctx.payloadCommands(alias.payload, alias.site ?? cmd), chain, [
+          ...aliasStack,
+          name,
+        ]);
       } else {
         stop(
           "execution-incomplete",

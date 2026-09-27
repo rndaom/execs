@@ -93,6 +93,12 @@ pub async fn get_stock_crosshair_sprites(
     with_root(|root| Ok(execs_core::extract_stock_crosshair_sprites(&root)?)).await
 }
 
+/// TF2's class emblems from the player's own install, for interface icons.
+#[tauri::command]
+pub async fn get_class_icons() -> Result<BTreeMap<String, StockCrosshairSprite>, CommandError> {
+    with_root(|root| Ok(execs_core::class_icons::extract_class_icons(&root)?)).await
+}
+
 /// Candidate custom-pack members that could replace Valve's stock preview art.
 /// The index deliberately does not claim a runtime winner.
 #[tauri::command]

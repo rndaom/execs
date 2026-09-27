@@ -11,6 +11,7 @@ export {
   engineManagedLintOptions,
   normalizeCfgPath,
 } from "./lint-options.ts";
+export { MASTERCOMFIG_STARTUP_ALIASES } from "./mastercomfig-aliases.ts";
 export { parseCommands } from "./parser.ts";
 export { createCfgResolver } from "./search-paths.ts";
 export { sourceOffset, sourcePosition, tokenizeCommands } from "./tokenizer.ts";

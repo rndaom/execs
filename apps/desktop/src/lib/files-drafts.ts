@@ -31,6 +31,30 @@ export function createFilesDraftStore() {
     entry.missingReviewed === true ||
     entry.text !== entry.baseline ||
     entry.source !== entry.baseline;
+  // Which profiles have unsaved Files work, for the sidebar's change dot.
+  // Notify after the current task: drafts are also read during render.
+  const listeners = new Set<() => void>();
+  let dirtySignature = "";
+  let version = 0;
+  let pending = false;
+  const signature = () =>
+    [...drafts]
+      .filter(([, entry]) => isDirty(entry))
+      .map(([id]) => id)
+      .sort()
+      .join("\n");
+  const changed = () => {
+    if (pending) return;
+    pending = true;
+    queueMicrotask(() => {
+      pending = false;
+      const next = signature();
+      if (next === dirtySignature) return;
+      dirtySignature = next;
+      version += 1;
+      for (const listener of listeners) listener();
+    });
+  };
   const documents = (profile: string | null): DraftDocument[] =>
     [...drafts].flatMap(([id, entry]) => {
       const [owner, path] = JSON.parse(id) as [string | null, string];
@@ -38,6 +62,20 @@ export function createFilesDraftStore() {
     });
   return {
     documents,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    /** Changes whenever the set of files with unsaved edits changes. */
+    getVersion: () => version,
+    hasDirty(profile: string | null) {
+      return [...drafts].some(
+        ([id, entry]) =>
+          (JSON.parse(id) as [string | null, string])[0] === profile && isDirty(entry),
+      );
+    },
     dirty(): DirtyFileDraft[] {
       return [...drafts]
         .filter(([, entry]) => isDirty(entry))
@@ -54,6 +92,7 @@ export function createFilesDraftStore() {
         });
     },
     discardAll() {
+      changed();
       for (const [id, entry] of drafts) {
         if (entry.created || entry.missing) drafts.delete(id);
         else {
@@ -65,6 +104,7 @@ export function createFilesDraftStore() {
       }
     },
     read(profile: string | null, path: string, source: string, expected?: FilesSource): string {
+      changed();
       const id = key(profile, path);
       const entry = drafts.get(id);
       if (!entry) {
@@ -99,6 +139,7 @@ export function createFilesDraftStore() {
       return entry.text;
     },
     markMissing(profile: string | null, paths: Set<string>) {
+      changed();
       for (const [id, entry] of drafts) {
         const [owner, path] = JSON.parse(id) as [string | null, string];
         if (owner === profile && !entry.created && !paths.has(path)) {
@@ -108,6 +149,7 @@ export function createFilesDraftStore() {
       }
     },
     create(profile: string | null, path: string, expected: FilesSource, text = "") {
+      changed();
       if (drafts.has(key(profile, path))) return;
       drafts.set(key(profile, path), {
         text,
@@ -135,6 +177,7 @@ export function createFilesDraftStore() {
         : null;
     },
     edit(profile: string | null, path: string, text: string) {
+      changed();
       const entry = drafts.get(key(profile, path));
       if (entry && entry.text !== text) {
         entry.text = text;
@@ -142,6 +185,7 @@ export function createFilesDraftStore() {
       }
     },
     acknowledge(profile: string | null, path: string, submitted: string, expected?: FilesSource) {
+      changed();
       const entry = drafts.get(key(profile, path));
       if (entry) {
         entry.baseline = submitted;
@@ -158,6 +202,7 @@ export function createFilesDraftStore() {
     },
     /** The caller first shows current source and draft. Native still checks the reviewed source. */
     reviewCurrent(profile: string | null, path: string) {
+      changed();
       const entry = drafts.get(key(profile, path));
       if (!entry || (entry.missing && entry.currentExpected?.sha256 !== null)) return false;
       entry.missingReviewed = entry.missing;
@@ -167,6 +212,7 @@ export function createFilesDraftStore() {
       return true;
     },
     discard(profile: string | null, path: string, source?: string) {
+      changed();
       const entry = drafts.get(key(profile, path));
       if (entry?.created || entry?.missing) {
         drafts.delete(key(profile, path));

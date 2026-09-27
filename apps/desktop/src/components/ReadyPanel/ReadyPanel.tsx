@@ -13,6 +13,7 @@ import { SwitchProgressList } from "../SwitchProgressList";
 import { Modal } from "../ui/Modal";
 import { OperationError } from "../ui/OperationError";
 import { Loading } from "../ui/Spinner";
+import { SaveAlertSlot } from "../ui/Toast";
 import { FolderRepair } from "./FolderRepair";
 import { PackPrompt } from "./PackPrompt";
 import { ProfileMenu } from "./ProfileMenu";
@@ -163,6 +164,7 @@ export function ReadyPanel({
           />
         }
       />
+      <SaveAlertSlot />
 
       {unsafeActive ? (
         <div

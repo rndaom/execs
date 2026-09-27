@@ -1013,6 +1013,11 @@ export function createPreviewApi(state: PreviewState): Api {
     async getStockCrosshairSprites() {
       throw notInPreview("Stock crosshair sprites");
     },
+    // Class emblems come from the user's own TF2 files; the browser preview
+    // has none, so every class falls back to its name.
+    async getClassIcons() {
+      return {};
+    },
     async getCrosshairContentSources() {
       return { hits: {}, incomplete: [] };
     },

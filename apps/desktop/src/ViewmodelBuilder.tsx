@@ -1,5 +1,6 @@
 import { ArrowClockwise, MagnifyingGlass } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ClassIcon } from "./components/ui/ClassIcon";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { Modal } from "./components/ui/Modal";
 import { Segmented } from "./components/ui/Segmented";
@@ -388,7 +389,12 @@ function ViewmodelCatalogChoices({
         <ClassTabs
           tabs={classes.map((name) => ({
             id: name,
-            label: viewmodelClassLabel(name),
+            label: (
+              <>
+                <ClassIcon classId={name} size={16} />
+                {viewmodelClassLabel(name)}
+              </>
+            ),
             meta: hiddenIn(name) || undefined,
           }))}
           selected={selectedClass}

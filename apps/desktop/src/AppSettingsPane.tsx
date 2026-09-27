@@ -55,7 +55,7 @@ function SettingsSection({
   return (
     <section
       aria-labelledby={id}
-      className="surface grid min-w-0 gap-3 px-4 py-3 md:grid-cols-[minmax(160px,0.5fr)_minmax(0,1fr)] md:gap-5"
+      className="grid min-w-0 gap-3 border-edge border-t pt-5 pb-2 first:border-t-0 first:pt-0 md:grid-cols-[minmax(160px,0.5fr)_minmax(0,1fr)] md:gap-5"
     >
       <div>
         <h2 id={id} className="t-section">
@@ -63,7 +63,7 @@ function SettingsSection({
         </h2>
         {description ? <p className="t-meta mt-1.5 max-w-[28ch]">{description}</p> : null}
       </div>
-      <div className="min-w-0 md:border-l md:border-edge md:pl-5">{children}</div>
+      <div className="min-w-0">{children}</div>
     </section>
   );
 }
@@ -164,7 +164,7 @@ export function AppSettingsPane({
       ) : null}
       {actionError ? <Alert className="mb-6">{actionError}</Alert> : null}
 
-      <div className="space-y-3" aria-busy={settings.loading || settings.saving}>
+      <div className="space-y-5" aria-busy={settings.loading || settings.saving}>
         <SettingsSection id="app-appearance" title="Appearance">
           <div className="flex min-h-11 flex-wrap items-center justify-between gap-3">
             <span className="t-row">Motion</span>
@@ -361,6 +361,10 @@ export function AppSettingsPane({
           </SettingsSection>
         ) : null}
       </div>
+      <p className="t-meta mt-6">
+        execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress
+        and Steam are trademarks of Valve Corporation.
+      </p>
     </div>
   );
 }
