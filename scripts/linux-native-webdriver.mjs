@@ -18,6 +18,19 @@ export async function waitUntil(label, check, timeout = 15_000) {
   throw new Error(`Timed out: ${label}`, { cause: lastError });
 }
 
+/**
+ * The startup screen covers an inert app until the first screen's reads finish
+ * (at most about ten seconds), so the profile library can render before its
+ * controls accept input. Wait for the screen to leave before interacting.
+ */
+export function waitForStartupScreen(driver) {
+  return waitUntil(
+    "startup screen lifted",
+    () => driver.read('return !document.querySelector("[data-testid=boot-splash]");'),
+    30_000,
+  );
+}
+
 /** Small W3C client for the external Tauri driver; no IPC mocking or browser fallback. */
 export class NativeWebDriver {
   constructor(port) {
