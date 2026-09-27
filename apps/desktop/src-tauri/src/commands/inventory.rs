@@ -1,4 +1,4 @@
-//! Development inventory operations. Steam runs in a disposable
+//! Inventory reads and operations. Steam runs in a disposable
 //! child so SDK faults, environment changes and shutdown cannot affect Tauri.
 use super::shared::{with_root, RootContext};
 use crate::{error::CommandError, WriteGate};
@@ -34,7 +34,7 @@ fn failure(message: impl Into<String>) -> CommandError {
     CommandError::new("InventoryUnavailable", message)
 }
 
-const MUTATIONS_UNAVAILABLE: &str = "Inventory operations require a fresh native review and its single-use token. Legacy direct-write commands are refused; release builds remain disabled until qualification.";
+const MUTATIONS_UNAVAILABLE: &str = "Inventory operations require a fresh native review and its single-use token. Legacy direct-write commands are refused.";
 
 #[derive(Serialize)]
 pub struct InventoryCapabilities {
@@ -47,26 +47,10 @@ pub struct InventoryCapabilities {
 #[tauri::command]
 pub fn get_inventory_capabilities() -> InventoryCapabilities {
     InventoryCapabilities {
-        organizer: if cfg!(debug_assertions) {
-            "live"
-        } else {
-            "unavailable"
-        },
-        crafting: if cfg!(debug_assertions) {
-            "live"
-        } else {
-            "unavailable"
-        },
-        deletion: if cfg!(debug_assertions) {
-            "live"
-        } else {
-            "unavailable"
-        },
-        reason: if cfg!(debug_assertions) {
-            "Development build: reviewed operations change the signed-in Steam backpack. Release qualification is pending."
-        } else {
-            MUTATIONS_UNAVAILABLE
-        },
+        organizer: "live",
+        crafting: "live",
+        deletion: "live",
+        reason: "Reviewed operations change the signed-in Steam backpack.",
     }
 }
 
@@ -167,11 +151,6 @@ fn enrich(root: &std::path::Path, snapshot: Snapshot) -> Result<Inventory, Comma
 
 #[tauri::command]
 pub async fn get_inventory(gate: tauri::State<'_, WriteGate>) -> Result<Inventory, CommandError> {
-    if !cfg!(debug_assertions) {
-        return Err(failure(
-            "Inventory is currently available only in development builds.",
-        ));
-    }
     // Serialize against another connection and against Launch TF2/install changes.
     let _guard = gate.lock_for_interrupted_recovery().await?;
     with_root(|root| {
@@ -189,11 +168,6 @@ pub async fn get_inventory(gate: tauri::State<'_, WriteGate>) -> Result<Inventor
 pub async fn get_inventory_icons(
     paths: Vec<String>,
 ) -> Result<BTreeMap<String, execs_core::inventory::Icon>, CommandError> {
-    if !cfg!(debug_assertions) {
-        return Err(failure(
-            "Inventory is currently available only in development builds.",
-        ));
-    }
     with_root(move |root| execs_core::inventory::icons(&root, &paths).map_err(failure)).await
 }
 
@@ -205,11 +179,6 @@ pub async fn get_inventory_steam_items(
     asset_ids: Vec<String>,
     refresh: bool,
 ) -> Result<crate::steam_items_fetch::SteamItems, CommandError> {
-    if !cfg!(debug_assertions) {
-        return Err(failure(
-            "Inventory is currently available only in development builds.",
-        ));
-    }
     super::shared::blocking(move || {
         let data = execs_core::try_execs_data_dir().map_err(failure)?;
         crate::steam_items_fetch::items(&data, &steam_id, &asset_ids, refresh).map_err(failure)
@@ -223,11 +192,6 @@ pub async fn get_inventory_steam_image(
     image: String,
     size: u32,
 ) -> Result<tauri::ipc::Response, CommandError> {
-    if !cfg!(debug_assertions) {
-        return Err(failure(
-            "Inventory is currently available only in development builds.",
-        ));
-    }
     let bytes = super::shared::blocking(move || {
         let data = execs_core::try_execs_data_dir().map_err(failure)?;
         crate::steam_items_fetch::image(&data, &image, size).map_err(failure)
@@ -241,17 +205,17 @@ mod operation_gate_tests {
     use super::*;
 
     #[test]
-    fn unqualified_mutations_refuse_even_direct_ipc_requests() {
+    fn reviewed_operations_are_live_and_direct_ipc_writes_refuse() {
+        // Every build offers reviewed operations; only prepare/execute can send them.
         let capabilities = get_inventory_capabilities();
         assert_eq!(
-            capabilities.organizer,
-            if cfg!(debug_assertions) {
-                "live"
-            } else {
-                "unavailable"
-            }
+            [
+                capabilities.organizer,
+                capabilities.crafting,
+                capabilities.deletion
+            ],
+            ["live"; 3]
         );
-        assert_eq!(capabilities.crafting, capabilities.organizer);
         for request in [
             serde_json::Value::Null,
             serde_json::json!({

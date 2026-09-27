@@ -1547,19 +1547,17 @@ export function SettingsHost({
           )}
         </div>
       ) : null}
-      {import.meta.env.DEV ? (
-        <div hidden={!visible || tab !== "inventory"}>
-          <AutosaveActivity.Provider value={visible && tab === "inventory"}>
-            <InventoryPane
-              {...inventoryDraftGuard}
-              api={api}
-              active={visible && tab === "inventory"}
-              running={running}
-              busy={busy || externalBusy}
-            />
-          </AutosaveActivity.Provider>
-        </div>
-      ) : null}
+      <div hidden={!visible || tab !== "inventory"}>
+        <AutosaveActivity.Provider value={visible && tab === "inventory"}>
+          <InventoryPane
+            {...inventoryDraftGuard}
+            api={api}
+            active={visible && tab === "inventory"}
+            running={running}
+            busy={busy || externalBusy}
+          />
+        </AutosaveActivity.Provider>
+      </div>
       {[...visited.current.tabs].map((paneTab) => (
         <SettingsDraftBoundary
           key={`${profileId}:${paneTab}`}

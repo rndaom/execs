@@ -32,17 +32,15 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
 };
 
 /**
- * The sidebar reads as three short groups instead of one long list: what you
- * set up, how it looks, and everything else. A group with no label shows no
- * heading.
+ * The sidebar reads as short groups instead of one long list: what you set up,
+ * how it looks, everything else, and the Steam account's own Inventory. A group
+ * with no label shows no heading.
  */
 export const SETTINGS_TAB_GROUPS: { label: string; tabs: readonly SettingsTab[] }[] = [
   { label: "Setup", tabs: ["comfig", "binds", "gameplay"] },
   { label: "Look", tabs: ["hud", "crosshair", "viewmodels", "sounds"] },
   { label: "More", tabs: ["mods", "files", "launch"] },
-  ...(import.meta.env.DEV
-    ? [{ label: "Steam", tabs: ["inventory"] as readonly SettingsTab[] }]
-    : []),
+  { label: "Steam", tabs: ["inventory"] },
 ];
 
 export function showSettingsChrome(library: ProfileLibrary | null): boolean {

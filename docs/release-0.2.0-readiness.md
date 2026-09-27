@@ -35,7 +35,7 @@ without reopening unrelated Done issues or claiming new platform acceptance.
   can be marked resolved in the release evidence.
 - Commit `c9169a76` restores the production comfig.app sound library and changes
   shared controls. This is an additional production delta requiring refreshed
-  package evidence even while Inventory remains development-only.
+  package evidence, as does Inventory now that release builds include it.
 - A later owner request adds a Sounds preview volume dock (preview level, mute
   and Stop; previews only, never TF2's cvars or files). The owner tried it in the
   development app. It is part of the same production delta.
@@ -78,19 +78,52 @@ crafting in the development app and reported that it works. Which recipes and
 counts were used was not specified, and Linux and packaged builds remain
 untested.
 
+## Owner decision: Inventory ships in 0.2.0
+
+On September 27, 2026 the owner decided that Inventory ships in 0.2.0: “it ships
+in 0.2.0, it's ready, I tested it, it's good.” This replaces the earlier plan to
+complete the [LIVE-TESTING.md](audits/2026-09-27-inventory-usability/LIVE-TESTING.md)
+acceptance before enabling Inventory in release builds.
+
+Release builds now include the Inventory sidebar entry and pane, its native read
+and operation commands, and the `--inventory-read` and `--inventory-operation`
+helper entry points. Only the release-build gating was removed. Single-use native
+review tokens, exact account/capacity/raw-item baselines, the durable intent
+journal written before any send, the write lock, reconciliation that never
+replays a mutation and the refusal of the old direct Apply/Craft commands are
+unchanged, and the browser test backpack keeps its simulator label.
+
+The decision adds no results that were not reported. The owner tested the
+Windows development app, including live crafting with unspecified recipes and
+counts; agents moved, consumed or deleted no live item. Inventory has not run on
+Linux or from a packaged build, and the candidate workflow's automated checks do
+not contact Steam. Release builds enforce the app's content security policy,
+which development builds do not; the pane's avatar, installed art and Steam
+renders are `data:` and `blob:` images, which that policy allows.
+
+Local Windows checks for this change: `pnpm test` (1,242 desktop tests, 170
+cfglint tests and 111 script checks; five Linux-only script checks skip), Biome,
+the production frontend build (existing large-chunk warning), rustfmt and
+workspace Clippy with warnings denied pass. New frontend tests load the sidebar
+groups and render the pane host with `DEV` off, and fail on the previous source;
+the capability test expects live operations in every build while the old direct
+commands still refuse. TF2 was open during the Rust workspace run: every
+Inventory test passed, and 386 fixtures in unchanged code stopped at the normal
+running-game guard, which was not bypassed, so the clean workspace result must
+come from hosted CI or a rerun with TF2 closed. A local release-profile
+executable (GUI subsystem; LTO off to save build time) answered
+`--inventory-read` and `--inventory-operation` through a pipe with one prefixed
+record each, refusing a missing Steam library and an empty request; rebuilt with
+the previous `main.rs`, both printed nothing. No Steam session was opened.
+
 ## Remaining delta before shipping 0.2.0
 
-Inventory is **still development-only in source**: production navigation and
-rendering exclude it, native release commands refuse, and release helper entry
-points cannot mutate. This is an explicit readiness item, not a claim that the
-new manager is already in the signed release candidate.
+Inventory is enabled in release builds in source, but no signed release
+candidate has contained it yet.
 
-1. Complete and record Inventory-specific live/platform acceptance using
-   [LIVE-TESTING.md](audits/2026-09-27-inventory-usability/LIVE-TESTING.md), including
-   exact in-game positions, the four metal recipes including a batch, a random
-   hat, deletion, refusal and unknown-outcome recovery, and Steam item art. Preserve the owner's positive interaction feedback.
-2. Enable the production Inventory surface and native entry points only with
-   that qualification, then integrate the final changes into the release branch.
+1. Integrate the Inventory release enablement into the release branch.
+2. Build the refreshed candidate in item 3 from a revision that includes it; the
+   earlier candidate hid Inventory and cannot attest to it.
 3. Integrate audit repairs, obtain green hosted Windows/Linux checks, and refresh
    the private signed candidate on the resulting revision. Verify the production
    Sounds and shared-control delta, package notices, and the signed upgrade from
