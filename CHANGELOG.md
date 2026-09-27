@@ -15,6 +15,12 @@ User-facing changes only. The release workflow publishes the matching
   emblem, and Viewmodels and Crosshair class tabs show TF2's class emblems read from your own game
   files. execs follows your system's reduced-motion setting, or your own Reduce preference in App
   settings.
+- Opening execs no longer shows a blank window and screens popping in piece by piece. A startup
+  screen with the spinning TF2 emblem says what execs is loading, waits until the first page is
+  ready, then hands its wordmark to the header as the page arrives: header, sidebar, then each
+  section in turn. Switching panes and profiles brings sections in the same way. On first run,
+  confirming your TF2 install now shows "Install confirmed" and the filled setup steps for a moment
+  before setup continues.
 - A quiet dot field sits behind every page: the TF2 emblem in orange dots, anchored in the bottom
   right corner. It clears away around text and controls so nothing is read over dots, and the dots
   near your pointer shift aside and settle back as it moves.
@@ -74,6 +80,7 @@ User-facing changes only. The release workflow publishes the matching
 - HUD: sort the catalog by TF2 HUDs listing activity and popularity. Creators without credit stay
   uncredited instead of getting invented names.
 - HUD: Return to TF2's stock HUD. The HUD and its options leave the profile; its folder is kept in
+- HUD: while a HUD installs or updates, its card shows the current step (downloading, checking the files, saving it), and the header says "Installing HUD…" instead of "Saving…". The installed HUD's card now carries a clear Installed label.
   a backup, and your other mods and settings stay the same.
 - Crosshair: the designer sits beside its preview and keeps unfinished designs. Saving a design to
   the library is separate from building the installed pack, and Shapes can start an editable
@@ -92,6 +99,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Development Inventory: crafting, smelting, moving and deleting no longer fail with "The backpack or signed-in account changed" when nothing changed. Steam gives the backpack a new version number on every connection, and execs now checks the items themselves instead.
+- Mods: choosing a GameBanana file works again. The file chooser opened at the bottom of the page under a dark overlay, so clicking it dismissed it; it now opens centred like every other dialog. Five other dialogs had the same problem and are fixed too.
+- Mods: GameBanana cards match the HUD catalog: a labelled Install button, an orange Installed label and outline, Manage for installed mods, and an overlay on the card while its files load or it installs. The header says "Installing mod…", "Importing mod…", "Removing mod…" or "Applying mods…" instead of "Saving…". The file chooser uses the app's selection tiles, and the import and remove dialogs open centred.
+- Crosshair no longer asks you to resolve pending changes when closing execs after you picked a custom shape and then went back to In-game mode, where there was no button to apply it.
 - Escape closes profile actions and returns focus to their button before closing the Profiles menu.
 - Binds, Gameplay, Crosshair and Sounds read your settings again when Comfig uses a preset other
   than the default, including Custom. The preset line mastercomfig reads first no longer stops
@@ -154,6 +165,7 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Changed
 
+- Viewmodels per weapon is much shorter: each class has one Shown / Hidden / Hands only choice for Primary, Secondary, Melee (and PDA for Engineer) plus one Inspect choice for every inspect animation. Setting a single weapon differently, such as keeping the Shortstop visible, is under Customize weapons, and Build review summarizes each class in one line.
 - Comfig modules no longer repeat the selected level as small text beside each module name.
 - Viewmodels builds from your own installed TF2 files instead of downloaded CompVMInstaller
   animations, and generated previews are gone. Packs built by earlier versions keep working.

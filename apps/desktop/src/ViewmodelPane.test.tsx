@@ -133,6 +133,16 @@ async function click(selector: string) {
   await act(async () => element(selector).click());
 }
 
+/** Set one weapon on its own from Customize weapons. */
+async function chooseWeapon(groupId: string, label: string) {
+  await click(`[data-testid="viewmodel-weapon"][data-group-id="${groupId}"]`);
+  const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button')].find(
+    (button) => button.textContent?.startsWith(label),
+  );
+  if (!item) throw new Error(`Missing ${label} menu item`);
+  await act(async () => item.click());
+}
+
 describe("Viewmodels source-derived draft", () => {
   it("shows class sections and short labels while release Build stays unavailable", async () => {
     await render(false, false);
@@ -141,14 +151,14 @@ describe("Viewmodels source-derived draft", () => {
     expect(box.textContent).not.toContain("Casual preload");
     expect(box.textContent).toContain("Every viewmodel is hidden in game");
     expect(box.textContent).toContain("Scattergun");
-    expect(box.querySelector('[data-testid="viewmodel-section-primary"]')?.textContent).toContain(
+    expect(box.querySelector('[data-testid="viewmodel-slot-primary"]')?.textContent).toContain(
       "Primary",
     );
     expect(box.textContent).toContain("Everything shown");
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
       true,
     );
-    await click('[data-testid="viewmodel-choice-scout/a-full"]');
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
       false,
     );
@@ -213,13 +223,18 @@ describe("Viewmodels source-derived draft", () => {
     expect(element('[data-testid="viewmodel-pack-status"]').textContent).toContain("Built");
     expect(element('[data-testid="viewmodel-saved-pack"]').textContent).toContain("Built in execs");
     expect(
-      element<HTMLInputElement>('[data-testid="viewmodel-choice-scout/a-weapon"]').checked,
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-weapon"]').checked,
     ).toBe(true);
-    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe("1 hidden");
-    await click('[data-testid="viewmodel-choice-scout/a-full"]');
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe("1 class changed");
+    // The Shortstop was saved as shown, so it is kept as a weapon set on its own.
+    expect(element('[data-testid="viewmodel-weapons"]').textContent).toContain("1 set on its own");
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
-      "1 hidden · not built yet",
+      "1 class changed · not built yet",
     );
+    expect(
+      element('[data-testid="viewmodel-weapon"][data-group-id="scout/b"]').dataset.choice,
+    ).toBe("shown");
   });
 
   it("keeps write operations disabled while TF2 runs or preload state is still loading", async () => {
@@ -240,7 +255,7 @@ describe("Viewmodels source-derived draft", () => {
 
   it("keeps a failed refresh stale and clears draft choices after installed sources change", async () => {
     await render();
-    await click('[data-testid="viewmodel-choice-scout/a-full"]');
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
       false,
     );
@@ -250,7 +265,7 @@ describe("Viewmodels source-derived draft", () => {
     expect(box.textContent).toContain("TF2 source read failed");
     expect(box.textContent).toContain("Scattergun");
     expect(
-      element<HTMLInputElement>('[data-testid="viewmodel-choice-scout/a-full"]').disabled,
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-full"]').disabled,
     ).toBe(true);
 
     getCatalog.mockResolvedValueOnce({
@@ -280,7 +295,7 @@ describe("Viewmodels source-derived draft", () => {
     await act(async () => document.dispatchEvent(new Event("visibilitychange")));
     expect(getCatalog).toHaveBeenCalledTimes(1);
 
-    await click('[data-testid="viewmodel-choice-scout/a-full"]');
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     await click('[data-testid="viewmodel-review-build"]');
     expect(box.querySelector('[data-testid="viewmodel-build-review"]')).not.toBeNull();
     paneActive = false;
@@ -301,9 +316,9 @@ describe("Viewmodels source-derived draft", () => {
     now += 3 * 60_000;
     paneActive = true;
     await render();
-    expect(element<HTMLInputElement>('[data-testid="viewmodel-choice-scout/a-full"]').checked).toBe(
-      true,
-    );
+    expect(
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-full"]').checked,
+    ).toBe(true);
     expect(getCatalog).toHaveBeenCalledTimes(2);
 
     focused = false;
@@ -316,7 +331,7 @@ describe("Viewmodels source-derived draft", () => {
 
   it("starts a fresh planning draft after switching profiles", async () => {
     await render();
-    await click('[data-testid="viewmodel-choice-scout/a-weapon"]');
+    await click('[data-testid="viewmodel-slot-choice-primary-weapon"]');
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
       false,
     );
@@ -331,15 +346,14 @@ describe("Viewmodels source-derived draft", () => {
 
   it("previews a whole-profile change, applies it only to the draft and can undo it", async () => {
     await render();
-    await click('[data-testid="viewmodel-choice-scout/a-weapon"]');
+    await click('[data-testid="viewmodel-slot-choice-primary-weapon"]');
     await click('[data-testid="viewmodel-presets"]');
     await click('[data-testid="viewmodel-preset-hide-all"]');
-    // Every row across both classes, with its exact change.
-    expect(element('[data-testid="viewmodel-preset-count"]').textContent).toBe("3 choices change:");
+    // Each class with the result it would have.
+    expect(element('[data-testid="viewmodel-preset-count"]').textContent).toBe("Afterwards:");
     const changes = element('[data-testid="viewmodel-preset-changes"]').textContent ?? "";
-    expect(changes).toContain("Hands only → Hidden");
-    expect(changes).toContain("Shown → Hidden");
-    expect(changes).toContain("Soldier");
+    expect(changes).toContain("ScoutPrimary hidden");
+    expect(changes).toContain("SoldierPrimary hidden");
 
     // Cancel leaves the custom selection exactly as it was.
     const cancel = [...box.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -347,19 +361,19 @@ describe("Viewmodels source-derived draft", () => {
     );
     await act(async () => cancel?.click());
     expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
-      "1 hidden · not built yet",
+      "1 class changed · not built yet",
     );
 
     await click('[data-testid="viewmodel-presets"]');
     await click('[data-testid="viewmodel-preset-hide-all"]');
     await click('[data-testid="viewmodel-preset-apply"]');
     expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
-      "3 hidden · not built yet",
+      "2 classes changed · not built yet",
     );
     expect(buildPack).not.toHaveBeenCalled();
     await click('[data-testid="viewmodel-preset-undo"]');
     expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
-      "1 hidden · not built yet",
+      "1 class changed · not built yet",
     );
     expect(box.querySelector('[data-testid="viewmodel-preset-undo"]')).toBeNull();
 
@@ -370,18 +384,23 @@ describe("Viewmodels source-derived draft", () => {
     expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
       "Everything shown",
     );
-    await click('[data-testid="viewmodel-choice-scout/b-full"]');
+    await chooseWeapon("scout/b", "Hidden");
     expect(box.querySelector('[data-testid="viewmodel-preset-undo"]')).toBeNull();
     await click('[data-testid="viewmodel-presets"]');
     await click('[data-testid="viewmodel-preset-keep-melee"]');
     await click('[data-testid="viewmodel-preset-mode-full"]');
-    expect(element('[data-testid="viewmodel-preset-count"]').textContent).toBe("2 choices change:");
+    expect(element('[data-testid="viewmodel-preset-changes"]').textContent).toContain(
+      "SoldierPrimary hidden",
+    );
   });
 
   it("identifies overlapping modes during review", async () => {
     await render();
-    await click('[data-testid="viewmodel-choice-scout/a-full"]');
-    await click('[data-testid="viewmodel-choice-scout/b-weapon"]');
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
+    await chooseWeapon("scout/b", "Hands only");
+    expect(element('[data-testid="viewmodel-conflict"]').textContent).toContain(
+      "Scattergun and Shortstop share animations",
+    );
     await click('[data-testid="viewmodel-review-build"]');
     expect(box.textContent).toContain("set differently");
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
@@ -397,7 +416,7 @@ describe("Viewmodels source-derived draft", () => {
     );
     buildPack = handler;
     await render(true);
-    await click('[data-testid="viewmodel-choice-scout/a-full"]');
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     await click('[data-testid="viewmodel-review-build"]');
     expect(box.textContent).toContain("Replaces this profile's viewmodel pack");
     const build = element<HTMLButtonElement>('[data-testid="viewmodel-build"]');
@@ -407,7 +426,10 @@ describe("Viewmodels source-derived draft", () => {
     expect(handler.mock.calls[0][0]).toEqual({
       catalog: catalog.catalog,
       sourceFingerprints: catalog.sourceFingerprints,
-      choices: [{ groupId: "scout/a", mode: "full" }],
+      choices: [
+        { groupId: "scout/a", mode: "full" },
+        { groupId: "scout/b", mode: "full" },
+      ],
       preload: true,
     });
     expect(box.textContent).toContain("Building from your TF2 files");
@@ -423,7 +445,7 @@ describe("Viewmodels source-derived draft", () => {
     buildPack = vi.fn(async () => true);
     running = true;
     await render();
-    await click('[data-testid="viewmodel-choice-scout/a-full"]');
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     await click('[data-testid="viewmodel-review-build"]');
     expect(box.textContent).toContain("Close TF2 before building");
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
@@ -432,7 +454,7 @@ describe("Viewmodels source-derived draft", () => {
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(false);
     await click('[data-testid="viewmodel-build-review"] .btn-ghost');
     expect(box.querySelector('[data-testid="viewmodel-build-review"]')).toBeNull();
-    await click('[data-testid="viewmodel-choice-scout/b-weapon"]');
+    await chooseWeapon("scout/b", "Hands only");
     await click('[data-testid="viewmodel-review-build"]');
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
     expect(buildPack).not.toHaveBeenCalled();

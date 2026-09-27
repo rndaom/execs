@@ -40,12 +40,12 @@ details[open] > .profile-menu-panel {
   animation: profile-menu-reveal var(--motion-move) var(--ease-out) backwards;
 }
 
-.settings-pane[data-switch="odd"],
+/* Settings panes arrive section by section from lib/entrance.ts; the Binds
+   category list keeps this single entrance. */
 #bind-category-panel[data-switch="odd"] {
   animation: pane-switch-odd var(--motion-move) var(--ease-out) backwards;
 }
 
-.settings-pane[data-switch="even"],
 #bind-category-panel[data-switch="even"] {
   animation: pane-switch-even var(--motion-move) var(--ease-out) backwards;
 }

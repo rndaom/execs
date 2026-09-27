@@ -125,11 +125,12 @@ fn version(snapshot: &Snapshot) -> Result<u64, String> {
         .map_err(|_| "Invalid cache version".into())
 }
 
-/// Compare complete authoritative data, allowing presentation-only persona/avatar changes.
+/// Compare complete authoritative item data, allowing presentation-only
+/// persona/avatar changes. The cache version is not compared: Steam advances it
+/// on each connection even when no item changed.
 pub fn same_inventory(left: &Snapshot, right: &Snapshot) -> bool {
     left.steam_id == right.steam_id
         && left.capacity == right.capacity
-        && left.cache_version == right.cache_version
         && index(left)
             .ok()
             .zip(index(right).ok())
@@ -329,6 +330,11 @@ impl Session {
         if !same_inventory(&self.request.baseline, fresh) {
             return Err("Inventory changed since review; review it again".into());
         }
+        // Confirmation must come from a cache newer than the one read just
+        // before sending, not merely newer than the reviewed connection's.
+        let current = version(fresh)?;
+        self.request.baseline.cache_version = fresh.cache_version.clone();
+        self.highest_version = self.highest_version.max(current);
         let message = self.message()?;
         self.sent = true;
         Ok(message)
@@ -621,6 +627,24 @@ mod tests {
         assert_eq!(kind, protocol::PROTOBUF | 1100);
         assert!(session.sent);
         assert!(session.prepare_send(&request.baseline).is_err());
+    }
+
+    #[test]
+    fn a_new_connection_version_with_unchanged_items_sends_and_rebinds_confirmation() {
+        let request = layout();
+        let mut session = Session::new(request).unwrap();
+        // Steam advanced the cache version between review and send; no item changed.
+        let reconnected = snapshot(5, &[(1, 5000, 1), (2, 5001, 2)]);
+        session.prepare_send(&reconnected).unwrap();
+        assert!(session.sent);
+        // A cache no newer than the one read just before sending cannot confirm.
+        let moved_at_old_version = snapshot(5, &[(1, 5000, 3), (2, 5001, 2)]);
+        assert!(session.confirm(&moved_at_old_version).unwrap().is_none());
+        let moved = snapshot(6, &[(1, 5000, 3), (2, 5001, 2)]);
+        assert_eq!(
+            session.confirm(&moved).unwrap().unwrap().status,
+            OperationStatus::Confirmed
+        );
     }
 
     #[test]

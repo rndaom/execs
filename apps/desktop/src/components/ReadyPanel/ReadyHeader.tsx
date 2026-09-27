@@ -42,14 +42,18 @@ export function ReadyHeader({
   const reasonId = useId();
 
   return (
-    <header className="relative z-40 flex h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 max-sm:h-auto max-sm:min-h-14 max-sm:flex-wrap max-sm:gap-y-2 max-sm:py-2 sm:px-6">
-      <div className="mr-1 flex shrink-0 items-center gap-2">
+    <header
+      data-reveal="header"
+      className="relative z-40 flex h-14 shrink-0 items-center gap-4 border-b border-edge bg-panel px-4 max-sm:h-auto max-sm:min-h-14 max-sm:flex-wrap max-sm:gap-y-2 max-sm:py-2 sm:px-6"
+    >
+      <div data-wordmark="" className="mr-1 flex shrink-0 items-center gap-2">
         {/* A fresh node per completed save replays the pop exactly once. */}
         <span
           key={`dot-${activity.saved}`}
           aria-hidden="true"
           data-saving={activity.kind === "saving" ? "true" : undefined}
           data-pop={activity.saved > 0 ? "true" : undefined}
+          data-wordmark-dot=""
           className="brand-dot size-2.5 rounded-full bg-brand"
         />
         <span className="text-[18px] font-semibold tracking-tight text-ink">execs</span>

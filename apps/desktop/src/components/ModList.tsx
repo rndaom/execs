@@ -50,8 +50,13 @@ export function ModList({
 
   return (
     <PaneSection
-      title="Custom packs"
-      description="The packs in this profile’s custom folder."
+      // Under the Custom packs tab the tab already names the list.
+      title={showImport ? "Custom packs" : <span className="sr-only">Custom packs</span>}
+      description={
+        showImport
+          ? "The packs in this profile’s custom folder."
+          : `${mods.length} ${mods.length === 1 ? "pack" : "packs"} in this profile’s custom folder.`
+      }
       id="mods-yours"
       first={first}
       meta={
@@ -62,11 +67,7 @@ export function ModList({
             onImportArchive={onImportArchive}
             onImportFolder={onImportFolder}
           />
-        ) : (
-          <span className="t-meta tnum">
-            {mods.length} {mods.length === 1 ? "pack" : "packs"}
-          </span>
-        )
+        ) : undefined
       }
     >
       {locked ? (
@@ -158,7 +159,6 @@ export function ModList({
           testId="mods-remove-confirm"
           title={`Remove ${confirming.name}?`}
           description={`${formatModBytes(confirming.bytes)} will be removed from this profile and its active TF2 setup. ${confirming.source.kind === "gamebanana" ? "You can download it again from GameBanana." : "Keep the original file if you want to import it again."}`}
-          className="fixed top-24 left-1/2 z-50 w-[min(460px,calc(100vw-2.5rem))] -translate-x-1/2"
           onClose={() => setConfirming(null)}
         >
           {current && selectedParticleMods.includes(current.id) ? (
@@ -178,7 +178,7 @@ export function ModList({
             <button
               type="button"
               data-testid="mods-remove-confirm-yes"
-              className="btn btn-primary"
+              className="btn btn-danger"
               disabled={removalBlocked}
               onClick={() => {
                 if (removalBlocked) return;

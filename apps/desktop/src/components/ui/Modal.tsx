@@ -11,6 +11,14 @@ type ModalEntry = {
   restoreTo: HTMLElement | null;
 };
 
+/**
+ * Where a dialog sits when its caller does not place it: centred over the
+ * scrim. Without this a dialog renders in page flow, below the scrim, where
+ * clicks land on the scrim and dismiss it.
+ */
+const CENTERED =
+  "fixed top-1/2 left-1/2 max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6";
+
 const stacks = new WeakMap<Document, ModalEntry[]>();
 let nextOrder = 0;
 
@@ -220,7 +228,9 @@ export function Modal({
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         tabIndex={-1}
-        className={`overlay overlay-enter p-4 text-left ${className}`.trim()}
+        className={`overlay overlay-enter p-4 text-left ${/(^|\s)fixed(\s|$)/.test(className) ? "" : CENTERED} ${className}`
+          .replace(/\s+/g, " ")
+          .trim()}
       >
         <p id={titleId} className={hideTitle ? "sr-only" : "t-section"}>
           {title}

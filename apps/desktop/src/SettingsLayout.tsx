@@ -1,6 +1,7 @@
 import { Component, createRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { DotBackdrop } from "./components/DotBackdrop";
 import { SETTINGS_TAB_ICONS } from "./components/ui/tabIcons";
+import { contentBlocks, revealBlocks } from "./lib/entrance";
 import { SETTINGS_TAB_GROUPS, SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 
 type WorkspaceTab = SettingsTab | "app";
@@ -27,7 +28,6 @@ class PaneScrollRegion extends Component<ScrollRegionProps> {
   private positions = new Map<WorkspaceTab, number>();
   private pendingRestore: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
-  private transitionPhase = 0;
 
   componentDidMount() {
     if (typeof ResizeObserver === "undefined" || !this.content.current) return;
@@ -59,13 +59,9 @@ class PaneScrollRegion extends Component<ScrollRegionProps> {
     this.pendingRestore = this.positions.get(this.props.tab) ?? 0;
     this.restorePending();
     if (previous.tab !== this.props.tab) {
-      // Alternate identical animations so a rapid second tab switch starts a
-      // fresh entrance without remounting the pane or losing its drafts.
-      this.transitionPhase += 1;
-      this.pane.current?.setAttribute(
-        "data-switch",
-        this.transitionPhase % 2 === 1 ? "odd" : "even",
-      );
+      // The retained pane arrives section by section; a rapid second switch
+      // restarts the entrance without remounting the pane or losing drafts.
+      revealBlocks(contentBlocks(this.pane.current), { step: 35, distance: 6, duration: 260 });
     }
   }
 
