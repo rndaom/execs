@@ -27,8 +27,14 @@ export const OFFICIAL_ADDON_DETAILS: Record<OfficialAddon, string> = {
   lowmem: "Reduce memory use on limited systems.",
   "null-canceling-movement": "Keep opposite movement keys responsive.",
   "flat-mouse": "Use direct, unaccelerated mouse input.",
-  "transparent-viewmodels": "Make weapon viewmodels transparent.",
+  "transparent-viewmodels":
+    "Official mastercomfig addon. Requires DirectX 9 and a supporting HUD; disables post-processing and anti-aliasing. execs cannot verify HUD support.",
 };
+
+/** This official addon is part of a Comfig profile, even before packages are installed. */
+export function canUseTransparentViewmodels(layer: ProfileDetail["layer"] | null): boolean {
+  return layer === "comfig";
+}
 
 export function defaultComfigState(): ComfigUiState {
   return {

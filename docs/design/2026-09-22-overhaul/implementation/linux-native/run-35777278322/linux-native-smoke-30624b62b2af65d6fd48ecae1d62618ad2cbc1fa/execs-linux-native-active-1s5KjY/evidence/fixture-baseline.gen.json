@@ -1,0 +1,162 @@
+{
+  "parent": "/home/runner/work/_temp",
+  "scratch": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY",
+  "childEnv": {
+    "HOME": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/home",
+    "XDG_DATA_HOME": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/data",
+    "XDG_CONFIG_HOME": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/config",
+    "XDG_CACHE_HOME": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/cache",
+    "XDG_RUNTIME_DIR": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/runtime",
+    "TMPDIR": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/tmp"
+  },
+  "data": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/data/execs",
+  "library": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/data/execs/profiles",
+  "tf2Root": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/fixture-tf2",
+  "profileId": "f2000002-0000-4000-8000-000000000001",
+  "otherProfileId": "f2000002-0000-4000-8000-000000000002",
+  "activeId": "f2000002-0000-4000-8000-000000000001",
+  "helperPath": "tf/cfg/native-fixture.cfg",
+  "configPath": "tf/cfg/config.cfg",
+  "settings": {
+    "schema": 1,
+    "tf2Root": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/fixture-tf2",
+    "preferences": {
+      "checkForUpdatesOnStartup": false,
+      "motion": "system"
+    }
+  },
+  "metadata": {
+    "f2000002-0000-4000-8000-000000000001/manifest.json": {
+      "schema": 1,
+      "id": "f2000002-0000-4000-8000-000000000001",
+      "name": "Native Files A",
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/fixture-tf2",
+      "launchOptions": "",
+      "launchSyncPending": false,
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/native-fixture.cfg",
+          "sha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+          "storage": "exclusive"
+        }
+      ],
+      "hudRoots": [],
+      "preloader": {
+        "addons": [],
+        "particleMods": [],
+        "profileParticleMods": []
+      }
+    },
+    "f2000002-0000-4000-8000-000000000002/manifest.json": {
+      "schema": 1,
+      "id": "f2000002-0000-4000-8000-000000000002",
+      "name": "Native Files B",
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/fixture-tf2",
+      "launchOptions": "",
+      "launchSyncPending": false,
+      "files": [
+        {
+          "path": "tf/cfg/config.cfg",
+          "sha256": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+          "storage": "exclusive"
+        },
+        {
+          "path": "tf/cfg/native-fixture.cfg",
+          "sha256": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+          "storage": "exclusive"
+        }
+      ],
+      "hudRoots": [],
+      "preloader": {
+        "addons": [],
+        "particleMods": [],
+        "profileParticleMods": []
+      }
+    },
+    "index.json": {
+      "schema": 1,
+      "tf2Root": "/home/runner/work/_temp/execs-linux-native-active-1s5KjY/fixture-tf2",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": [
+        {
+          "id": "f2000002-0000-4000-8000-000000000001",
+          "name": "Native Files A",
+          "createdAt": "2026-09-22T00:00:00Z",
+          "updatedAt": "2026-09-22T00:00:00Z"
+        },
+        {
+          "id": "f2000002-0000-4000-8000-000000000002",
+          "name": "Native Files B",
+          "createdAt": "2026-09-22T00:00:00Z",
+          "updatedAt": "2026-09-22T00:00:00Z"
+        }
+      ]
+    }
+  },
+  "libraryHashes": {
+    "f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+    "f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+    "f2000002-0000-4000-8000-000000000001/manifest.json": "ed8b9cc29ac4ae5cd472469614413240d3b508ec5c4f0f83987a667f4afb8d08",
+    "f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+    "f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+    "f2000002-0000-4000-8000-000000000002/manifest.json": "4948c864df6b819ea293a54bb23097287535478fb3d06b77b23ae5273835db0b",
+    "index.json": "f8fce597e9464142961a839e7bdba159d6870df5eb1edbab29870c02cbe65575"
+  },
+  "liveHashes": {
+    "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+    "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+    "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+    "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+  },
+  "settingsHash": "eb5cba39085a3ed94fa1c0cb46e56def4d16e35c9e7f9d880d002ddbe5de0e6d",
+  "helperText": "// A native Files fixture line 001\n// A native Files fixture line 002\n// A native Files fixture line 003\n// A native Files fixture line 004\n// A native Files fixture line 005\n// A native Files fixture line 006\n// A native Files fixture line 007\n// A native Files fixture line 008\n// A native Files fixture line 009\n// A native Files fixture line 010\n// A native Files fixture line 011\n// A native Files fixture line 012\n// A native Files fixture line 013\n// A native Files fixture line 014\n// A native Files fixture line 015\n// A native Files fixture line 016\n// A native Files fixture line 017\n// A native Files fixture line 018\n// A native Files fixture line 019\n// A native Files fixture line 020\n// A native Files fixture line 021\n// A native Files fixture line 022\n// A native Files fixture line 023\n// A native Files fixture line 024\n// A native Files fixture line 025\n// A native Files fixture line 026\n// A native Files fixture line 027\n// A native Files fixture line 028\n// A native Files fixture line 029\n// A native Files fixture line 030\n// A native Files fixture line 031\n// A native Files fixture line 032\n// A native Files fixture line 033\n// A native Files fixture line 034\n// A native Files fixture line 035\n// A native Files fixture line 036\n// A native Files fixture line 037\n// A native Files fixture line 038\n// A native Files fixture line 039\n// A native Files fixture line 040\n// A native Files fixture line 041\n// A native Files fixture line 042\n// A native Files fixture line 043\n// A native Files fixture line 044\n// A native Files fixture line 045\n// A native Files fixture line 046\n// A native Files fixture line 047\n// A native Files fixture line 048\n// A native Files fixture line 049\n// A native Files fixture line 050\n// A native Files fixture line 051\n// A native Files fixture line 052\n// A native Files fixture line 053\n// A native Files fixture line 054\n// A native Files fixture line 055\n// A native Files fixture line 056\n// A native Files fixture line 057\n// A native Files fixture line 058\n// A native Files fixture line 059\n// A native Files fixture line 060\n// A native Files fixture line 061\n// A native Files fixture line 062\n// A native Files fixture line 063\n// A native Files fixture line 064\n// A native Files fixture line 065\n// A native Files fixture line 066\n// A native Files fixture line 067\n// A native Files fixture line 068\n// A native Files fixture line 069\n// A native Files fixture line 070\n// A native Files fixture line 071\n// A native Files fixture line 072\n// A native Files fixture line 073\n// A native Files fixture line 074\n// A native Files fixture line 075\n// A native Files fixture line 076\n// A native Files fixture line 077\n// A native Files fixture line 078\n// A native Files fixture line 079\n// A horizontal selection owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-SELECTION-A\n// A native Files fixture line 081\n// A native Files fixture line 082\n// A native Files fixture line 083\n// A native Files fixture line 084\n// A native Files fixture line 085\n// A native Files fixture line 086\n// A native Files fixture line 087\n// A native Files fixture line 088\n// A native Files fixture line 089\n// A native Files fixture line 090\n// A native Files fixture line 091\n// A native Files fixture line 092\n// A native Files fixture line 093\n// A native Files fixture line 094\n// A native Files fixture line 095\n// A native Files fixture line 096\n// A native Files fixture line 097\n// A native Files fixture line 098\n// A native Files fixture line 099\n// A native Files fixture line 100\n// A native Files fixture line 101\n// A native Files fixture line 102\n// A native Files fixture line 103\n// A native Files fixture line 104\n// A native Files fixture line 105\n// A native Files fixture line 106\n// A native Files fixture line 107\n// A native Files fixture line 108\n// A native Files fixture line 109\n// A native Files fixture line 110\n// A native Files fixture line 111\n// A native Files fixture line 112\n// A native Files fixture line 113\n// A native Files fixture line 114\n// A native Files fixture line 115\n// A native Files fixture line 116\n// A native Files fixture line 117\n// A native Files fixture line 118\n// A native Files fixture line 119\n// A native Files fixture line 120\n// A native Files fixture line 121\n// A native Files fixture line 122\n// A native Files fixture line 123\n// A native Files fixture line 124\n// A native Files fixture line 125\n// A native Files fixture line 126\n// A native Files fixture line 127\n// A native Files fixture line 128\n// A original final sentinel\n",
+  "initialText": "// A native Files fixture line 001\n// A native Files fixture line 002\n// A native Files fixture line 003\n// A native Files fixture line 004\n// A native Files fixture line 005\n// A native Files fixture line 006\n// A native Files fixture line 007\n// A native Files fixture line 008\n// A native Files fixture line 009\n// A native Files fixture line 010\n// A native Files fixture line 011\n// A native Files fixture line 012\n// A native Files fixture line 013\n// A native Files fixture line 014\n// A native Files fixture line 015\n// A native Files fixture line 016\n// A native Files fixture line 017\n// A native Files fixture line 018\n// A native Files fixture line 019\n// A native Files fixture line 020\n// A native Files fixture line 021\n// A native Files fixture line 022\n// A native Files fixture line 023\n// A native Files fixture line 024\n// A native Files fixture line 025\n// A native Files fixture line 026\n// A native Files fixture line 027\n// A native Files fixture line 028\n// A native Files fixture line 029\n// A native Files fixture line 030\n// A native Files fixture line 031\n// A native Files fixture line 032\n// A native Files fixture line 033\n// A native Files fixture line 034\n// A native Files fixture line 035\n// A native Files fixture line 036\n// A native Files fixture line 037\n// A native Files fixture line 038\n// A native Files fixture line 039\n// A native Files fixture line 040\n// A native Files fixture line 041\n// A native Files fixture line 042\n// A native Files fixture line 043\n// A native Files fixture line 044\n// A native Files fixture line 045\n// A native Files fixture line 046\n// A native Files fixture line 047\n// A native Files fixture line 048\n// A native Files fixture line 049\n// A native Files fixture line 050\n// A native Files fixture line 051\n// A native Files fixture line 052\n// A native Files fixture line 053\n// A native Files fixture line 054\n// A native Files fixture line 055\n// A native Files fixture line 056\n// A native Files fixture line 057\n// A native Files fixture line 058\n// A native Files fixture line 059\n// A native Files fixture line 060\n// A native Files fixture line 061\n// A native Files fixture line 062\n// A native Files fixture line 063\n// A native Files fixture line 064\n// A native Files fixture line 065\n// A native Files fixture line 066\n// A native Files fixture line 067\n// A native Files fixture line 068\n// A native Files fixture line 069\n// A native Files fixture line 070\n// A native Files fixture line 071\n// A native Files fixture line 072\n// A native Files fixture line 073\n// A native Files fixture line 074\n// A native Files fixture line 075\n// A native Files fixture line 076\n// A native Files fixture line 077\n// A native Files fixture line 078\n// A native Files fixture line 079\n// A horizontal selection owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-SELECTION-A\n// A native Files fixture line 081\n// A native Files fixture line 082\n// A native Files fixture line 083\n// A native Files fixture line 084\n// A native Files fixture line 085\n// A native Files fixture line 086\n// A native Files fixture line 087\n// A native Files fixture line 088\n// A native Files fixture line 089\n// A native Files fixture line 090\n// A native Files fixture line 091\n// A native Files fixture line 092\n// A native Files fixture line 093\n// A native Files fixture line 094\n// A native Files fixture line 095\n// A native Files fixture line 096\n// A native Files fixture line 097\n// A native Files fixture line 098\n// A native Files fixture line 099\n// A native Files fixture line 100\n// A native Files fixture line 101\n// A native Files fixture line 102\n// A native Files fixture line 103\n// A native Files fixture line 104\n// A native Files fixture line 105\n// A native Files fixture line 106\n// A native Files fixture line 107\n// A native Files fixture line 108\n// A native Files fixture line 109\n// A native Files fixture line 110\n// A native Files fixture line 111\n// A native Files fixture line 112\n// A native Files fixture line 113\n// A native Files fixture line 114\n// A native Files fixture line 115\n// A native Files fixture line 116\n// A native Files fixture line 117\n// A native Files fixture line 118\n// A native Files fixture line 119\n// A native Files fixture line 120\n// A native Files fixture line 121\n// A native Files fixture line 122\n// A native Files fixture line 123\n// A native Files fixture line 124\n// A native Files fixture line 125\n// A native Files fixture line 126\n// A native Files fixture line 127\n// A native Files fixture line 128\n// A original final sentinel\n",
+  "otherText": "// B native Files fixture line 001\n// B native Files fixture line 002\n// B native Files fixture line 003\n// B native Files fixture line 004\n// B native Files fixture line 005\n// B native Files fixture line 006\n// B native Files fixture line 007\n// B native Files fixture line 008\n// B native Files fixture line 009\n// B native Files fixture line 010\n// B native Files fixture line 011\n// B native Files fixture line 012\n// B native Files fixture line 013\n// B native Files fixture line 014\n// B native Files fixture line 015\n// B native Files fixture line 016\n// B native Files fixture line 017\n// B native Files fixture line 018\n// B native Files fixture line 019\n// B native Files fixture line 020\n// B native Files fixture line 021\n// B native Files fixture line 022\n// B native Files fixture line 023\n// B native Files fixture line 024\n// B native Files fixture line 025\n// B native Files fixture line 026\n// B native Files fixture line 027\n// B native Files fixture line 028\n// B native Files fixture line 029\n// B native Files fixture line 030\n// B native Files fixture line 031\n// B native Files fixture line 032\n// B native Files fixture line 033\n// B native Files fixture line 034\n// B native Files fixture line 035\n// B native Files fixture line 036\n// B native Files fixture line 037\n// B native Files fixture line 038\n// B native Files fixture line 039\n// B native Files fixture line 040\n// B native Files fixture line 041\n// B native Files fixture line 042\n// B native Files fixture line 043\n// B native Files fixture line 044\n// B native Files fixture line 045\n// B native Files fixture line 046\n// B native Files fixture line 047\n// B native Files fixture line 048\n// B native Files fixture line 049\n// B native Files fixture line 050\n// B native Files fixture line 051\n// B native Files fixture line 052\n// B native Files fixture line 053\n// B native Files fixture line 054\n// B native Files fixture line 055\n// B native Files fixture line 056\n// B native Files fixture line 057\n// B native Files fixture line 058\n// B native Files fixture line 059\n// B native Files fixture line 060\n// B native Files fixture line 061\n// B native Files fixture line 062\n// B native Files fixture line 063\n// B native Files fixture line 064\n// B native Files fixture line 065\n// B native Files fixture line 066\n// B native Files fixture line 067\n// B native Files fixture line 068\n// B native Files fixture line 069\n// B native Files fixture line 070\n// B native Files fixture line 071\n// B native Files fixture line 072\n// B native Files fixture line 073\n// B native Files fixture line 074\n// B native Files fixture line 075\n// B native Files fixture line 076\n// B native Files fixture line 077\n// B native Files fixture line 078\n// B native Files fixture line 079\n// B horizontal selection owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-owned-fixture-SELECTION-B\n// B native Files fixture line 081\n// B native Files fixture line 082\n// B native Files fixture line 083\n// B native Files fixture line 084\n// B native Files fixture line 085\n// B native Files fixture line 086\n// B native Files fixture line 087\n// B native Files fixture line 088\n// B native Files fixture line 089\n// B native Files fixture line 090\n// B native Files fixture line 091\n// B native Files fixture line 092\n// B native Files fixture line 093\n// B native Files fixture line 094\n// B native Files fixture line 095\n// B native Files fixture line 096\n// B native Files fixture line 097\n// B native Files fixture line 098\n// B native Files fixture line 099\n// B native Files fixture line 100\n// B native Files fixture line 101\n// B native Files fixture line 102\n// B native Files fixture line 103\n// B native Files fixture line 104\n// B native Files fixture line 105\n// B native Files fixture line 106\n// B native Files fixture line 107\n// B native Files fixture line 108\n// B native Files fixture line 109\n// B native Files fixture line 110\n// B native Files fixture line 111\n// B native Files fixture line 112\n// B native Files fixture line 113\n// B native Files fixture line 114\n// B native Files fixture line 115\n// B native Files fixture line 116\n// B native Files fixture line 117\n// B native Files fixture line 118\n// B native Files fixture line 119\n// B native Files fixture line 120\n// B native Files fixture line 121\n// B native Files fixture line 122\n// B native Files fixture line 123\n// B native Files fixture line 124\n// B native Files fixture line 125\n// B native Files fixture line 126\n// B native Files fixture line 127\n// B native Files fixture line 128\n// B original final sentinel\n",
+  "selectionLine": 80,
+  "selectionText": "SELECTION-A",
+  "seededAt": "2026-09-22T20:03:40.722Z",
+  "dataTree": {
+    "files": {
+      "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+      "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "ed8b9cc29ac4ae5cd472469614413240d3b508ec5c4f0f83987a667f4afb8d08",
+      "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+      "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+      "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "4948c864df6b819ea293a54bb23097287535478fb3d06b77b23ae5273835db0b",
+      "profiles/index.json": "f8fce597e9464142961a839e7bdba159d6870df5eb1edbab29870c02cbe65575",
+      "settings.json": "eb5cba39085a3ed94fa1c0cb46e56def4d16e35c9e7f9d880d002ddbe5de0e6d"
+    },
+    "directories": [
+      "profiles",
+      "profiles/f2000002-0000-4000-8000-000000000001",
+      "profiles/f2000002-0000-4000-8000-000000000001/files",
+      "profiles/f2000002-0000-4000-8000-000000000001/files/tf",
+      "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg",
+      "profiles/f2000002-0000-4000-8000-000000000002",
+      "profiles/f2000002-0000-4000-8000-000000000002/files",
+      "profiles/f2000002-0000-4000-8000-000000000002/files/tf",
+      "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg"
+    ]
+  },
+  "liveTree": {
+    "files": {
+      "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+      "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+      "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+    },
+    "directories": [
+      "tf",
+      "tf/cfg",
+      "tf/custom"
+    ]
+  },
+  "provenance": {
+    "authored": "Two schema-1 Vanilla profiles with wholly authored cfg payloads and comment-only helpers; A active and mirrored exactly, B an unchanged control. No Steam or game executable. Not an upgrade test."
+  }
+}

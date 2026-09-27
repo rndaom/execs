@@ -1,0 +1,45 @@
+{
+  "processes": [
+    {
+      "pid": 5108,
+      "parent": 1852,
+      "executable": "D:\\a\\_temp\\execs-windows-package-OfHbbB\\downloads\\msedgedriver.exe",
+      "created": "2026-09-24T02:49:57.0898770Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-OfHbbB\\downloads\\msedgedriver.exe --port=56935",
+      "session": 2
+    },
+    {
+      "pid": 4832,
+      "parent": 5108,
+      "executable": "C:\\Windows\\system32\\conhost.exe",
+      "created": "2026-09-24T02:49:57.0953040Z",
+      "commandLine": "\\??\\C:\\Windows\\system32\\conhost.exe 0x4",
+      "session": 2
+    }
+  ],
+  "windows": [],
+  "version": "131.0.2903.86",
+  "process": {
+    "pid": 5108,
+    "parent": 1852,
+    "executable": "D:\\a\\_temp\\execs-windows-package-OfHbbB\\downloads\\msedgedriver.exe",
+    "created": "2026-09-24T02:49:57.0898770Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-OfHbbB\\downloads\\msedgedriver.exe --port=56935",
+    "session": 2
+  },
+  "packageCode": 15700,
+  "listeners": [
+    {
+      "port": 56935,
+      "address": "::1",
+      "pid": 5108
+    },
+    {
+      "port": 56935,
+      "address": "127.0.0.1",
+      "pid": 5108
+    }
+  ],
+  "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+  "uiDiagnostics": null
+}

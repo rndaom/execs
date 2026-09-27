@@ -1,0 +1,45 @@
+# Active native fixture isolation analysis
+
+Read-only source review on 2026-09-22 at product revision `03b406e973d5188347622f51e9b4518da713274e`. The source references below refer to that revision. No application or game was launched, no registry or OS-user configuration was changed, and no player files were read or written for this analysis.
+
+**The current Windows executable has no production isolation switch that redirects Steam discovery with the execs library.** A child-process `APPDATA` override isolates execs settings, profiles, caches and recovery state, but a confirmed synthetic TF2 root does not isolate the Steam account chosen for Cloud and launch-option writes. Therefore the existing inactive fixture must not be treated as an isolated active fixture merely by setting its active id.
+
+## Authoritative paths
+
+| Entry point | Source reference | Consequence for a Windows fixture |
+| --- | --- | --- |
+| execs data directory | `apps/desktop/src-tauri/core/src/settings.rs:83` | Windows reads `APPDATA`; Linux reads `XDG_DATA_HOME` and `HOME`. This boundary owns the execs library, not Steam discovery. |
+| Steam roots | `apps/desktop/src-tauri/core/src/finder.rs:218`, `:268` | Windows reads HKCU `Software\\Valve\\Steam` (`SteamPath`, `InstallPath`) and HKLM `SOFTWARE\\WOW6432Node\\Valve\\Steam` (`InstallPath`). It canonicalizes existing roots. Neither the confirmed TF2 root nor `APPDATA` is an input. |
+| Account selection | `apps/desktop/src-tauri/core/src/launch.rs:510` | Numeric `userdata/<id>` directories with a valid `config/localconfig.vdf` become candidates; `MostRecent` is preferred at line 562. No association with the confirmed TF2 root is required. |
+| Cloud destination | `apps/desktop/src-tauri/core/src/launch.rs:475`, `:488` | The existing Cloud file can be discovered for reads, and a destination can be returned even when `440/remote/cfg/config.cfg` does not exist yet. Containment is checked against the selected Steam root. |
+| Dual write | `apps/desktop/src-tauri/core/src/absorb.rs:162` | Writes the supplied root's `tf/cfg/config.cfg`, then the selected account's Cloud destination. The mutation guard checks TF2, not whether Steam is running. Keeping Steam open is not a Cloud-write barrier. |
+| Files save IPC | `apps/desktop/src-tauri/src/commands/files.rs:68` | Acquires the write gate and calls `files_workspace::save_to` with `WriteOwnedOptions::default()` at line 87. IPC exposes no Steam-root override. |
+| Active config save | `apps/desktop/src-tauri/core/src/apply.rs:222` | Only an active `tf/cfg/config.cfg` save sets `config_needs_cloud`; default options discover Steam roots at line 246 and dual-write at line 248. A failed Cloud projection leaves a durable retry marker. |
+| Profile switch IPC | `apps/desktop/src-tauri/src/commands/library.rs:123` | Supplies a discovered Cloud file and default Steam roots. Core switches dual-write target config at `core/src/switch.rs:291` and synchronize launch options at line 307. A same-profile retry can synchronize pending launch options at line 195. |
+| Launch-option destination | `apps/desktop/src-tauri/core/src/launch.rs:167` | With Steam closed, the chosen account's `localconfig.vdf` is backed up and atomically replaced. This is a separate Steam write from Cloud config. |
+
+The normal executable entry point (`apps/desktop/src-tauri/src/main.rs:4`) has no fixture mode. Its only special argument is the development Inventory read helper. No Steam-root environment override exists in the discovery path above.
+
+## Startup, close and pane behavior
+
+The renderer calls absorb after startup with TF2 closed and after an observed quit (`apps/desktop/src/hooks/useProfileLibrary.ts:176`, `:198`, `:210`). Native `commands/absorb.rs:10` takes the write gate and calls the production `absorb_owned`, which discovers the Cloud file and leaves `steam_roots: None` (`core/src/absorb.rs:195`).
+
+Absorb returns before file reconciliation when there is no active profile (`core/src/absorb.rs:220`). This is the relevant boundary for the existing inactive-library fixture. An active profile enters interrupted-write repair, live classification and library mutation. It dual-writes config only when config bytes drift or `cloud_sync_pending` is already true (`:232`, `:249`). It does **not** unconditionally rewrite Cloud on every boot. The live synthetic `tf/cfg/config.cfg` takes precedence over Cloud as an inventory source; when it is absent, Cloud is the fallback (`core/src/surface.rs:351`).
+
+Library loading can also recover a pending profile mutation (`apps/desktop/src-tauri/src/lib.rs:186`; `commands/shared.rs:197`). A fixture's lack of journals and recovery markers therefore matters independently of its active id. Preloader status itself reads launch options and local state (`commands/preloader.rs:197`); it does not synchronize launch options. No automatic launch-option retry was found in the normal read-only startup path; retry is attached to explicit switch/setter operations.
+
+The native close listener is real Tauri window behavior: it registers `onCloseRequested`, prevents close while drafts or writes exist, and destroys the window only through the approved continuation (`apps/desktop/src/hooks/useNativeCloseGuard.ts:35`). The exit guard awaits registered Files saves; native close may also flush unlocked settings autosaves (`hooks/useFilesExitGuard.tsx:42`, `:60`). A Files draft saved from the close dialog therefore reaches the same native save path described above. The close dialog is not a separate storage boundary.
+
+## What a restricted Windows interaction could establish
+
+An already active synthetic fixture with exact matching live/library `config.cfg`, `cloud_sync_pending: false`, no journals or recovery/preloader state, and no settings drafts would not take the boot Cloud-write branch. Reading Files, editing a helper CFG in memory, navigating away and back, cancelling/discarding close, or explicitly saving that non-config helper does not itself call the active-config dual writer (`core/src/apply.rs:224`). This supports a narrowly prescribed interaction if independently preflighted.
+
+It does not eliminate reachable Steam writes from the process: saving `config.cfg`, accepting a config retry/drift, switching profiles, or changing launch/preload settings still uses registry-discovered Steam roots. The renderer does not enforce a fixture-only restriction on those operations. A helper-only run would consequently be limited evidence for that exact path, not qualification of an isolated native Files workspace or its config-save behavior. This report does not authorize or execute that run.
+
+## Safe alternatives within the present implementation
+
+1. **Unmodified native IPC in an ephemeral Linux environment.** All non-Windows Steam candidates are below child-process `HOME` or `XDG_DATA_HOME` (`core/src/finder.rs:295`). Set both to fresh absolute directories owned by the harness, with a contained synthetic TF2 root and execs library. Assert the resolved execs directory and every discovered Steam root remain inside the fixture before launch. With no Steam candidate directories, discovery returns no accounts; to exercise the Cloud path, create one contained synthetic Steam account and compare its exact expected bytes. Use ordinary contained directories, no external symlinks, and either no `libraryfolders.vdf` or one naming only contained fixture libraries. A real Tauri window can then exercise Files save/close/pane behavior without a player account. This is a proposed run, not completed evidence; current `ci.yml:45` runs Rust checks/tests but no native window test.
+2. **Existing Windows core fixtures with explicit roots.** `files_workspace_tests.rs:34` passes `WriteOwnedOptions { steam_roots: Some(&[]) }`; its config retry test at line 240 uses a synthetic Steam account and verifies the eventual Cloud bytes. The public `files_workspace::save_to`, `absorb_owned_to`, and switch `_to` APIs already support bounded data-flow tests with explicit roots. These can establish exact bytes, drift/refusal and recovery behavior on Windows without the production discovery fallback. They do not exercise native IPC serialization or a real close event.
+3. **Retain the existing renderer integration coverage and its limit.** `useNativeCloseGuard.test.ts:65`, `useFilesExitGuard.test.ts:62`, `App.files-exit.test.ts:71`, `SettingsHost.files.test.tsx:123`, and `FilesPane.test.ts:178` cover close registration, awaited saves, cancellation/failure, and draft/pane retention with test doubles. They remain useful alongside core fixtures, but do not replace the unperformed native active-profile pass.
+
+A separate clean Windows VM/runner with no player Steam installation could provide a different environment boundary after its discovered roots are audited. Creating users or altering this workstation's registry is unnecessary for the proposed Linux route and was excluded from this task. No product override or acceptance criterion was added. The outstanding native active-profile qualification remains outstanding until its chosen isolated run is actually executed and recorded.

@@ -1,0 +1,10 @@
+{
+  "scenario": "StartupError",
+  "executable": "G:\\Projects\\execs\\apps\\desktop\\src-tauri\\target\\release\\execs.exe",
+  "executableSha256": "B8CCBBEA61023799956F9820D11A130FFBFF09257F0D47C45EF37126DAC56DE5",
+  "executableLength": 23439872,
+  "executableModifiedUtc": "2026-09-22T15:50:58.5054937Z",
+  "executableProductVersion": "0.2.0",
+  "markerSha256": "0D6CEAC6342CD664CD9816C782F27C9A121B145868292BCB0B1DF59CAC9325B5",
+  "preparedUtc": "2026-09-22T15:56:11.6041008Z"
+}

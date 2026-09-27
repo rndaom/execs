@@ -8,9 +8,87 @@ const autoexec = (text: string): CfgFile => ({ path: "tf/cfg/autoexec.cfg", text
 const profile = (files: CfgFile[]) => lint(files, engineManagedLintOptions(files));
 
 describe("startup execution is separate from safety scanning", () => {
+  it("does not guess the effect of uncatalogued cvar-shaped writes", () => {
+    const result = profile([
+      { path: "tf/cfg/config.cfg", text: "r_lightmap_bicubic_set 1\nviewmodel_fov 70" },
+      autoexec("viewwmodel_fov 90\nviewmodel_fov 90"),
+    ]);
+    expect(result.executionComplete).toBe(false);
+    expect(result.effective.size).toBe(0);
+    expect(result.findings.filter((finding) => finding.ruleId === "unknown-command")).toHaveLength(
+      1,
+    );
+    expect(
+      result.findings.find(
+        (finding) =>
+          finding.ruleId === "unknown-command" && finding.message.includes("viewwmodel_fov"),
+      )?.message,
+    ).toContain("did you mean `viewmodel_fov`");
+  });
+
+  it("refuses unknown control flow and unknown assignments", () => {
+    expect(profile([autoexec("viewmodel_fov 90\nplugin_action")]).executionComplete).toBe(false);
+    expect(profile([autoexec("viewmodel_fov 90\nplugin_setting 1")]).executionComplete).toBe(false);
+  });
+
+  it("leaves a malformed personal bind unresolved without losing later settings", () => {
+    const result = profile([
+      autoexec('bind p ""show_quest_log"\nbind w +forward\nviewmodel_fov 90'),
+    ]);
+    expect(result.executionComplete).toBe(true);
+    expect(result.binds.has("p")).toBe(false);
+    expect(result.binds.get("w")).toBe("+forward");
+    expect(result.effective.get("viewmodel_fov")?.value).toBe("90");
+    expect(result.findings.some((finding) => finding.ruleId === "syntax-quote")).toBe(true);
+    expect(lint([autoexec('bind p ""show_quest_log"')]).executionComplete).toBe(false);
+  });
+
+  it("keeps startup settings when unevenly quoted aliases are only defined", () => {
+    const files: CfgFile[] = [
+      autoexec("viewmodel_fov 90\nexec overrides/alias.cfg"),
+      {
+        path: "tf/cfg/overrides/alias.cfg",
+        text: [
+          'alias "dc" "disconnect"',
+          'alias "q" "quit; echo "quitting..."',
+          'alias "rt" "retry; echo "retrying..."',
+          'alias "ali" "exec overrides/alias.cfg; echo "Alias system loaded!"',
+        ].join("\n"),
+      },
+    ];
+    const result = profile(files);
+    expect(result.executionComplete).toBe(true);
+    expect(result.effective.get("viewmodel_fov")?.value).toBe("90");
+    expect(result.findings.some((finding) => finding.ruleId === "syntax-quote")).toBe(true);
+    expect(result.findings.some((finding) => finding.ruleId === "exec-cycle")).toBe(false);
+    expect(result.findings.some((finding) => finding.ruleId === "disruptive-bind")).toBe(false);
+  });
+
+  it("stops startup inference when an unevenly quoted alias is actually invoked", () => {
+    const result = profile([autoexec('alias "q" "quit; echo "quitting..."\nq')]);
+    expect(result.executionComplete).toBe(false);
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({
+        ruleId: "execution-incomplete",
+        message: expect.stringContaining("alias `q`"),
+      }),
+    );
+  });
+
+  it("does not treat a one-time alias reload as an exec cycle", () => {
+    const result = profile([
+      autoexec("exec overrides/alias.cfg\nali\nviewmodel_fov 90"),
+      { path: "tf/cfg/overrides/alias.cfg", text: 'alias ali "exec overrides/alias.cfg"' },
+    ]);
+    expect(result.executionComplete).toBe(true);
+    expect(result.effective.get("viewmodel_fov")?.value).toBe("90");
+    expect(result.findings.some((finding) => finding.ruleId === "exec-cycle")).toBe(false);
+  });
+
   it("keeps credential values out of derived settings and summaries", () => {
     const result = lint([autoexec("password private\nrcon_password secret")]);
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    expect(result.findings.filter((finding) => finding.ruleId === "rcon-password")).toHaveLength(2);
     expect(result.effective.has("password")).toBe(false);
     expect(result.effective.has("rcon_password")).toBe(false);
     expect(JSON.stringify(result.summary)).not.toContain("private");
@@ -39,7 +117,10 @@ describe("startup execution is separate from safety scanning", () => {
       { path: "tf/cfg/optional.cfg", text: 'alias never "unbindall"\n' },
     ]);
     expect(result.findings.filter((f) => f.tier === "block").map((f) => f.ruleId)).toEqual(
-      expect.arrayContaining(["rcon-password", "connect-redirect", "disruptive-bind", "unbindall"]),
+      expect.arrayContaining(["connect-redirect", "disruptive-bind", "unbindall"]),
+    );
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({ ruleId: "rcon-password", tier: "warn" }),
     );
     expect(result.ok).toBe(false);
   });

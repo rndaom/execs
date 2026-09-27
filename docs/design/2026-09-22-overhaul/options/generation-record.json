@@ -1,0 +1,99 @@
+{
+  "method": "Built-in image_gen",
+  "status": "All 15 boards generated, visually inspected and copied to workspace.",
+  "requestedCanvas": [3840, 2160],
+  "actualCanvas": [1672, 941],
+  "prompts": "prompts.json",
+  "records": [
+    {
+      "option": "01-foundry",
+      "board": "core",
+      "file": "options/01-foundry/01-core.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-1642707a-02c9-4899-85d9-dce1974fb208.png"
+    },
+    {
+      "option": "02-signal",
+      "board": "core",
+      "file": "options/02-signal/01-core.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-fdd59e6d-299b-4d8e-9666-73dfd25137f2.png"
+    },
+    {
+      "option": "03-afterhours",
+      "board": "core",
+      "file": "options/03-afterhours/01-core.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-20822063-efef-4f97-8de4-ebd69491ca9f.png"
+    },
+    {
+      "option": "01-foundry",
+      "board": "customization",
+      "file": "options/01-foundry/02-customization.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-1bb597a6-9a54-4ba6-8724-d381a901129a.png"
+    },
+    {
+      "option": "01-foundry",
+      "board": "workspaces",
+      "file": "options/01-foundry/03-workspaces.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-6060e024-f939-4ebc-8f8b-2837d46b4e23.png"
+    },
+    {
+      "option": "01-foundry",
+      "board": "profiles",
+      "file": "options/01-foundry/04-profiles.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-3dbdd0de-0e2d-467f-ab56-5824a89e4e56.png"
+    },
+    {
+      "option": "01-foundry",
+      "board": "states",
+      "file": "options/01-foundry/05-states.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-c5867e93-002d-45ab-9c8b-79eba525ce04.png"
+    },
+    {
+      "option": "02-signal",
+      "board": "customization",
+      "file": "options/02-signal/02-customization.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-63cea5bc-9050-416e-8a62-a91928f314ff.png"
+    },
+    {
+      "option": "02-signal",
+      "board": "workspaces",
+      "file": "options/02-signal/03-workspaces.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-087673c9-3ef8-452c-a7c1-25e0dda2b5aa.png"
+    },
+    {
+      "option": "02-signal",
+      "board": "profiles",
+      "file": "options/02-signal/04-profiles.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-7d1315b3-fce5-4f06-8e30-b5e95f46115b.png"
+    },
+    {
+      "option": "02-signal",
+      "board": "states",
+      "file": "options/02-signal/05-states.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-fce1fe37-2068-4cd4-815f-04a31a1db46b.png"
+    },
+    {
+      "option": "03-afterhours",
+      "board": "customization",
+      "file": "options/03-afterhours/02-customization.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-a3bbb333-4a3b-4672-8735-13004dd19009.png"
+    },
+    {
+      "option": "03-afterhours",
+      "board": "workspaces",
+      "file": "options/03-afterhours/03-workspaces.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-8f946870-a094-468f-9625-91bd53b5083c.png"
+    },
+    {
+      "option": "03-afterhours",
+      "board": "profiles",
+      "file": "options/03-afterhours/04-profiles.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-265ceedf-5893-450c-bdb2-954b69a869b4.png"
+    },
+    {
+      "option": "03-afterhours",
+      "board": "states",
+      "file": "options/03-afterhours/05-states.png",
+      "generation": "C:\\Users\\Random\\.codex\\generated_images\\01a0c833-7717-70f2-90d3-594fb124208f\\exec-8ae44ff3-c633-40cf-aad4-64554192195b.png"
+    }
+  ]
+}

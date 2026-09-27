@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "tf2Root": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\tf2-root",
+  "activeProfileId": null,
+  "profiles": [
+    {
+      "id": "ab24b740-19dc-4d52-8e99-a75d3f3334de",
+      "name": "QA inactive - no HUD",
+      "createdAt": "2026-09-22T17:14:12.2139984Z",
+      "updatedAt": "2026-09-22T17:14:12.2139984Z"
+    },
+    {
+      "id": "0d13e5ff-1adf-4606-aa0a-481e72ba253d",
+      "name": "QA inactive - single HUD",
+      "createdAt": "2026-09-22T17:14:12.2268953Z",
+      "updatedAt": "2026-09-22T17:14:12.2268953Z"
+    },
+    {
+      "id": "0e68d2e0-eb45-47da-8324-3bbdb5ef411e",
+      "name": "Actual public v0.1.8 export",
+      "createdAt": "2026-09-22T17:27:56Z",
+      "updatedAt": "2026-09-22T17:27:56Z"
+    }
+  ]
+}

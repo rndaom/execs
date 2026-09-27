@@ -26,6 +26,7 @@ import {
   ContextMenuSeparator,
 } from "./components/ui/ContextMenu";
 import { Segmented } from "./components/ui/Segmented";
+import { Loading } from "./components/ui/Spinner";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity } from "./hooks/useAutosave";
 import { useFilesAnalysis } from "./hooks/useFilesAnalysis";
@@ -60,6 +61,7 @@ type FilesPaneProps = {
   recoveryAvailable?: boolean;
   limited?: boolean;
   hudId: string | null;
+  reviewTarget?: { id: number; path: string; line: number } | null;
   draftStore: FilesDraftStore;
   closeReady?: boolean;
   onSave: (path: string, text: string, submission?: DirtyFileDraft) => Promise<boolean>;
@@ -76,6 +78,7 @@ function ProfileFilesPane({
   recoveryAvailable,
   limited,
   hudId,
+  reviewTarget,
   draftStore,
   closeReady = true,
   onSave,
@@ -88,6 +91,7 @@ function ProfileFilesPane({
   const [panel, setPanel] = useState<"problems" | "reference" | "new" | "saveAs" | null>(null);
   const [fileMenu, setFileMenu] = useState<(ContextMenuPosition & { path: string }) | null>(null);
   const [scope, setScope] = useState<"current" | "all">("current");
+  const [findingType, setFindingType] = useState<"issues" | "catalog">("issues");
   const [query, setQuery] = useState("");
   const [newKind, setNewKind] = useState<"startup" | "class" | "helper">("startup");
   const [newName, setNewName] = useState("autoexec");
@@ -105,13 +109,12 @@ function ProfileFilesPane({
     to?: number;
     focusOnly?: boolean;
   }>();
-  const [insertion, setInsertion] = useState<{ id: number; text: string }>();
-  const [snippet, setSnippet] = useState<string | null>(null);
   const [reviewConflict, setReviewConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const identity = useRef(0);
   const actionId = useRef(0);
+  const reviewedTarget = useRef<number | null>(null);
   const newCfgName = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (panel !== "new" || newKind !== "helper" || !active) return;
@@ -144,10 +147,11 @@ function ProfileFilesPane({
     () => ({
       profile: profileId,
       hudId,
+      layer: context?.layer ?? "vanilla",
       files: draftStore.documents(profileId).map(({ path, text }) => ({ path, text })),
       identity: `${profileId}:${++identity.current}`,
     }),
-    [profileId, files, hudId, revision, draftStore],
+    [profileId, files, hudId, context?.layer, revision, draftStore],
   );
   const analysis = useFilesAnalysis(snapshot, active);
   const findings = [
@@ -169,10 +173,17 @@ function ProfileFilesPane({
     blocking.length === 0 &&
     closeReady;
   const links = analysis.links;
-  const shownFindings = findings.filter((finding) =>
+  const typedFindings = findings.filter((finding) =>
+    import.meta.env.DEV && findingType === "catalog"
+      ? finding.tier === "info"
+      : finding.tier !== "info",
+  );
+  const shownFindings = typedFindings.filter((finding) =>
     scope === "all" ? true : finding.file === selected,
   );
-  const currentFindingCount = findings.filter((finding) => finding.file === selected).length;
+  const currentFindingCount = findings.filter(
+    (finding) => finding.file === selected && finding.tier !== "info",
+  ).length;
   const filtered = listed.filter(
     (file) => !query || file.path.toLowerCase().includes(query.toLowerCase()),
   );
@@ -260,6 +271,21 @@ function ProfileFilesPane({
     setReviewConflict(false);
     setTarget({ id: ++actionId.current, line, from, to });
   }
+  useEffect(() => {
+    if (!active || !reviewTarget || reviewedTarget.current === reviewTarget.id) return;
+    const file = listed.find(
+      (candidate) => candidate.path.toLowerCase() === reviewTarget.path.toLowerCase(),
+    );
+    if (!file) return;
+    reviewedTarget.current = reviewTarget.id;
+    draftStore.select(profileId, file.path);
+    setPicked(file.path);
+    setReviewConflict(false);
+    setTarget({ id: ++actionId.current, line: reviewTarget.line });
+    setScope("current");
+    setFindingType("issues");
+    setPanel("problems");
+  }, [active, reviewTarget, listed, draftStore, profileId]);
   function openFileMenu(event: ReactMouseEvent<HTMLButtonElement>, path: string) {
     event.preventDefault();
     setFileMenu({ path, x: event.clientX, y: event.clientY });
@@ -479,7 +505,7 @@ function ProfileFilesPane({
   return (
     <section data-testid="settings-files" className="flex min-h-0 min-w-0 flex-col gap-3 text-left">
       <header className="flex min-h-8 flex-wrap items-center justify-between gap-2">
-        <h2 className="t-section">Files</h2>
+        <h1 className="t-pane">Files</h1>
         {dirtyDocuments.length > 1 && (
           <button
             type="button"
@@ -560,7 +586,7 @@ function ProfileFilesPane({
                   <button
                     key={kind}
                     type="button"
-                    className="btn btn-ghost px-2 py-1"
+                    className="btn btn-ghost min-w-0 flex-1 px-1 py-1 text-xs"
                     aria-pressed={newKind === kind}
                     onClick={() => {
                       setNewKind(kind as "startup" | "class" | "helper");
@@ -616,7 +642,7 @@ function ProfileFilesPane({
                 </div>
               )}
               <p
-                className={`t-meta mt-3 ${creation.error ? "text-danger" : ""}`}
+                className={`t-meta mt-3 break-all ${creation.error ? "text-danger" : ""}`}
                 title={creation.path ?? undefined}
               >
                 {!context
@@ -670,7 +696,7 @@ function ProfileFilesPane({
                 destinations={destinationOptions}
               />
               <p
-                className={`t-meta mt-3 ${saveAsTarget.error || saveAsCollision ? "text-danger" : ""}`}
+                className={`t-meta mt-3 break-all ${saveAsTarget.error || saveAsCollision ? "text-danger" : ""}`}
                 title={saveAsTarget.path ?? undefined}
               >
                 {!context
@@ -855,7 +881,6 @@ function ProfileFilesPane({
               onShowHelp={() => setPanel("reference")}
               files={snapshot.files}
               target={target}
-              insertion={insertion}
               onCommandChange={setCommand}
               statusStart={
                 <div className="flex min-w-0 items-center gap-1">
@@ -876,10 +901,7 @@ function ProfileFilesPane({
                       panel === "reference" ? "bg-panel-raised text-ink" : "text-ink-muted"
                     }`}
                     aria-pressed={panel === "reference"}
-                    onClick={() => {
-                      if (panel === "reference") setSnippet(null);
-                      setPanel(panel === "reference" ? null : "reference");
-                    }}
+                    onClick={() => setPanel(panel === "reference" ? null : "reference")}
                   >
                     <BookOpenText size={14} aria-hidden="true" />
                     <span>Help</span>
@@ -986,10 +1008,7 @@ function ProfileFilesPane({
                   type="button"
                   className="rounded p-1 text-ink-muted hover:bg-panel-raised hover:text-ink focus-visible:outline"
                   aria-label={`Close ${panel === "problems" ? "Problems" : "Help"}`}
-                  onClick={() => {
-                    if (panel === "reference") setSnippet(null);
-                    setPanel(null);
-                  }}
+                  onClick={() => setPanel(null)}
                 >
                   <X size={15} aria-hidden="true" />
                 </button>
@@ -1009,7 +1028,10 @@ function ProfileFilesPane({
                             <span className="flex items-center gap-1.5">
                               This file
                               <span className="tabular-nums text-ink-muted">
-                                {findings.filter((finding) => finding.file === selected).length}
+                                {
+                                  typedFindings.filter((finding) => finding.file === selected)
+                                    .length
+                                }
                               </span>
                             </span>
                           ),
@@ -1019,17 +1041,41 @@ function ProfileFilesPane({
                           label: (
                             <span className="flex items-center gap-1.5">
                               All files
-                              <span className="tabular-nums text-ink-muted">{findings.length}</span>
+                              <span className="tabular-nums text-ink-muted">
+                                {typedFindings.length}
+                              </span>
                             </span>
                           ),
                         },
                       ]}
                     />
+                    {import.meta.env.DEV && (
+                      <>
+                        <Segmented
+                          label="Finding type"
+                          size="sm"
+                          value={findingType}
+                          onChange={setFindingType}
+                          options={[
+                            { id: "issues", label: "Issues" },
+                            { id: "catalog", label: "Catalog gaps" },
+                          ]}
+                        />
+                        {findingType === "catalog" && (
+                          <p className="t-meta mt-2">
+                            These commands are absent from the offline reference. That does not mean
+                            the cfg is invalid.
+                          </p>
+                        )}
+                      </>
+                    )}
                     {!analysis.result ? (
-                      <p className="t-meta mt-3">{analysis.error ?? "Checking…"}</p>
+                      <p className="t-meta mt-3">
+                        {analysis.error ?? <Loading>Checking…</Loading>}
+                      </p>
                     ) : shownFindings.length === 0 ? (
                       <p className="mt-3 rounded-lg border border-edge bg-panel-raised p-3 text-sm">
-                        Nothing to review here.
+                        {findingType === "catalog" ? "No catalog gaps here." : "No issues here."}
                       </p>
                     ) : (
                       <ul className="mt-3 grid gap-2">
@@ -1048,45 +1094,7 @@ function ProfileFilesPane({
                   </>
                 )}
 
-                {panel === "reference" && (
-                  <>
-                    {snippet !== null && (
-                      <section
-                        className="mb-4 border-edge border-b pb-4"
-                        aria-label="Snippet preview"
-                      >
-                        <h4 className="t-row">Insert into {selected}</h4>
-                        <pre className="my-2 whitespace-pre-wrap text-sm">{snippet}</pre>
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            disabled={!editable || !closeReady}
-                            className="btn btn-primary"
-                            onClick={() => {
-                              setInsertion({ id: ++actionId.current, text: snippet });
-                              setSnippet(null);
-                            }}
-                          >
-                            Insert
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-ghost"
-                            onClick={() => setSnippet(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </section>
-                    )}
-                    <FilesReference
-                      command={command}
-                      selectedPath={selected}
-                      editable={editable}
-                      onInsert={setSnippet}
-                    />
-                  </>
-                )}
+                {panel === "reference" && <FilesReference command={command} />}
               </div>
             </section>
           )}
@@ -1373,18 +1381,13 @@ function FindingRow({
             ? "Advisory"
             : finding.tier === "block"
               ? "Save restriction"
-              : "Warning"}
+              : finding.tier === "info"
+                ? "Catalog gap"
+                : "Warning"}
         </span>
       </div>
       <p className="mt-2 text-sm leading-5">{findingMessage(finding.message)}</p>
       {finding.via && <p className="t-meta mt-1">Via {finding.via}</p>}
-      <p className="t-meta mt-1">
-        {finding.advisory
-          ? "Read-only source"
-          : finding.tier === "block"
-            ? "Fix before saving"
-            : "Save is allowed"}
-      </p>
     </li>
   );
 }

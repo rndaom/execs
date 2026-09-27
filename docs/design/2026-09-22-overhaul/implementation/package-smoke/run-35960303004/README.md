@@ -1,0 +1,19 @@
+# Linux development packages: run 35960303004
+
+The [hosted run](https://github.com/rndaom/execs/actions/runs/35960303004) passed on draft PR #60 head `a9dc1a411afa6a4ca8b16f4acbdac9a866efc9da` through tested merge `6cb1274d51c53a540deb1670df689d80894f3086`. It built unsigned 0.2.0 development AppImage and Debian packages and authenticated the previous public v0.1.8 packages. It did not publish a release or exercise a signed updater.
+
+All three [structured cases](evidence/results.json) passed:
+
+- [AppImage upgrade](evidence/appimage-upgrade/results.json): public v0.1.8 launched from a read-only FUSE mount, exported a profile through its native UI, and closed. The candidate replaced the image, read the preserved setup, imported and switched to the exact export, then reopened with the selected cfg bytes intact.
+- [Debian upgrade](evidence/deb-upgrade/results.json): the public package installed and exported through its native UI; the candidate package upgraded it and passed the same import, switch, reopen, and installed-executable identity checks.
+- [Debian first install](evidence/deb-first-install/results.json): the candidate installed without a previous execs package, launched, read the authored setup, closed, and reopened with its cfg intact. This separate case has no old-UI export or import claim.
+
+The two retained old-UI exports each hash to `6f93d339d2c9cfdafaad7f3c754fbbe74b87a1023cd832a70802b429bc261bd2`; the bounded receipt verifies four payloads in each. Across 14, 15, and 8 preservation checkpoints respectively, original profile and payload hashes remain intact, isolated Steam discovery paths stay absent, and final fixture comparisons pass. All three candidate launch and reopen receipts report a native window; the final Files screenshots are legible and show the synthetic cfg.
+
+The optimized package build and notice gates passed. The generator checked notices for **466 dependency packages** and produced **1,656 builder system-package/common-license records**. The retained package receipt confirms `DEPENDENCIES.txt` exists in the extracted candidates and that the candidate AppImage omits the conflicting `libwayland-client`, `server`, `cursor` and `egl` families checked by the harness. It does **not** retain the complete packaged notice contents or an independent inventory of the candidate's runtime dynamic-library dependencies. Native launch on this Ubuntu 22.04 runner establishes runtime startup there, not broader distribution coverage.
+
+The separate [CI Linux native job](https://github.com/rndaom/execs/actions/runs/35960302999/job/107507243909) passed all **18** product proxy-binding loopback cases on the same PR head, including numeric IPv4/IPv6 proxy targets, original TLS host checks, redirect rebinding, private-address refusal, deadlines and SOCKS5h. This run did not exercise live CDN redirects or a signed package. Audit D8 remains open for its remaining qualification; Windows NSIS, retail TF2, Steam Cloud, media decoding, Wayland and other Linux distributions are outside this package run.
+
+[Artifact 10792625570](https://github.com/rndaom/execs/actions/runs/35960303004/artifacts/10792625570) contains **45** fixture-only files. Its API size is 1,467,253 bytes; the upload log reports ZIP SHA-256 `d50c087cf5f3cf7afc4222ba260e572c58f99fcb678c1b51535b1385acdf453b`. The extracted files, totaling 2,631,351 bytes, are archived byte-for-byte under [evidence](evidence) with sizes and SHA-256 hashes in [provenance.json](provenance.json). The original artifact ZIP, installers and complete generated notice files are not archived here.
+
+Public-content review of all 28 screenshots, eight logs, seven JSON receipts and both ZIP member sets found synthetic cfg/VPK fixtures, ephemeral `/home/runner` paths and public release URLs, with no tokens, personal account names, Steam IDs, personal files or retail TF2 assets.

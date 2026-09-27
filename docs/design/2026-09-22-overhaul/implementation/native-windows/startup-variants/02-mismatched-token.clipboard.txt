@@ -1,0 +1,18 @@
+[Window Title]
+execs could not start
+
+[Content]
+execs stopped before opening to protect your TF2 installation.
+
+execs 0.2.0
+State location: G:\Projects\execs\.artifacts\native-isolation\20260922-140806-startup-mismatchedtoken-2256bd28\roaming\execs\maintenance
+
+found mismatched maintenance state at G:\Projects\execs\.artifacts\native-isolation\20260922-140806-startup-mismatchedtoken-2256bd28\roaming\execs\maintenance\launching-tf2
+
+No recovery markers were cleared and no TF2 files were changed.
+Copy this message (Ctrl+C on Windows; select the text and copy on Linux) and include it in a bug report at:
+https://github.com/rndaom/execs/issues/new/choose
+
+Keep the state files in place so the interrupted operation can be reviewed.
+
+[OK]

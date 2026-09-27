@@ -21,6 +21,7 @@ let close: (event: { preventDefault: () => void }) => void;
 beforeEach(async () => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(document, "hasFocus").mockReturnValue(true);
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
   native.destroy.mockReset().mockResolvedValue(undefined);
@@ -37,6 +38,12 @@ beforeEach(async () => {
   api = createPreviewApi("settings-hud-installed");
   applyHud = api.applyHudOptions;
   vi.spyOn(api, "launchTf2").mockResolvedValue(undefined);
+  vi.spyOn(api, "getLaunchSyncStatus").mockResolvedValue({
+    profileOptions: "-novid",
+    steamOptions: "-novid",
+    inSync: true,
+    steamRunning: true,
+  });
   const library = await api.getProfileLibrary();
   vi.spyOn(api, "getProfileLibrary").mockResolvedValue({
     ...library,
@@ -106,6 +113,42 @@ it("identifies a failed HUD save after navigating to Sounds and retries the reta
   expect(api.launchTf2).toHaveBeenCalledOnce();
 });
 
+it("focuses the reviewed pane while Cancel restores the original control and retains drafts", async () => {
+  vi.spyOn(api, "applyHudOptions").mockRejectedValue(Error("HUD refused"));
+  vi.spyOn(api, "writeManagedCfg").mockRejectedValue(Error("sounds refused"));
+  await act(async () => element("#hud-surface-installed").click());
+  await clickId("hud-opt-minmode");
+  await debounce();
+  await clickId("settings-tab-sounds");
+  await clickId("sounds-hit-enabled");
+  await debounce();
+  await clickId("settings-tab-hud");
+  const opener = element('[data-testid="hud-opt-minmode"]');
+  expect(opener.closest("[hidden], [inert]")).toBeNull();
+  opener.focus();
+
+  await act(async () => close({ preventDefault: vi.fn() }));
+  await click("Cancel");
+  expect(document.activeElement === opener).toBe(true);
+
+  await act(async () => close({ preventDefault: vi.fn() }));
+  await click("Open Sounds");
+  const heading = element('[data-testid="settings-surface-sounds"] h1');
+  expect(document.activeElement === heading).toBe(true);
+  expect(heading.closest("[hidden], [inert]")).toBeNull();
+  expect(box.querySelector('[data-testid="files-exit-guard"]')).toBeNull();
+  expect(element('[data-testid="sounds-hit-enabled"]').getAttribute("aria-checked")).toBe("true");
+  expect(opener.getAttribute("aria-checked")).toBe("true");
+  expect(reason()).toContain("HUD");
+  expect(reason()).toContain("Sounds");
+  expect(native.destroy).not.toHaveBeenCalled();
+
+  const nav = element('[data-testid="settings-tab-hud"]');
+  nav.focus();
+  await clickId("settings-tab-hud");
+  expect(document.activeElement).toBe(nav);
+});
+
 it("keeps multiple panes protected until each resolves, and explicit discard restores persisted controls", async () => {
   vi.spyOn(api, "applyHudOptions").mockRejectedValue(Error("HUD refused"));
   const write = vi.spyOn(api, "writeManagedCfg").mockRejectedValue(Error("sound refused"));
@@ -157,14 +200,11 @@ it("releases failed draft gating for a later profile change only after explicit 
   const target = [...box.querySelectorAll<HTMLButtonElement>('[data-testid="profile-name"]')].find(
     (item) => item.textContent?.includes("Second"),
   );
-  expect(target?.disabled).toBe(true);
-  await click("Review changes");
+  expect(target?.disabled).toBe(false);
+  await act(async () => target?.click());
+  expect(change).not.toHaveBeenCalled();
+  expect(box.querySelector('[data-testid="files-exit-guard"]')).not.toBeNull();
   await click("Discard and continue");
-  const enabledTarget = [
-    ...box.querySelectorAll<HTMLButtonElement>('[data-testid="profile-name"]'),
-  ].find((item) => item.textContent?.includes("Second"));
-  expect(enabledTarget?.disabled).toBe(false);
-  await act(async () => enabledTarget?.click());
   expect(change).toHaveBeenCalledWith("second");
 });
 
@@ -174,7 +214,7 @@ it("explains Steam verification separately and opens its recovery pane", async (
     installingUpdate: false,
     steamVerification: true,
   });
-  await act(async () => vi.advanceTimersByTimeAsync(1001));
+  await act(async () => vi.advanceTimersByTimeAsync(5001));
   expect(launch().disabled).toBe(true);
   expect(reason()).toContain("Steam verification in Mods");
   await click("Open Mods");
@@ -263,4 +303,36 @@ it("joins an actual in-flight autosave on native close and waits for its queue r
   await act(async () => finish());
   expect(apply).toHaveBeenCalledOnce();
   expect(native.destroy).toHaveBeenCalledOnce();
+});
+
+it("asks before restarting Steam to write a profile's missing launch options", async () => {
+  vi.mocked(api.getLaunchSyncStatus).mockResolvedValue({
+    profileOptions: "-novid +exec overrides/execs_preload",
+    steamOptions: "",
+    inSync: false,
+    steamRunning: true,
+  });
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(element('[data-testid="launch-sync-warning"]').textContent).toContain(
+    "Launch options not in Steam",
+  );
+  await click("Launch TF2");
+  expect(api.launchTf2).not.toHaveBeenCalled();
+  expect(element('[data-testid="launch-sync-review"]').textContent).toContain(
+    "+exec overrides/execs_preload",
+  );
+  await click("Restart Steam and launch");
+  expect(api.launchTf2).toHaveBeenCalledExactlyOnceWith(true);
+});
+
+it("writes missing launch options without asking when Steam is closed", async () => {
+  vi.mocked(api.getLaunchSyncStatus).mockResolvedValue({
+    profileOptions: "-novid",
+    steamOptions: "",
+    inSync: false,
+    steamRunning: false,
+  });
+  await click("Launch TF2");
+  expect(box.querySelector('[data-testid="launch-sync-review"]')).toBeNull();
+  expect(api.launchTf2).toHaveBeenCalledExactlyOnceWith(true);
 });

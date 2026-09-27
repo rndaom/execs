@@ -1,0 +1,126 @@
+{
+  "runId": 35937290549,
+  "workflowUrl": "https://github.com/rndaom/execs/actions/runs/35937290549",
+  "artifactId": 10783936314,
+  "artifactName": "linux-native-smoke-4c363147a62a624a7bda7f2ecae13541d505d37f",
+  "artifactApiSizeBytes": 1173178,
+  "head": "65d20bd905435a6d4813b39c13537339d94b7b2b",
+  "testedMerge": "4c363147a62a624a7bda7f2ecae13541d505d37f",
+  "files": [
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/01-native-active-files.png",
+      "bytes": 119255,
+      "sha256": "c45e420b5724f184255fd942848196d961e7c9d796e419f19356850876d0f5e7"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/02-native-draft-before-navigation.png",
+      "bytes": 68775,
+      "sha256": "c8b58253d03b7f8b188ae246647707c78d63e92dbd93eff4a20d84138ba69b14"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/03-native-draft-after-navigation.png",
+      "bytes": 68778,
+      "sha256": "d0f7cdec1c7c9a85f762e0ba047c3c447678536dae1d5c86f7e82a68a54caabf"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/04-native-explicit-save.png",
+      "bytes": 129104,
+      "sha256": "2a5066b5294556528a7978a0c194ec5345a65705364aa9e9edef97dadcf85819"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/05-native-close-cancel-dialog.png",
+      "bytes": 108759,
+      "sha256": "85c9caf1b5695dca84e1ca808585d992c2bebc247e049169680049c443cfa81e"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/06-native-close-discard-dialog.png",
+      "bytes": 112004,
+      "sha256": "09a87c5ac84da4c09c01e3a5c71e3d3394232e82ffa061d04c1380a8670bba0f"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/07-native-after-discard-restart.png",
+      "bytes": 119383,
+      "sha256": "e235d4743f1356e0dad508b3d06406680f097ca5eac8b136b396dd2ada5f42fa"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/08-native-close-save-dialog.png",
+      "bytes": 107589,
+      "sha256": "081c7385ad5f80dfa45666046abe5f46fbd88ceb737b3f95948b99a3aa46e81d"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/09-native-after-close-save-restart.png",
+      "bytes": 119751,
+      "sha256": "75c99d6cc5b098ec558e38180008de5a9418fb1549dbef26825eaa1515d8d17f"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/first-active-launch-driver.log",
+      "bytes": 203,
+      "sha256": "01b90f7ad529703338d13690bd5ec7894fbfd3850897ef4daf66f1d786c5adfc"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/fixture-baseline.json",
+      "bytes": 22626,
+      "sha256": "307f48a3a4031979230e0a7b7d76238663fd60c869e3af8f70e66e86f70e229d"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/restart-after-close-save-driver.log",
+      "bytes": 359,
+      "sha256": "1e4d4c872f5b54d47067c1411e4e776d23b2913eb147a650290e184e00753b2f"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/restart-after-discard-driver.log",
+      "bytes": 359,
+      "sha256": "8e49ed0e73d90f042e5fefcd442d1535a651a3d973ef538921e9086b343f47c4"
+    },
+    {
+      "path": "evidence/execs-linux-native-active-Y00bgy/evidence/results.json",
+      "bytes": 117805,
+      "sha256": "d920a7ccdb51f254e0e5cb1f8ad085e9e3508a4f5775a1661d81f204035e42ac"
+    },
+    {
+      "path": "evidence/execs-linux-native-heL8Bw/evidence/01-native-inactive-1200.png",
+      "bytes": 45166,
+      "sha256": "ecedc827d7313534da426b4d58dc189a8692936722169f3d9948f4bb197ce5bb"
+    },
+    {
+      "path": "evidence/execs-linux-native-heL8Bw/evidence/02-native-menu-960.png",
+      "bytes": 49610,
+      "sha256": "ce0553cd910cb6fb9c5e2f73b5f2774dd3be85a97dbdf6f7bb9bbee26aa21db1"
+    },
+    {
+      "path": "evidence/execs-linux-native-heL8Bw/evidence/03-native-keyboard-zoom-menu.png",
+      "bytes": 41666,
+      "sha256": "fcda54a4b2acf8e8f88028fd9e01947cda2fbbf6160dcd33968c2a6d1dfe9cf8"
+    },
+    {
+      "path": "evidence/execs-linux-native-heL8Bw/evidence/04-native-preferences-saved.png",
+      "bytes": 73723,
+      "sha256": "da622c7ed177ba7fa97d0dccad06dbbdb4e924808ea3c0c52929ebd6802fe463"
+    },
+    {
+      "path": "evidence/execs-linux-native-heL8Bw/evidence/05-native-preferences-after-restart.png",
+      "bytes": 84325,
+      "sha256": "2f53a6ec2536c746a663ecdfcf67c030bd64b6d6aff89093e4e46622b762a1fa"
+    },
+    {
+      "path": "evidence/execs-linux-native-heL8Bw/evidence/first-launch-driver.log",
+      "bytes": 203,
+      "sha256": "509e9e508c6b0fae06b8dc21fa29c8aec4bda96530891c3b25d5fee5563ba8ae"
+    },
+    {
+      "path": "evidence/execs-linux-native-heL8Bw/evidence/fixture-baseline.json",
+      "bytes": 15245,
+      "sha256": "f998495bce72355e088e6ab5daba0b65ec60cfcc21c31b9729e0d34345fe7e5c"
+    },
+    {
+      "path": "evidence/execs-linux-native-heL8Bw/evidence/restart-driver.log",
+      "bytes": 359,
+      "sha256": "ca91fd9482d6f80506ca4d0eb91169519d794f8d47db43b988102be6f35e0143"
+    },
+    {
+      "path": "evidence/execs-linux-native-heL8Bw/evidence/results.json",
+      "bytes": 10874,
+      "sha256": "ec5866898aab26b0ab84798609fef9f747aa78aec19382174cc3cf539676a783"
+    }
+  ]
+}

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Review the earlier execs implementation and concept references. The current overhaul direction is documented separately.">
+    <title>execs — Previous implementation review</title>
+    <link rel="stylesheet" href="../gallery.css">
+    <link rel="stylesheet" href="review.css">
+    <script src="review.js" type="module"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#review-workspace">Skip to selected page</a>
+    <header class="review-masthead">
+      <a class="wordmark" href="review.html" aria-label="execs implementation review">execs<span aria-hidden="true">.</span></a>
+      <span class="review-phase">Previous implementation review</span>
+      <nav aria-label="Review links">
+        <a href="../index.html">Concept history</a>
+        <a href="#follow-up-evidence">Follow-up evidence</a>
+        <a href="../design-qa.md" target="_blank" rel="noopener">Integrated QA</a>
+        <a href="http://127.0.0.1:1422/?preview=settings-comfig" target="_blank" rel="noopener">Interactive fixture</a>
+      </nav>
+    </header>
+    <section class="review-intro" aria-labelledby="review-title">
+      <div><p class="eyebrow">Historical candidate · 22 September 2026</p><h1 id="review-title">Earlier overhaul review</h1></div>
+      <div class="review-intro-note"><p id="review-count">Loading accepted screenshots…</p><p class="meta">Production UI in browser fixtures. Native qualification is separate.</p></div>
+    </section>
+    <main class="review-layout">
+      <aside class="review-rail" aria-label="Page selection">
+        <label class="eyebrow" for="page-filter">Page or flow</label>
+        <input id="page-filter" type="search" placeholder="Find a page…" autocomplete="off">
+        <nav id="page-navigation" aria-label="Application pages and flows"></nav>
+        <p id="no-pages" class="meta" hidden>No matching pages.</p>
+      </aside>
+      <section id="review-workspace" class="review-workspace" aria-labelledby="page-title" aria-busy="true">
+        <div class="workspace-heading">
+          <div><p id="page-group" class="eyebrow">Implementation</p><h2 id="page-title">Loading the review</h2></div>
+          <span id="development-badge" class="development-badge" hidden>Development only</span>
+        </div>
+        <p id="page-description" class="review-description"></p>
+        <div class="capture-toolbar">
+          <div><span id="capture-count" class="meta"></span><h3 id="capture-title">Accepted screenshot</h3></div>
+          <div class="capture-actions"><button id="capture-previous" class="button subtle" type="button">Previous</button><button id="capture-next" class="button subtle" type="button">Next</button></div>
+        </div>
+        <div class="comparison-grid">
+          <figure class="implementation-figure">
+            <div class="figure-label"><span>Implemented UI</span><span id="capture-viewport" class="meta"></span></div>
+            <button id="open-current" class="capture-image-button" type="button" aria-label="Inspect implementation screenshot">
+              <img id="current-image" alt="" width="1200" height="800">
+              <span class="image-inspect-label">Inspect full size</span>
+            </button>
+            <figcaption><p id="capture-note" class="meta"></p><a id="current-original" class="text-link meta" href="core/01-comfig-1200.png" target="_blank" rel="noopener">Open original screenshot</a></figcaption>
+          </figure>
+          <figure class="reference-figure">
+            <div class="figure-label"><span>Previous concept</span></div>
+            <button id="open-reference" class="reference-crop" type="button" aria-label="Inspect the original concept board"><img id="reference-image" alt="" width="1672" height="941"></button>
+            <figcaption><h3 id="reference-title">Previous reference</h3><p id="reference-view" class="meta"></p><p id="reference-note" class="meta"></p><button id="open-board" class="button subtle" type="button">View full board</button></figcaption>
+          </figure>
+        </div>
+        <div class="evidence-note"><p id="page-limit"></p><p class="meta">Reference imagery and labels are illustrative. The implemented controls, data and safety behavior are authoritative.</p><div id="qa-links" class="qa-links"></div></div>
+        <section class="state-section" aria-labelledby="states-title"><div class="state-heading"><h3 id="states-title">Accepted states</h3><span class="meta">Choose a capture to compare</span></div><ol id="capture-list" class="capture-list"></ol></section>
+        <p id="review-status" class="review-status-message" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+    <section id="follow-up-evidence" class="review-followup" aria-labelledby="follow-up-title">
+      <div class="state-heading"><div><p class="eyebrow">Supplemental checks</p><h2 id="follow-up-title">Follow-up evidence</h2></div><span class="meta">Separate from the 85 primary captures</span></div>
+      <p class="review-description">Later interaction corrections and scoped native checks. Reports retain each check's exact limits and candidate identity.</p>
+      <div class="followup-grid">
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect browser Choose profile entry point" data-kind="Browser fixture · inactive library" data-title="Choose a profile" data-caption="1920 × 945 browser fixture. The new entry point opens the existing profile menu; it does not activate a profile. Native re-verification is tracked separately in the Windows report."><img src="profile-management/inactive-library/01-choose-profile.png" alt="Centered Choose a profile heading, switching explanation and one copper Choose profile button." width="1920" height="945" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Browser fixture</p><h3>A clear inactive-library entry</h3><p class="meta">Choose profile opens the saved-profile menu without activating a profile.</p><a class="text-link meta" href="profile-management/inactive-library/verification.md" target="_blank" rel="noopener">Entry-point verification</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect native Windows preferences after reopening" data-kind="Native Windows · isolated candidate" data-title="Preferences retained after reopening" data-caption="Actual Windows app capture, including its OS frame. Reduce motion and startup update preferences persisted across a normal close and reopen. This local executable check does not establish installer or packaged release qualification."><img src="native-windows/08-preferences-after-reopen.jpg" alt="Native Windows App settings with Reduce selected and checking for updates on startup enabled." width="1202" height="832" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Native Windows · isolated data</p><h3>Preferences survive a restart</h3><p class="meta">Actual app evidence. The report tracks startup, settings, picker/import cancellation, deletion and subsequent rechecks.</p><a class="text-link meta" href="native-windows/README.md" target="_blank" rel="noopener">Latest scoped Windows results</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect corrected browser profile-menu reflow" data-kind="Browser fixture · CSS reflow" data-title="Six-profile menu: keyboard access at 480 × 320" data-caption="Final corrected 480 × 320 CSS reflow capture of an inactive library with six profiles. The menu is anchored to its actual header and clamped to the viewport; keyboard navigation scrolls Change install fully into view. This is reduced available CSS space, not direct native zoom or OS text-scaling evidence."><img src="interaction-completion/11-inactive-keyboard-fixed-480.png" alt="Scrolled profile menu beneath the inactive-library header, with the Change install footer action fully visible and keyboard focused." width="480" height="320" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Browser fixture · CSS reflow</p><h3>Profile actions stay reachable</h3><p class="meta">The final six-profile menu correction keeps keyboard access to footer actions within the narrow viewport.</p><a class="text-link meta" href="interaction-completion/design-qa.md" target="_blank" rel="noopener">Interaction and reflow audit</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect browser Launch reflow at 480 by 320" data-kind="Browser fixture · CSS reflow" data-title="Launch draft and review actions at 480 × 320" data-caption="480 × 320 CSS reflow in a browser fixture, equivalent to the available layout space of a 960 × 640 window at 200% enlargement. The pending review action wraps within the header and the unfinished Launch addition is retained. This is CSS reflow evidence, not actual native zoom or OS text scaling."><img src="zoom-reflow/23-launch-480-unsubmitted-fixed.png" alt="Launch option draft with the pending Review changes action on a second header row, fully contained at 480 by 320." width="480" height="320" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Browser fixture · CSS reflow</p><h3>Enlarged layouts retain drafts and actions</h3><p class="meta">Effective 480 × 320 layout space. The report checks Comfig, Binds, Files and Launch with keyboard navigation and scrolling.</p><a class="text-link meta" href="zoom-reflow/reflow-qa.md" target="_blank" rel="noopener">CSS reflow audit and fixes</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect actual Windows keyboard zoom at the minimum client size" data-kind="Native Windows · keyboard zoom" data-title="App settings after five zoom-in shortcut increments" data-caption="Actual Windows app capture after five separate Ctrl+KP_Add increments: approximately twice normal size, with no exact runtime zoom factor measured. The image includes a 962 × 672 OS frame around a 960 × 640 client. Keyboard navigation remained usable through scrolling. This scoped native check does not establish OS text scaling or packaged release qualification."><img src="native-windows/zoom-follow-up/04-settings-enlarged-960.jpg" alt="Actual Windows App settings enlarged after five keyboard zoom increments, showing Motion controls inside the minimum-size app window and its OS frame." width="962" height="672" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Native Windows · actual keyboard zoom</p><h3>Five zoom increments at minimum size</h3><p class="meta">Approximately 2×; no exact factor measured. OS frame: 962 × 672. App client: 960 × 640.</p><a class="text-link meta" href="native-windows/zoom-follow-up/README.md" target="_blank" rel="noopener">Native zoom and preference retry results</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect accepted native Linux menu at 200 percent keyboard zoom" data-kind="Native Linux · WebKitGTK keyboard zoom" data-title="Profile actions at measured 200% native zoom" data-caption="Actual Linux Tauri/WebKitGTK content at 200% page zoom: a 960 × 640 native screenshot with 480 × 320 CSS content. Real Tab/Enter traversal reached Change install with its full focus outline visible. A WebDriver coordinate mismatch leaves physical pointer use at 200% unverified; normal-scale pointer input passed. This scoped native check does not establish installer or packaged release qualification."><img src="linux-native/run-35763403785/linux-native-smoke-9522bd3e1d61f2f10c7e95228a1f12b4ef28a999/execs-linux-native-0Z84WB/evidence/03-native-keyboard-zoom-menu.png" alt="Actual Linux native profile menu at 200 percent zoom, scrolled to Import and the fully visible, keyboard-focused Change install action." width="960" height="640" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Native Linux · actual keyboard zoom</p><h3>Profile actions at 200% zoom</h3><p class="meta">Native image: 960 × 640; CSS content: 480 × 320. Keyboard traversal passed. Zoomed physical pointer use remains unverified because of the driver's coordinate mismatch.</p><a class="text-link meta" href="linux-native/retry-35763403785.md" target="_blank" rel="noopener">Accepted Linux retry and limits</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect corrected Files editor scroll restoration in Chrome" data-kind="Chrome fixture · pane scroll and drafts" data-title="Files retains its editing position" data-caption="960 × 640 Chrome fixture after the Sounds → Mods → Files sequence. Files restored its outer scroll from 438 to 438 and its internal editor scroll from 1129 to 1129. Keyboard focus on Wrap then revealed the editor shown here. The exact 2,470-byte unsaved draft and backward text selection survived. This is browser fixture evidence; no native file was saved."><img src="pane-scroll-follow-up/37-files-editor-restored-fixed-960.png" alt="Unsaved autoexec draft in the restored Files editor, with Wrap keyboard focus, the Files navigation item visible and line 69 reported in the status." width="960" height="640" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Chrome fixture · scroll restoration</p><h3>Files keeps its editing position</h3><p class="meta">The corrected editor restores its own scroll alongside the pane's offset, while retaining exact draft bytes, selection and history.</p><a class="text-link meta" href="pane-scroll-follow-up/README.md" target="_blank" rel="noopener">Pane scroll and draft verification</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect App settings failure in the Chrome contrast audit" data-kind="Chrome fixture · rendered text contrast" data-title="Preference-save error and Retry contrast" data-caption="1920 × 889 Chrome fixture showing the normal App settings error, Retry action and toast after a development-only save failure. All 27 meaningful text samples in the scoped audit pass 4.5:1; the lowest ratio is 5.4247:1. The report includes successful fixture retry. This is a bounded rendered-text check, not full accessibility certification or native WebView contrast qualification."><img src="contrast-follow-up/08-app-settings-failure.png" alt="App settings with a visible preview save-failure message, hovered Retry app settings button, Follow system selected and the matching error toast." width="1920" height="889" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Chrome fixture · text contrast</p><h3>Readable save failures and recovery</h3><p class="meta">27 meaningful text samples pass 4.5:1. The scoped check includes the preference-save error and Retry action.</p><a class="text-link meta" href="contrast-follow-up/README.md" target="_blank" rel="noopener">Rendered contrast and retry results</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect wrapped cfg paths in the pending-change dialog" data-kind="In-app browser fixture · pending changes" data-title="Complete cfg paths stay readable" data-caption="960 × 640 browser fixture with a valid 109-character cfg path. The corrected dialog wraps the full path; its client and scroll widths both measure 606 pixels. At 480 × 320 all three actions also remain visible. Cancel keeps the draft and restores its opener. This is browser evidence, not a native close or file-save result."><img src="close-dialog-follow-up/03-long-path-after-960.png" alt="Save Files drafts dialog showing a complete long cfg path wrapped over two lines, with Save and continue, Discard and continue, and Cancel visible." width="960" height="640" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">In-app browser fixture · dialogs</p><h3>Read the whole path before deciding</h3><p class="meta">Long paths wrap without horizontal scrolling. Save, Discard and Cancel stay reachable at minimum and enlarged layout sizes.</p><a class="text-link meta" href="close-dialog-follow-up/README.md" target="_blank" rel="noopener">Dialog layout and focus verification</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect destination focus after pending-change review" data-kind="In-app browser fixture · keyboard navigation" data-title="Review returns focus to the selected pane" data-caption="960 × 640 browser fixture after Review changes → Open Crosshair. The visible Crosshair heading receives keyboard focus and the next Tab reaches its mode controls. Dot remains an unapplied draft. Cancel separately restores the Review changes button. The live close/write guard has separate regression tests."><img src="close-dialog-follow-up/08-crosshair-heading-focused-960.png" alt="Crosshair pane with a visible keyboard focus outline around its heading, Dot selected, and Build pack plus Discard custom edits available." width="960" height="640" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">In-app browser fixture · keyboard focus</p><h3>Continue where the changes belong</h3><p class="meta">Open pane moves focus into the destination, retains its draft and preserves Cancel's return behavior.</p><a class="text-link meta" href="close-dialog-follow-up/README.md" target="_blank" rel="noopener">Pending-pane review verification</a></figcaption>
+        </figure>
+        <figure>
+          <button class="capture-image-button supplemental-image" type="button" aria-label="Inspect native Linux Files after Save-and-close and restart" data-kind="Native Linux · Files close decisions" data-title="Native Files close decisions survive restart" data-caption="Accepted 1200 × 800 native Linux capture from run 35937290549 after Save-and-close and restart. Draft retention and exact 4,881-byte explicit Save passed. Cancel kept the 4,927-byte draft, Discard restored the previous 4,881-byte save after restart, and Save-and-close committed 4,911 bytes that remained after another restart. This is a native development build, not an installed package or retail TF2 result."><img src="linux-native/run-35937290549/evidence/execs-linux-native-active-Y00bgy/evidence/09-native-after-close-save-restart.png" alt="Actual native Linux Files pane after Save-and-close and restart, with the fixture cfg reopened." width="1200" height="800" loading="lazy"><span class="image-inspect-label">Inspect full size</span></button>
+          <figcaption><p class="eyebrow">Native Linux · isolated active fixture</p><h3>Files close decisions and restart pass</h3><p class="meta">The native run passed Cancel with the draft retained, Discard with the last save restored, and Save-and-close with the new bytes restored after restart. It also observed a clean close.</p><p class="meta"><a class="text-link" href="linux-native/run-35937290549/evidence/execs-linux-native-active-Y00bgy/evidence/05-native-close-cancel-dialog.png" target="_blank" rel="noopener">Cancel dialog</a> · <a class="text-link" href="linux-native/run-35937290549/evidence/execs-linux-native-active-Y00bgy/evidence/07-native-after-discard-restart.png" target="_blank" rel="noopener">After Discard/restart</a> · <a class="text-link" href="linux-native/run-35937290549/evidence/execs-linux-native-active-Y00bgy/evidence/08-native-close-save-dialog.png" target="_blank" rel="noopener">Save-and-close dialog</a> · <a class="text-link" href="linux-native/run-35937290549/evidence/execs-linux-native-active-Y00bgy/evidence/09-native-after-close-save-restart.png" target="_blank" rel="noopener">After Save/restart</a></p><p class="meta"><a class="text-link" href="linux-native/run-35937290549/README.md" target="_blank" rel="noopener">Current native results and provenance</a> · <a class="text-link" href="linux-native/run-35780701908/README.md" target="_blank" rel="noopener">Earlier failed Discard run</a></p></figcaption>
+        </figure>
+      </div>
+      <div class="followup-qualification"><p>The <a class="text-link" href="package-smoke/run-35942107825/README.md" target="_blank" rel="noopener">current Linux development package run</a> passed AppImage upgrade, Debian upgrade and Debian first install with native UI, the guarded Import chooser retry and exact fixture checks. The <a class="text-link" href="package-smoke/run-35937290574-windows/README.md" target="_blank" rel="noopener">Windows previous-public probe</a> remains failed before UI export or candidate upgrade. Signed updater and release checks remain open.</p><p class="meta">Historical native captures 10 and 12 record the old blank entry state and import copy; they are not presented as accepted current UI.</p></div>
+    </section>
+    <footer class="review-footer"><p>Local review artifact. Screenshots do not certify Steam, native media, installers, or the Windows/Linux packaged matrix.</p><div><a href="../combined-release-plan.md" target="_blank" rel="noopener">Release plan</a><a href="../research/rnd-290-startup-error.md" target="_blank" rel="noopener">Native startup diagnostics</a><a href="review-data.json" target="_blank" rel="noopener">Accepted capture manifest</a></div></footer>
+    <dialog class="image-dialog" id="review-lightbox" aria-labelledby="lightbox-title" aria-describedby="lightbox-caption">
+      <div class="image-dialog-header"><div><p class="eyebrow" id="lightbox-kind">Implementation screenshot</p><h2 id="lightbox-title">Full-size image</h2></div><button id="lightbox-close" class="button subtle" type="button" autofocus>Close</button></div>
+      <div class="image-dialog-tools"><fieldset class="zoom-controls" aria-label="Image zoom"><button id="zoom-out" class="button subtle" type="button" aria-label="Zoom out">−</button><output id="zoom-level" aria-live="polite">Fit</output><button id="zoom-in" class="button subtle" type="button" aria-label="Zoom in">+</button><button id="zoom-fit" class="button subtle" type="button">Fit</button><button id="zoom-original" class="button subtle" type="button">100%</button></fieldset><a id="lightbox-original" class="text-link" href="core/01-comfig-1200.png" target="_blank" rel="noopener">Open original image</a></div>
+      <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users need to focus the named scroll region to pan a full-size image. -->
+      <section id="lightbox-stage" class="image-stage" tabindex="0" aria-label="Image view. Scroll or use arrow keys to pan a zoomed image."><img id="lightbox-image" alt=""></section>
+      <p id="lightbox-caption" class="image-dialog-caption"></p>
+    </dialog>
+    <noscript><p class="noscript-note">JavaScript is needed for the page selector and image viewer. The integrated QA and original concept gallery remain available through the links above.</p></noscript>
+  </body>
+</html>

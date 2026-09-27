@@ -1,0 +1,32 @@
+{
+  "appDataUnchanged": true,
+  "candidateProductRevision": "7c78fbed1907dceb37bf348596fca48a8f654e66",
+  "desktopOrGameStarted": false,
+  "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+  "exporterTag": "v0.1.8",
+  "packagedRuntimeExercised": false,
+  "platform": "windows",
+  "profiles": [
+    {
+      "currentArchiveSha256": "6f93d339d2c9cfdafaad7f3c754fbbe74b87a1023cd832a70802b429bc261bd2",
+      "currentCoreReadAndExport": true,
+      "currentPayloadsPreserved": 4,
+      "id": "f20a0001-8d01-4000-8000-000000000001",
+      "oldArchiveSha256": "6f93d339d2c9cfdafaad7f3c754fbbe74b87a1023cd832a70802b429bc261bd2",
+      "oldCoreReadAndExport": true,
+      "oldPayloadsPreserved": 4,
+      "profile": "Package smoke - active"
+    },
+    {
+      "currentArchiveSha256": "e976c9e4f1ee074557a0d9085937bc02b525e3c4832ca91bfa8492903137a9a4",
+      "currentCoreReadAndExport": true,
+      "currentPayloadsPreserved": 8,
+      "id": "f20a0001-8d01-4000-8000-000000000002",
+      "oldArchiveSha256": "e976c9e4f1ee074557a0d9085937bc02b525e3c4832ca91bfa8492903137a9a4",
+      "oldCoreReadAndExport": true,
+      "oldPayloadsPreserved": 8,
+      "profile": "Package smoke - saved HUD"
+    }
+  ],
+  "syntheticLiveRootUnchanged": true
+}

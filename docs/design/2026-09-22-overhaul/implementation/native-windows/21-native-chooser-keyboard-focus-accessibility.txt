@@ -1,0 +1,113 @@
+Window: "execs", App: execs.exe.
+	0 window execs Secondary Actions: Raise
+		1 pane
+			2 pane execs
+				3 pane (disabled)
+				4 region execs - Web content
+					5 region
+						6 region
+							7 region
+								8 region
+								9 region
+									10 region
+										11 region
+											12 region
+												13 region
+												14 document execs Value: http://tauri.localhost/ ID: RootWebArea
+													15 group ID: root
+														16 main
+															17 section header
+																18 text execs
+																19 details
+																	20 disclosure triangle Profile Profiles
+																		21 text Profile
+																		22 text Profiles
+																		23 graphic
+																	56 text Profiles
+																	57 text 2 profiles
+																	58 button New profile
+																		59 graphic
+																	60 list
+																		61 list item QA inactive - no HUDSwitch
+																			62 button QA inactive - no HUD Switch
+																			63 button Actions for QA inactive - no HUD Description: Actions for QA inactive - no HUD
+																				64 graphic
+																		65 list item QA inactive - single HUDSwitch
+																			66 button QA inactive - single HUD Switch
+																			67 button Actions for QA inactive - single HUD Description: Actions for QA inactive - single HUD
+																				68 graphic
+																	69 text Profile name
+																	70 edit (settable, string) Profile name Description: Save current as… ID: profile-name
+																	71 button (disabled) Save
+																	72 button Import
+																		73 graphic
+																	74 button Change install
+																		75 graphic
+																24 group Description: G:\Projects\execs\.artifacts\native-isolation\20260922-123141-inactivelibrary-e497a50a\tf2-root
+																	25 text tf2-root
+																26 button Copy install path Description: Copy install path — G:\Projects\execs\.artifacts\native-isolation\20260922-123141-inactivelibrary-e497a50a\tf2-root
+																	27 graphic
+																	28 group
+																29 button Launch TF2
+																	30 graphic
+															31 text NO ACTIVE PROFILE
+															32 heading Choose a profile
+															33 text Switching profiles replaces your installed TF2 setup.
+															34 button Choose profile
+															35 group Description: execs 0.2.0
+																36 text v0.2.0
+															37 text ·
+															38 button Check for updates
+															39 text ·
+															40 button Report a bug
+															41 text ·
+															42 button Copy diagnostics
+															43 text ·
+															44 button App settings
+															45 text execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+														46 status
+								47 region
+						48 region
+						49 region
+		50 title bar (settable, string) Value: execs
+			51 menu bar System ID: MenuBar
+				52 menu item System
+			53 button Minimize
+			54 button Maximize
+			55 button Close
+
+Document text: ```
+execs
+Profile
+Profiles
+￼
+Profiles
+2 profiles
+￼
+New profile
+QA inactive - no HUD
+Switch
+￼
+QA inactive - single HUD
+Switch
+￼
+Profile name
+￼
+Save
+￼
+Import
+￼
+Change install
+tf2-root
+￼
+￼
+￼
+Launch TF2
+NO ACTIVE PROFILE
+Choose a profile
+Switching profiles replaces your installed TF2 setup.
+Choose profile
+v0.2.0 · Check for updates · Report a bug · Copy diagnostics · App settings
+execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+￼
+```

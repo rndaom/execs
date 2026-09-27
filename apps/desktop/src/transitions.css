@@ -1,0 +1,59 @@
+/* Short entrances add continuity to navigation without delaying interaction.
+   index.css owns the global motion tokens and the reduced-motion overrides. */
+@keyframes profile-menu-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pane-switch-odd {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pane-switch-even {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-menu-caret {
+  transition: transform var(--motion-move) var(--ease-reversible);
+}
+
+details[open] > summary .profile-menu-caret {
+  transform: rotate(180deg);
+}
+
+details[open] > .profile-menu-panel {
+  animation: profile-menu-reveal var(--motion-move) var(--ease-out) backwards;
+}
+
+.settings-pane[data-switch="odd"],
+#bind-category-panel[data-switch="odd"] {
+  animation: pane-switch-odd var(--motion-move) var(--ease-out) backwards;
+}
+
+.settings-pane[data-switch="even"],
+#bind-category-panel[data-switch="even"] {
+  animation: pane-switch-even var(--motion-move) var(--ease-out) backwards;
+}

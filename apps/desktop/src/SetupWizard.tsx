@@ -1,12 +1,11 @@
-import { SlidersHorizontal } from "@phosphor-icons/react";
-import { useState } from "react";
 import { OnboardingFrame } from "./components/OnboardingFrame";
 import { OperationError } from "./components/ui/OperationError";
 import { OptionTile } from "./components/ui/OptionTile";
 import { PaneSection } from "./components/ui/PaneSection";
+import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { openExternal, type StartFrom, type WizardSpec } from "./lib/bridge";
-import { presetListExpanded, visibleComfigPresets } from "./lib/comfig-catalog";
+import { COMFIG_PRESETS, comfigPresetById } from "./lib/comfig-catalog";
 import { OFFICIAL_ADDON_DETAILS } from "./lib/comfig-ui";
 import {
   type ComfigPresetId,
@@ -18,7 +17,6 @@ import {
 } from "./lib/first-run-ui";
 
 export function SetupWizard({
-  title,
   draftName,
   preset,
   addons,
@@ -31,7 +29,6 @@ export function SetupWizard({
   onApply,
   onCancel,
 }: {
-  title: string;
   draftName: string;
   preset: ComfigPresetId;
   addons: OfficialAddonId[];
@@ -46,50 +43,22 @@ export function SetupWizard({
   onCancel?: () => void;
 }) {
   const { running, busy, error, dismissError } = useAppStatus();
-  const [showAllPresets, setShowAllPresets] = useState(false);
   const canApply = canApplyWizard(draftName, running, busy);
-  const presets = visibleComfigPresets(preset, showAllPresets);
-  const expanded = presetListExpanded(preset, showAllPresets);
-  // A preset outside the featured four forces the list open, so there is
-  // nothing to collapse back to.
-  const canCollapsePresets = !presetListExpanded(preset, false);
+  const selectedPreset = comfigPresetById(preset);
 
   return (
     <OnboardingFrame
-      eyebrow={title}
-      icon={<SlidersHorizontal aria-hidden="true" size={13} weight="bold" />}
       title="Build your TF2 profile"
-      lede="Name it and pick a preset."
       width="wide"
-      footer={
-        <div className="flex flex-col-reverse gap-3 border-t border-edge pt-6 sm:flex-row sm:items-center sm:justify-between">
-          {onCancel ? (
-            <button
-              type="button"
-              data-testid="wizard-cancel"
-              disabled={busy}
-              onClick={onCancel}
-              className="btn btn-ghost w-full sm:w-auto"
-            >
-              Cancel
-            </button>
-          ) : (
-            <p className="t-meta">
-              {running
-                ? "TF2 is running — setup stays read-only."
-                : "No game files change until you apply."}
-            </p>
-          )}
-          <button
-            type="submit"
-            form="setup-wizard"
-            data-testid="wizard-apply"
-            disabled={!canApply}
-            className="btn btn-primary w-full sm:w-auto"
-          >
-            {wizardApplyCopy(running, creating)}
-          </button>
-        </div>
+      compact
+      steps={
+        creating
+          ? undefined
+          : [
+              { label: "Find TF2", state: "complete" },
+              { label: "Confirm folder", state: "complete" },
+              { label: "Create profile", state: "current" },
+            ]
       }
     >
       <form
@@ -97,117 +66,139 @@ export function SetupWizard({
         data-testid="setup-wizard"
         onSubmit={(event) => {
           event.preventDefault();
-          onApply();
+          if (canApply) onApply();
         }}
       >
-        <label htmlFor="wizard-name" className="t-row block">
-          Profile name
-        </label>
-        <input
-          id="wizard-name"
-          data-testid="wizard-name"
-          value={draftName}
-          onChange={(event) => onDraftName(event.target.value)}
-          placeholder="My TF2 setup"
-          disabled={busy}
-          autoComplete="off"
-          className="field mt-3 w-full px-4 py-3 text-ink placeholder:text-ink-faint focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-        />
-
-        {startFrom && onStartFrom ? (
-          <PaneSection
-            id="wizard-start-from"
-            title="Start from"
-            description="Where your in-game options come from."
-          >
-            <div data-testid="wizard-start-from" className="mt-4 grid gap-3 sm:grid-cols-2">
-              {START_FROM_OPTIONS.map((option) => (
-                <OptionTile
-                  key={option.id}
-                  id={`wizard-start-from-${option.id}`}
-                  name="wizard-start-from"
-                  value={option.id}
-                  title={option.label}
-                  description={option.description}
-                  selected={startFrom === option.id}
+        <div className="surface p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label htmlFor="wizard-name" className="t-row shrink-0 sm:w-[120px]">
+              Profile name
+            </label>
+            <input
+              id="wizard-name"
+              data-testid="wizard-name"
+              value={draftName}
+              onChange={(event) => onDraftName(event.target.value)}
+              placeholder="My TF2 setup"
+              disabled={busy}
+              autoComplete="off"
+              className="input min-w-[200px] flex-1"
+            />
+            <div className="pane-actions">
+              {onCancel ? (
+                <button
+                  type="button"
+                  data-testid="wizard-cancel"
                   disabled={busy}
-                  onSelect={() => onStartFrom(option.id)}
+                  onClick={onCancel}
+                  className="btn btn-ghost"
+                >
+                  Cancel
+                </button>
+              ) : null}
+              <button
+                type="submit"
+                data-testid="wizard-apply"
+                disabled={!canApply}
+                className="btn btn-primary"
+              >
+                {wizardApplyCopy(running, creating)}
+              </button>
+            </div>
+          </div>
+          <p className="t-meta mt-2 sm:pl-[132px]">
+            {running
+              ? "Keep choosing your setup. Close TF2 before applying it."
+              : creating
+                ? "Creates the profile, then switches TF2 to it."
+                : "Creates the profile and applies your selections to TF2."}
+          </p>
+        </div>
+
+        <OperationError message={error} onDismiss={dismissError} className="mt-4" />
+
+        <div className="section pane-workspace">
+          <div>
+            {startFrom && onStartFrom ? (
+              <PaneSection
+                id="wizard-start-from"
+                title="Start from"
+                description="Where your in-game options come from."
+                first
+              >
+                <div data-testid="wizard-start-from" className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {START_FROM_OPTIONS.map((option) => (
+                    <OptionTile
+                      key={option.id}
+                      id={`wizard-start-from-${option.id}`}
+                      name="wizard-start-from"
+                      value={option.id}
+                      title={option.label}
+                      description={option.description}
+                      selected={startFrom === option.id}
+                      disabled={busy}
+                      onSelect={() => onStartFrom(option.id)}
+                    />
+                  ))}
+                </div>
+              </PaneSection>
+            ) : null}
+
+            <PaneSection
+              id="wizard-preset"
+              title="Preset"
+              description="Sets the default for every module."
+              first={!(startFrom && onStartFrom)}
+            >
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {COMFIG_PRESETS.map((item) => (
+                  <OptionTile
+                    key={item.id}
+                    id={`comfig-preset-${item.id}`}
+                    name="comfig-preset"
+                    value={item.id}
+                    title={item.label}
+                    description={item.description}
+                    selected={preset === item.id}
+                    disabled={busy}
+                    onSelect={() => onPreset(item.id)}
+                  />
+                ))}
+              </div>
+              {selectedPreset ? (
+                <p className="t-meta mt-3 text-ink-faint">
+                  {selectedPreset.label}: {selectedPreset.performance.toLowerCase()} performance ·{" "}
+                  {selectedPreset.fidelity.toLowerCase()} fidelity
+                </p>
+              ) : null}
+            </PaneSection>
+          </div>
+
+          <PaneSection
+            id="wizard-addons"
+            title="Official addons"
+            meta={<span className="tnum">{addons.length} selected</span>}
+            first
+          >
+            <div className="mt-1">
+              {OFFICIAL_ADDONS.map((item) => (
+                <SwitchRow
+                  key={item.id}
+                  id={`wizard-addon-input-${item.id}`}
+                  testId={`wizard-addon-${item.id}`}
+                  label={item.label}
+                  description={OFFICIAL_ADDON_DETAILS[item.id]}
+                  checked={addons.includes(item.id)}
+                  disabled={busy}
+                  onChange={() => onToggleAddon(item.id)}
                 />
               ))}
             </div>
+            <p className="t-meta mt-3">Manage official addons later in Comfig.</p>
           </PaneSection>
-        ) : null}
+        </div>
 
-        <PaneSection
-          id="wizard-preset"
-          title="Preset"
-          description="Sets the default for every module."
-          meta={
-            canCollapsePresets ? (
-              <button
-                type="button"
-                data-testid="wizard-show-all-presets"
-                onClick={() => setShowAllPresets((current) => !current)}
-                disabled={busy}
-                className="btn btn-ghost"
-              >
-                {expanded ? "Show core presets" : "Show all presets"}
-              </button>
-            ) : null
-          }
-        >
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {presets.map((item) => (
-              <OptionTile
-                key={item.id}
-                id={`comfig-preset-${item.id}`}
-                name="comfig-preset"
-                value={item.id}
-                title={item.label}
-                description={item.description}
-                selected={preset === item.id}
-                disabled={busy}
-                meta={
-                  <span className="grid grid-cols-2 gap-2 border-t border-edge pt-3 text-[12px]">
-                    <span>
-                      <span className="block text-ink-faint">Performance</span>
-                      <span className="mt-0.5 block text-ink-muted">{item.performance}</span>
-                    </span>
-                    <span>
-                      <span className="block text-ink-faint">Fidelity</span>
-                      <span className="mt-0.5 block text-ink-muted">{item.fidelity}</span>
-                    </span>
-                  </span>
-                }
-                onSelect={() => onPreset(item.id)}
-              />
-            ))}
-          </div>
-        </PaneSection>
-
-        <PaneSection
-          id="wizard-addons"
-          title="Official addons"
-          meta={<span className="tnum">{addons.length} selected</span>}
-        >
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {OFFICIAL_ADDONS.map((item) => (
-              <OptionTile
-                key={item.id}
-                id={`wizard-addon-input-${item.id}`}
-                type="checkbox"
-                testId={`wizard-addon-${item.id}`}
-                title={item.label}
-                description={OFFICIAL_ADDON_DETAILS[item.id]}
-                selected={addons.includes(item.id)}
-                disabled={busy}
-                onSelect={() => onToggleAddon(item.id)}
-              />
-            ))}
-          </div>
-        </PaneSection>
-
-        <p className="t-meta mt-12 text-ink-faint">
+        <p className="t-meta mt-6 border-t border-edge pt-4 text-ink-faint">
           Uses official mastercomfig packages. execs is not affiliated with{" "}
           <button
             type="button"
@@ -218,8 +209,6 @@ export function SetupWizard({
           </button>
           .
         </p>
-
-        <OperationError message={error} onDismiss={dismissError} className="mt-6" />
       </form>
     </OnboardingFrame>
   );

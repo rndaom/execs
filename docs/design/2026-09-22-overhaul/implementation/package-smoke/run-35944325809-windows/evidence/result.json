@@ -1,0 +1,625 @@
+{
+  "schema": 1,
+  "status": "failed",
+  "scope": "Previous-public NSIS capability proof only; no candidate build or qualification.",
+  "sourceRevision": "35bbefababe423daa997a6f8bf507b9c4cfd3d0b",
+  "workflow": {
+    "runId": "35944325809",
+    "attempt": "1",
+    "event": "pull_request",
+    "eventSha": "35bbefababe423daa997a6f8bf507b9c4cfd3d0b",
+    "pullRequestHead": "0e5a24f24a6dc4268fbbdea9fc2ec935f1b6ecc9"
+  },
+  "runner": {
+    "os": "win22",
+    "version": "20260913.307.1",
+    "node": "v24.21.0"
+  },
+  "notQualified": [
+    "candidate NSIS/upgrade/import/reopen",
+    "production signed updater",
+    "real updater UI",
+    "interactive installer pages",
+    "standard-user Windows",
+    "screen-reader speech",
+    "Steam/TF2/Cloud"
+  ],
+  "checks": [
+    {
+      "phase": "before-install",
+      "recordedAt": "2026-09-24T01:46:11.976Z",
+      "data": {
+        "files": {
+          "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "af26e786315ff29dedc241e5779f8db11846c86752b29770e57b66276cc5dc1d",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bed8ac651692744ccb550bd7e805074af62852165d96b1b6207d096ab31c348c",
+          "profiles/index.json": "272dd1f125afa80ecd8bfa8b7f7230095d38cf3d63b1d947cb49fdb5170ed681",
+          "settings.json": "ec0af1107b76b410535138943ef92255553b7a877b33326b0b2f9fb1d3288baf"
+        },
+        "directories": [
+          "profiles",
+          "profiles/blobs",
+          "profiles/blobs/sha256",
+          "profiles/blobs/sha256/ec",
+          "profiles/f20a0001-8d01-4000-8000-000000000001",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+        ]
+      },
+      "live": {
+        "files": {
+          "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+          "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+        },
+        "directories": [
+          "tf",
+          "tf/cfg",
+          "tf/cfg/overrides",
+          "tf/custom"
+        ]
+      },
+      "exported": {
+        "files": {},
+        "directories": []
+      },
+      "originalBytesPreserved": true
+    },
+    {
+      "phase": "after-install",
+      "recordedAt": "2026-09-24T01:46:14.956Z",
+      "data": {
+        "files": {
+          "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "af26e786315ff29dedc241e5779f8db11846c86752b29770e57b66276cc5dc1d",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bed8ac651692744ccb550bd7e805074af62852165d96b1b6207d096ab31c348c",
+          "profiles/index.json": "272dd1f125afa80ecd8bfa8b7f7230095d38cf3d63b1d947cb49fdb5170ed681",
+          "settings.json": "ec0af1107b76b410535138943ef92255553b7a877b33326b0b2f9fb1d3288baf"
+        },
+        "directories": [
+          "profiles",
+          "profiles/blobs",
+          "profiles/blobs/sha256",
+          "profiles/blobs/sha256/ec",
+          "profiles/f20a0001-8d01-4000-8000-000000000001",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+        ]
+      },
+      "live": {
+        "files": {
+          "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+          "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+        },
+        "directories": [
+          "tf",
+          "tf/cfg",
+          "tf/cfg/overrides",
+          "tf/custom"
+        ]
+      },
+      "exported": {
+        "files": {},
+        "directories": []
+      },
+      "originalBytesPreserved": true,
+      "host": {
+        "sid": "S-1-5-21-2325914565-3525904610-1579391994-500",
+        "user": "runnervmibwwn\\runneradmin",
+        "session": 2,
+        "userInteractive": true,
+        "packageCode": 15700,
+        "groups": [
+          "S-1-5-21-2325914565-3525904610-1579391994-513",
+          "S-1-1-0",
+          "S-1-5-114",
+          "S-1-5-32-544",
+          "S-1-5-32-545",
+          "S-1-5-4",
+          "S-1-2-1",
+          "S-1-5-11",
+          "S-1-5-15",
+          "S-1-5-113",
+          "S-1-2-0",
+          "S-1-5-64-10"
+        ],
+        "playerProcesses": [],
+        "steamRegistry": [],
+        "productLocations": [
+          "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\execs"
+        ]
+      }
+    }
+  ],
+  "captures": [],
+  "cleanup": [
+    {
+      "alreadyExited": [],
+      "forcedCleanup": [
+        {
+          "pid": 1872,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:22.2138490Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=renderer --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --remote-debugging-port=60173 --video-capture-use-gpu-memory-buffer --lang=en-US --device-scale-factor=1 --num-raster-threads=2 --enable-main-frame-before-activation --renderer-client-id=5 --js-flags=\"--harmony-weak-refs-with-cleanup-some --expose-gc --ms-user-locale=\" --time-ticks-at-unix-epoch=-1790213748131433 --launch-time-ticks=634075475 --field-trial-handle=3584,i,9956167699399496386,4893570762199660390,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=3632 /prefetch:1",
+          "session": 2
+        },
+        {
+          "pid": 3740,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:22.0046940Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=service --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=2348,i,9956167699399496386,4893570762199660390,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=2360 /prefetch:8",
+          "session": 2
+        },
+        {
+          "pid": 6120,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:21.7257120Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=1744,i,9956167699399496386,4893570762199660390,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1936 /prefetch:3",
+          "session": 2
+        },
+        {
+          "pid": 2348,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:20.9868290Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=gpu-process --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --gpu-preferences=UAAAAAAAAADgAAAEAAAAAAAAAAAAAAAAAABgAAEAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAA --field-trial-handle=1848,i,9956167699399496386,4893570762199660390,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1832 /prefetch:2",
+          "session": 2
+        },
+        {
+          "pid": 7576,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:17.5040190Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=crashpad-handler --user-data-dir=D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView /prefetch:4 --monitor-self-annotation=ptype=crashpad-handler --database=D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\\Crashpad --annotation=IsOfficialBuild=1 --annotation=channel= --annotation=chromium-version=131.0.6778.109 \"--annotation=exe=C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --annotation=plat=Win64 \"--annotation=prod=Edge WebView2\" --annotation=ver=131.0.2903.86 --initial-client-data=0x180,0x184,0x188,0x15c,0x190,0x7ff865416070,0x7ff86541607c,0x7ff865416088",
+          "session": 2
+        },
+        {
+          "pid": 1568,
+          "parent": 5884,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:16.6613090Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=60173 --lang=en-US --mojo-named-platform-channel-pipe=5884.1380.8187065935502548599",
+          "session": 2
+        },
+        {
+          "pid": 5884,
+          "parent": 6736,
+          "executable": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+          "created": "2026-09-24T01:46:15.8426810Z",
+          "commandLine": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+          "session": 2
+        }
+      ]
+    },
+    {
+      "entries": 4,
+      "restored": true
+    }
+  ],
+  "host": {
+    "sid": "S-1-5-21-2325914565-3525904610-1579391994-500",
+    "user": "runnervmibwwn\\runneradmin",
+    "session": 2,
+    "userInteractive": true,
+    "packageCode": 15700,
+    "groups": [
+      "S-1-5-21-2325914565-3525904610-1579391994-513",
+      "S-1-1-0",
+      "S-1-5-114",
+      "S-1-5-32-544",
+      "S-1-5-32-545",
+      "S-1-5-4",
+      "S-1-2-1",
+      "S-1-5-11",
+      "S-1-5-15",
+      "S-1-5-113",
+      "S-1-2-0",
+      "S-1-5-64-10"
+    ],
+    "playerProcesses": [],
+    "steamRegistry": [],
+    "productLocations": []
+  },
+  "versions": {
+    "version": "0.2.0",
+    "previousVersion": "0.1.8",
+    "historySha256": "25f7e7633e9be25a380a59662a75b6247fddde606b7613124689959dd2cee9f0",
+    "temporaryHeadingRehearsal": true
+  },
+  "publicPackage": {
+    "kind": "nsis",
+    "path": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\downloads\\execs_0.1.8_x64-setup.exe",
+    "name": "execs_0.1.8_x64-setup.exe",
+    "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_x64-setup.exe",
+    "bytes": 6460740,
+    "sha256": "8a3795c315f08d12b65a7c725235bc9a989115a3a353c65f2930588d382c6268",
+    "signatureVerified": true,
+    "release": {
+      "assets": [
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020219",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:42Z",
+          "digest": "sha256:06ec406e829601ae259e0fa4d2b1d4cc90c9fd76f7b56477e1e78165e4bcb0e7",
+          "downloadCount": 7,
+          "id": "RA_kwDOT5ircc4ic-N7",
+          "label": "execs_0.1.8_amd64.AppImage",
+          "name": "execs_0.1.8_amd64.AppImage",
+          "size": 100592120,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:46Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.AppImage"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020302",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:46Z",
+          "digest": "sha256:439e76fdebc318307a6399d6649fda9db6878020ae3b8660ea96e1ee41d5d922",
+          "downloadCount": 7,
+          "id": "RA_kwDOT5ircc4ic-PO",
+          "label": "execs_0.1.8_amd64.AppImage.sig",
+          "name": "execs_0.1.8_amd64.AppImage.sig",
+          "size": 416,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:46Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.AppImage.sig"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020175",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:40Z",
+          "digest": "sha256:bb6f3628cee4dbbb37a093c4ef4bbb25c3ce6fbf64f4a3f775a39af454e99231",
+          "downloadCount": 6,
+          "id": "RA_kwDOT5ircc4ic-NP",
+          "label": "execs_0.1.8_amd64.deb",
+          "name": "execs_0.1.8_amd64.deb",
+          "size": 13220524,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:40Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.deb"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020205",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:41Z",
+          "digest": "sha256:892f07293c809397cd7610c7b363261b81d5cd7ace7baa5a32e9050ebf924020",
+          "downloadCount": 7,
+          "id": "RA_kwDOT5ircc4ic-Nt",
+          "label": "execs_0.1.8_amd64.deb.sig",
+          "name": "execs_0.1.8_amd64.deb.sig",
+          "size": 408,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:41Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.deb.sig"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578025792",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:19:28Z",
+          "digest": "sha256:8a3795c315f08d12b65a7c725235bc9a989115a3a353c65f2930588d382c6268",
+          "downloadCount": 7,
+          "id": "RA_kwDOT5ircc4ic_lA",
+          "label": "execs_0.1.8_x64-setup.exe",
+          "name": "execs_0.1.8_x64-setup.exe",
+          "size": 6460740,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:19:29Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_x64-setup.exe"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578025817",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:19:29Z",
+          "digest": "sha256:0178d084a15be9b28b0367587fefc50fec383d63c1689359502bd6f892ad0a7a",
+          "downloadCount": 6,
+          "id": "RA_kwDOT5ircc4ic_lZ",
+          "label": "execs_0.1.8_x64-setup.exe.sig",
+          "name": "execs_0.1.8_x64-setup.exe.sig",
+          "size": 416,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:19:29Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_x64-setup.exe.sig"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578036775",
+          "contentType": "application/json",
+          "createdAt": "2026-09-21T02:26:02Z",
+          "digest": "sha256:d6c872b45cc7d9c9a7a74af89cd8b65046af49d7c86b03ceaa43ff84ddf3b619",
+          "downloadCount": 58,
+          "id": "RA_kwDOT5ircc4idCQn",
+          "label": "",
+          "name": "latest.json",
+          "size": 3352,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:26:03Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/latest.json"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578036823",
+          "contentType": "application/json",
+          "createdAt": "2026-09-21T02:26:05Z",
+          "digest": "sha256:8bfe346043ce34638d7a048d48daad985a23de70e7ced8d382ac8066072c3ff1",
+          "downloadCount": 1,
+          "id": "RA_kwDOT5ircc4idCRX",
+          "label": "",
+          "name": "release-commit.json",
+          "size": 83,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:26:05Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/release-commit.json"
+        }
+      ],
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-21T02:26:18Z",
+      "tagName": "v0.1.8"
+    }
+  },
+  "fixture": {
+    "provenance": {
+      "exporterTag": "v0.1.8",
+      "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+      "archives": [
+        {
+          "name": "no-hud",
+          "archiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38"
+        },
+        {
+          "name": "single-hud",
+          "archiveSha256": "4b46fb3144b5c9fcd334505672fc8513fa3f9d629f821fbb4ab53b9da4667ec9"
+        }
+      ],
+      "authored": "Schema-1 library index, profile IDs/names, settings and disposable TF2 root; source export manifests and payload bytes are unchanged except the named library identity fields."
+    },
+    "childEnv": {
+      "APPDATA": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\roaming",
+      "LOCALAPPDATA": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\local",
+      "XDG_DATA_HOME": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\data",
+      "XDG_CONFIG_HOME": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\config"
+    },
+    "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+    "activeProfileName": "Package smoke - active"
+  },
+  "installer": {
+    "code": 0,
+    "signal": null,
+    "exitedAt": "2026-09-24T01:46:13.515Z",
+    "destination": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed"
+  },
+  "installed": {
+    "path": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+    "sha256": "171df823a15b3f08e871dfc75bd098a9b1954bf30c0913ee81049edd3a06914c",
+    "noticeSha256": "4bc661f74c34dbbf71693e5faf2fe086812d8a85d4e3df3c3cfc8fee5fb56b22"
+  },
+  "policy": {
+    "entries": 4,
+    "userData": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview",
+    "applied": true,
+    "port": 60173
+  },
+  "webview": {
+    "version": "131.0.2903.86",
+    "versionEndpoint": {
+      "Browser": "Edg/131.0.2903.86",
+      "Protocol-Version": "1.3",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+      "V8-Version": "13.1.20.7",
+      "WebKit-Version": "537.36 (@cf5bf303997cad93d7a0bede234d3c3dc01cc63d)",
+      "webSocketDebuggerUrl": "ws://127.0.0.1:60173/devtools/browser/c68c4395-0566-4c67-bff3-70bdb82d3f9e"
+    },
+    "observation": {
+      "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+      "listeners": [
+        {
+          "address": "127.0.0.1",
+          "pid": 1568,
+          "port": 60173
+        }
+      ],
+      "packageCode": 15700,
+      "processes": [
+        {
+          "pid": 5884,
+          "parent": 6736,
+          "executable": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+          "created": "2026-09-24T01:46:15.8426810Z",
+          "commandLine": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+          "session": 2
+        },
+        {
+          "pid": 1568,
+          "parent": 5884,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:16.6613090Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=60173 --lang=en-US --mojo-named-platform-channel-pipe=5884.1380.8187065935502548599",
+          "session": 2
+        },
+        {
+          "pid": 7576,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:17.5040190Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=crashpad-handler --user-data-dir=D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView /prefetch:4 --monitor-self-annotation=ptype=crashpad-handler --database=D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\\Crashpad --annotation=IsOfficialBuild=1 --annotation=channel= --annotation=chromium-version=131.0.6778.109 \"--annotation=exe=C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --annotation=plat=Win64 \"--annotation=prod=Edge WebView2\" --annotation=ver=131.0.2903.86 --initial-client-data=0x180,0x184,0x188,0x15c,0x190,0x7ff865416070,0x7ff86541607c,0x7ff865416088",
+          "session": 2
+        },
+        {
+          "pid": 2348,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:20.9868290Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=gpu-process --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --gpu-preferences=UAAAAAAAAADgAAAEAAAAAAAAAAAAAAAAAABgAAEAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAA --field-trial-handle=1848,i,9956167699399496386,4893570762199660390,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1832 /prefetch:2",
+          "session": 2
+        },
+        {
+          "pid": 6120,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:21.7257120Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=1744,i,9956167699399496386,4893570762199660390,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1936 /prefetch:3",
+          "session": 2
+        },
+        {
+          "pid": 3740,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:22.0046940Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=service --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=2348,i,9956167699399496386,4893570762199660390,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=2360 /prefetch:8",
+          "session": 2
+        },
+        {
+          "pid": 1872,
+          "parent": 1568,
+          "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+          "created": "2026-09-24T01:46:22.2138490Z",
+          "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=renderer --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --remote-debugging-port=60173 --video-capture-use-gpu-memory-buffer --lang=en-US --device-scale-factor=1 --num-raster-threads=2 --enable-main-frame-before-activation --renderer-client-id=5 --js-flags=\"--harmony-weak-refs-with-cleanup-some --expose-gc --ms-user-locale=\" --time-ticks-at-unix-epoch=-1790213748131433 --launch-time-ticks=634075475 --field-trial-handle=3584,i,9956167699399496386,4893570762199660390,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=3632 /prefetch:1",
+          "session": 2
+        }
+      ],
+      "windows": [],
+      "process": {
+        "pid": 5884,
+        "parent": 6736,
+        "executable": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+        "created": "2026-09-24T01:46:15.8426810Z",
+        "commandLine": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+        "session": 2
+      },
+      "version": "0.1.8"
+    },
+    "driver": {
+      "path": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\downloads\\msedgedriver.exe",
+      "signer": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+      "version": "131.0.2903.86",
+      "sha256": "C34A6B22814A18599F2A67BEF922BA879AE44158F216D4D2DF797D293F545665",
+      "signature": "Valid",
+      "url": "https://msedgedriver.microsoft.com/131.0.2903.86/edgedriver_win64.zip",
+      "archiveSha256": "16ad3ea073e26f0000d1315e0a851eeb44b2754c66d47652e265cce5dea662af"
+    }
+  },
+  "error": {
+    "message": "Driver exposed outside loopback",
+    "stack": "AssertionError [ERR_ASSERTION]: Driver exposed outside loopback\n    at main (file:///D:/a/execs/execs/scripts/windows-package-smoke.mjs:559:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+  },
+  "finalPreservation": {
+    "recordedAt": "2026-09-24T01:46:35.639Z",
+    "data": {
+      "files": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "af26e786315ff29dedc241e5779f8db11846c86752b29770e57b66276cc5dc1d",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bed8ac651692744ccb550bd7e805074af62852165d96b1b6207d096ab31c348c",
+        "profiles/index.json": "272dd1f125afa80ecd8bfa8b7f7230095d38cf3d63b1d947cb49fdb5170ed681",
+        "settings.json": "ec0af1107b76b410535138943ef92255553b7a877b33326b0b2f9fb1d3288baf"
+      },
+      "directories": [
+        "profiles",
+        "profiles/blobs",
+        "profiles/blobs/sha256",
+        "profiles/blobs/sha256/ec",
+        "profiles/f20a0001-8d01-4000-8000-000000000001",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+        "profiles/f20a0001-8d01-4000-8000-000000000002",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+      ]
+    },
+    "live": {
+      "files": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "directories": [
+        "tf",
+        "tf/cfg",
+        "tf/cfg/overrides",
+        "tf/custom"
+      ]
+    },
+    "exported": {
+      "files": {},
+      "directories": []
+    },
+    "originalBytesPreserved": true
+  },
+  "finalErrors": [
+    "Driver exposed outside loopback",
+    "Owned process cleanup failed"
+  ]
+}

@@ -1,0 +1,9 @@
+# Linux native development smoke: run 35937290549
+
+This [hosted run](https://github.com/rndaom/execs/actions/runs/35937290549) passed on draft PR #60 head `65d20bd905435a6d4813b39c13537339d94b7b2b` through the tested PR merge `4c363147a62a624a7bda7f2ecae13541d505d37f`. It built and drove a real native Linux WebKitGTK development binary. It is not an AppImage/Debian installation, signed updater, Steam Cloud, or retail TF2 result.
+
+The [inactive-profile case](evidence/execs-linux-native-heL8Bw/evidence/results.json) passed the six-profile menu, keyboard zoom interaction, and settings persistence across a native restart. Its five screenshots and structured checks are retained.
+
+The [active Files case](evidence/execs-linux-native-active-Y00bgy/evidence/results.json) passed draft retention through pane navigation and exact-byte explicit Save. A native close request offered Save, Discard, and Cancel. Cancel retained the 4,927-byte draft. Discard closed the app and a restart loaded the previous 4,881-byte save. A later Save-and-close committed the 4,911-byte draft, and the next restart loaded those bytes. The harness then observed a clean native close. Nine screenshots and the structured checks are retained; screenshot 06 shows the dialog before Discard, while screenshots 07 and 09 show the corresponding post-restart states.
+
+The original workflow artifact is API artifact `10783936314`, named `linux-native-smoke-4c363147a62a624a7bda7f2ecae13541d505d37f`. Its 23 extracted files are archived byte-for-byte beneath this directory. [provenance.json](provenance.json) records their sizes and SHA-256 hashes. This successful run supersedes the close-flow limits of [run 35780701908](../run-35780701908/README.md) for the tested native development path; broader release qualification remains open.

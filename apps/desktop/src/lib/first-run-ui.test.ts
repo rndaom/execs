@@ -36,8 +36,8 @@ describe("first-run routing", () => {
     expect(canApplyWizard("Main", true, false)).toBe(false);
     expect(canApplyWizard("Main", false, true)).toBe(false);
     expect(wizardApplyCopy(true)).toBe("Close TF2 to apply");
-    expect(wizardApplyCopy(false)).toBe("Apply");
-    expect(wizardApplyCopy(false, true)).toBe("Create");
+    expect(wizardApplyCopy(false)).toBe("Create and apply");
+    expect(wizardApplyCopy(false, true)).toBe("Create and switch");
     expect(wizardApplyCopy(true, true)).toBe("Close TF2 to apply");
   });
 

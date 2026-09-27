@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "name": "Package smoke - active",
+  "launchOptions": "-novid -nojoy",
+  "files": [
+    {
+      "path": "tf/cfg/config.cfg",
+      "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/cfg/overrides/compat.cfg",
+      "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/compat-pack.vpk",
+      "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/mastercomfig-base.vpk",
+      "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+      "storage": "shared"
+    }
+  ],
+  "mods": [
+    {
+      "id": "compat-pack",
+      "name": "Compatibility pack",
+      "source": {
+        "kind": "local"
+      },
+      "pack": "compat-pack.vpk",
+      "files": 1,
+      "bytes": 170,
+      "installedAt": "2026-09-20T00:00:00Z"
+    }
+  ],
+  "id": "f20a0001-8d01-4000-8000-000000000001",
+  "tf2Root": "D:\\a\\_temp\\execs-windows-package-JlaeIR\\fixture\\fixture-tf2"
+}

@@ -43,6 +43,42 @@ function editor() {
   return EditorView.findFromDOM(element) as EditorView;
 }
 
+async function finishEditorMeasure(view: EditorView) {
+  await act(
+    () =>
+      new Promise<void>((resolve) => {
+        view.requestMeasure({ read: () => null, write: () => resolve() });
+      }),
+  );
+}
+
+function tabIntoEditorWithBrowserReset(view: EditorView, reverse = false) {
+  const after = document.createElement("button");
+  after.textContent = "After editor";
+  if (reverse) box.append(after);
+  const previous = reverse
+    ? after
+    : box.querySelector<HTMLButtonElement>('[aria-label="Wrap lines"]');
+  if (!previous) throw new Error("Missing editor focus neighbor");
+  previous.focus();
+  const tab = new KeyboardEvent("keydown", {
+    key: "Tab",
+    keyCode: 9,
+    shiftKey: reverse,
+    bubbles: true,
+    cancelable: true,
+  });
+  previous.dispatchEvent(tab);
+  expect(tab.defaultPrevented).toBe(false);
+  // jsdom has no default Tab navigation or native layout. Reproduce the
+  // observed WebKit entry: focus and selection survive, then both axes reset.
+  view.contentDOM.focus();
+  view.scrollDOM.scrollTop = 0;
+  view.scrollDOM.scrollLeft = 0;
+  view.scrollDOM.dispatchEvent(new Event("scroll"));
+  after.remove();
+}
+
 describe("Files editor model isolation", () => {
   it("preserves CRLF bytes, scopes Save, and leaves ordinary Tab to focus navigation", () => {
     props = { ...props, value: "echo hi\r\necho bye\r\n" };
@@ -141,6 +177,190 @@ describe("Files editor model isolation", () => {
     expect(editor().state.doc.toString()).toBe("echo hi");
     expect(props.onChange).toHaveBeenLastCalledWith("echo hi");
   });
+  it("restores document scroll before hiding can erase layout, together with draft history and selection", () => {
+    const renderPane = () =>
+      act(() =>
+        root.render(
+          <div hidden={!props.active}>
+            <FilesEditor {...props} />
+          </div>,
+        ),
+      );
+    renderPane();
+    const first = editor();
+    act(() =>
+      first.dispatch({
+        changes: { from: 7, insert: " there" },
+        selection: { anchor: 13, head: 8 },
+      }),
+    );
+    props = { ...props, value: "echo hi there" };
+    renderPane();
+    // Browsers report zero after display:none or removal. jsdom has no layout,
+    // so model that browser behavior while keeping visible scroll observable.
+    const emulateBrowserLayout = (view: EditorView) => {
+      for (const [axis, value] of [
+        ["scrollTop", 380],
+        ["scrollLeft", 48],
+      ] as const) {
+        Object.defineProperty(view.scrollDOM, axis, {
+          configurable: true,
+          get: () => (view.dom.isConnected && !view.dom.closest("[hidden]") ? value : 0),
+        });
+      }
+    };
+    emulateBrowserLayout(first);
+    props = { ...props, active: false };
+    renderPane();
+    expect(box.querySelector(".cm-editor")).toBeNull();
+    props = { ...props, active: true };
+    renderPane();
+    expect(editor().scrollDOM.scrollTop).toBe(380);
+    expect(editor().scrollDOM.scrollLeft).toBe(48);
+    expect(editor().state.doc.toString()).toBe("echo hi there");
+    expect(editor().state.selection.main.anchor).toBe(13);
+    expect(editor().state.selection.main.head).toBe(8);
+
+    props = { ...props, path: "cfg/other.cfg", value: "other" };
+    renderPane();
+    expect(editor().scrollDOM.scrollTop).toBe(0);
+    props = { ...props, path: "cfg/autoexec.cfg", value: "echo hi there" };
+    renderPane();
+    expect(editor().scrollDOM.scrollTop).toBe(380);
+    expect(editor().scrollDOM.scrollLeft).toBe(48);
+    emulateBrowserLayout(editor());
+    act(() => root.render(null));
+    renderPane();
+    expect(editor().scrollDOM.scrollTop).toBe(380);
+    expect(editor().scrollDOM.scrollLeft).toBe(48);
+    expect(editor().state.selection.main.anchor).toBe(13);
+    expect(editor().state.selection.main.head).toBe(8);
+    act(() => {
+      undo(editor());
+    });
+    expect(editor().state.doc.toString()).toBe("echo hi");
+    expect(props.onSave).not.toHaveBeenCalled();
+  });
+  it.each([false, true])(
+    "retains a restored viewport when %s reverse Tab enters the editor after a browser focus reset",
+    async (reverse) => {
+      const original = Array.from({ length: 100 }, (_, index) => `echo line ${index + 1}`).join(
+        "\n",
+      );
+      props = { ...props, value: original };
+      render();
+      const first = editor();
+      const line = first.state.doc.line(80);
+      act(() =>
+        first.dispatch({
+          changes: { from: original.length, insert: "\n// retained draft" },
+          selection: { anchor: line.to, head: line.from },
+        }),
+      );
+      const draft = first.state.doc.toString();
+      const selection = first.state.selection;
+      props = { ...props, value: draft };
+      render();
+      first.scrollDOM.scrollTop = 1210;
+      first.scrollDOM.scrollLeft = 2234;
+      props = { ...props, active: false };
+      render();
+      props = { ...props, active: true };
+      render();
+      const restored = editor();
+      await finishEditorMeasure(restored);
+      expect(restored.scrollDOM.scrollTop).toBe(1210);
+      expect(restored.scrollDOM.scrollLeft).toBe(2234);
+      act(() => tabIntoEditorWithBrowserReset(restored, reverse));
+      await finishEditorMeasure(restored);
+      expect(document.activeElement).toBe(restored.contentDOM);
+      expect(restored.scrollDOM.scrollTop).toBe(1210);
+      expect(restored.scrollDOM.scrollLeft).toBe(2234);
+      expect(restored.state.doc.toString()).toBe(draft);
+      expect(restored.state.selection.eq(selection)).toBe(true);
+      act(() => {
+        expect(undo(restored)).toBe(true);
+      });
+      expect(restored.state.doc.toString()).toBe(original);
+      expect(props.onSave).not.toHaveBeenCalled();
+    },
+  );
+  it.each(["pointer", "wheel", "key"])(
+    "does not restore over %s input before the queued focus measurement",
+    async (input) => {
+      render();
+      const view = editor();
+      await finishEditorMeasure(view);
+      view.scrollDOM.scrollTop = 380;
+      view.scrollDOM.scrollLeft = 48;
+      act(() => {
+        tabIntoEditorWithBrowserReset(view);
+        if (input === "pointer")
+          view.contentDOM.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        else if (input === "wheel")
+          view.scrollDOM.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true }));
+        else
+          view.contentDOM.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Shift", bubbles: true }),
+          );
+        view.scrollDOM.scrollTop = 47;
+        view.scrollDOM.scrollLeft = 9;
+      });
+      await finishEditorMeasure(view);
+      expect(view.scrollDOM.scrollTop).toBe(47);
+      expect(view.scrollDOM.scrollLeft).toBe(9);
+      expect(view.state.doc.toString()).toBe("echo hi");
+      expect(props.onSave).not.toHaveBeenCalled();
+    },
+  );
+  it("preserves a read-only viewport on keyboard entry without allowing edits", async () => {
+    props = { ...props, readOnly: true };
+    render();
+    const view = editor();
+    await finishEditorMeasure(view);
+    view.scrollDOM.scrollTop = 380;
+    view.scrollDOM.scrollLeft = 48;
+    act(() => tabIntoEditorWithBrowserReset(view));
+    await finishEditorMeasure(view);
+    expect(view.scrollDOM.scrollTop).toBe(380);
+    expect(view.scrollDOM.scrollLeft).toBe(48);
+    expect(document.activeElement).toBe(view.contentDOM);
+    act(() => view.dispatch({ changes: { from: 0, insert: "blocked" } }));
+    expect(view.state.doc.toString()).toBe("echo hi");
+    expect(props.onChange).not.toHaveBeenCalled();
+    expect(props.onSave).not.toHaveBeenCalled();
+  });
+  it.each(["document", "profile"])(
+    "cancels queued focus restoration before changing %s",
+    async (identity) => {
+      render();
+      const previous = editor();
+      await finishEditorMeasure(previous);
+      previous.scrollDOM.scrollTop = 380;
+      previous.scrollDOM.scrollLeft = 48;
+      act(() => tabIntoEditorWithBrowserReset(previous));
+      props = {
+        ...props,
+        ...(identity === "document"
+          ? { path: "cfg/other.cfg" }
+          : { profileId: crypto.randomUUID() }),
+        value: "other document",
+      };
+      render();
+      const next = editor();
+      await finishEditorMeasure(next);
+      expect(previous.dom.isConnected).toBe(false);
+      expect(previous.scrollDOM.scrollTop).toBe(0);
+      expect(previous.scrollDOM.scrollLeft).toBe(0);
+      expect(next.scrollDOM.scrollTop).toBe(0);
+      expect(next.scrollDOM.scrollLeft).toBe(0);
+      expect(next.state.doc.toString()).toBe("other document");
+      expect(next.state.selection.main.head).toBe(0);
+      expect(undo(next)).toBe(false);
+      expect(props.onChange).not.toHaveBeenCalled();
+      expect(props.onSave).not.toHaveBeenCalled();
+    },
+  );
   it("blocks programmatic edits in read-only files and destroys hidden views", () => {
     props = { ...props, readOnly: true };
     render();
@@ -204,6 +424,11 @@ describe("Files editor model isolation", () => {
     expect(getComputedStyle(match as HTMLElement).borderRadius).toBe("4px");
     expect(getComputedStyle(currentMatch as HTMLElement).boxShadow).toContain("inset");
     act(() => find?.click());
+    expect(searchPanelOpen(editor().state)).toBe(false);
+    expect(find?.getAttribute("aria-pressed")).toBe("false");
+
+    act(() => find?.click());
+    act(() => box.querySelector<HTMLButtonElement>('.cm-panel.cm-search [name="close"]')?.click());
     expect(searchPanelOpen(editor().state)).toBe(false);
     expect(find?.getAttribute("aria-pressed")).toBe("false");
 

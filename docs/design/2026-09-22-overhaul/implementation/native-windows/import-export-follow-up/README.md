@@ -1,0 +1,39 @@
+# Native inactive import, export, reopen and path check — 22 September 2026
+
+**Scoped Windows native passes:** the application imported a synthetic multi-HUD ZIP emitted by the actual public-v0.1.8 exporter after explicit trust and `secondhud` selection, exported the new inactive profile, and retained all three inactive profiles after a normal quit/reopen. A separate export-only case then confirmed an exact path committed in the native Save dialog. These **eight captures** are separate from the earlier native and zoom captures: **01–06 use E093; 07–08 use 7D3**.
+
+The first case's two sessions used the same version 0.2.0 release executable, 23,442,432 bytes, SHA-256 `E09343CC38637D2B99D2FEE1843C3FA15FA73B741218B77EFC2CB0FA9DAA1A65`. This is the historical E093 build used for the zoom follow-up. The isolated case was `20260922-131412-inactiveimport-65ffd4ab`. Both sessions ran unpackaged through Explorer with private execs/WebView2 data and returned exit code 0; see [recorded request](metadata/request.json), [first launch](metadata/session-01/launch.json), and [reopened launch](metadata/session-02/launch.json). The later 7D3 case is recorded separately below.
+
+| Capture | Native evidence |
+| --- | --- |
+| [01 — Import review](01-import-review.jpg) | The actual v0.1.8 ZIP reached the native trust review. |
+| [02 — Explicit HUD choice](02-second-hud-selected.jpg) | `secondhud` was selected before import confirmation. |
+| [03 — Completed inactive import](03-import-complete-inactive.jpg) | Ten files imported; Done retained an inactive library. |
+| [04 — Export action](04-imported-profile-export-action.jpg) | Export was selected for **Actual public v0.1.8 export**. |
+| [05 — After export](05-after-export-inactive.jpg) | The app remained inactive before its first normal close. This is not evidence that the intended Save destination was accepted. |
+| [06 — Reopened library](06-three-inactive-profiles-after-restart.jpg) | All three profiles were present and inactive after restart. |
+
+Each image has a matching `.uia.txt` snapshot. [E093 provenance](provenance.json) records the first six capture hashes and their archived source metadata.
+
+The [input ZIP](../../profile-management/compatibility-v018/multi-hud-change-owner/exported-by-v0.1.8.zip) came from the actual `v0.1.8` library exporter at `85aaf6bc0dd28f43351d4cb5cdb62502737688d5`: SHA-256 `77CC3C6F9DED610E56084F1EF7DDD410DEFE6F04162303054A0CEE274D234727`. The [payload comparison](payload-comparison.json) records **10/10 imported and 10/10 exported payload hashes** matching that source. Both HUD trees, original `fixturehud` record/options and approved CFG bytes remain exact. The [new manifest](metadata/imported-manifest.json) records selected owner `secondhud`, `hudReviewPending: true`, empty preloader choices and inert `launchSyncPending: true`. Activation and option reset were deliberately not performed.
+
+The native picker wrote **`imports/Actual public v0.1.8 export.zip`**, using its default name/location. The operator reported setting the planned absolute path, but that path was not the resulting destination. Read-only inspection found the actual 3302-byte ZIP with SHA-256 `BE5F3472308C176CB88F6C604D1592C275EED58B9602AC65F4DAADF57E7AE552`. Root explicitly authorized one same-case relocation to the previously absent `exports/native-multiple-huds-v018.zip`; resolved endpoints were checked, its hash stayed identical, and all other 30 fixture files stayed exact. The [relocation receipt](metadata/export-relocation.json) preserves the actual original path and timestamps. The [archived native export](native-export.zip) contains those unchanged bytes. This correction does not establish that the native Save dialog accepted the originally intended path.
+
+The [post-export audit](metadata/post-import-export-integrity.json) verified 31 files: all **19 pre-existing files other than the index** remained exact, existing index summaries stayed exact, and the index added only the reviewed inactive profile. The only permitted extra directory is the ordinary, exactly empty blob `.incoming` container left by successful core ingestion; journals, contents within that container, reparse points and other staging state remain refused. The helper's [17 data-only checks](metadata/validator-selftest.json) are separate from the native results.
+
+The reopened session exited normally at **17:37:04.8759279 UTC**. The completed [reopen audit](metadata/post-reopen-integrity.json), recorded at **17:37:13.6616093 UTC**, verified all 31 post-export files unchanged and `activeProfileId: null`. Archival used those completed reports and did not rerun the binary-bound validator after the executable rebuild began.
+
+**Separate exact-path follow-up — 7D3:** case `20260922-134811-inactivelibrary-55ac7ac8` used version 0.2.0, 23,442,432 bytes, SHA-256 `7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D`. It exported only the preseeded **QA inactive - no HUD** profile. The [path plan](metadata/export-path-7d3/export-path-check-plan.json), [request](metadata/export-path-7d3/request.json), [launch](metadata/export-path-7d3/launch.json), and [7D3 provenance](export-path-7d3-provenance.json) keep this identity distinct from the E093 import/reopen results.
+
+| Capture | Native exact-path evidence |
+| --- | --- |
+| [07 — Settled Save path](07-keyboard-export-path.jpg) | After clicking the visible File name field by coordinates, the operator issued a separate `type_text` of the full path, pressed Tab, and verified the settled screenshot and [UIA value](07-keyboard-export-path.uia.txt) before clicking Save. |
+| [08 — Export completed](08-keyboard-export-complete.jpg) | The app remained inactive after export and then closed normally with Alt+F4. |
+
+The initial rushed batch of element click/Ctrl+A/type/Tab did not update the visible input. The separate, verified entry succeeded. These observations do not establish that either earlier failed input sequence was an application defect; the E093 default-name/path mismatch remains recorded above.
+
+The [7D3 audit](metadata/export-path-7d3/post-export-path-integrity.json) passed at **18:00:04.3158562 UTC** after exit 0 at **17:59:55.5499464 UTC**. All **20 original files, including the index, remained exact**. The sole added file was the actual requested `<case>/exports/keyboard-path-check.zip`, with all four selected-profile payloads exact. Its SHA-256 is `B72B83E32F47B916390C32B575228BBD8AA6100A3B3828EAB014F6C17D9C3E92`; the [archived native ZIP](keyboard-path-export-7d3.zip) retains those bytes. No relocation, import, activation or deletion occurred in this follow-up.
+
+**Bounded RND-325 observation:** the [read-only process snapshot](metadata/export-path-7d3/process-priority-observation.json) at **17:52:31.7005710 UTC** records PID 35100 as `Normal` process priority, base priority 8, with all 46 thread `priorityLevel` values `Normal`. Priority boosts were enabled and instantaneous thread priorities ranged from 8 to 15. No priorities were changed. This is one snapshot of the foregrounded private native window, not performance qualification: it includes no TF2, foreground/background comparison, frame-time, WebView2 child-process or UI-latency measurement.
+
+This pass covers native trust/import, preserved multi-HUD bytes and ownership metadata, export, inactive state and restart persistence. It does not qualify active-profile switching, Files saves/close guards, Steam Cloud synchronization, TF2 behavior, or installer/updater behavior. Windows Steam discovery can still read actual account metadata; the scoped native actions did not include game/Steam launch or Cloud synchronization. Real player Cloud files, browser caches and OS files were outside the fixture hash comparison. See the [safety analysis](../active-fixture-analysis.md) and [reproduction instructions](../reproduction/inactive-import-export-reopen.md).

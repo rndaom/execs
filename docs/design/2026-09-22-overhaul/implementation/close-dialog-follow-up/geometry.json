@@ -1,0 +1,70 @@
+{
+  "before": {
+    "clientWidth": 606,
+    "scrollWidth": 725,
+    "path": "tf/cfg/overrides/competitive_soldier_rocketjump_practice_crosshair_viewmodel_and_audio_preferences_backup.cfg"
+  },
+  "after960": {
+    "clientWidth": 606,
+    "focus": "Cancel",
+    "pathHeight": 39,
+    "pathText": "tf/cfg/overrides/competitive_soldier_rocketjump_practice_crosshair_viewmodel_and_audio_preferences_backup.cfg",
+    "scrollWidth": 606,
+    "viewport": {
+      "height": 640,
+      "width": 960
+    }
+  },
+  "after480": {
+    "buttons": [
+      {
+        "label": "Save and continue",
+        "rect": {
+          "bottom": 212.046875,
+          "height": 39.6875,
+          "left": 114.25,
+          "right": 264.578125,
+          "top": 172.359375,
+          "width": 150.328125,
+          "x": 114.25,
+          "y": 172.359375
+        }
+      },
+      {
+        "label": "Discard and continue",
+        "rect": {
+          "bottom": 212.046875,
+          "height": 39.6875,
+          "left": 276.578125,
+          "right": 447,
+          "top": 172.359375,
+          "width": 170.421875,
+          "x": 276.578125,
+          "y": 172.359375
+        }
+      },
+      {
+        "label": "Cancel",
+        "rect": {
+          "bottom": 263.734375,
+          "height": 39.6875,
+          "left": 371.078125,
+          "right": 447,
+          "top": 224.046875,
+          "width": 75.921875,
+          "x": 371.078125,
+          "y": 224.046875
+        }
+      }
+    ],
+    "clientHeight": 239,
+    "clientWidth": 446,
+    "scrollHeight": 239,
+    "scrollWidth": 446,
+    "viewport": {
+      "height": 320,
+      "width": 480
+    }
+  },
+  "keyboard": ["Cancel", "Save and continue", "Discard and continue", "Cancel"]
+}

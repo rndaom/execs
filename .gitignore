@@ -4,6 +4,8 @@ coverage/
 **/src-tauri/target/
 test-results/
 playwright-report/
+__pycache__/
+*.pyc
 *.log
 .env
 .env.local

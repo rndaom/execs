@@ -1,4 +1,4 @@
-import { PencilSimple, Plus, X } from "@phosphor-icons/react";
+import { PencilSimple, X } from "@phosphor-icons/react";
 import {
   type CrosshairColor,
   type CrosshairShape,
@@ -10,8 +10,7 @@ import type { PreviewPixels } from "./useCrosshairDraft";
 
 /**
  * The base-crosshair picker: first-party shapes, the imported PNG, and every
- * library entry — each drawn, not named — plus the two doors into the
- * designer and the community pack.
+ * library entry — each drawn, not named — plus the designer entry.
  */
 export function CrosshairLibraryChips({
   choices,
@@ -20,14 +19,12 @@ export function CrosshairLibraryChips({
   customRgba,
   previewFor,
   locked,
-  canBrowseCommunity,
   hasDesign,
   onSelect,
   onRemove,
   onOpenDesigner,
-  onOpenCommunity,
   showDesigner = true,
-  showCommunity = true,
+  designerLabel,
 }: {
   choices: CrosshairShape[];
   selected: CrosshairShape;
@@ -35,14 +32,12 @@ export function CrosshairLibraryChips({
   customRgba: number[] | null;
   previewFor: (name: string) => PreviewPixels | null;
   locked: boolean;
-  canBrowseCommunity: boolean;
   hasDesign: boolean;
   onSelect: (shape: CrosshairShape) => void;
   onRemove: (shape: CrosshairShape) => void;
   onOpenDesigner: () => void;
-  onOpenCommunity: () => void;
   showDesigner?: boolean;
-  showCommunity?: boolean;
+  designerLabel?: string;
 }) {
   return (
     <fieldset>
@@ -61,24 +56,12 @@ export function CrosshairLibraryChips({
               className="btn btn-ghost"
             >
               <PencilSimple size={13} />
-              {hasDesign ? "Edit design" : "Design your own"}
-            </button>
-          ) : null}
-          {showCommunity ? (
-            <button
-              type="button"
-              data-testid="crosshair-open-community"
-              disabled={locked || !canBrowseCommunity}
-              onClick={onOpenCommunity}
-              className="btn btn-ghost"
-            >
-              <Plus size={13} />
-              Community crosshairs
+              {designerLabel ?? (hasDesign ? "Edit design" : "Design your own")}
             </button>
           ) : null}
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
+      <div className="mt-3 grid grid-cols-4 gap-2">
         {choices.map((shape) => {
           const isSelected = selected === shape;
           const isLibrary = !isBuiltinCrosshairShape(shape);
@@ -104,7 +87,7 @@ export function CrosshairLibraryChips({
                 customRgba={customRgba}
                 color={color}
                 preview={previewFor(shape)}
-                size={44}
+                size={36}
               />
               <span className={`thumb-label ${isLibrary ? "" : "capitalize"}`}>
                 {crosshairShapeLabel(shape)}
@@ -122,7 +105,7 @@ export function CrosshairLibraryChips({
                     event.preventDefault();
                     onRemove(shape);
                   }}
-                  className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full border border-edge-strong bg-panel text-ink-muted opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-focus-within/chip:opacity-100 group-hover/chip:opacity-100"
+                  className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border border-edge-strong bg-panel text-ink-muted opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-focus-within/chip:opacity-100 group-hover/chip:opacity-100"
                 >
                   <X size={9} weight="bold" />
                 </button>

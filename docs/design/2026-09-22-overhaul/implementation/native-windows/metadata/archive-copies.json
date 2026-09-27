@@ -1,0 +1,469 @@
+{
+  "collectedUtc": "2026-09-22T16:19:35.6097918Z",
+  "normalizedUtc": "2026-09-22T16:48:18.218582Z",
+  "note": "Executed local fixture metadata and current local reproduction scripts. Text is normalized for the repository, not asserted byte-identical to the source; source and archive SHA-256 values are distinct fields. No WebView2 cache or real player files copied. Launcher gained the InactiveLibrary branch after the first rootless session; this is the reusable script snapshot at collection, not a historical per-session script hash. Image bytes are unchanged and separately hashed.",
+  "files": [
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\Start-IsolatedExecs.ps1",
+      "archivedRelativePath": "reproduction/Start-IsolatedExecs.ps1",
+      "sourceSha256": "51AEF43202CA40D8601BF6DB5BB30B39FD5DE01C9E41B88ADB2DFBA0A4846CDA",
+      "archivedSha256": "51AEF43202CA40D8601BF6DB5BB30B39FD5DE01C9E41B88ADB2DFBA0A4846CDA",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\InactiveLibraryFixture.ps1",
+      "archivedRelativePath": "reproduction/InactiveLibraryFixture.ps1",
+      "sourceSha256": "65DDA62C2F3195F575A333413B70F4CE059CC253CC3C4550828C2D6C93F4B032",
+      "archivedSha256": "65DDA62C2F3195F575A333413B70F4CE059CC253CC3C4550828C2D6C93F4B032",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\inactive-library-safety.md",
+      "archivedRelativePath": "reproduction/inactive-library-safety.md",
+      "sourceSha256": "B63528E7E9C80D3492C31B47707356ED507009104D4407788551F135FE10BD6E",
+      "archivedSha256": "B63528E7E9C80D3492C31B47707356ED507009104D4407788551F135FE10BD6E",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-115611-startuperror-6775da61\\request.json",
+      "archivedRelativePath": "metadata/20260922-115611-startuperror-6775da61/request.json",
+      "sourceSha256": "6528B7974592A3A9242DAF7C4B3A492558C59A933EC5B3D7750A8C6CBF88C9FA",
+      "archivedSha256": "6889F290E30D252B1D4CC95AA9B31CEE7D90A855BD45417256C77358C7C321DC",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-115611-startuperror-6775da61\\bootstrap-policy-refusal-event.json",
+      "archivedRelativePath": "metadata/20260922-115611-startuperror-6775da61/bootstrap-policy-refusal-event.json",
+      "sourceSha256": "92DEE52E6D635AE388B4F8202AFF17FEF7E6C72CB713434257465B75EFB6460E",
+      "archivedSha256": "9507E84AF97A6E7544C752C1A07D8E91929BB84D458DD01FD9A68755D1CB81A5",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120326-startuperror-7da431d8\\request.json",
+      "archivedRelativePath": "metadata/20260922-120326-startuperror-7da431d8/request.json",
+      "sourceSha256": "739A5FC90AC3955B8D9C67F8999406FC7484F9650E0AA058040D20E8457C5AC2",
+      "archivedSha256": "1EEDDC66293A4724031DF57464533E812061F696BF5EA839D8283D2E86ED370F",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120326-startuperror-7da431d8\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-120326-startuperror-7da431d8/bootstrap.json",
+      "sourceSha256": "2C2DBB00FB7B5B5BA68CD3B87BD5F60DB4C669644C69552F83B8DA3CA9FD7D27",
+      "archivedSha256": "8468304A5AAD7A48602BED88ADFAB0240CDF144C9D8777ABCD723BB9F8E2629A",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120326-startuperror-7da431d8\\launch.json",
+      "archivedRelativePath": "metadata/20260922-120326-startuperror-7da431d8/launch.json",
+      "sourceSha256": "1E8CD849159959FE15F8C3D392267B0B477127FC94800C34D65C4A478475DFAE",
+      "archivedSha256": "36D09113B0E16FF441E8EDB0A35FDE9A479031819AEC389056EDFCAE42D827AF",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120326-startuperror-7da431d8\\exit.json",
+      "archivedRelativePath": "metadata/20260922-120326-startuperror-7da431d8/exit.json",
+      "sourceSha256": "FAD4EFDD04AD85F2BC1DBBE33B6D42256ACE63A169424463F0A0460FC2D593EE",
+      "archivedSha256": "804E5FA7AD49CB0CC94127883B4959BB163F226DFA29F0FCC090E66312648FD6",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120326-startuperror-7da431d8\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-120326-startuperror-7da431d8/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120326-startuperror-7da431d8\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-120326-startuperror-7da431d8/stderr.txt",
+      "sourceSha256": "AA7D0F52E3956F6766C88DD9B001E1F867ACE22CDB6AFC666EAF0A3944556E6C",
+      "archivedSha256": "AA7D0F52E3956F6766C88DD9B001E1F867ACE22CDB6AFC666EAF0A3944556E6C",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120326-startuperror-7da431d8\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-120326-startuperror-7da431d8/webview-processes.json",
+      "sourceSha256": "4F53CDA18C2BAA0C0354BB5F9A3ECBE5ED12AB4D8E11BA873C2F11161202B945",
+      "archivedSha256": "37517E5F3DC66819F61F5A7BB8ACE1921282415F10551D2DEFA5C3EB0985B570",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120326-startuperror-7da431d8\\roaming\\execs\\maintenance\\steam-verification",
+      "archivedRelativePath": "metadata/20260922-120326-startuperror-7da431d8/steam-verification.invalid-marker",
+      "sourceSha256": "0D6CEAC6342CD664CD9816C782F27C9A121B145868292BCB0B1DF59CAC9325B5",
+      "archivedSha256": "0D6CEAC6342CD664CD9816C782F27C9A121B145868292BCB0B1DF59CAC9325B5",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\request.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/request.json",
+      "sourceSha256": "A9DD276AA872502177BAB8B40C7A1C97FC8FF3C5CE297AEDCF972E836CB03155",
+      "archivedSha256": "562F6EB08702310916A69E1A3B85BCCC2A099D83D60499B62FE68910753F069D",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\first-session\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/first-session/bootstrap.json",
+      "sourceSha256": "37D1EBACD02D1DEF7D4C824B3BF8720659CD54B975BA728D3C11642CCBB0AE4B",
+      "archivedSha256": "A9E82775061ED4BFD1791D1A812F39AB7FEDD890A13B04A5DC56DBB5F0563FB5",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\first-session\\launch.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/first-session/launch.json",
+      "sourceSha256": "A88E00934BE8650D6D16BA1681339DDB5363D3EDC1BEA98F4F4C9638C32F4DBC",
+      "archivedSha256": "36FD2F5BBA953ACCD729169C389B1381833084CC90686495F18593C9430FFC44",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\first-session\\exit.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/first-session/exit.json",
+      "sourceSha256": "B20B565BA05387ED2C811CF4151377A18A8641DDAFB1AD7E303B48CECDE9A004",
+      "archivedSha256": "6839DFBE50F38380506BDF1D2295030879318946A24D779E411B4B3677809E66",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\first-session\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/first-session/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\first-session\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/first-session/stderr.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\first-session\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/first-session/webview-processes.json",
+      "sourceSha256": "D355A48C8DB77BCB332BA8BE35C047B63323D4F86CEA8A10A58570F2BE172B36",
+      "archivedSha256": "5FA91984B7AB8AC32B134DA3D38C6B3B55D0A560C5992A5A50854AE342ED3AFA",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\first-session\\settings.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/first-session/settings.json",
+      "sourceSha256": "93377660B4DF44DA44461F4AE018E785EB51A478DAE271950EFBA8913A5A465D",
+      "archivedSha256": "93377660B4DF44DA44461F4AE018E785EB51A478DAE271950EFBA8913A5A465D",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/reopened-session/bootstrap.json",
+      "sourceSha256": "FC0CECDDD7D8E47A8F40749540FCB23E9CE1FBCD810E0EDA39C2655A5ED095E3",
+      "archivedSha256": "95BDCBEC19023BBB3A9ECFDBC94B3B3935019AB62FBBF29BE0EABDC804880856",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\launch.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/reopened-session/launch.json",
+      "sourceSha256": "3D62E79302F9F0CF96723881F80A868861A381DF5941A9C02ABA5D0848258896",
+      "archivedSha256": "8B1E4D4638ECBD8E09E68C786350AC142BE3CAB966F6C358E44E2F25583AFF77",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\exit.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/reopened-session/exit.json",
+      "sourceSha256": "FBFB6FA12D63324CF11C4D8F957893C01E0BFDBD041D642A2F24E694FFAA0FF9",
+      "archivedSha256": "F2AA225512554A761BC27799BD1774EF7C11545C0CCED6AD45D893459B3C8334",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/reopened-session/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/reopened-session/stderr.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/reopened-session/webview-processes.json",
+      "sourceSha256": "53CA4B19A900E93D16590B61C264776A533494EBAC9A7E17E80A81F153B708D2",
+      "archivedSha256": "7992683EA7913E148540F7473268F268F0E7894C5A0756B3A4D1F15700E519A6",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\roaming\\execs\\settings.json",
+      "archivedRelativePath": "metadata/20260922-120533-rootless-422d593e/reopened-session/settings.json",
+      "sourceSha256": "93377660B4DF44DA44461F4AE018E785EB51A478DAE271950EFBA8913A5A465D",
+      "archivedSha256": "93377660B4DF44DA44461F4AE018E785EB51A478DAE271950EFBA8913A5A465D",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\request.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/request.json",
+      "sourceSha256": "7DC8F4DC85A290559A97ED0C3A39067DBB31294520062ACE1435A5163950FEE8",
+      "archivedSha256": "BF2C364FCF75E2FEFD56862DC6BA1C8F2156C841485F2BF5F81D19C8ACC46315",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/bootstrap.json",
+      "sourceSha256": "392521C152A50128A1A1F54D53639884F4FEDF0D7C7C22A9730DF31D6716F8A2",
+      "archivedSha256": "523365181AFDE312FB77D317A0A431D323B09E23D2882AEC68DFFCD1BE8682F9",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\launch.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/launch.json",
+      "sourceSha256": "62B408B59304F5208C4ACD40C642EB562A591AFF3B46244FC99D02E8897403D2",
+      "archivedSha256": "6B18F0A37B310A208DD9C521908DC96479C93D3E34C765E4FC89001E145FA5F4",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\exit.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/exit.json",
+      "sourceSha256": "B90099AAD17A2CCDF8B15CE4C14F934BD91F1A2EABCF7BDDFF062EFCD90153A4",
+      "archivedSha256": "C93AC3B388587931A7DDA31535109914CCE9C83C4C89CAF034014B68D5291427",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/stderr.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/webview-processes.json",
+      "sourceSha256": "6F4853F5D7A30BAE40BE303A5ECE8CED423F782562E8D7A57FAAFAE9520A202B",
+      "archivedSha256": "035C68254CD42542D8D559F25778A82CCCC196AFFFC3961263AFC02A06C2434B",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\inactive-library-baseline.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/inactive-library-baseline.json",
+      "sourceSha256": "9858F68631BD97F005DEA1C98A6D155D41F195517030F774DD12B1FDE5CA8F7A",
+      "archivedSha256": "F3FB75CB6F83A004E3E95F8A130171C17824577754F85B166E1DA3838D22EDFB",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\inactive-library-sources.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/inactive-library-sources.json",
+      "sourceSha256": "C1AB3094E7763CDA092BE17E1A11B0FDD7B7AAC61CA7D6EC3B5CF45F7ABF8742",
+      "archivedSha256": "8F19D9974A715F0D9BE926247D3F5C5A2D784632CB5CDC8832545897164E6A81",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\post-delete-integrity.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/post-delete-integrity.json",
+      "sourceSha256": "477D1D36B957A3C0B3493B9D89D4F38A1B277E87C72B5C8436AB4A0FE5700A7D",
+      "archivedSha256": "AB230412456BF4051F5E5605E3454CBEB872630A4333DBAC84E76E4A4CCF7F64",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\roaming\\execs\\profiles\\index.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/index-after-delete.json",
+      "sourceSha256": "3ABA7CB948DA867AB98C362A1C6AF2752FCB4770155327F13B5DE3CC6BFC26B3",
+      "archivedSha256": "3ABA7CB948DA867AB98C362A1C6AF2752FCB4770155327F13B5DE3CC6BFC26B3",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120750-inactivelibrary-ff33a080\\roaming\\execs\\settings.json",
+      "archivedRelativePath": "metadata/20260922-120750-inactivelibrary-ff33a080/settings-after-delete.json",
+      "sourceSha256": "B555531485DCC3B6761D074FAB29E4C10F148A037C38AFBAAC3113ED0C9773EC",
+      "archivedSha256": "AFF53067F02E6192C5AC5F73126FD6AD99BF275512FED432B3B174FF4F3E3515",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:/Projects/execs/.artifacts/native-isolation/Validate-InactiveDeletion.ps1",
+      "archivedRelativePath": "reproduction/Validate-InactiveDeletion.ps1",
+      "sourceSha256": "D1694A9E276240D0BA8B5A0BA92ED15F0A8279EF6C71B35CA4F98ED3B001559B",
+      "archivedSha256": "D1694A9E276240D0BA8B5A0BA92ED15F0A8279EF6C71B35CA4F98ED3B001559B",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\Validate-InactiveReview.ps1",
+      "archivedRelativePath": "reproduction/Validate-InactiveReview.ps1",
+      "sourceSha256": "BAA304FD31C01414EDF723B2078FE9396E18F954BB9DCC7B38C97EC70B22FB70",
+      "archivedSha256": "BAA304FD31C01414EDF723B2078FE9396E18F954BB9DCC7B38C97EC70B22FB70",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\request.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/request.json",
+      "sourceSha256": "4D1BA4F94020529AF202E7BD9B871C988D85D599878C981B4A5E0A78E213D062",
+      "archivedSha256": "5646B9AF1FDFC6DAA6847EF26C1ED38E5338F603CC60E30223987458AAF783D1",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/bootstrap.json",
+      "sourceSha256": "13E450B0336FBFEE704485A0270D0676A8FF04CB0ECD9FE5F4D01DA2B799B0DF",
+      "archivedSha256": "1A1D517204005A03126D451EEE6429F2272DA632CC0BEDABCB9029069794D6AB",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\launch.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/launch.json",
+      "sourceSha256": "CEA35F381E4EFCBBB136E1F5D6D14A768EC9F478C666728120B6E0FE7FE1E6C5",
+      "archivedSha256": "879FC681F26320B70343CEF178EE6B25DAF739D16F21A65BCDA8EB7E9BF3EDF4",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\exit.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/exit.json",
+      "sourceSha256": "7DB71013B5CF2A08231FE453F45727549CB3C6E62BF141A398C5E9331C243F7E",
+      "archivedSha256": "5933820AD52063167B5B01C3090D7662D6ED8D53624589BF050AD60B3D1DAC18",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/stderr.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/webview-processes.json",
+      "sourceSha256": "4B41BA1BDAC7AC794FF0B270192E550FEC25DD091B0C93FE54748ECF7339825D",
+      "archivedSha256": "B17F59AAB353C1C595F5AA50A26E44260B028699F64157D674F129B3F3521F07",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\inactive-library-baseline.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/inactive-library-baseline.json",
+      "sourceSha256": "7555BA09ED7E4457FB352A8D539AEB562188005727691FE3D0FA4A71646DF2FF",
+      "archivedSha256": "B7208C25196E0ADC136CEDA7EFCECBF275850FB4020A1B6C3BA807E656B72470",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\inactive-library-sources.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/inactive-library-sources.json",
+      "sourceSha256": "1BA3C866E46F5304BB5CBA8D6CAA1499E29903EFE3256AFDF6F9EECE2715F0BB",
+      "archivedSha256": "D45A2AD669B5F64B6E98D89AE152B1ADBF6E020869938C46AAE835BE69C8B72E",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\post-cancel-integrity.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/post-cancel-integrity.json",
+      "sourceSha256": "78FB8E33CDF2C48DED03CD72EFA7D6358450631EFEAA667ED772BB90D076810D",
+      "archivedSha256": "9B4E13AADDC243DB616309FA9EDB261016532F53BC097ADE80A13247057C8EB0",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\roaming\\execs\\profiles\\index.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/index-after-cancel.json",
+      "sourceSha256": "1EC02B6406C6DA30CD1EE9E7642FB1111D2764DD109CE9AC5193E13DC7DA7970",
+      "archivedSha256": "997A51A9676EE74561BA79E2816FE17AD7DCAC603E2C319C876C8B56E925A5AC",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-123141-inactivelibrary-e497a50a\\roaming\\execs\\settings.json",
+      "archivedRelativePath": "metadata/20260922-123141-inactivelibrary-e497a50a/settings-after-cancel.json",
+      "sourceSha256": "19A6F71369676627F177D850259252B2BF6C1EF63016B2A038D88F1EAB2CDC23",
+      "archivedSha256": "0713C3F8597997D03E3093BADDF59ECC7A751A7399385404BD47E539EA7E14BC",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\request.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/request.json",
+      "sourceSha256": "DD477A291E782F18F522832AF859F7B47F4893CDCE7970D4DB19795A8CE06969",
+      "archivedSha256": "73308FB56325EE46CFCF59555615D9A6F39C441E9DA89AA475068EF092D9F774",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\bootstrap.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/bootstrap.json",
+      "sourceSha256": "1E3E4D2B028EB2AA311B70032C76E540CF2F6E025D7635C9EC0259167B3BE1B5",
+      "archivedSha256": "D3ADB4F8F9F8E7C2AEBD311C90FF087435CEC3F132D009580A69E5CE3B6E01EA",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\launch.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/launch.json",
+      "sourceSha256": "1C2DA5DF510B47ADF20BE12FB62D1A2E33EF8CD59382F8748828E1ED9A1875D8",
+      "archivedSha256": "A3E447C9515A7C4C1CDB6FF6ACB30C7CD53C79682B30B78006BF67D0DA51D687",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\exit.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/exit.json",
+      "sourceSha256": "651CC5576C855B22B4931FA10F04AAABBF6FE8EDCD46F6F10E903FF43FF1F9E6",
+      "archivedSha256": "4652243537D18D217B4C94828F480D069ACAE145CC20D529CC23FF3A3F116D5A",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\stdout.txt",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/stdout.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\stderr.txt",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/stderr.txt",
+      "sourceSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "archivedSha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\webview-processes.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/webview-processes.json",
+      "sourceSha256": "23D766A642B764F60CA6444D27825183844EE4A47AB78E49F0E8D99736FB9B98",
+      "archivedSha256": "EB43E35EF0CE74A3BCE13BC786941B60D379BF644CFCC2DB7243B81F8E5DF9E1",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\inactive-library-baseline.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/inactive-library-baseline.json",
+      "sourceSha256": "6857C8775B179B2110D578D43634E8E450713E09FC1DD07826AB47142E7CAB13",
+      "archivedSha256": "5776C90EFC6EA9ED444B29A4D426745B380A65FA5BDBC14F27CADF80CB7EC9EE",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\inactive-library-sources.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/inactive-library-sources.json",
+      "sourceSha256": "E1175EB6E6D2BE1A58209542183984A11AFD5BC9864E5C44094CFAC8AEA86D56",
+      "archivedSha256": "F76116F921D3328A26AF740CD6F6606F4E32BFA0A47D4D40EDCD241D213E07E7",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\post-menu-integrity.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/post-menu-integrity.json",
+      "sourceSha256": "CCEF569A43C827FD1C11D7858D0DE5C34D74E5675FA186F5937D0C638C8EB66F",
+      "archivedSha256": "B732A6073B466B9448E7B3497902F89148F201343CCD0F9116CFA64622BF46AC",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\roaming\\execs\\profiles\\index.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/index-after-menu.json",
+      "sourceSha256": "65C8373FF4C915105E3E79BB93E2D856AA61FB80B0A4FB9A7FD60782421AEAE0",
+      "archivedSha256": "6CC3F74EF680EF200083E9A5F05CF30201DE5ADB3A86A58B47AEBA34B25C3004",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-124450-inactivelibrary-fc1d31c3\\roaming\\execs\\settings.json",
+      "archivedRelativePath": "metadata/20260922-124450-inactivelibrary-fc1d31c3/settings-after-menu.json",
+      "sourceSha256": "DEB4334577126A424CA190B64D8124BB7E29272046496B98D948EAB4DDC69CE8",
+      "archivedSha256": "9E5C9BDDD04285257D1D6F89CB6D9B8D87C105B198AE64169E3A778E3D510265",
+      "transformation": "UTF-8 without BOM; LF line endings and final newline for nonempty text; JSON formatted with Biome. Semantic text content retained."
+    }
+  ]
+}

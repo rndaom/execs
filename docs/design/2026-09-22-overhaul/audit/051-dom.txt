@@ -1,0 +1,84 @@
+- main:
+  - paragraph: execs
+  - generic: Unused install
+  - heading "Build your TF2 profile" [level=1]
+  - paragraph: Name it and pick a preset.
+  - generic: Profile name
+  - textbox "Profile name":
+    - /placeholder: My TF2 setup
+  - region "Preset":
+    - heading "Preset" [level=2]
+    - paragraph: Sets the default for every module.
+    - button "Show all presets"
+    - radio "Ultra Maximum fidelity with the highest system requirements. Performance Lowest Fidelity Maximum"
+    - generic: Ultra
+    - generic: Maximum fidelity with the highest system requirements.
+    - generic: Performance
+    - generic: Lowest
+    - generic: Fidelity
+    - generic: Maximum
+    - radio "High High visual quality for modern systems. Performance Moderate Fidelity High"
+    - generic: High
+    - generic: High visual quality for modern systems.
+    - generic: Performance
+    - generic: Moderate
+    - generic: Fidelity
+    - generic: High
+    - radio "Medium Selected A balanced mix of visual quality and performance. Performance Great Fidelity Balanced" [checked]
+    - generic: Medium
+    - generic: Selected
+    - generic: A balanced mix of visual quality and performance.
+    - generic: Performance
+    - generic: Great
+    - generic: Fidelity
+    - generic: Balanced
+    - radio "Low Maximum performance with reduced visual effects. Performance Very high Fidelity Low"
+    - generic: Low
+    - generic: Maximum performance with reduced visual effects.
+    - generic: Performance
+    - generic: Very high
+    - generic: Fidelity
+    - generic: Low
+  - region "Official addons":
+    - heading "Official addons" [level=2]
+    - generic: 0 selected
+    - checkbox "No footsteps Remove player footstep sounds."
+    - generic: No footsteps
+    - generic: Remove player footstep sounds.
+    - checkbox "No Pyroland Disable Pyroland visual effects."
+    - generic: No Pyroland
+    - generic: Disable Pyroland visual effects.
+    - checkbox "No soundscapes Remove ambient map soundscapes."
+    - generic: No soundscapes
+    - generic: Remove ambient map soundscapes.
+    - checkbox "No tutorial Skip tutorial hints and prompts."
+    - generic: No tutorial
+    - generic: Skip tutorial hints and prompts.
+    - checkbox "Low memory Reduce memory use on limited systems."
+    - generic: Low memory
+    - generic: Reduce memory use on limited systems.
+    - checkbox "Null-canceling movement Keep opposite movement keys responsive."
+    - generic: Null-canceling movement
+    - generic: Keep opposite movement keys responsive.
+    - checkbox "Flat mouse Use direct, unaccelerated mouse input."
+    - generic: Flat mouse
+    - generic: Use direct, unaccelerated mouse input.
+    - checkbox "Transparent viewmodels Make weapon viewmodels transparent."
+    - generic: Transparent viewmodels
+    - generic: Make weapon viewmodels transparent.
+  - paragraph:
+    - text: Uses official mastercomfig packages. execs is not affiliated with
+    - button "comfig.app"
+    - text: .
+  - paragraph: No game files change until you apply.
+  - button "Apply" [disabled]
+  - button "Change install"
+  - paragraph:
+    - text: v0.2.0 ·
+    - button "Check for updates"
+    - text: ·
+    - button "Report a bug"
+    - text: ·
+    - button "Copy diagnostics"
+  - paragraph: execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+- status

@@ -1,0 +1,44 @@
+✔ removes only Wayland libraries, including versioned copies in multiarch directories (7.1064ms)
+✔ rejects unrelated directories before removing anything (2.4386ms)
+﹣ does not follow symlinks outside the bundle (0.0536ms) # SKIP
+﹣ output plugin prunes before packing, forwards arguments and propagates failure (0.0415ms) # SKIP
+﹣ output plugin discovery does not require or mutate an AppDir (0.0774ms) # SKIP
+✔ package fixture retains tagged v0.1.8 cfg and valid Source VPK bytes with provenance (41.6886ms)
+✔ package fixture covers Windows and Linux data roots without inheriting host settings (61.9498ms)
+✔ package fixture refuses scratch reuse and a stale previous-public baseline (19.5687ms)
+✔ preservation fails on independent corruption of active, inactive, and shared payloads (77.7353ms)
+✔ preservation fails on deletion, new files, and unfinished recovery journals (77.1954ms)
+✔ preservation fails on lost active identity, deleted profiles, launch options or HUD options (170.0619ms)
+✔ preservation tolerates only documented additive defaults and harmless JSON formatting (32.1808ms)
+✔ preservation does not accept new preloader selections, arbitrary metadata or false sync success (110.4504ms)
+✔ preservation rejects changed confirmed root and changes to the synthetic live install (86.1983ms)
+✔ preservation refuses linked library directories rather than following them (28.5368ms)
+✔ Steam isolation guards cover native, Flatpak, Snap and XDG discovery paths (21.5814ms)
+✔ package smoke checks preservation after each process and makes no rendered-readiness claim (0.2687ms)
+✔ Minisign verification rejects changed bytes, signatures, keys and comments (6.2319ms)
+✔ release validation binds signatures to both assets and their release (9.2458ms)
+✔ draft URL identity accepts its stable signed API assets and refuses temporary feed URLs (4.1271ms)
+✔ previous installers use actual published asset names with literal or sanitized revisions (0.4083ms)
+✔ stable hotfix versions accept only canonical positive bounded numeric revisions (0.4734ms)
+✔ a hotfix requires its own exact tag, four source versions and substantive changelog section (19.1621ms)
+✔ updater history selects the immediately preceding stable release or numeric hotfix (7.8017ms)
+✔ signed hotfix assets accept literal or encoded plus URLs and reject original-release substitutions (9.4718ms)
+✔ all product versions, the tag and substantive notes must agree (8.2231ms)
+✔ package smoke derives and passes the immediately previous changelog release (0.3293ms)
+✔ release workflow always waits for the reusable CI gate (0.2718ms)
+✔ release candidates and tag builds share a product-tag concurrency lock (0.1881ms)
+✔ extracts a dated section and stops at the next heading (0.7742ms)
+✔ accepts an em-dash date and a v prefix (0.7933ms)
+✔ extracts Unreleased (0.2265ms)
+✔ throws when the version is missing (0.4739ms)
+✔ throws when the version section is empty (0.2261ms)
+✔ formats the GitHub install footer (0.1237ms)
+✔ reads the repo changelog for 0.1.0 (0.3402ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 3
+ℹ todo 0
+ℹ duration_ms 784.366

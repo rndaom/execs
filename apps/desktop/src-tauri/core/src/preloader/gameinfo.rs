@@ -184,7 +184,8 @@ pub(crate) fn gameinfo_backup_path(data_dir: &Path) -> PathBuf {
 /// Keep the pristine backup usable. It is written on first sight, and
 /// refreshed whenever the game's file differs from it while the bypass is
 /// *off* — that is a TF2 update replacing gameinfo.txt, and a stale backup
-/// would otherwise restore last patch's file forever.
+/// would otherwise restore last patch's file forever. The live writer validates
+/// and toggles the current file; it never copies the old backup over an update.
 pub(crate) fn refresh_gameinfo_backup(
     data_dir: &Path,
     bytes: &[u8],
@@ -270,67 +271,6 @@ fn toggled_gameinfo(bytes: &[u8], enabled: bool) -> Option<Vec<u8>> {
         }
     }
     None
-}
-
-/// Put the pristine gameinfo.txt back from the app-data backup. Returns false
-/// when there is no backup or the file already matches it; refuses a backup
-/// that is not a gameinfo file at all, since writing that over the game's
-/// copy is exactly the damage this exists to repair.
-pub fn restore_gameinfo_from_backup(
-    tf2_root: &Path,
-    data_dir: &Path,
-    running_names: &[String],
-) -> Result<bool, String> {
-    restore_gameinfo_from_backup_with_sampler(
-        tf2_root,
-        data_dir,
-        running_names,
-        &live_process_names,
-    )
-}
-
-pub fn restore_gameinfo_from_backup_with_sampler(
-    tf2_root: &Path,
-    data_dir: &Path,
-    running_names: &[String],
-    process_sampler: &dyn Fn() -> Vec<String>,
-) -> Result<bool, String> {
-    refuse_if_running_among(running_names).map_err(|err| err.message().to_string())?;
-    let Some(pristine) = read_gameinfo_backup(data_dir)? else {
-        return Ok(false);
-    };
-    if !valid_pristine_gameinfo(&pristine) {
-        return Err(
-            "The gameinfo.txt backup is not a GameInfo file in pristine form; refusing to restore from it. \
-             Verify game files in Steam to get the stock file back."
-                .into(),
-        );
-    }
-    let path = gameinfo_path(tf2_root);
-    let observed = match read_live_gameinfo(tf2_root) {
-        Ok(current) => Some(current),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
-        Err(err) => return Err(format!("Could not read gameinfo.txt: {err}")),
-    };
-    if observed.as_deref() == Some(pristine.as_slice()) {
-        return Ok(false);
-    }
-    let still_observed = match read_live_gameinfo(tf2_root) {
-        Ok(current) => Some(current),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
-        Err(err) => return Err(format!("Could not recheck gameinfo.txt: {err}")),
-    };
-    if still_observed != observed {
-        return Err(
-            "gameinfo.txt changed while its restore was being prepared; leaving it alone.".into(),
-        );
-    }
-    // Re-check right before the write into the official file.
-    refuse_if_running_among(process_sampler()).map_err(|err| err.message().to_string())?;
-    // Atomic: a truncated gameinfo.txt means TF2 does not start at all.
-    write_atomic_within(tf2_root, &path, &pristine)
-        .map_err(|err| format!("Could not restore gameinfo.txt: {err}"))?;
-    Ok(true)
 }
 
 /// Toggle the bypass by commenting/uncommenting the *first*

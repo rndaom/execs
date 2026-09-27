@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "status": "failed",
+  "scope": "Linux X11/WebKitGTK no-bundle release binary; owned inactive library, global preferences and keyboard zoom. Not installer, updater, Steam or game qualification.",
+  "revision": "52fb28506a431614ec95e851c9a29c40d87b2d26",
+  "binarySha256": "4d99ade0ca2686045014ae8d03efd6a33b7961c4989e7ec92eb0261a3c5d7ad1",
+  "fixture": {
+    "exporterTag": "v0.1.8",
+    "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+    "sourceArchiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38",
+    "authored": "Six inactive identities, index/settings and synthetic TF2 root; owned no-HUD payload bytes reused unchanged. This is runtime evidence, not an upgrade test."
+  },
+  "isolation": {
+    "HOME": "/home/runner/work/_temp/execs-linux-native-gWCE5g/home",
+    "XDG_DATA_HOME": "/home/runner/work/_temp/execs-linux-native-gWCE5g/data",
+    "XDG_CONFIG_HOME": "/home/runner/work/_temp/execs-linux-native-gWCE5g/config",
+    "XDG_CACHE_HOME": "/home/runner/work/_temp/execs-linux-native-gWCE5g/cache",
+    "XDG_RUNTIME_DIR": "/home/runner/work/_temp/execs-linux-native-gWCE5g/runtime",
+    "TMPDIR": "/home/runner/work/_temp/execs-linux-native-gWCE5g/tmp"
+  },
+  "checks": [
+    {
+      "label": "first-launch",
+      "state": {
+        "native": true,
+        "width": 1200,
+        "motion": "system",
+        "menuOpen": false,
+        "href": "tauri://localhost",
+        "height": 800,
+        "focusedTag": "BODY",
+        "dpr": 1,
+        "heading": "Choose a profile"
+      },
+      "capabilities": {
+        "browserName": "wry",
+        "browserVersion": "0.55.1",
+        "platformName": "linux",
+        "acceptInsecureCerts": false,
+        "strictFileInteractability": false,
+        "setWindowRect": true,
+        "unhandledPromptBehavior": "dismiss and notify",
+        "pageLoadStrategy": "normal",
+        "proxy": {},
+        "timeouts": {
+          "script": 30000,
+          "pageLoad": 300000,
+          "implicit": 0
+        }
+      }
+    },
+    {
+      "label": "inactive-six-profile-menu",
+      "state": {
+        "profiles": 6,
+        "width": 960,
+        "focused": {
+          "x": 180,
+          "width": 330,
+          "left": 180,
+          "right": 510,
+          "top": 206.5,
+          "height": 20,
+          "y": 206.5,
+          "bottom": 226.5
+        },
+        "focusText": "MainSwitch",
+        "height": 640,
+        "panel": {
+          "x": 151,
+          "width": 430,
+          "left": 151,
+          "right": 581,
+          "top": 111.5,
+          "height": 433.6875,
+          "y": 111.5,
+          "bottom": 545.1875
+        },
+        "focusHit": true,
+        "lastActionHit": true,
+        "open": true
+      }
+    }
+  ],
+  "captures": [
+    {
+      "file": "01-native-inactive-1200.png",
+      "state": {
+        "native": true,
+        "width": 1200,
+        "motion": "system",
+        "menuOpen": false,
+        "href": "tauri://localhost",
+        "height": 800,
+        "focusedTag": "BODY",
+        "dpr": 1,
+        "heading": "Choose a profile"
+      },
+      "pixels": [
+        1200,
+        800
+      ]
+    },
+    {
+      "file": "02-native-menu-960.png",
+      "state": {
+        "native": true,
+        "width": 960,
+        "motion": "system",
+        "menuOpen": true,
+        "href": "tauri://localhost",
+        "height": 640,
+        "focusedTag": "BUTTON",
+        "dpr": 1,
+        "heading": "Choose a profile"
+      },
+      "pixels": [
+        960,
+        640
+      ]
+    },
+    {
+      "file": "failure.png",
+      "state": {
+        "native": true,
+        "width": 480,
+        "motion": "system",
+        "menuOpen": false,
+        "href": "tauri://localhost",
+        "height": 320,
+        "focusedTag": "BODY",
+        "dpr": 1,
+        "heading": "Choose a profile"
+      },
+      "pixels": [
+        960,
+        640
+      ]
+    }
+  ],
+  "preservation": [
+    {
+      "stage": "before-launch",
+      "motion": "system",
+      "profiles": 6,
+      "activeProfileId": null,
+      "libraryAndLivePayloadsPreserved": true,
+      "allowedAdditiveMetadataObserved": []
+    },
+    {
+      "stage": "after-native-exit",
+      "motion": "system",
+      "profiles": 6,
+      "activeProfileId": null,
+      "libraryAndLivePayloadsPreserved": true,
+      "allowedAdditiveMetadataObserved": []
+    }
+  ],
+  "error": "Error: Timed out: six native profile rows\n    at waitUntil (file:///home/runner/work/execs/execs/scripts/linux-native-webdriver.mjs:18:9)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processTimers (node:internal/timers:615:9)\n    at async openMenu (file:///home/runner/work/execs/execs/scripts/linux-native-smoke.mjs:251:5)\n    at async main (file:///home/runner/work/execs/execs/scripts/linux-native-smoke.mjs:294:5)\n    at async file:///home/runner/work/execs/execs/scripts/linux-native-smoke.mjs:384:3"
+}

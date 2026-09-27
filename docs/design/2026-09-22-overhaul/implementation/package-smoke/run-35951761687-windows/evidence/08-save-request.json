@@ -1,0 +1,14 @@
+{
+  "root": "D:\\a\\_temp\\execs-windows-package-QHTPg7",
+  "process": {
+    "pid": 2148,
+    "parent": 7048,
+    "executable": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed\\execs.exe",
+    "created": "2026-09-24T03:31:56.7539540Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\installed\\execs.exe",
+    "session": 2
+  },
+  "destination": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\fixture\\exports\\previous-ui-export.zip",
+  "capture": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\evidence\\03-native-export-save.png",
+  "observation": "D:\\a\\_temp\\execs-windows-package-QHTPg7\\evidence\\native-save-observations.json"
+}

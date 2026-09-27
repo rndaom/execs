@@ -1,0 +1,45 @@
+{
+  "windows": [],
+  "process": {
+    "pid": 7552,
+    "parent": 4912,
+    "executable": "D:\\a\\_temp\\execs-windows-package-4ZUeXj\\downloads\\msedgedriver.exe",
+    "created": "2026-09-24T03:01:06.4446460Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-4ZUeXj\\downloads\\msedgedriver.exe --port=51916",
+    "session": 2
+  },
+  "listeners": [
+    {
+      "address": "::1",
+      "port": 51916,
+      "pid": 7552
+    },
+    {
+      "address": "127.0.0.1",
+      "port": 51916,
+      "pid": 7552
+    }
+  ],
+  "processes": [
+    {
+      "pid": 7552,
+      "parent": 4912,
+      "executable": "D:\\a\\_temp\\execs-windows-package-4ZUeXj\\downloads\\msedgedriver.exe",
+      "created": "2026-09-24T03:01:06.4446460Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-4ZUeXj\\downloads\\msedgedriver.exe --port=51916",
+      "session": 2
+    },
+    {
+      "pid": 5928,
+      "parent": 7552,
+      "executable": "C:\\Windows\\system32\\conhost.exe",
+      "created": "2026-09-24T03:01:06.4500700Z",
+      "commandLine": "\\??\\C:\\Windows\\system32\\conhost.exe 0x4",
+      "session": 2
+    }
+  ],
+  "uiDiagnostics": null,
+  "version": "131.0.2903.86",
+  "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+  "packageCode": 15700
+}

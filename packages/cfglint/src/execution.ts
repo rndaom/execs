@@ -6,11 +6,14 @@ import type { Command, CvarValue } from "./types.ts";
 type ExecutionContext = {
   files: Map<string, { commands: Command[] }>;
   entryPoints: string[];
+  /** Loader-defined aliases available before the first entry point. */
+  startupAliases: Readonly<Record<string, string>>;
   resolveExec: (target: string) => string | null;
   payloadCommands: (payload: string, site: Command) => Command[];
   takeCommand: (at: Command) => boolean;
   takeExec: (at: Command) => boolean;
   incomplete: (rule: string, message: string, at: Command) => void;
+  allowMalformedBinds: boolean;
 };
 
 /**
@@ -22,11 +25,18 @@ type ExecutionContext = {
 export function evaluateStartup(ctx: ExecutionContext): {
   effective: Map<string, CvarValue>;
   binds: Map<string, string>;
+  bindSources: Map<string, { file: string; line: number }>;
   executionComplete: boolean;
 } {
   const effective = new Map<string, CvarValue>();
   const binds = new Map<string, string>();
-  const aliases = new Map<string, { payload: string; site: Command }>();
+  const bindSources = new Map<string, { file: string; line: number }>();
+  const aliases = new Map<string, { payload: string; site: Command | null; malformed: boolean }>();
+  // Loader definitions have no user file; their payload is reported at the
+  // line that invokes them.
+  for (const [name, payload] of Object.entries(ctx.startupAliases)) {
+    aliases.set(name.toLowerCase(), { payload, site: null, malformed: false });
+  }
   let complete = true;
 
   function stop(rule: string, message: string, at: Command) {
@@ -43,6 +53,17 @@ export function evaluateStartup(ctx: ExecutionContext): {
       }
       const { name, args } = cmd;
       if (cmd.tokens.some((token) => !token.closed)) {
+        // A malformed bind cannot establish that key, but a newline-bound
+        // parser recovery can still establish later, unrelated settings.
+        // Keep the syntax finding from the safety pass for the user to fix.
+        if (ctx.allowMalformedBinds && name === "bind") continue;
+        // Defining an alias does not run its payload. Keep it unresolved until
+        // invocation so a dormant alias with nested/unmatched quotes cannot
+        // erase reliable, unrelated startup settings.
+        if (name === "alias" && args[0]) {
+          aliases.set(args[0].toLowerCase(), { payload: "", site: cmd, malformed: true });
+          continue;
+        }
         stop(
           "execution-incomplete",
           "Startup contains an unclosed quote; settings are incomplete",
@@ -73,7 +94,11 @@ export function evaluateStartup(ctx: ExecutionContext): {
       }
       if (name === "alias") {
         if (args[0])
-          aliases.set(args[0].toLowerCase(), { payload: args.slice(1).join(" "), site: cmd });
+          aliases.set(args[0].toLowerCase(), {
+            payload: args.slice(1).join(" "),
+            site: cmd,
+            malformed: false,
+          });
         continue;
       }
       if (name === "bind") {
@@ -81,17 +106,26 @@ export function evaluateStartup(ctx: ExecutionContext): {
         if (args.length >= 2) {
           const key = args[0].toLowerCase();
           const payload = args.slice(1).join(" ");
-          if (payload) binds.set(key, payload);
-          else binds.delete(key);
+          if (payload) {
+            binds.set(key, payload);
+            bindSources.set(key, { file: cmd.file, line: cmd.line });
+          } else {
+            binds.delete(key);
+            bindSources.delete(key);
+          }
         }
         continue;
       }
       if (name === "unbind") {
-        if (args[0]) binds.delete(args[0].toLowerCase());
+        if (args[0]) {
+          binds.delete(args[0].toLowerCase());
+          bindSources.delete(args[0].toLowerCase());
+        }
         continue;
       }
       if (name === "unbindall") {
         binds.clear();
+        bindSources.clear();
         continue;
       }
       // These mutate settings or add commands conditionally. Do not pretend
@@ -118,6 +152,14 @@ export function evaluateStartup(ctx: ExecutionContext): {
       }
       const alias = aliases.get(name);
       if (alias) {
+        if (alias.malformed) {
+          stop(
+            "execution-incomplete",
+            `Startup alias \`${name}\` has unmatched quotes; settings are incomplete`,
+            cmd,
+          );
+          continue;
+        }
         if (aliasStack.includes(name) || aliasStack.length >= MAX_ALIAS_DEPTH) {
           stop(
             "alias-depth",
@@ -126,7 +168,10 @@ export function evaluateStartup(ctx: ExecutionContext): {
           );
           continue;
         }
-        commands(ctx.payloadCommands(alias.payload, alias.site), chain, [...aliasStack, name]);
+        commands(ctx.payloadCommands(alias.payload, alias.site ?? cmd), chain, [
+          ...aliasStack,
+          name,
+        ]);
       } else {
         stop(
           "execution-incomplete",
@@ -157,6 +202,7 @@ export function evaluateStartup(ctx: ExecutionContext): {
   if (!complete) {
     effective.clear();
     binds.clear();
+    bindSources.clear();
   }
-  return { effective, binds, executionComplete: complete };
+  return { effective, binds, bindSources, executionComplete: complete };
 }

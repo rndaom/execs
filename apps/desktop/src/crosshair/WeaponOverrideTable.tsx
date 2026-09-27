@@ -1,3 +1,4 @@
+import { ClassIcon } from "../components/ui/ClassIcon";
 import { ClassTabs } from "../components/ui/ClassTabs";
 import { Disclosure } from "../components/ui/Disclosure";
 import {
@@ -53,7 +54,12 @@ export function WeaponOverrideTable({
   const slots = catalogSlots();
   const tabs = [ALL_CLASSES_TAB, ...TF2_CLASSES].map((id) => ({
     id,
-    label: <span className="capitalize">{id === ALL_CLASSES_TAB ? "All classes" : id}</span>,
+    label: (
+      <>
+        {id === ALL_CLASSES_TAB ? null : <ClassIcon classId={id} size={16} />}
+        <span className="capitalize">{id === ALL_CLASSES_TAB ? "All classes" : id}</span>
+      </>
+    ),
   }));
   const overrides = Object.keys(draft.assignments).length;
 

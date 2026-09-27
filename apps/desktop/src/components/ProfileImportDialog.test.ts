@@ -17,6 +17,8 @@ function fixture(stage: ProfileLibraryState["importStage"], creator = true, need
       creator,
       warnings: ["config.cfg contains 'password'."],
       notes: [],
+      huds: [] as string[],
+      selectedHud: null as string | null,
     },
     importedProfile:
       stage === "done"
@@ -31,6 +33,7 @@ function fixture(stage: ProfileLibraryState["importStage"], creator = true, need
     dismissImport: () => {},
     cancelImport: async () => {},
     confirmImport: async () => {},
+    selectImportHud: () => {},
     switchProfile: async () => {},
     reviewFolderRepair: async () => {},
   } satisfies ComponentProps<typeof ProfileImportDialog>["profiles"];
@@ -47,7 +50,9 @@ describe("profile import dialog", () => {
     expect(markup).toContain("236 files to import");
     expect(markup).toContain("16 left out");
     expect(markup).toContain("Trust and import");
-    expect(markup).toContain("Saved server credentials are kept");
+    expect(markup).toContain("Saved passwords and remote-console settings are kept");
+    expect(markup).toContain("Your TF2 setup stays unchanged until you switch.");
+    expect(markup).not.toContain("Your current profile stays active");
     expect(markup).toContain("<details");
     expect(markup).toContain("config.cfg contains");
   });
@@ -72,6 +77,43 @@ describe("profile import dialog", () => {
     expect(render("done")).toContain('aria-valuenow="3"');
     expect(render("done")).toContain('aria-busy="false"');
     expect(render("selecting")).toBe("");
+  });
+
+  it("requires an explicit HUD choice and explains that other originals stay preserved", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const box = document.createElement("div");
+    document.body.append(box);
+    const root = createRoot(box);
+    const profiles = {
+      ...fixture("review"),
+      confirmImport: vi.fn(async () => {}),
+      selectImportHud: vi.fn(),
+    };
+    profiles.importReview.huds = ["toonhud", "rayshud"];
+    try {
+      await act(async () =>
+        root.render(createElement(ProfileImportDialog, { profiles, running: false })),
+      );
+      const primary = () => box.querySelector<HTMLButtonElement>(".btn-primary");
+      expect(primary()?.disabled).toBe(true);
+      expect(box.textContent).toContain("preserved originals");
+      expect(box.textContent).toContain("won’t be loaded by TF2");
+      await act(async () => primary()?.click());
+      expect(profiles.confirmImport).not.toHaveBeenCalled();
+      await act(async () => box.querySelector<HTMLInputElement>("#profile-import-hud-1")?.click());
+      expect(profiles.selectImportHud).toHaveBeenCalledWith("rayshud");
+      profiles.importReview.selectedHud = "rayshud";
+      await act(async () =>
+        root.render(createElement(ProfileImportDialog, { profiles, running: false })),
+      );
+      expect(primary()?.disabled).toBe(false);
+      await act(async () => primary()?.click());
+      expect(profiles.confirmImport).toHaveBeenCalledOnce();
+    } finally {
+      await act(async () => root.unmount());
+      box.remove();
+      vi.unstubAllGlobals();
+    }
   });
 
   it("routes an imported unsafe profile to its repair review after TF2 closes", async () => {

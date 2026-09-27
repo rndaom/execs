@@ -1,0 +1,372 @@
+{
+  "cases": [
+    {
+      "archive": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\no-hud\\exported-by-v0.1.8.zip",
+      "archiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38",
+      "case": "no-hud",
+      "existingActiveIdUnchanged": true,
+      "existingManifestUnchanged": true,
+      "explicitChoice": null,
+      "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+      "exporterTag": "v0.1.8",
+      "hudReviewPending": false,
+      "importerRevision": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+      "liveRootHashesAfter": {
+        "tf/cfg/autoexec.cfg": "78343cbd001dfbd78632bd601b7a070b5ef3f13dd7b14cf9f5c14ac4399beb68",
+        "tf/cfg/config_default.cfg": "c9916cac69df86f48c2145c7d264163d9db4424ecad2a0ab2c4eb4a00908698b",
+        "tf/custom/sentinel/resource/preserved.txt": "e05eb3dc4622e5e9687ffc01f0eac68196a7fb7a5c50d96baf14b40a433e7e8d",
+        "tf/steam.inf": "11c3f9632246ecffe381ccd84ab8f5dab25e4b8713470820c0790242da7cd1a0"
+      },
+      "liveRootHashesBefore": {
+        "tf/cfg/autoexec.cfg": "78343cbd001dfbd78632bd601b7a070b5ef3f13dd7b14cf9f5c14ac4399beb68",
+        "tf/cfg/config_default.cfg": "c9916cac69df86f48c2145c7d264163d9db4424ecad2a0ab2c4eb4a00908698b",
+        "tf/custom/sentinel/resource/preserved.txt": "e05eb3dc4622e5e9687ffc01f0eac68196a7fb7a5c50d96baf14b40a433e7e8d",
+        "tf/steam.inf": "11c3f9632246ecffe381ccd84ab8f5dab25e4b8713470820c0790242da7cd1a0"
+      },
+      "newPreloaderSelectionEmpty": true,
+      "payloads": [
+        {
+          "afterSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "beforeSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "bytes": 55,
+          "path": "tf/cfg/config.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "beforeSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "bytes": 49,
+          "path": "tf/cfg/overrides/compat.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "beforeSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "bytes": 170,
+          "path": "tf/custom/compat-pack.vpk",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "beforeSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "bytes": 149,
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "storage": "shared"
+        }
+      ],
+      "reexport": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\no-hud\\reexported-by-current.zip",
+      "reexportSha256": "97953dd14a3d20d1ef542aa9c4dda714084294362fa066ad48dd5f56a8fe1064",
+      "refusedWithoutMultiHudChoice": false,
+      "resolvedNewDataDir": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\no-hud\\isolated-appdata\\execs",
+      "resolvedOldDataDir": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\no-hud\\isolated-appdata\\execs",
+      "reviewedHuds": [],
+      "sourceZipSchema": 1,
+      "status": "passed"
+    },
+    {
+      "archive": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\single-hud\\exported-by-v0.1.8.zip",
+      "archiveSha256": "4b46fb3144b5c9fcd334505672fc8513fa3f9d629f821fbb4ab53b9da4667ec9",
+      "case": "single-hud",
+      "existingActiveIdUnchanged": true,
+      "existingManifestUnchanged": true,
+      "explicitChoice": "fixturehud",
+      "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+      "exporterTag": "v0.1.8",
+      "hudReviewPending": false,
+      "importerRevision": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+      "liveRootHashesAfter": {
+        "tf/cfg/autoexec.cfg": "78343cbd001dfbd78632bd601b7a070b5ef3f13dd7b14cf9f5c14ac4399beb68",
+        "tf/cfg/config_default.cfg": "c9916cac69df86f48c2145c7d264163d9db4424ecad2a0ab2c4eb4a00908698b",
+        "tf/custom/sentinel/resource/preserved.txt": "e05eb3dc4622e5e9687ffc01f0eac68196a7fb7a5c50d96baf14b40a433e7e8d",
+        "tf/steam.inf": "11c3f9632246ecffe381ccd84ab8f5dab25e4b8713470820c0790242da7cd1a0"
+      },
+      "liveRootHashesBefore": {
+        "tf/cfg/autoexec.cfg": "78343cbd001dfbd78632bd601b7a070b5ef3f13dd7b14cf9f5c14ac4399beb68",
+        "tf/cfg/config_default.cfg": "c9916cac69df86f48c2145c7d264163d9db4424ecad2a0ab2c4eb4a00908698b",
+        "tf/custom/sentinel/resource/preserved.txt": "e05eb3dc4622e5e9687ffc01f0eac68196a7fb7a5c50d96baf14b40a433e7e8d",
+        "tf/steam.inf": "11c3f9632246ecffe381ccd84ab8f5dab25e4b8713470820c0790242da7cd1a0"
+      },
+      "newPreloaderSelectionEmpty": true,
+      "payloads": [
+        {
+          "afterSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "beforeSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "bytes": 55,
+          "path": "tf/cfg/config.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "beforeSha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "bytes": 84,
+          "path": "tf/cfg/overrides/autoexec.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "beforeSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "bytes": 49,
+          "path": "tf/cfg/overrides/compat.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "beforeSha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "bytes": 17,
+          "path": "tf/cfg/overrides/execs_hud_fixture.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "beforeSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "bytes": 170,
+          "path": "tf/custom/compat-pack.vpk",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "beforeSha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "bytes": 60,
+          "path": "tf/custom/fixturehud/info.vdf",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "beforeSha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "bytes": 26,
+          "path": "tf/custom/fixturehud/resource/ui/layout.res",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "beforeSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "bytes": 149,
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "storage": "shared"
+        }
+      ],
+      "reexport": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\single-hud\\reexported-by-current.zip",
+      "reexportSha256": "1e6c4750b3dfdc758a1f407529964c897393402f76b2738db17a43beb146bac3",
+      "refusedWithoutMultiHudChoice": false,
+      "resolvedNewDataDir": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\single-hud\\isolated-appdata\\execs",
+      "resolvedOldDataDir": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\single-hud\\isolated-appdata\\execs",
+      "reviewedHuds": ["fixturehud"],
+      "sourceZipSchema": 1,
+      "status": "passed"
+    },
+    {
+      "archive": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\multi-hud-keep-owner\\exported-by-v0.1.8.zip",
+      "archiveSha256": "77cc3c6f9ded610e56084f1ef7ddd410defe6f04162303054a0cee274d234727",
+      "case": "multi-hud-keep-owner",
+      "existingActiveIdUnchanged": true,
+      "existingManifestUnchanged": true,
+      "explicitChoice": "fixturehud",
+      "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+      "exporterTag": "v0.1.8",
+      "hudReviewPending": false,
+      "importerRevision": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+      "liveRootHashesAfter": {
+        "tf/cfg/autoexec.cfg": "78343cbd001dfbd78632bd601b7a070b5ef3f13dd7b14cf9f5c14ac4399beb68",
+        "tf/cfg/config_default.cfg": "c9916cac69df86f48c2145c7d264163d9db4424ecad2a0ab2c4eb4a00908698b",
+        "tf/custom/sentinel/resource/preserved.txt": "e05eb3dc4622e5e9687ffc01f0eac68196a7fb7a5c50d96baf14b40a433e7e8d",
+        "tf/steam.inf": "11c3f9632246ecffe381ccd84ab8f5dab25e4b8713470820c0790242da7cd1a0"
+      },
+      "liveRootHashesBefore": {
+        "tf/cfg/autoexec.cfg": "78343cbd001dfbd78632bd601b7a070b5ef3f13dd7b14cf9f5c14ac4399beb68",
+        "tf/cfg/config_default.cfg": "c9916cac69df86f48c2145c7d264163d9db4424ecad2a0ab2c4eb4a00908698b",
+        "tf/custom/sentinel/resource/preserved.txt": "e05eb3dc4622e5e9687ffc01f0eac68196a7fb7a5c50d96baf14b40a433e7e8d",
+        "tf/steam.inf": "11c3f9632246ecffe381ccd84ab8f5dab25e4b8713470820c0790242da7cd1a0"
+      },
+      "newPreloaderSelectionEmpty": true,
+      "payloads": [
+        {
+          "afterSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "beforeSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "bytes": 55,
+          "path": "tf/cfg/config.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "beforeSha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "bytes": 84,
+          "path": "tf/cfg/overrides/autoexec.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "beforeSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "bytes": 49,
+          "path": "tf/cfg/overrides/compat.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "beforeSha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "bytes": 17,
+          "path": "tf/cfg/overrides/execs_hud_fixture.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "beforeSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "bytes": 170,
+          "path": "tf/custom/compat-pack.vpk",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "beforeSha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "bytes": 60,
+          "path": "tf/custom/fixturehud/info.vdf",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "beforeSha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "bytes": 26,
+          "path": "tf/custom/fixturehud/resource/ui/layout.res",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "beforeSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "bytes": 149,
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "storage": "shared"
+        },
+        {
+          "afterSha256": "fb21c5a21c43cb1150eee897ff064114208ec02e29ace0cccfee00deb4f0de48",
+          "beforeSha256": "fb21c5a21c43cb1150eee897ff064114208ec02e29ace0cccfee00deb4f0de48",
+          "bytes": 33,
+          "path": "tf/custom/secondhud/info.vdf",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "5178c2034cdebf4c5f73a80b94488e6b1bba00d41eff3ab1ab548da41dcfa875",
+          "beforeSha256": "5178c2034cdebf4c5f73a80b94488e6b1bba00d41eff3ab1ab548da41dcfa875",
+          "bytes": 26,
+          "path": "tf/custom/secondhud/resource/ui/layout.res",
+          "storage": "exclusive"
+        }
+      ],
+      "reexport": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\multi-hud-keep-owner\\reexported-by-current.zip",
+      "reexportSha256": "47f4ebf32867f51a5ecf573a12d59dd9ef12a91a43b4c68251fc363f65d0b549",
+      "refusedWithoutMultiHudChoice": true,
+      "resolvedNewDataDir": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\multi-hud-keep-owner\\isolated-appdata\\execs",
+      "resolvedOldDataDir": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\multi-hud-keep-owner\\isolated-appdata\\execs",
+      "reviewedHuds": ["fixturehud", "secondhud"],
+      "sourceZipSchema": 1,
+      "status": "passed"
+    },
+    {
+      "archive": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\multi-hud-change-owner\\exported-by-v0.1.8.zip",
+      "archiveSha256": "77cc3c6f9ded610e56084f1ef7ddd410defe6f04162303054a0cee274d234727",
+      "case": "multi-hud-change-owner",
+      "existingActiveIdUnchanged": true,
+      "existingManifestUnchanged": true,
+      "explicitChoice": "secondhud",
+      "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+      "exporterTag": "v0.1.8",
+      "hudReviewPending": true,
+      "importerRevision": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+      "liveRootHashesAfter": {
+        "tf/cfg/autoexec.cfg": "78343cbd001dfbd78632bd601b7a070b5ef3f13dd7b14cf9f5c14ac4399beb68",
+        "tf/cfg/config_default.cfg": "c9916cac69df86f48c2145c7d264163d9db4424ecad2a0ab2c4eb4a00908698b",
+        "tf/custom/sentinel/resource/preserved.txt": "e05eb3dc4622e5e9687ffc01f0eac68196a7fb7a5c50d96baf14b40a433e7e8d",
+        "tf/steam.inf": "11c3f9632246ecffe381ccd84ab8f5dab25e4b8713470820c0790242da7cd1a0"
+      },
+      "liveRootHashesBefore": {
+        "tf/cfg/autoexec.cfg": "78343cbd001dfbd78632bd601b7a070b5ef3f13dd7b14cf9f5c14ac4399beb68",
+        "tf/cfg/config_default.cfg": "c9916cac69df86f48c2145c7d264163d9db4424ecad2a0ab2c4eb4a00908698b",
+        "tf/custom/sentinel/resource/preserved.txt": "e05eb3dc4622e5e9687ffc01f0eac68196a7fb7a5c50d96baf14b40a433e7e8d",
+        "tf/steam.inf": "11c3f9632246ecffe381ccd84ab8f5dab25e4b8713470820c0790242da7cd1a0"
+      },
+      "newPreloaderSelectionEmpty": true,
+      "payloads": [
+        {
+          "afterSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "beforeSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "bytes": 55,
+          "path": "tf/cfg/config.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "beforeSha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "bytes": 84,
+          "path": "tf/cfg/overrides/autoexec.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "beforeSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "bytes": 49,
+          "path": "tf/cfg/overrides/compat.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "beforeSha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "bytes": 17,
+          "path": "tf/cfg/overrides/execs_hud_fixture.cfg",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "beforeSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "bytes": 170,
+          "path": "tf/custom/compat-pack.vpk",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "beforeSha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "bytes": 60,
+          "path": "tf/custom/fixturehud/info.vdf",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "beforeSha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "bytes": 26,
+          "path": "tf/custom/fixturehud/resource/ui/layout.res",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "beforeSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "bytes": 149,
+          "path": "tf/custom/mastercomfig-base.vpk",
+          "storage": "shared"
+        },
+        {
+          "afterSha256": "fb21c5a21c43cb1150eee897ff064114208ec02e29ace0cccfee00deb4f0de48",
+          "beforeSha256": "fb21c5a21c43cb1150eee897ff064114208ec02e29ace0cccfee00deb4f0de48",
+          "bytes": 33,
+          "path": "tf/custom/secondhud/info.vdf",
+          "storage": "exclusive"
+        },
+        {
+          "afterSha256": "5178c2034cdebf4c5f73a80b94488e6b1bba00d41eff3ab1ab548da41dcfa875",
+          "beforeSha256": "5178c2034cdebf4c5f73a80b94488e6b1bba00d41eff3ab1ab548da41dcfa875",
+          "bytes": 26,
+          "path": "tf/custom/secondhud/resource/ui/layout.res",
+          "storage": "exclusive"
+        }
+      ],
+      "reexport": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\multi-hud-change-owner\\reexported-by-current.zip",
+      "reexportSha256": "be5f3472308c176cb88f6c604d1592c275eed58b9602ac65f4daadf57e7ae552",
+      "refusedWithoutMultiHudChoice": true,
+      "resolvedNewDataDir": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\multi-hud-change-owner\\isolated-appdata\\execs",
+      "resolvedOldDataDir": "C:/Users/Random/AppData/Local/Temp/execs-v018-compat-91e193afc7334cb6876ac2fd3434cf44/results\\multi-hud-change-owner\\isolated-appdata\\execs",
+      "reviewedHuds": ["fixturehud", "secondhud"],
+      "sourceZipSchema": 1,
+      "status": "passed"
+    }
+  ],
+  "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+  "exporterTag": "v0.1.8",
+  "importerRevision": "542b3dd20f2847fc90a1a4e990584f03830fcc6d",
+  "status": "passed"
+}

@@ -1,0 +1,24 @@
+{
+  "sid": "S-1-5-21-2325914565-3525904610-1579391994-500",
+  "user": "runnervmibwwn\\runneradmin",
+  "session": 2,
+  "userInteractive": true,
+  "packageCode": 15700,
+  "groups": [
+    "S-1-5-21-2325914565-3525904610-1579391994-513",
+    "S-1-1-0",
+    "S-1-5-114",
+    "S-1-5-32-544",
+    "S-1-5-32-545",
+    "S-1-5-4",
+    "S-1-2-1",
+    "S-1-5-11",
+    "S-1-5-15",
+    "S-1-5-113",
+    "S-1-2-0",
+    "S-1-5-64-10"
+  ],
+  "playerProcesses": [],
+  "steamRegistry": [],
+  "productLocations": []
+}

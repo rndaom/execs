@@ -1,0 +1,50 @@
+{
+  "listeners": [],
+  "process": {
+    "pid": 900,
+    "parent": 5040,
+    "executable": "D:\\a\\_temp\\execs-windows-package-C5xBNt\\installed\\execs.exe",
+    "created": "2026-09-24T02:32:58.6387950Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-C5xBNt\\installed\\execs.exe",
+    "session": 2
+  },
+  "processes": [
+    {
+      "pid": 900,
+      "parent": 5040,
+      "executable": "D:\\a\\_temp\\execs-windows-package-C5xBNt\\installed\\execs.exe",
+      "created": "2026-09-24T02:32:58.6387950Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-C5xBNt\\installed\\execs.exe",
+      "session": 2
+    },
+    {
+      "pid": 4444,
+      "parent": 900,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T02:33:01.2736610Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-C5xBNt\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=61297 --lang=en-US --mojo-named-platform-channel-pipe=900.7212.9545369477755547346",
+      "session": 2
+    },
+    {
+      "pid": 2508,
+      "parent": 4444,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T02:33:03.5336730Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=crashpad-handler --user-data-dir=D:\\a\\_temp\\execs-windows-package-C5xBNt\\fixture\\webview\\EBWebView /prefetch:4 --monitor-self-annotation=ptype=crashpad-handler --database=D:\\a\\_temp\\execs-windows-package-C5xBNt\\fixture\\webview\\EBWebView\\Crashpad --annotation=IsOfficialBuild=1 --annotation=channel= --annotation=chromium-version=131.0.6778.109 \"--annotation=exe=C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --annotation=plat=Win64 \"--annotation=prod=Edge WebView2\" --annotation=ver=131.0.2903.86 --initial-client-data=0x180,0x184,0x188,0x15c,0x190,0x7fff20876070,0x7fff2087607c,0x7fff20876088",
+      "session": 2
+    },
+    {
+      "pid": 7556,
+      "parent": 4444,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T02:33:09.3933060Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=gpu-process --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-C5xBNt\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --gpu-preferences=UAAAAAAAAADgAAAEAAAAAAAAAAAAAAAAAABgAAEAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAA --field-trial-handle=1784,i,2460664551058121131,16838518160240630397,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1792 /prefetch:2",
+      "session": 2
+    }
+  ],
+  "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+  "uiDiagnostics": null,
+  "windows": [],
+  "version": "0.1.8",
+  "packageCode": 15700
+}

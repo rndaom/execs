@@ -19,6 +19,8 @@ export const TOAST_SAVING_DELAY_MS = 400;
 
 /** How long "Saved" stands before it fades. */
 export const TOAST_SAVED_MS = 1600;
+/** A locked draft remains pending after this brief notice disappears. */
+export const TOAST_DEFERRED_MS = 2400;
 
 export type ToastKind = "saving" | "saved" | "error" | "deferred";
 
@@ -69,10 +71,7 @@ export function failureMessage(reason: unknown, prefix = "Could not save"): stri
 }
 
 function remaining(state: ToastState): Toast | null {
-  return (
-    Object.values(state.failures).at(-1) ??
-    (state.deferred.length > 0 ? { kind: "deferred", message: DEFERRED_MESSAGE } : null)
-  );
+  return Object.values(state.failures).at(-1) ?? null;
 }
 
 function withoutFailure(state: ToastState, source: string): ToastState {
@@ -115,13 +114,12 @@ export function toastStep(state: ToastState, event: ToastEvent): ToastState {
         ? state
         : { ...state, toast: { kind: "saving", message: SAVING_MESSAGE } };
     case "defer": {
-      // Said once while the lock is on, not on every keystroke. Returning the
-      // same object keeps React from re-rendering the toast.
+      // A pending source announces once. The notice fades, while its draft
+      // remains tracked until it is saved or discarded.
       const source = event.source ?? "default";
-      const next = state.deferred.includes(source)
-        ? state
-        : { ...state, deferred: [...state.deferred, source] };
-      return state.toast?.kind === "error" || state.toast?.kind === "deferred"
+      if (state.deferred.includes(source)) return state;
+      const next = { ...state, deferred: [...state.deferred, source] };
+      return state.toast?.kind === "error"
         ? next
         : { ...next, toast: { kind: "deferred", message: DEFERRED_MESSAGE } };
     }
@@ -144,9 +142,11 @@ export function toastStep(state: ToastState, event: ToastEvent): ToastState {
   }
 }
 
-/** Only "Saved" fades on its own; everything else waits for an event. */
+/** Success and deferred-draft notices fade; failures wait for an action. */
 export function toastLingerMs(toast: Toast | null): number | null {
-  return toast?.kind === "saved" ? TOAST_SAVED_MS : null;
+  if (toast?.kind === "saved") return TOAST_SAVED_MS;
+  if (toast?.kind === "deferred") return TOAST_DEFERRED_MS;
+  return null;
 }
 
 /** Escape and a click dismiss the toast only while it is waiting on the user. */

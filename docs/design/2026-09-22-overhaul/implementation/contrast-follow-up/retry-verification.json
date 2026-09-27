@@ -1,0 +1,17 @@
+{
+  "errorPresent": false,
+  "motionAttribute": "reduce",
+  "recordedAt": "2026-09-22T17:59:21.047Z",
+  "selectedMotion": [
+    {
+      "id": "segmented-motion-_r_7_-reduce",
+      "value": "reduce"
+    }
+  ],
+  "url": "http://127.0.0.1:1422/?preview=settings-app-failure",
+  "viewport": {
+    "dpr": 1,
+    "height": 889,
+    "width": 1920
+  }
+}

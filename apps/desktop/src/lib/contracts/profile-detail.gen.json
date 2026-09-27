@@ -1,0 +1,135 @@
+{
+  "id": "3f2b8c1e-0000-4000-8000-000000000001",
+  "name": "Main",
+  "launchOptions": "-novid +exec execs_preload",
+  "layer": "comfig",
+  "files": [
+    {
+      "path": "tf/cfg/config.cfg",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "storage": "exclusive"
+    },
+    {
+      "path": "tf/custom/mastercomfig-base.vpk",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "storage": "shared"
+    }
+  ],
+  "hudRoots": [
+    "flawhud",
+    "toonhud"
+  ],
+  "selectedHudRoot": "flawhud",
+  "hud": {
+    "id": "flawhud",
+    "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "source": "hudDb",
+    "options": {
+      "crosshair": "true"
+    }
+  },
+  "crosshair": {
+    "id": "execs-crosshairs",
+    "sourceChanged": true,
+    "sourceScriptsSha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "inactive": true,
+    "scale": 32,
+    "stock": {
+      "file": "crosshair5",
+      "scale": 32
+    },
+    "shape": "dot",
+    "assignments": {
+      "tf_weapon_rocketlauncher": "designed"
+    },
+    "color": [
+      255,
+      128,
+      0
+    ],
+    "library": {
+      "mine": "rgba"
+    },
+    "design": "{\"gap\":2}"
+  },
+  "viewmodel": {
+    "id": "execs-viewmodels",
+    "sourceChanged": true,
+    "source": "stockBuilt",
+    "preload": true,
+    "options": {
+      "scout": "hidden"
+    },
+    "buildRecipe": {
+      "schema": 1,
+      "catalog": {
+        "patchVersion": "10412354",
+        "catalogSha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      },
+      "choices": [
+        {
+          "groupId": "scout-primary",
+          "mode": "weapon"
+        }
+      ],
+      "sourceFingerprints": [
+        {
+          "id": "models/weapons/c_models/c_scout_animations.mdl",
+          "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        }
+      ]
+    }
+  },
+  "hitsound": {
+    "sourceChanged": true,
+    "hit": {
+      "name": "ding.wav",
+      "source": "file",
+      "boost": 6,
+      "token": "0123456789abcdef0123456789abcdef"
+    },
+    "kill": {
+      "name": "Classic",
+      "source": "comfig",
+      "boost": 12,
+      "hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+  },
+  "mods": [
+    {
+      "id": "skins",
+      "name": "Skins",
+      "source": {
+        "kind": "gamebanana",
+        "id": 123456,
+        "url": "https://gamebanana.com/mods/123456"
+      },
+      "pack": "skins.vpk",
+      "files": 1,
+      "bytes": 2048,
+      "installedAt": "2026-09-26T12:00:00Z"
+    },
+    {
+      "id": "local-pack",
+      "name": "Local pack",
+      "source": {
+        "kind": "local"
+      },
+      "pack": "local-pack",
+      "files": 3,
+      "bytes": 4096,
+      "installedAt": "2026-09-26T12:00:00Z"
+    },
+    {
+      "id": "found",
+      "name": "found",
+      "source": {
+        "kind": "external"
+      },
+      "pack": "found",
+      "files": 2,
+      "bytes": 10,
+      "installedAt": "2026-09-26T12:00:00Z"
+    }
+  ]
+}

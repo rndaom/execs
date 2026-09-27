@@ -1,0 +1,13 @@
+# Owned X11 main-window selection
+
+Run [35777278322](https://github.com/rndaom/execs/actions/runs/35777278322) passed native Files scroll/selection retention and the explicit helper Save, then stopped before sending a close request: three windows belonging to the verified native PID advertised `WM_DELETE_WINDOW`. The old guard counted all three. It did not retain their attributes, so this run does not establish that the extra windows were hidden GTK helpers.
+
+The harness now records every observed same-PID close-capable candidate, its title/protocol, map state, InputOutput/InputOnly class, override-redirect flag, root/parent, transient relationship, WM_CLASS and geometry. Each observation also retains the verified executable, process group and process-start identity. Rejection reasons are saved before selection can throw.
+
+The additive `treeWindowIds` field retains every visited XID, including windows without the owned PID or close protocol. Every tree query must succeed, and the existing 4,096-window bound remains. The package harness can therefore distinguish an absent original dialog from one missing only from the filtered candidates; a failed or racing traversal produces no complete-tree claim.
+
+The close target must be the sole viewable InputOutput root child titled `execs`, with positive dimensions, no override-redirect or transient relationship, and the existing delete protocol. The root-child requirement is specific to this disposable Xvfb session without a window manager. Inspection remains read-only and unfiltered. Python independently repeats selection immediately before the existing `WM_PROTOCOLS/WM_DELETE_WINDOW` message and requires the same XID. Zero or multiple eligible windows, changed identity, or a refused request still fail; no JavaScript close or window destruction is introduced.
+
+These attributes and visibility distinctions follow [Xlib window information](https://www.x.org/releases/X11R7.7/doc/libX11/libX11/libX11.html). The close message retains the [ICCCM window-deletion protocol](https://www.x.org/releases/X11R7.7/doc/xorg-docs/icccm/icccm.html).
+
+Validation: the combined active, inactive, and preservation harness tests passed **50 tests**, with **2 platform skips** on Windows. The bundled Python separately compiled the full X11 helper and passed all **13 selector fixtures**, including mapped/unmapped windows, ambiguous visible windows, foreign PID, wrong title/protocol, input-only windows, pop-ups, transients and invalid dimensions. Scoped Biome and whitespace checks passed. Actual Linux Xlib observation and native Cancel/Discard/Save-close/restart still require the next reviewed hosted run; this correction alone does not qualify those behaviors.

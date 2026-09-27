@@ -1,0 +1,29 @@
+{
+  "pid": 16568,
+  "version": "7.6.5",
+  "executable": "C:\\Users\\Random\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\powershell\\pwsh.exe",
+  "effectiveExecutionPolicy": "RemoteSigned",
+  "executionPolicies": [
+    {
+      "scope": "MachinePolicy",
+      "policy": "Undefined"
+    },
+    {
+      "scope": "UserPolicy",
+      "policy": "Undefined"
+    },
+    {
+      "scope": "Process",
+      "policy": "Undefined"
+    },
+    {
+      "scope": "CurrentUser",
+      "policy": "Undefined"
+    },
+    {
+      "scope": "LocalMachine",
+      "policy": "RemoteSigned"
+    }
+  ],
+  "startedUtc": "2026-09-22T17:42:10.8390419Z"
+}

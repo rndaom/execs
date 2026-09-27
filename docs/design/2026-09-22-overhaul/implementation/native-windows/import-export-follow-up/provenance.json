@@ -1,0 +1,242 @@
+{
+  "archivedUtc": "2026-09-22T17:40:37.6204203Z",
+  "scope": "Native inactive profile import/export/reopen only",
+  "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab",
+  "executableSha256": "E09343CC38637D2B99D2FEE1843C3FA15FA73B741218B77EFC2CB0FA9DAA1A65",
+  "executableLength": 23442432,
+  "executableVersion": "0.2.0",
+  "nativeSessions": [
+    {
+      "launchedUtc": "2026-09-22T17:20:29.6885786Z",
+      "appPid": 10656,
+      "exitedUtc": "2026-09-22T17:30:15.3568337Z",
+      "exitCode": 0
+    },
+    {
+      "launchedUtc": "2026-09-22T17:35:52.7460672Z",
+      "exitCode": 0,
+      "exitedUtc": "2026-09-22T17:37:04.8759279Z",
+      "appPid": 24416
+    }
+  ],
+  "captureCount": 6,
+  "captures": [
+    {
+      "image": "01-import-review.jpg",
+      "imageSha256": "A70209425AB8523D9CCF387E96331C0CCF99A3A8DB1B5E121AA3B442B8B3BD8A",
+      "imageLength": 60352,
+      "uia": "01-import-review.uia.txt",
+      "uiaSha256": "05737EFC8B16E9F40A9C8328717929BAB33921A76B365A5667FA5935CB109CAA"
+    },
+    {
+      "image": "02-second-hud-selected.jpg",
+      "imageSha256": "D3A868E806E8F66D231EE9B156C1706220A62061F7F1CE5ECA250C84F3438279",
+      "imageLength": 61779,
+      "uia": "02-second-hud-selected.uia.txt",
+      "uiaSha256": "76728895ACEB5B6C79394884C33BECBB9D4D3CE34B93A67037DF188EF6F66855"
+    },
+    {
+      "image": "03-import-complete-inactive.jpg",
+      "imageSha256": "202B794539125DCF0494BAD854851699B149C5FB2E6E67B76051DBCC176DC360",
+      "imageLength": 49767,
+      "uia": "03-import-complete-inactive.uia.txt",
+      "uiaSha256": "B0C59DD083A2A4794972D39325433A31D955FADA1659E58FA9780A7F4B5D070C"
+    },
+    {
+      "image": "04-imported-profile-export-action.jpg",
+      "imageSha256": "0ED56D0C94753B1BA152E71BFA2B83318B646CA86A418003E607E19BF2F77974",
+      "imageLength": 64900,
+      "uia": "04-imported-profile-export-action.uia.txt",
+      "uiaSha256": "6CA13537358B1F56C15D57D2235B1248B8FAAA011FBD572D32D77CAF355BD2B1"
+    },
+    {
+      "image": "05-after-export-inactive.jpg",
+      "imageSha256": "AE560778CC8E941EEBF6F9A991D122D52E37A1E1AD2650940D3167DB31494EA8",
+      "imageLength": 52246,
+      "uia": "05-after-export-inactive.uia.txt",
+      "uiaSha256": "6F12A2F43F30C219F5D811B0C2D0804C239C2C0DB6E57E7A46345071DA9F504C"
+    },
+    {
+      "image": "06-three-inactive-profiles-after-restart.jpg",
+      "imageSha256": "02199D811DEAC50442F855D79E9F84FE973C5D42902F865B246ECC3A81AD3045",
+      "imageLength": 62618,
+      "uia": "06-three-inactive-profiles-after-restart.uia.txt",
+      "uiaSha256": "0933BD61E62BB4FD26D2FD8CFB2FD0E4C177F18A5250A3A91720FA8460926A99"
+    }
+  ],
+  "sourceExporter": {
+    "tag": "v0.1.8",
+    "archiveSha256": "77CC3C6F9DED610E56084F1EF7DDD410DEFE6F04162303054A0CEE274D234727",
+    "revision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5"
+  },
+  "nativeExport": {
+    "explicitlyRelocatedTo": "exports/native-multiple-huds-v018.zip",
+    "archivedAs": "native-export.zip",
+    "intendedNativeSaveDestinationConfirmed": false,
+    "originalNativeRelativePath": "imports/Actual public v0.1.8 export.zip",
+    "relocationReceipt": "metadata/export-relocation.json",
+    "sha256": "BE5F3472308C176CB88F6C604D1592C275EED58B9602AC65F4DAADF57E7AE552"
+  },
+  "completedChecks": {
+    "hudReviewPending": true,
+    "selectedHud": "secondhud",
+    "totalPostExportFilesUnchangedAfterReopen": 31,
+    "importedPayloadsExact": 10,
+    "normalExitCodes": [0, 0],
+    "existingNonIndexFilesUnchanged": 19,
+    "exportedPayloadsExact": 10,
+    "activeProfileId": null
+  },
+  "archivedMetadata": [
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\request.json",
+      "archivedAs": "metadata/request.json",
+      "sourceSha256": "D87E8AA310F3C56A276C43D7E764C4AE66B8DBCB62A362DAFEC9669FBDE5AFC7",
+      "archivedSha256": "5F82614FCCA82F89C05762B9541309DE80A229B64BA1F944CAD1D3D7A39BC83B",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\inactive-import-plan.json",
+      "archivedAs": "metadata/inactive-import-plan.json",
+      "sourceSha256": "43AA00655014706BF0DA83768D316552506C6A2E592BB1A0876492F1B847D23D",
+      "archivedSha256": "035D20501282BF931C5D77A59C970E82F7F00162B0763A61E49491BF3DED7171",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\inactive-library-baseline.json",
+      "archivedAs": "metadata/inactive-library-baseline.json",
+      "sourceSha256": "7D535BFEB080CC62C3AABE471E4C77EAABE7F5003DB654C2D9BB63C97CA7C794",
+      "archivedSha256": "907E51DCDD4675AE5AD42A3F4A9AEB12E1B29C45068207310B2AE960EE109608",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\inactive-library-sources.json",
+      "archivedAs": "metadata/inactive-library-sources.json",
+      "sourceSha256": "BE45D3910D212005EE6B304C35F67CF4AA00E8887722C1FDB2A88D580947E065",
+      "archivedSha256": "EA344B77365AAD8DDEFED2771A1DA653827913553B5A1D6C69CD3A0DA2489F78",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\initial-import-integrity.json",
+      "archivedAs": "metadata/initial-import-integrity.json",
+      "sourceSha256": "45FD14C4D8E01C3161FBEA9AE5C906B6FF9B5AF415010726D85503B93AE59099",
+      "archivedSha256": "45FD14C4D8E01C3161FBEA9AE5C906B6FF9B5AF415010726D85503B93AE59099",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\post-import-export-integrity.json",
+      "archivedAs": "metadata/post-import-export-integrity.json",
+      "sourceSha256": "9AF870F8D8566BAF27192AEB10156590E5A466AAB711A820BBD322389A1E7DB4",
+      "archivedSha256": "9AF870F8D8566BAF27192AEB10156590E5A466AAB711A820BBD322389A1E7DB4",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\post-reopen-integrity.json",
+      "archivedAs": "metadata/post-reopen-integrity.json",
+      "sourceSha256": "BCD336E723D69962F4B56239FA251248366A2A1744385439845D10CEF8095A67",
+      "archivedSha256": "BCD336E723D69962F4B56239FA251248366A2A1744385439845D10CEF8095A67",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\export-relocation-before.json",
+      "archivedAs": "metadata/export-relocation-before.json",
+      "sourceSha256": "FC6A0E31A290AD32842961270BD91C79132534A57C9AAFA9E13204077275C1DB",
+      "archivedSha256": "DD83E92859579CE6D8CAE2771297BAC95A34DF11D77ECF862924F72DD6B8E51D",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\export-relocation.json",
+      "archivedAs": "metadata/export-relocation.json",
+      "sourceSha256": "A91F80DE77ECBD77E07EBEC8B73198E7B4C5E5D25283204349B244C4638C4101",
+      "archivedSha256": "D821D0B0D1B07774B911AC749B397823449BAFA5F05BF3C5A4CC3F4ABAF6D7CD",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\import-export-session\\bootstrap.json",
+      "archivedAs": "metadata/session-01/bootstrap.json",
+      "sourceSha256": "E5F8DDE28EA22EF8232F237D860CD027E6EF0E55024FC5E4B1F6AF2F9A380887",
+      "archivedSha256": "4BFC4ABDE9CFCBEB4B774ED3754EFD81A2D2772C4FFAC7FB860E2843726CEEAA",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\bootstrap.json",
+      "archivedAs": "metadata/session-02/bootstrap.json",
+      "sourceSha256": "9525548658179AB0F8FEF6A06EFDA8630B3746A233F4A5D9FFD4AAF20A5CBC66",
+      "archivedSha256": "3CBF136C3F5A3092A033C963B190511CD88F09517ABD1F69BC57A06800E4DCF7",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\import-export-session\\launch.json",
+      "archivedAs": "metadata/session-01/launch.json",
+      "sourceSha256": "E7195BC0FE95A7B6D617C6951378ACF71EFDD08D07176A4D1382EC4C980BDDA1",
+      "archivedSha256": "A521DDBB82E251A223970E61954094732957062CE8031A710D9A3CE913FED3CE",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\launch.json",
+      "archivedAs": "metadata/session-02/launch.json",
+      "sourceSha256": "56A763B4560AF9354BCD3130EC6B6837078C1D4F69F91C77F2191FD95D71A67C",
+      "archivedSha256": "8A4776C6A63D19BD80E76FB342FC4D2C600C68650E929D1CBC5C33DF0974C1AC",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\import-export-session\\exit.json",
+      "archivedAs": "metadata/session-01/exit.json",
+      "sourceSha256": "1CE327D3DFFE48A656D71FDE1FD26DB3C24CFE2B212EA614B9500178BC38AF31",
+      "archivedSha256": "90C6B43C843CCFA1C40407A15F0F3AD915C7D70EB4481EBB16218538F7504C03",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\exit.json",
+      "archivedAs": "metadata/session-02/exit.json",
+      "sourceSha256": "41EF285E9873EDA2704F00F8092C509063C4B38A38D7500B8C86FDC99E477E96",
+      "archivedSha256": "DBEF23430D4B5FDF336922556CCCF6D2266ECBB530FB0FCE673294A58F64F854",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\import-export-session\\webview-processes.json",
+      "archivedAs": "metadata/session-01/webview-processes.json",
+      "sourceSha256": "2E5B13C049D949521675AAADB8B11E6FD43FBBE578801AB8EFA2FFC86BF029B2",
+      "archivedSha256": "B94FDFEF7E795F69960CDDF6513D014449E92D66A3696FDD9D60C1AB416EA2B5",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\webview-processes.json",
+      "archivedAs": "metadata/session-02/webview-processes.json",
+      "sourceSha256": "B1F2C739F0EFB00D0009BCFB1D0B4CEA2A20ABA1F5AE87F0AE10013B73011CD0",
+      "archivedSha256": "F8FF79C1D5667BDAAF6568A67C08FEAD574007F947070DBB1DE1D0C72F0D0A11",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\roaming\\execs\\profiles\\index.json",
+      "archivedAs": "metadata/index-after-reopen.json",
+      "sourceSha256": "286CF6CB67A110DA86688240B988EFB5635127837BA443454167226B8B25248B",
+      "archivedSha256": "286CF6CB67A110DA86688240B988EFB5635127837BA443454167226B8B25248B",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\roaming\\execs\\profiles\\0e68d2e0-eb45-47da-8324-3bbdb5ef411e\\manifest.json",
+      "archivedAs": "metadata/imported-manifest.json",
+      "sourceSha256": "2A6857B121E6F401DC9BE97BA1913460F17D308C2714BB57996D7F18D3D6488E",
+      "archivedSha256": "9BD25BCA56B8D85C864BC1F77A38BB3CFF09A8824965779E426F08408E7CDC02",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    },
+    {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-133354-inactiveimport-validator-selftest-3f4bcb02\\validator-selftest.json",
+      "archivedAs": "metadata/validator-selftest.json",
+      "sourceSha256": "6736431F1048D003F740C12923E3FDF43D180254704A619D297A89EFCF29EEDC",
+      "archivedSha256": "EFA8390CCD4C3BCD9BCE0B288BAEC209DEFF10061683C844D4DB7EFC38FE8B0C",
+      "transformation": "UTF-8 JSON formatted by repository Biome with LF line endings; parsed values verified against source"
+    }
+  ],
+  "qualificationsExcluded": [
+    "active profile switching",
+    "Files native saves or close guards",
+    "Steam Cloud synchronization",
+    "TF2 runtime",
+    "installer/updater",
+    "later rebuilt executable"
+  ],
+  "archiveMethod": "Read completed historical reports; preserve original source hashes, format archived JSON with repository Biome, verify parsed data equality, and retain exact image/UIA/ZIP hashes. No app launch, current-executable read, fixture mutation or binary-bound validator rerun.",
+  "metadataFormattedUtc": "2026-09-22T18:05:02.9328503Z"
+}

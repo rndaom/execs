@@ -1,3 +1,4 @@
+import { CaretRight } from "@phosphor-icons/react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { draftRecordKey } from "../../hooks/useSeededDraft";
 
@@ -86,7 +87,7 @@ export function Disclosure({
     >
       <summary>
         <span aria-hidden="true" className="disclosure-caret">
-          ›
+          <CaretRight size={14} weight="bold" />
         </span>
         {summary}
       </summary>

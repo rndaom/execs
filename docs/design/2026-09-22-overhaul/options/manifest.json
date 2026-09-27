@@ -1,0 +1,135 @@
+{
+  "created": "2026-09-22",
+  "method": "Built-in ImageGen; generated concepts, not application implementation.",
+  "options": [
+    {
+      "id": "01-foundry",
+      "name": "Foundry",
+      "description": "Warm graphite, architectural structure, confident typography.",
+      "palette": ["#151310", "#211E19", "#F0E9DB", "#D98449"],
+      "boards": [
+        {
+          "file": "options/01-foundry/01-core.png",
+          "title": "Core pages",
+          "views": ["Comfig", "Binds", "Gameplay", "HUD browsing"],
+          "note": "FOV imagery is illustrative. Generated minor labels and controls require reconciliation with the audited product behavior."
+        },
+        {
+          "file": "options/01-foundry/02-customization.png",
+          "title": "Customization",
+          "views": ["Crosshair designer", "Installed HUD options", "Viewmodels", "Sounds"],
+          "note": "Generated game imagery illustrates layout, not verified in-game results. Settings autosave; pack builds and file changes retain explicit actions."
+        },
+        {
+          "file": "options/01-foundry/03-workspaces.png",
+          "title": "Workspaces",
+          "views": ["Mods browsing", "Mods Casual setup", "Files", "Launch options"],
+          "note": "Mods keeps the shipped Browse / Installed / Casual structure. No fabricated progress percentages or live telemetry."
+        },
+        {
+          "file": "options/01-foundry/04-profiles.png",
+          "title": "Profiles and setup",
+          "views": ["Profile switcher", "Import review", "First run", "App settings — planned"],
+          "note": "Global App settings is a planned 0.2.0 surface. Profile and import safety behavior stays intact."
+        },
+        {
+          "file": "options/01-foundry/05-states.png",
+          "title": "States and dialogs",
+          "views": [
+            "Inventory — development only",
+            "TF2 running and deferred edits",
+            "Files transition guard",
+            "Profile deletion — planned"
+          ],
+          "note": "Inventory remains development-only and outside the release commitment. Profile deletion is proposed. Real recovery and pending-change semantics take precedence over illustrative text."
+        }
+      ]
+    },
+    {
+      "id": "02-signal",
+      "name": "Signal",
+      "description": "Cool slate, precise alignment, efficient workspaces.",
+      "palette": ["#10161C", "#19232C", "#E6EDF1", "#80B8D2"],
+      "boards": [
+        {
+          "file": "options/02-signal/01-core.png",
+          "title": "Core pages",
+          "views": ["Comfig", "Binds", "Gameplay", "HUD browsing"],
+          "note": "FOV imagery is illustrative. Generated minor labels and controls require reconciliation with the audited product behavior."
+        },
+        {
+          "file": "options/02-signal/02-customization.png",
+          "title": "Customization",
+          "views": ["Crosshair designer", "Installed HUD options", "Viewmodels", "Sounds"],
+          "note": "Generated game imagery illustrates layout, not verified in-game results. Settings autosave; pack builds and file changes retain explicit actions."
+        },
+        {
+          "file": "options/02-signal/03-workspaces.png",
+          "title": "Workspaces",
+          "views": ["Mods browsing", "Mods Casual setup", "Files", "Launch options"],
+          "note": "Mods keeps the shipped Browse / Installed / Casual structure. No fabricated progress percentages or live telemetry."
+        },
+        {
+          "file": "options/02-signal/04-profiles.png",
+          "title": "Profiles and setup",
+          "views": ["Profile switcher", "Import review", "First run", "App settings — planned"],
+          "note": "Global App settings is a planned 0.2.0 surface. Profile and import safety behavior stays intact."
+        },
+        {
+          "file": "options/02-signal/05-states.png",
+          "title": "States and dialogs",
+          "views": [
+            "Inventory — development only",
+            "TF2 running and deferred edits",
+            "Files transition guard",
+            "Profile deletion — planned"
+          ],
+          "note": "Inventory remains development-only and outside the release commitment. Profile deletion is proposed. Real recovery and pending-change semantics take precedence over illustrative text."
+        }
+      ]
+    },
+    {
+      "id": "03-afterhours",
+      "name": "Afterhours",
+      "description": "Olive and brass, softer forms, a spacious studio feel.",
+      "palette": ["#151915", "#202720", "#ECEADE", "#C4AE70"],
+      "boards": [
+        {
+          "file": "options/03-afterhours/01-core.png",
+          "title": "Core pages",
+          "views": ["Comfig", "Binds", "Gameplay", "HUD browsing"],
+          "note": "FOV imagery is illustrative. Generated minor labels and controls require reconciliation with the audited product behavior."
+        },
+        {
+          "file": "options/03-afterhours/02-customization.png",
+          "title": "Customization",
+          "views": ["Crosshair designer", "Installed HUD options", "Viewmodels", "Sounds"],
+          "note": "Generated game imagery illustrates layout, not verified in-game results. Settings autosave; pack builds and file changes retain explicit actions."
+        },
+        {
+          "file": "options/03-afterhours/03-workspaces.png",
+          "title": "Workspaces",
+          "views": ["Mods browsing", "Mods Casual setup", "Files", "Launch options"],
+          "note": "Mods keeps the shipped Browse / Installed / Casual structure. No fabricated progress percentages or live telemetry."
+        },
+        {
+          "file": "options/03-afterhours/04-profiles.png",
+          "title": "Profiles and setup",
+          "views": ["Profile switcher", "Import review", "First run", "App settings — planned"],
+          "note": "Global App settings is a planned 0.2.0 surface. Profile and import safety behavior stays intact."
+        },
+        {
+          "file": "options/03-afterhours/05-states.png",
+          "title": "States and dialogs",
+          "views": [
+            "Inventory — development only",
+            "TF2 running and deferred edits",
+            "Files transition guard",
+            "Profile deletion — planned"
+          ],
+          "note": "Inventory remains development-only and outside the release commitment. Profile deletion is proposed. Real recovery and pending-change semantics take precedence over illustrative text."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "sid": "S-1-5-21-1535354919-3125631827-3241930664-500",
+  "user": "runnervmocx8p\\runneradmin",
+  "session": 2,
+  "userInteractive": true,
+  "packageCode": 15700,
+  "groups": [
+    "S-1-5-21-1535354919-3125631827-3241930664-513",
+    "S-1-1-0",
+    "S-1-5-114",
+    "S-1-5-32-544",
+    "S-1-5-32-545",
+    "S-1-5-4",
+    "S-1-2-1",
+    "S-1-5-11",
+    "S-1-5-15",
+    "S-1-5-113",
+    "S-1-2-0",
+    "S-1-5-64-10"
+  ],
+  "playerProcesses": [],
+  "steamRegistry": [],
+  "productLocations": [
+    "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\execs"
+  ]
+}

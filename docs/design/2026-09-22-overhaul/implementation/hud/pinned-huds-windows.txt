@@ -1,0 +1,57 @@
+Pinned HUD fixture evidence: C:\Users\Random\AppData\Local\Temp\execs-pinned-huds-bEUGrN
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running tests\hud_catalog_options.rs (apps\desktop\src-tauri\target\debug\deps\hud_catalog_options-766249f31e5b1013.exe)
+
+running 4 tests
+test budhud_youtuber_directory_choices_round_trip_payloads ... ok
+test hypnotize_checkbox_bases_apply_both_states_in_full_schema ... ok
+test flawhud_full_schema_applies_supported_choices_without_log_files ... ok
+test rayshud_full_schema_default_and_alternate_controls_preserve_legacy_comment ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.14s
+
+     Running tests\hud_expression_archives.rs (apps\desktop\src-tauri\target\debug\deps\hud_expression_archives-ff3e898fdeb62039.exe)
+
+running 1 test
+test real_font_templates_reapply_and_resolve_to_declared_fonts ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.73s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running unittests src\lib.rs (apps\desktop\src-tauri\target\debug\deps\execs_core-a7a1a02f4ef104d6.exe)
+
+running 1 test
+test hud::tests::pinned_catalog_huds_install_update_and_preserve_payloads has been running for over 60 seconds
+test hud::tests::pinned_catalog_huds_install_update_and_preserve_payloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 714 filtered out; finished in 211.79s
+
+     Running tests\absorb_integrity.rs (apps\desktop\src-tauri\target\debug\deps\absorb_integrity-8e70afbd92d23b2f.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests\hud_catalog_options.rs (apps\desktop\src-tauri\target\debug\deps\hud_catalog_options-766249f31e5b1013.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests\hud_expression_archives.rs (apps\desktop\src-tauri\target\debug\deps\hud_expression_archives-ff3e898fdeb62039.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests\hud_schema_integrity.rs (apps\desktop\src-tauri\target\debug\deps\hud_schema_integrity-d6522b58eb0b6528.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests\pack_identity.rs (apps\desktop\src-tauri\target\debug\deps\pack_identity-96b7b95d2ab6cd51.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s

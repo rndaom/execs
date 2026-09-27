@@ -1,0 +1,116 @@
+{
+  "runId": 35780702038,
+  "workflowUrl": "https://github.com/rndaom/execs/actions/runs/35780702038",
+  "artifactId": 10718307664,
+  "artifactName": "development-linux-packages-3b979c6cdbcf0406e8c5cdc691150f2917cc70b3",
+  "artifactApiSizeBytes": 656511,
+  "head": "ee0a8f22db5f6a07af053bd070490d55c9f271e9",
+  "testedMerge": "3b979c6cdbcf0406e8c5cdc691150f2917cc70b3",
+  "files": [
+    {
+      "path": "results.json",
+      "bytes": 260847,
+      "sha256": "02be31a11cd9a7a38f176998b022b4f90164b9861d01cb64dc4c226565236b17"
+    },
+    {
+      "path": "appimage-upgrade/candidate-import-complete.png",
+      "bytes": 74213,
+      "sha256": "5c4c8cd47081e6b73fe40a79e5bf50aa2f13c6c9349c7e3017271c99f7ba7280"
+    },
+    {
+      "path": "appimage-upgrade/candidate-import-dialog.png",
+      "bytes": 21865,
+      "sha256": "f503bc2f01f9a207b883e7559cacaec21bf59aadb479de00fddbc365a58e12a7"
+    },
+    {
+      "path": "appimage-upgrade/candidate-import-path.png",
+      "bytes": 26120,
+      "sha256": "ea04e4f70e34da3c96353742e8d01946f78027abb1b27b1ca2f96b548bd6b73a"
+    },
+    {
+      "path": "appimage-upgrade/candidate-import-review.png",
+      "bytes": 81708,
+      "sha256": "56404517d14fc2db547a9c454935ff64821d98d16e7b09937e317f3d3f295840"
+    },
+    {
+      "path": "appimage-upgrade/candidate-launch-driver.log",
+      "bytes": 360,
+      "sha256": "28c18cabac0ba3afcaaea580c52dc3073b331d6f5a1741d50e8c9fcee0c3d724"
+    },
+    {
+      "path": "appimage-upgrade/candidate-preserved-profile-read.png",
+      "bytes": 62792,
+      "sha256": "a3f588a7907615f856fad8cb5f98d4f8a765dfbc3360a39682bcdaaca66f00c4"
+    },
+    {
+      "path": "appimage-upgrade/candidate-profile-after-reopen.png",
+      "bytes": 62728,
+      "sha256": "6033b82bac4c5e5fa7c8c42e9d0690452288fa7c8dca6ba1cec5c4a8b579d31d"
+    },
+    {
+      "path": "appimage-upgrade/candidate-reopen-driver.log",
+      "bytes": 204,
+      "sha256": "8fee5fbc3c9bd4ed3fe5ffa6db14fc80ce0c66feb89fbe7c74fb0a5a1a746f07"
+    },
+    {
+      "path": "appimage-upgrade/candidate-switch-complete.png",
+      "bytes": 80320,
+      "sha256": "b14d8b8d5ee77837a3fce5bd6eface8bde4190205398bdd698e66c527321301e"
+    },
+    {
+      "path": "appimage-upgrade/candidate-switched-profile-read.png",
+      "bytes": 80332,
+      "sha256": "18b379311d4dd2d51d8040c5ae5bbcd5cd9aff045c1d768667913c837286a0f2"
+    },
+    {
+      "path": "appimage-upgrade/fixture-baseline.json",
+      "bytes": 15786,
+      "sha256": "69b95a5eace6001abea1f2d2654dcd3b6184c795c656cd42888e00d839a80bc2"
+    },
+    {
+      "path": "appimage-upgrade/previous-export-complete.png",
+      "bytes": 56374,
+      "sha256": "b88f86d309cf58d752e7d01e785996f16994fe665e3db8f12ef681911e60e868"
+    },
+    {
+      "path": "appimage-upgrade/previous-export-dialog.png",
+      "bytes": 30268,
+      "sha256": "fd3466603a8e290e06bc59692a730b23712d8061cd4070ab55a75e29aaab1fc1"
+    },
+    {
+      "path": "appimage-upgrade/previous-export-path.png",
+      "bytes": 32011,
+      "sha256": "50034cc934bd7cadaec20e02c12ba2339091438e27c87786d651bdd8019e604e"
+    },
+    {
+      "path": "appimage-upgrade/previous-launch-driver.log",
+      "bytes": 204,
+      "sha256": "c74ac856217bf9a5b4c1103f4df32c10fef94ae7e1c9c93cbccbaee7cd40612d"
+    },
+    {
+      "path": "appimage-upgrade/previous-profile-read.png",
+      "bytes": 55941,
+      "sha256": "a28847b1262596c42179f12dd0f0c0170d24bedba7a321d85935c2e291a8657c"
+    },
+    {
+      "path": "appimage-upgrade/previous-ui-export.zip",
+      "bytes": 1674,
+      "sha256": "6f93d339d2c9cfdafaad7f3c754fbbe74b87a1023cd832a70802b429bc261bd2"
+    },
+    {
+      "path": "appimage-upgrade/results.json",
+      "bytes": 217902,
+      "sha256": "f167b9dd854abf29e7b486373344a6c5d7c8678489abc5d9fac3f23cbecedfb5"
+    },
+    {
+      "path": "deb-upgrade/fixture-baseline.json",
+      "bytes": 15786,
+      "sha256": "718443ec96e8c187933358982c2a1a1c404fe5f9dc504d7adaac674f67de98cb"
+    },
+    {
+      "path": "deb-upgrade/results.json",
+      "bytes": 9643,
+      "sha256": "611e6402dea77de579dc03791180eda55c475f9ced968f8b448da484dd703f6c"
+    }
+  ]
+}

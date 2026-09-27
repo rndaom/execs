@@ -24,7 +24,7 @@ export const SOURCES = [
   },
   master(
     "config/mastercomfig/cfg/comfig/comfig.cfg",
-    "mastercomfig alias declarations; MIT mastercomfig contributors",
+    "mastercomfig TF2 cfg settings and alias declarations; MIT mastercomfig contributors",
   ),
   master(
     "config/mastercomfig/cfg/comfig/define_presets.cfg",
@@ -42,6 +42,10 @@ export const SOURCES = [
     date: "2026-09-20",
     description: "Valve SDK MAX_FOV declaration; metadata only",
   },
+  master(
+    "config/cfg/addons/flat-mouse.cfg",
+    "mastercomfig TF2 flat-mouse addon settings; MIT mastercomfig contributors",
+  ),
 ];
 const LINE_RE = /^([+-]?[A-Za-z_][\w-]*)\s+:\s(.*?)\s+:\s*(.*?)\s*:\s?(.*)$/;
 export function parseDump(text, minimum) {
@@ -157,6 +161,24 @@ export function buildCorpus(texts) {
       });
     }
   }
+  // The pinned Windows dump predates this setting. The same pinned TF2 cfg
+  // uses it as a scalar setting; a Source-1-Games runtime diagnostic also
+  // lists it as a ConVar, but does not establish current TF2 defaults/flags.
+  if (!/^r_lightmap_bicubic_set 1\s*\/\/ Mark that bicubic setting was set$/m.test(texts[3]))
+    throw new Error("Missing verified mastercomfig bicubic setting");
+  mergeEntry(corpus, "r_lightmap_bicubic_set", {
+    c: 0,
+    s: [3],
+    a: "Observed in pinned mastercomfig TF2 cfg; current retail availability and flags unverified",
+    h: "Marks that mastercomfig has set the bicubic lightmap option.",
+  });
+  if (!/^m_rawinput_onetime_reset 1\s*\/\/ \^$/m.test(texts[7]))
+    throw new Error("Missing verified mastercomfig raw-input setting");
+  mergeEntry(corpus, "m_rawinput_onetime_reset", {
+    c: 0,
+    s: [7],
+    a: "Observed in pinned mastercomfig TF2 addon; current retail availability and flags unverified",
+  });
   // Observed forms are useful help, but do not establish exhaustive engine arity.
   corpus.exec.syntax = "exec <cfg path>";
   corpus.alias.syntax = "alias <name> [command …]";

@@ -7,17 +7,26 @@ import type {
   ProfileImportReview,
   ProfileLibrary,
   ProfileSummary,
+  RetiredCasualReview,
   Tf2Install,
 } from "../lib/bridge";
+import { parseInvokeError } from "../lib/bridge";
 import {
   canExportProfile,
   canImportProfile,
   canSaveCurrent,
   hasPackChanges,
   newlyImportedProfile,
+  profileNameProblem,
 } from "../lib/library-ui";
 import type { SetOperationError } from "./useOperationErrors";
 import type { SwitchProgressController } from "./useSwitchProgress";
+
+function hudReviewProfile(error: unknown, requested: string | null, active: string | null) {
+  const { code } = parseInvokeError(error);
+  if (code === "HudLiveReviewRequired") return active;
+  return code === "HudReviewRequired" ? requested : null;
+}
 
 export type ProfileLibraryState = {
   library: ProfileLibrary | null;
@@ -32,17 +41,35 @@ export type ProfileLibraryState = {
   refreshKey: string;
   onBindSyncHandled: (request: number) => void;
   saveCurrent: (name: string) => Promise<boolean>;
+  /** Resolves true once the new name is saved; failures report and keep the old name. */
+  renameProfile: (id: string, name: string) => Promise<boolean>;
+  /** Resolves true once the inactive copy exists. */
+  duplicateProfile: (id: string, name: string) => Promise<boolean>;
   importProfile: () => Promise<void>;
   importing: boolean;
   importStage: "selecting" | "reading" | "review" | "saving" | "done" | null;
   importReview: ProfileImportReview | null;
+  selectImportHud: (hud: string) => void;
   confirmImport: () => Promise<void>;
   cancelImport: () => Promise<void>;
   importError: string | null;
   importedProfile: ProfileSummary | null;
   dismissImport: () => void;
-  exportProfile: (id: string) => Promise<void>;
+  exportProfile: (id: string, expectedReviewRevision: string) => Promise<void>;
   switchProfile: (id: string) => Promise<void>;
+  retiredCasualReview: (RetiredCasualReview & { name: string; error?: string }) | null;
+  retiredCasualInFlight: boolean;
+  confirmRetiredCasualReview: () => Promise<void>;
+  cancelRetiredCasualReview: () => void;
+  switchHandoff: { kind: "kept" | "retained"; message: string; ownerId: string | null } | null;
+  captureKeptPacks: () => Promise<void>;
+  dismissSwitchHandoff: () => void;
+  deleteTarget: ProfileSummary | null;
+  deleting: boolean;
+  deleteError: string | null;
+  reviewDelete: (id: string) => void;
+  confirmDelete: (keepInstalled: boolean, switchToId?: string) => Promise<void>;
+  cancelDelete: () => void;
   folderRepair: { id: string; name: string; plan: CustomFolderRepair[]; error?: string } | null;
   reviewFolderRepair: (id: string) => Promise<void>;
   repairFolders: () => Promise<void>;
@@ -62,6 +89,7 @@ export function useProfileLibrary(
     progress,
     setError,
     setBusy,
+    onHudReviewRequired,
   }: {
     confirmed: Tf2Install | null;
     running: boolean;
@@ -70,9 +98,19 @@ export function useProfileLibrary(
     progress: SwitchProgressController;
     setError: SetOperationError;
     setBusy: (busy: boolean) => void;
+    onHudReviewRequired?: (profileId: string) => void;
   },
 ): ProfileLibraryState {
   const [library, setLibrary] = useState<ProfileLibrary | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProfileSummary | null>(null);
+  const [switchHandoff, setSwitchHandoff] = useState<ProfileLibraryState["switchHandoff"]>(null);
+  const [retiredCasualReview, setRetiredCasualReview] =
+    useState<ProfileLibraryState["retiredCasualReview"]>(null);
+  const [retiredCasualInFlight, setRetiredCasualInFlight] = useState(false);
+  const retiredCasualInFlightRef = useRef(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const deleteInFlight = useRef(false);
   const [folderRepair, setFolderRepair] = useState<ProfileLibraryState["folderRepair"]>(null);
   const [packPrompt, setPackPrompt] = useState<AbsorbDelta | null>(null);
   const [packPromptProfile, setPackPromptProfile] = useState<string | null>(null);
@@ -211,6 +249,12 @@ export function useProfileLibrary(
       })
       .catch((err) => {
         if (control.live && generation === control.generation && gate === control.gate) {
+          const reviewId = hudReviewProfile(err, activeProfileId, activeProfileId);
+          if (reviewId && onHudReviewRequired) {
+            setError(null, "profiles:absorb");
+            onHudReviewRequired(reviewId);
+            return;
+          }
           setError(
             err instanceof Error ? err.message : "Could not absorb live changes.",
             "profiles:absorb",
@@ -234,8 +278,51 @@ export function useProfileLibrary(
     busy,
     quitNonce,
     setError,
+    onHudReviewRequired,
     absorbRetry,
   ]);
+
+  const renameProfile = useCallback(
+    async (id: string, name: string) => {
+      if (running || profileNameProblem(name) !== null) return false;
+      setBusy(true);
+      try {
+        setLibrary(await api.renameProfile(id, name));
+        setError(null, "profiles:rename");
+        return true;
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Could not rename that profile.",
+          "profiles:rename",
+        );
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, running, setBusy, setError],
+  );
+
+  const duplicateProfile = useCallback(
+    async (id: string, name: string) => {
+      if (running || profileNameProblem(name) !== null) return false;
+      setBusy(true);
+      try {
+        setLibrary(await api.duplicateProfile(id, name));
+        setError(null, "profiles:duplicate");
+        return true;
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Could not duplicate that profile.",
+          "profiles:duplicate",
+        );
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, running, setBusy, setError],
+  );
 
   const saveCurrent = useCallback(
     async (name: string) => {
@@ -245,6 +332,8 @@ export function useProfileLibrary(
       setBusy(true);
       try {
         setLibrary(await api.saveCurrentAs(name));
+        setSwitchHandoff(null);
+        setRetiredCasualReview(null);
         setError(null, "profiles:save-current");
         return true;
       } catch (err) {
@@ -272,7 +361,11 @@ export function useProfileLibrary(
     try {
       unlisten = await api.onProfileImportReading(() => setImportStage("reading"));
       const review = await api.importProfile();
-      setImportReview(review);
+      // Multiple HUDs always need a fresh, visible choice, including native
+      // exports whose previous selection is present as a review hint.
+      setImportReview(
+        review && (review.huds?.length ?? 0) > 1 ? { ...review, selectedHud: null } : review,
+      );
       setImportStage(review ? "review" : null);
       if (!review) setBusy(false);
     } catch (err) {
@@ -285,12 +378,30 @@ export function useProfileLibrary(
     }
   }, [api, library, running, busy, setBusy]);
 
+  const selectImportHud = useCallback(
+    (hud: string) => {
+      if (importStage !== "review" || importInFlight.current) return;
+      setImportReview((review) =>
+        review?.huds?.includes(hud) ? { ...review, selectedHud: hud } : review,
+      );
+    },
+    [importStage],
+  );
+
   const confirmImport = useCallback(async () => {
     if (!importReview || !library || running || importInFlight.current) return;
+    if (
+      (importReview.huds?.length ?? 0) > 1 &&
+      !importReview.huds?.includes(importReview.selectedHud ?? "")
+    )
+      return;
     importInFlight.current = true;
     setImportStage("saving");
     try {
-      const next = await api.confirmProfileImport(importReview.token);
+      const next = await api.confirmProfileImport(
+        importReview.token,
+        importReview.selectedHud ?? undefined,
+      );
       setLibrary(next);
       setImportedProfile(newlyImportedProfile(library, next));
       setImportStage("done");
@@ -322,13 +433,13 @@ export function useProfileLibrary(
   }, [api, importReview, setBusy]);
 
   const exportProfile = useCallback(
-    async (id: string) => {
+    async (id: string, expectedReviewRevision: string) => {
       if (!library || !canExportProfile(library, running)) {
         return;
       }
       setBusy(true);
       try {
-        const exported = await api.exportProfile(id);
+        const exported = await api.exportProfile(id, expectedReviewRevision);
         if (exported !== null) setError(null, `profiles:export:${id}`);
       } catch (err) {
         setError(
@@ -351,8 +462,10 @@ export function useProfileLibrary(
       // the target will report its own delta when the switch settles.
       progress.start();
       setBusy(true);
+      let reviewId: string | null = null;
       try {
         setLibrary(await api.switchProfile(id));
+        setSwitchHandoff(null);
         setImportedProfile(null);
         setImportStage(null);
         setImportReview(null);
@@ -361,10 +474,37 @@ export function useProfileLibrary(
         setPackPrompt(null);
         setPackPromptDeferred(false);
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Could not switch profiles.",
-          "profiles:switch",
-        );
+        reviewId = hudReviewProfile(err, id, library.activeProfileId);
+        const { code, message } = parseInvokeError(err);
+        if (code === "KeptPackHandoff" || code === "PendingLiveHandoff") {
+          setSwitchHandoff({
+            kind: code === "KeptPackHandoff" ? "kept" : "retained",
+            message,
+            ownerId: library.activeProfileId,
+          });
+          setError(null, "profiles:switch");
+        } else if (code === "LegacyCasualSourceMissing") {
+          try {
+            const review = await api.reviewRetiredCasualProfile(id);
+            setRetiredCasualReview({
+              ...review,
+              name: library.profiles.find((profile) => profile.id === id)?.name ?? "this profile",
+            });
+            setError(null, "profiles:switch");
+          } catch (reviewError) {
+            setError(
+              reviewError instanceof Error
+                ? reviewError.message
+                : "Could not review saved Casual choices.",
+              "profiles:switch",
+            );
+          }
+        } else if (reviewId && onHudReviewRequired) setError(null, "profiles:switch");
+        else
+          setError(
+            err instanceof Error ? err.message : "Could not switch profiles.",
+            "profiles:switch",
+          );
         // A failure after the durable switch marker was written clears the
         // active profile on disk. Never leave the renderer showing the stale
         // pre-switch active id; the refreshed library also exposes recovery.
@@ -377,14 +517,184 @@ export function useProfileLibrary(
       } finally {
         setBusy(false);
       }
+      if (reviewId) onHudReviewRequired?.(reviewId);
     },
-    [api, library, running, busy, progress, setError, setBusy],
+    [api, library, running, busy, progress, setError, setBusy, onHudReviewRequired],
   );
+
+  const confirmRetiredCasualReview = useCallback(async () => {
+    if (
+      !retiredCasualReview ||
+      retiredCasualInFlightRef.current ||
+      running ||
+      busy ||
+      progress.state.active
+    ) {
+      return;
+    }
+    const { profileId, revision } = retiredCasualReview;
+    retiredCasualInFlightRef.current = true;
+    setRetiredCasualInFlight(true);
+    setBusy(true);
+    let cleared = false;
+    try {
+      setLibrary(await api.clearRetiredCasualProfile(profileId, revision));
+      setRetiredCasualReview(null);
+      setError(null, "profiles:switch");
+      cleared = true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update the saved profile.";
+      setRetiredCasualReview((current) =>
+        current?.profileId === profileId ? { ...current, error: message } : current,
+      );
+    } finally {
+      setBusy(false);
+    }
+    try {
+      if (cleared) await switchProfile(profileId);
+    } finally {
+      retiredCasualInFlightRef.current = false;
+      setRetiredCasualInFlight(false);
+    }
+  }, [api, retiredCasualReview, running, busy, progress, setBusy, setError, switchProfile]);
+
+  const cancelRetiredCasualReview = useCallback(() => {
+    if (!retiredCasualInFlightRef.current) setRetiredCasualReview(null);
+  }, []);
+
+  const captureKeptPacks = useCallback(async () => {
+    if (switchHandoff?.kind !== "kept" || running || busy) return;
+    if (library?.activeProfileId !== switchHandoff.ownerId) {
+      setSwitchHandoff(null);
+      setError(
+        "The active profile changed. Choose the profile to switch to again.",
+        "profiles:switch",
+      );
+      return;
+    }
+    setBusy(true);
+    try {
+      setLibrary(await api.absorbPacks("captureKept"));
+      setSwitchHandoff(null);
+      setAbsorbNonce((value) => value + 1);
+      setError(null, "profiles:switch");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not capture kept packs.",
+        "profiles:switch",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [api, switchHandoff, library, running, busy, setBusy, setError]);
+
+  const reviewDelete = useCallback(
+    (id: string) => {
+      if (running || busy || progress.state.active || library?.pendingSwitchProfileId) return;
+      const target = library?.profiles.find((profile) => profile.id === id);
+      if (!target || !library?.usable || library.rootMismatch) return;
+      setDeleteError(null);
+      setDeleteTarget(target);
+    },
+    [library, running, busy, progress.state.active],
+  );
+
+  const confirmDelete = useCallback(
+    async (keepInstalled: boolean, switchToId?: string) => {
+      if (
+        !deleteTarget ||
+        !library ||
+        running ||
+        busy ||
+        deleteInFlight.current ||
+        progress.state.active ||
+        library.pendingSwitchProfileId
+      )
+        return;
+      const target = library.profiles.find((profile) => profile.id === deleteTarget.id);
+      if (!target) {
+        setDeleteError("This profile is no longer in the library.");
+        return;
+      }
+      const active = library.activeProfileId === target.id;
+      const replacement = library.profiles.find((profile) => profile.id === switchToId);
+      if (active && !keepInstalled && (!replacement || replacement.id === target.id)) {
+        setDeleteError("Choose another profile, or keep the installed TF2 files.");
+        return;
+      }
+      if (active && !keepInstalled && replacement?.unsafeCustomFolders?.length) {
+        setDeleteError("Repair that profile’s folder names before switching to it.");
+        return;
+      }
+      deleteInFlight.current = true;
+      setDeleting(true);
+      setDeleteError(null);
+      setBusy(true);
+      let switching = false;
+      let reviewId: string | null = null;
+      try {
+        if (active && !keepInstalled && replacement) {
+          switching = true;
+          progress.start();
+          const switched = await api.switchProfile(replacement.id);
+          setLibrary(switched);
+          if (switched.activeProfileId !== replacement.id || switched.pendingSwitchProfileId) {
+            throw new Error("The profile switch did not finish. Your saved profile was kept.");
+          }
+          progress.complete();
+          switching = false;
+        }
+        const next = await api.deleteProfile(target.id, active && keepInstalled);
+        setLibrary(next);
+        setSwitchHandoff(null);
+        setDeleteTarget(null);
+        setPackPrompt(null);
+        setPackPromptDeferred(false);
+        setImportedProfile((current) => (current?.id === target.id ? null : current));
+        setError(null, `profiles:delete:${target.id}`);
+      } catch (error) {
+        if (switching) progress.cancel();
+        reviewId = switching
+          ? hudReviewProfile(error, replacement?.id ?? null, library.activeProfileId)
+          : null;
+        if (reviewId && onHudReviewRequired) {
+          setDeleteTarget(null);
+          setDeleteError(null);
+        } else
+          setDeleteError(error instanceof Error ? error.message : "Could not delete that profile.");
+        // An interruption can happen after the index commit. Native reads
+        // recover payload cleanup, and refresh must not imply it is active.
+        try {
+          const next = await api.getProfileLibrary();
+          setLibrary(next);
+          if (!next.profiles.some((profile) => profile.id === target.id)) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        } catch {
+          // Keep the original failure and its recovery context visible.
+        }
+      } finally {
+        deleteInFlight.current = false;
+        setDeleting(false);
+        setBusy(false);
+      }
+      if (reviewId) onHudReviewRequired?.(reviewId);
+    },
+    [api, deleteTarget, library, running, busy, progress, setBusy, setError, onHudReviewRequired],
+  );
+
+  const cancelDelete = useCallback(() => {
+    if (deleteInFlight.current) return;
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }, []);
 
   const answerPackPrompt = useCallback(
     async (choice: PackChoice) => {
       if (!packPrompt || packPromptProfile !== activeProfileId || running || busy) return;
       setBusy(true);
+      let reviewId: string | null = null;
       try {
         setLibrary(await api.absorbPacks(choice));
         setError(null, "profiles:packs");
@@ -392,12 +702,31 @@ export function useProfileLibrary(
         setPackPromptDeferred(false);
         setAbsorbNonce((value) => value + 1);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not update packs.", "profiles:packs");
+        reviewId = hudReviewProfile(err, activeProfileId, activeProfileId);
+        if (reviewId && onHudReviewRequired) {
+          setPackPromptDeferred(true);
+          setError(null, "profiles:packs");
+        } else
+          setError(
+            err instanceof Error ? err.message : "Could not update packs.",
+            "profiles:packs",
+          );
       } finally {
         setBusy(false);
       }
+      if (reviewId) onHudReviewRequired?.(reviewId);
     },
-    [api, packPrompt, packPromptProfile, activeProfileId, running, busy, setError, setBusy],
+    [
+      api,
+      packPrompt,
+      packPromptProfile,
+      activeProfileId,
+      running,
+      busy,
+      setError,
+      setBusy,
+      onHudReviewRequired,
+    ],
   );
 
   const reviewFolderRepair = useCallback(
@@ -443,6 +772,10 @@ export function useProfileLibrary(
 
   const reset = useCallback(() => {
     setLibrary(null);
+    setSwitchHandoff(null);
+    setRetiredCasualReview(null);
+    setDeleteTarget(null);
+    setDeleteError(null);
     setFolderRepair(null);
     setPackPrompt(null);
     setPackPromptProfile(null);
@@ -469,10 +802,13 @@ export function useProfileLibrary(
     refreshKey: `${library?.activeProfileId ?? ""}:${absorbNonce}`,
     onBindSyncHandled,
     saveCurrent,
+    renameProfile,
+    duplicateProfile,
     importProfile,
     importing,
     importStage,
     importReview,
+    selectImportHud,
     confirmImport,
     cancelImport,
     importError,
@@ -485,6 +821,19 @@ export function useProfileLibrary(
     },
     exportProfile,
     switchProfile,
+    retiredCasualReview,
+    retiredCasualInFlight,
+    confirmRetiredCasualReview,
+    cancelRetiredCasualReview,
+    switchHandoff,
+    captureKeptPacks,
+    dismissSwitchHandoff: () => setSwitchHandoff(null),
+    deleteTarget,
+    deleting,
+    deleteError,
+    reviewDelete,
+    confirmDelete,
+    cancelDelete,
     folderRepair,
     reviewFolderRepair,
     repairFolders,

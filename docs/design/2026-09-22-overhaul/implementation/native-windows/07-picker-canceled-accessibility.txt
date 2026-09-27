@@ -1,0 +1,76 @@
+Window: "execs", App: execs.exe.
+	0 window execs Secondary Actions: Raise
+		1 pane
+			2 pane execs
+				3 pane (disabled)
+				4 region execs - Web content
+					5 region
+						6 region
+							7 region
+								8 region
+								9 region
+									10 region
+										11 region
+											12 region
+												13 region
+												14 document execs Value: http://tauri.localhost/ ID: RootWebArea
+													15 group ID: root
+														16 main
+															102 text execs
+															103 text FIND TF2
+															104 heading Find your Team Fortress 2 install
+															105 text Choose the folder your profiles will use.
+															106 list Setup progress
+																107 list item Find TF2Done
+																108 list item Confirm folderCurrent step
+																109 list item Set up profileUpcoming
+															110 heading TF2 location
+															111 text Nothing is written until you confirm.
+															112 list
+																113 list item Team Fortress 2H:\SteamLibrary\steamapps\common\Team Fortress 2
+																	114 toggle button Team Fortress 2 H:\SteamLibrary\steamapps\common\Team Fortress 2
+															115 button Browse…
+															116 button Confirm install
+															32 group Description: execs 0.2.0
+																33 text v0.2.0
+															34 text ·
+															35 button Check for updates
+															36 text ·
+															37 button Report a bug
+															38 text ·
+															39 button Copy diagnostics
+															40 text ·
+															41 button App settings
+															42 text execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+														43 status
+								44 region
+						45 region
+						46 region
+		47 title bar (settable, string) Value: execs
+			48 menu bar System ID: MenuBar
+				49 menu item System
+			50 button Minimize
+			51 button Maximize
+			52 button Close
+
+Document text: ```
+execs
+FIND TF2
+Find your Team Fortress 2 install
+Choose the folder your profiles will use.
+Find TF2
+Done
+Confirm folder
+Current step
+Set up profile
+Upcoming
+TF2 location
+Nothing is written until you confirm.
+Team Fortress 2
+H:\SteamLibrary\steamapps\common\Team Fortress 2
+Browse…
+Confirm install
+v0.2.0 · Check for updates · Report a bug · Copy diagnostics · App settings
+execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+￼
+```

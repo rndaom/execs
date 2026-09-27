@@ -36,11 +36,24 @@ pub async fn set_profile_launch_options(
     .await
 }
 
+/// Compare the active profile's launch options with Steam's saved copy.
+#[tauri::command]
+pub async fn get_launch_sync_status() -> Result<execs_core::LaunchSyncStatus, CommandError> {
+    with_profile(|root, profile_id| Ok(execs_core::launch_sync_status(&root, &profile_id)?)).await
+}
+
 /// Start TF2 through Steam after every in-flight write has finished. Keep the
 /// lifecycle lease until the process is visible so a queued writer cannot run
 /// in Steam's launch delay and race the game startup.
+///
+/// With `sync_steam`, the player has agreed to close Steam: execs asks Steam
+/// to exit, writes the profile's launch options once it has, and the launch
+/// below starts Steam again.
 #[tauri::command]
-pub async fn launch_tf2(gate: tauri::State<'_, WriteGate>) -> Result<(), CommandError> {
+pub async fn launch_tf2(
+    gate: tauri::State<'_, WriteGate>,
+    sync_steam: bool,
+) -> Result<(), CommandError> {
     let data_dir = execs_core::try_execs_data_dir().map_err(CommandError::unknown)?;
     let operation = gate
         .begin_operation(ExclusiveOperation::LaunchingTf2)
@@ -66,6 +79,12 @@ pub async fn launch_tf2(gate: tauri::State<'_, WriteGate>) -> Result<(), Command
     if already_running {
         operation.finish();
         return Ok(());
+    }
+    if sync_steam {
+        if let Err(error) = super::shared::blocking(write_steam_launch_options).await {
+            operation.finish();
+            return Err(error);
+        }
     }
     let handoff_token = operation.clone();
     let handoff_data_dir = data_dir.clone();
@@ -107,6 +126,52 @@ pub async fn launch_tf2(gate: tauri::State<'_, WriteGate>) -> Result<(), Command
         "LaunchPending",
         "Steam has not started TF2 yet. Changes stay locked while execs keeps waiting.",
     ))
+}
+
+/// Steam keeps launch options in memory and rewrites `localconfig.vdf` on
+/// exit, so it must be fully closed before the profile's options are written.
+fn write_steam_launch_options() -> Result<(), CommandError> {
+    let root = confirmed_root()?;
+    let Some(profile_id) = execs_core::load_library(Some(&root))?.active_profile_id else {
+        return Ok(());
+    };
+    if steam_running() {
+        tauri_plugin_opener::open_url("steam://exit", None::<&str>).map_err(|err| {
+            CommandError::unknown(format!("Could not ask Steam to close ({err})"))
+        })?;
+        if !wait_until(|| !steam_running(), 120) {
+            return Err(CommandError::new(
+                "SteamRunning",
+                "Steam did not close within a minute. Close Steam yourself, then launch again.",
+            ));
+        }
+    }
+    match execs_core::sync_profile_launch_options(&root, &profile_id)? {
+        execs_core::LaunchWriteReason::Written | execs_core::LaunchWriteReason::NoAccount => Ok(()),
+        execs_core::LaunchWriteReason::SteamOpen => Err(CommandError::new(
+            "SteamRunning",
+            "Steam opened again before its launch options were written. Launch again.",
+        )),
+        execs_core::LaunchWriteReason::WriteFailed => Err(CommandError::new(
+            "LaunchOptionsNotWritten",
+            "Could not write Steam's launch options, so TF2 was not started. Steam is closed; launch again to retry.",
+        )),
+    }
+}
+
+fn steam_running() -> bool {
+    execs_core::process_lock::steam_running_among(execs_core::process_lock::live_process_names())
+}
+
+/// Poll every half second, up to `attempts` times.
+fn wait_until(mut done: impl FnMut() -> bool, attempts: u32) -> bool {
+    for _ in 0..attempts {
+        if done() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    done()
 }
 
 /// Explicit recovery for a Steam launch the user cancelled in Steam. The UI

@@ -13,7 +13,7 @@ use crate::WriteGate;
 const MAX_EDITOR_FILE_BYTES: usize = 1024 * 1024;
 const MAX_EDITOR_PATH_BYTES: usize = 1024;
 
-fn validate_editor_path(path: &str) -> Result<(), CommandError> {
+pub(super) fn validate_editor_path(path: &str) -> Result<(), CommandError> {
     if path.is_empty() || path.len() > MAX_EDITOR_PATH_BYTES {
         return Err(CommandError::new(
             "InvalidPath",
@@ -23,7 +23,7 @@ fn validate_editor_path(path: &str) -> Result<(), CommandError> {
     Ok(())
 }
 
-fn validate_editor_text(text: &str) -> Result<(), CommandError> {
+pub(super) fn validate_editor_text(text: &str) -> Result<(), CommandError> {
     if text.len() > MAX_EDITOR_FILE_BYTES {
         return Err(CommandError::new(
             "FileTooLarge",

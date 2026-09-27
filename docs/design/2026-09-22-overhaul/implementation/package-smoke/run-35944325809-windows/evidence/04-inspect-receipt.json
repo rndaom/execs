@@ -1,0 +1,33 @@
+{
+  "packageCode": 15700,
+  "listeners": [],
+  "windows": [],
+  "uiError": "Could not load file or assembly 'UIAutomationTypes, Version=10.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35'. The system cannot find the file specified.",
+  "version": "0.1.8",
+  "process": {
+    "pid": 5884,
+    "parent": 6736,
+    "executable": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+    "created": "2026-09-24T01:46:15.8426810Z",
+    "commandLine": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+    "session": 2
+  },
+  "processes": [
+    {
+      "pid": 5884,
+      "parent": 6736,
+      "executable": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+      "created": "2026-09-24T01:46:15.8426810Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-o5N4XO\\installed\\execs.exe",
+      "session": 2
+    },
+    {
+      "pid": 1568,
+      "parent": 5884,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T01:46:16.6613090Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-o5N4XO\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=60173 --lang=en-US --mojo-named-platform-channel-pipe=5884.1380.8187065935502548599",
+      "session": 2
+    }
+  ]
+}

@@ -31,7 +31,7 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Component, type ReactNode, useEffect, useRef, useState } from "react";
 import { copyToClipboard } from "../lib/copy-ui";
 import {
   type CompletionCatalog,
@@ -71,7 +71,42 @@ export type FilesEditorProps = {
   insertion?: { id: number; text: string };
 };
 
-const sessions = new Map<string, { state: EditorState; top: number; left: number }>();
+const sessions = new Map<
+  string,
+  {
+    state: EditorState;
+    top: number;
+    left: number;
+    scroll: ReturnType<EditorView["scrollSnapshot"]>;
+  }
+>();
+
+type EditorSessionBoundaryProps = {
+  identity: string;
+  active: boolean;
+  capture: () => void;
+};
+
+/** Capture before an ancestor hides or removes the editor's scroll surface. */
+class EditorSessionBoundary extends Component<EditorSessionBoundaryProps> {
+  getSnapshotBeforeUpdate(previous: EditorSessionBoundaryProps) {
+    if (previous.active && (!this.props.active || previous.identity !== this.props.identity)) {
+      previous.capture();
+    }
+    return null;
+  }
+
+  componentDidUpdate() {}
+
+  componentWillUnmount() {
+    this.props.capture();
+  }
+
+  render() {
+    return null;
+  }
+}
+
 const cfgLanguage = StreamLanguage.define<{ command: boolean }>({
   startState: () => ({ command: true }),
   token(stream, state) {
@@ -193,6 +228,26 @@ const theme = EditorView.theme(
       height: "1px",
       opacity: "0",
     },
+    ".cm-panel.cm-search label:has(input:focus-visible)": {
+      outline: "2px solid var(--color-brand)",
+      outlineOffset: "2px",
+    },
+    "@media (max-width: 1100px)": {
+      ".cm-panel.cm-search": {
+        gridTemplateColumns: "minmax(120px, 1fr) repeat(3, auto) 24px",
+      },
+      ".cm-panel.cm-search label:nth-of-type(1)": {
+        gridColumn: "1",
+        gridRow: "2",
+        justifySelf: "start",
+      },
+      ".cm-panel.cm-search label:nth-of-type(2)": { gridColumn: "2", gridRow: "2" },
+      ".cm-panel.cm-search label:nth-of-type(3)": { gridColumn: "3 / span 2", gridRow: "2" },
+      ".cm-panel.cm-search [name=replace].cm-textfield": { gridRow: "3" },
+      ".cm-panel.cm-search button[name=replace]": { gridRow: "3" },
+      ".cm-panel.cm-search [name=replaceAll]": { gridRow: "3" },
+      ".cm-panel.cm-search [name=close]": { gridColumn: "5" },
+    },
     ".cm-textfield, .cm-button": {
       minHeight: "28px",
       margin: "0",
@@ -252,6 +307,13 @@ export function FilesEditor(props: FilesEditorProps) {
 
   useEffect(() => {
     if (!host.current || !props.active) return;
+    let keyboardViewport: {
+      state: EditorState;
+      top: number;
+      left: number;
+      trigger: KeyboardEvent;
+    } | null = null;
+    const focusMeasure = {};
     const updatePosition = (state: EditorState) => {
       const cursor = state.selection.main.head;
       const line = state.doc.lineAt(cursor);
@@ -286,6 +348,35 @@ export function FilesEditor(props: FilesEditorProps) {
         spellcheck: "false",
       }),
       EditorView.domEventHandlers({
+        focus: (_event, editor) => {
+          const captured = keyboardViewport;
+          if (!captured) return false;
+          const unchanged = () =>
+            keyboardViewport === captured &&
+            view.current === editor &&
+            editor.hasFocus &&
+            !captured.trigger.defaultPrevented &&
+            editor.state.doc === captured.state.doc &&
+            editor.state.selection.eq(captured.state.selection);
+          editor.requestMeasure({
+            key: focusMeasure,
+            read: unchanged,
+            write: (ready) => {
+              if (!ready || !unchanged()) {
+                if (keyboardViewport === captured) keyboardViewport = null;
+                return;
+              }
+              keyboardViewport = null;
+              // WebKit can reset both axes during default keyboard focus.
+              // Synchronize CodeMirror's DOM selection before restoring the
+              // viewport; moving the caret into view would lose that viewport.
+              editor.focus();
+              editor.scrollDOM.scrollTop = captured.top;
+              editor.scrollDOM.scrollLeft = captured.left;
+            },
+          });
+          return false;
+        },
         keydown: (event) => {
           if (
             (event.ctrlKey || event.metaKey) &&
@@ -398,27 +489,59 @@ export function FilesEditor(props: FilesEditorProps) {
       EditorView.updateListener.of((update) => {
         if (update.docChanged) latest.current.onChange(update.state.doc.toString());
         if (update.docChanged || update.selectionSet) updatePosition(update.state);
+        else if (searchPanelOpen(update.startState) !== searchPanelOpen(update.state)) {
+          setFindOpen(searchPanelOpen(update.state));
+        }
       }),
     ];
     configuration.current = extensions;
     const cached = sessions.get(id);
-    const state =
-      cached?.state.doc.toString() === latest.current.value
-        ? cached.state.update({ effects: StateEffect.reconfigure.of(extensions) }).state
-        : EditorState.create({ doc: latest.current.value, extensions });
-    const editor = new EditorView({ state, parent: host.current });
+    const matching = cached?.state.doc.toString() === latest.current.value ? cached : undefined;
+    const state = matching
+      ? matching.state.update({ effects: StateEffect.reconfigure.of(extensions) }).state
+      : EditorState.create({ doc: latest.current.value, extensions });
+    const editor = new EditorView({ state, parent: host.current, scrollTo: matching?.scroll });
     view.current = editor;
-    if (cached) {
-      editor.scrollDOM.scrollTop = cached.top;
-      editor.scrollDOM.scrollLeft = cached.left;
+    const owner = editor.dom.ownerDocument;
+    const cancelKeyboardViewport = () => {
+      keyboardViewport = null;
+    };
+    const captureKeyboardViewport = (event: KeyboardEvent) => {
+      cancelKeyboardViewport();
+      if (
+        event.key !== "Tab" ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        editor.hasFocus ||
+        event.defaultPrevented
+      )
+        return;
+      const { scrollTop: top, scrollLeft: left } = editor.scrollDOM;
+      if (top || left) keyboardViewport = { state: editor.state, top, left, trigger: event };
+    };
+    const focusElsewhere = (event: FocusEvent) => {
+      if (event.target !== editor.contentDOM) cancelKeyboardViewport();
+    };
+    // Observe the browser's actual Tab destination without resolving or
+    // preventing its focus order, including reverse Tab and the Find panel.
+    owner.addEventListener("keydown", captureKeyboardViewport, true);
+    owner.addEventListener("focusin", focusElsewhere, true);
+    owner.addEventListener("pointerdown", cancelKeyboardViewport, true);
+    owner.addEventListener("wheel", cancelKeyboardViewport, { capture: true, passive: true });
+    if (matching) {
+      // Set the initial pixels; CodeMirror's snapshot keeps the same text in
+      // place after virtualized line heights are measured on the next frame.
+      editor.scrollDOM.scrollTop = matching.top;
+      editor.scrollDOM.scrollLeft = matching.left;
     }
     updatePosition(state);
     return () => {
-      sessions.set(id, {
-        state: editor.state,
-        top: editor.scrollDOM.scrollTop,
-        left: editor.scrollDOM.scrollLeft,
-      });
+      cancelKeyboardViewport();
+      owner.removeEventListener("keydown", captureKeyboardViewport, true);
+      owner.removeEventListener("focusin", focusElsewhere, true);
+      owner.removeEventListener("pointerdown", cancelKeyboardViewport, true);
+      owner.removeEventListener("wheel", cancelKeyboardViewport, true);
       editor.destroy();
       view.current = null;
       setMenuPosition(null);
@@ -528,6 +651,21 @@ export function FilesEditor(props: FilesEditorProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <EditorSessionBoundary
+        identity={id}
+        active={props.active}
+        capture={() => {
+          const editor = view.current;
+          if (!editor) return;
+          // Passive cleanup runs after display:none has already zeroed scroll.
+          sessions.set(id, {
+            state: editor.state,
+            top: editor.scrollDOM.scrollTop,
+            left: editor.scrollDOM.scrollLeft,
+            scroll: editor.scrollSnapshot(),
+          });
+        }}
+      />
       <div className="flex flex-wrap items-center gap-1 border-b border-edge px-2 py-1 text-xs text-ink-muted">
         <button
           type="button"

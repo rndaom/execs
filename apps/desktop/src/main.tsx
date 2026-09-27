@@ -4,6 +4,7 @@ import { App } from "./App";
 import { resolveApi } from "./lib/api";
 import { type PreviewState, previewStateFromSearch } from "./lib/preview";
 import "./index.css";
+import "./transitions.css";
 
 const root = document.getElementById("root");
 if (!root) {

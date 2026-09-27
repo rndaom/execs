@@ -1,0 +1,469 @@
+{
+  "schema": 1,
+  "status": "failed",
+  "scope": "Previous-public NSIS capability proof only; no candidate build or qualification.",
+  "sourceRevision": "4c363147a62a624a7bda7f2ecae13541d505d37f",
+  "workflow": {
+    "runId": "35937290574",
+    "attempt": "1",
+    "event": "pull_request",
+    "eventSha": "4c363147a62a624a7bda7f2ecae13541d505d37f",
+    "pullRequestHead": "65d20bd905435a6d4813b39c13537339d94b7b2b"
+  },
+  "runner": {
+    "os": "win22",
+    "version": "20260920.314.1",
+    "node": "v24.21.0"
+  },
+  "notQualified": [
+    "candidate NSIS/upgrade/import/reopen",
+    "production signed updater",
+    "real updater UI",
+    "interactive installer pages",
+    "standard-user Windows",
+    "screen-reader speech",
+    "Steam/TF2/Cloud"
+  ],
+  "checks": [
+    {
+      "phase": "before-install",
+      "recordedAt": "2026-09-24T00:12:17.545Z",
+      "data": {
+        "files": {
+          "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "f9bcdf732c076fd819a8d37307c9969ecb30fb1222cb546342e94b700db4483c",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "514ababb56cddf09629a3b33aea8d0dfc0ca3a6fc46f3fbcfadc4efe3f65a96f",
+          "profiles/index.json": "6f16526caf1aa98ea3e1c8279e4a8aed75819d2572ac2535fc741d230ee3a1e6",
+          "settings.json": "82fe2de26d78e13446901f2eeb1e06dd8e1f8231493dbd2a32163629d77ce7fd"
+        },
+        "directories": [
+          "profiles",
+          "profiles/blobs",
+          "profiles/blobs/sha256",
+          "profiles/blobs/sha256/ec",
+          "profiles/f20a0001-8d01-4000-8000-000000000001",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+        ]
+      },
+      "live": {
+        "files": {
+          "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+          "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+        },
+        "directories": [
+          "tf",
+          "tf/cfg",
+          "tf/cfg/overrides",
+          "tf/custom"
+        ]
+      },
+      "exported": {
+        "files": {},
+        "directories": []
+      },
+      "originalBytesPreserved": true
+    },
+    {
+      "phase": "after-install",
+      "recordedAt": "2026-09-24T00:12:21.113Z",
+      "data": {
+        "files": {
+          "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "f9bcdf732c076fd819a8d37307c9969ecb30fb1222cb546342e94b700db4483c",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "514ababb56cddf09629a3b33aea8d0dfc0ca3a6fc46f3fbcfadc4efe3f65a96f",
+          "profiles/index.json": "6f16526caf1aa98ea3e1c8279e4a8aed75819d2572ac2535fc741d230ee3a1e6",
+          "settings.json": "82fe2de26d78e13446901f2eeb1e06dd8e1f8231493dbd2a32163629d77ce7fd"
+        },
+        "directories": [
+          "profiles",
+          "profiles/blobs",
+          "profiles/blobs/sha256",
+          "profiles/blobs/sha256/ec",
+          "profiles/f20a0001-8d01-4000-8000-000000000001",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+          "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+        ]
+      },
+      "live": {
+        "files": {
+          "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+          "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+          "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+          "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+          "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+          "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+        },
+        "directories": [
+          "tf",
+          "tf/cfg",
+          "tf/cfg/overrides",
+          "tf/custom"
+        ]
+      },
+      "exported": {
+        "files": {},
+        "directories": []
+      },
+      "originalBytesPreserved": true,
+      "host": {
+        "sid": "S-1-5-21-1535354919-3125631827-3241930664-500",
+        "user": "runnervmocx8p\\runneradmin",
+        "session": 2,
+        "userInteractive": true,
+        "packageCode": 15700,
+        "groups": [
+          "S-1-5-21-1535354919-3125631827-3241930664-513",
+          "S-1-1-0",
+          "S-1-5-114",
+          "S-1-5-32-544",
+          "S-1-5-32-545",
+          "S-1-5-4",
+          "S-1-2-1",
+          "S-1-5-11",
+          "S-1-5-15",
+          "S-1-5-113",
+          "S-1-2-0",
+          "S-1-5-64-10"
+        ],
+        "playerProcesses": [],
+        "steamRegistry": [],
+        "productLocations": [
+          "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\execs"
+        ]
+      }
+    }
+  ],
+  "captures": [],
+  "cleanup": [
+    {
+      "phase": "inspect-before-cleanup",
+      "error": "Command failed: pwsh -NoLogo -NoProfile -NonInteractive -File D:\\a\\execs\\execs\\scripts\\windows-package-native.ps1 -Action Inspect -Request -\n\u001b[31;1mException: \u001b[0mD:\\a\\execs\\execs\\scripts\\windows-package-native.ps1:74\u001b[0m\r\n\u001b[31;1m\u001b[0m\u001b[36;1mLine |\u001b[0m\r\n\u001b[31;1m\u001b[0m\u001b[36;1m\u001b[36;1m  74 | \u001b[0m . created -ne $Expected.created)) { \u001b[36;1mthrow 'Process identity changed.'\u001b[0m }\u001b[0m\r\n\u001b[31;1m\u001b[0m\u001b[36;1m\u001b[36;1m\u001b[0m\u001b[36;1m\u001b[0m\u001b[36;1m     | \u001b[31;1m                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\u001b[0m\r\n\u001b[31;1m\u001b[0m\u001b[36;1m\u001b[36;1m\u001b[0m\u001b[36;1m\u001b[0m\u001b[36;1m\u001b[31;1m\u001b[31;1m\u001b[36;1m     | \u001b[31;1mProcess identity changed.\u001b[0m\r\n"
+    },
+    {
+      "restored": true,
+      "entries": 4
+    }
+  ],
+  "host": {
+    "sid": "S-1-5-21-1535354919-3125631827-3241930664-500",
+    "user": "runnervmocx8p\\runneradmin",
+    "session": 2,
+    "userInteractive": true,
+    "packageCode": 15700,
+    "groups": [
+      "S-1-5-21-1535354919-3125631827-3241930664-513",
+      "S-1-1-0",
+      "S-1-5-114",
+      "S-1-5-32-544",
+      "S-1-5-32-545",
+      "S-1-5-4",
+      "S-1-2-1",
+      "S-1-5-11",
+      "S-1-5-15",
+      "S-1-5-113",
+      "S-1-2-0",
+      "S-1-5-64-10"
+    ],
+    "playerProcesses": [],
+    "steamRegistry": [],
+    "productLocations": []
+  },
+  "versions": {
+    "version": "0.2.0",
+    "previousVersion": "0.1.8",
+    "historySha256": "25f7e7633e9be25a380a59662a75b6247fddde606b7613124689959dd2cee9f0",
+    "temporaryHeadingRehearsal": true
+  },
+  "publicPackage": {
+    "kind": "nsis",
+    "path": "D:\\a\\_temp\\execs-windows-package-Muaopv\\downloads\\execs_0.1.8_x64-setup.exe",
+    "name": "execs_0.1.8_x64-setup.exe",
+    "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_x64-setup.exe",
+    "bytes": 6460740,
+    "sha256": "8a3795c315f08d12b65a7c725235bc9a989115a3a353c65f2930588d382c6268",
+    "signatureVerified": true,
+    "release": {
+      "assets": [
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020219",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:42Z",
+          "digest": "sha256:06ec406e829601ae259e0fa4d2b1d4cc90c9fd76f7b56477e1e78165e4bcb0e7",
+          "downloadCount": 3,
+          "id": "RA_kwDOT5ircc4ic-N7",
+          "label": "execs_0.1.8_amd64.AppImage",
+          "name": "execs_0.1.8_amd64.AppImage",
+          "size": 100592120,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:46Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.AppImage"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020302",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:46Z",
+          "digest": "sha256:439e76fdebc318307a6399d6649fda9db6878020ae3b8660ea96e1ee41d5d922",
+          "downloadCount": 3,
+          "id": "RA_kwDOT5ircc4ic-PO",
+          "label": "execs_0.1.8_amd64.AppImage.sig",
+          "name": "execs_0.1.8_amd64.AppImage.sig",
+          "size": 416,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:46Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.AppImage.sig"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020175",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:40Z",
+          "digest": "sha256:bb6f3628cee4dbbb37a093c4ef4bbb25c3ce6fbf64f4a3f775a39af454e99231",
+          "downloadCount": 2,
+          "id": "RA_kwDOT5ircc4ic-NP",
+          "label": "execs_0.1.8_amd64.deb",
+          "name": "execs_0.1.8_amd64.deb",
+          "size": 13220524,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:40Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.deb"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578020205",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:15:41Z",
+          "digest": "sha256:892f07293c809397cd7610c7b363261b81d5cd7ace7baa5a32e9050ebf924020",
+          "downloadCount": 3,
+          "id": "RA_kwDOT5ircc4ic-Nt",
+          "label": "execs_0.1.8_amd64.deb.sig",
+          "name": "execs_0.1.8_amd64.deb.sig",
+          "size": 408,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:15:41Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_amd64.deb.sig"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578025792",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:19:28Z",
+          "digest": "sha256:8a3795c315f08d12b65a7c725235bc9a989115a3a353c65f2930588d382c6268",
+          "downloadCount": 2,
+          "id": "RA_kwDOT5ircc4ic_lA",
+          "label": "execs_0.1.8_x64-setup.exe",
+          "name": "execs_0.1.8_x64-setup.exe",
+          "size": 6460740,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:19:29Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_x64-setup.exe"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578025817",
+          "contentType": "application/zip",
+          "createdAt": "2026-09-21T02:19:29Z",
+          "digest": "sha256:0178d084a15be9b28b0367587fefc50fec383d63c1689359502bd6f892ad0a7a",
+          "downloadCount": 1,
+          "id": "RA_kwDOT5ircc4ic_lZ",
+          "label": "execs_0.1.8_x64-setup.exe.sig",
+          "name": "execs_0.1.8_x64-setup.exe.sig",
+          "size": 416,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:19:29Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/execs_0.1.8_x64-setup.exe.sig"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578036775",
+          "contentType": "application/json",
+          "createdAt": "2026-09-21T02:26:02Z",
+          "digest": "sha256:d6c872b45cc7d9c9a7a74af89cd8b65046af49d7c86b03ceaa43ff84ddf3b619",
+          "downloadCount": 44,
+          "id": "RA_kwDOT5ircc4idCQn",
+          "label": "",
+          "name": "latest.json",
+          "size": 3352,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:26:03Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/latest.json"
+        },
+        {
+          "apiUrl": "https://api.github.com/repos/rndaom/execs/releases/assets/578036823",
+          "contentType": "application/json",
+          "createdAt": "2026-09-21T02:26:05Z",
+          "digest": "sha256:8bfe346043ce34638d7a048d48daad985a23de70e7ced8d382ac8066072c3ff1",
+          "downloadCount": 1,
+          "id": "RA_kwDOT5ircc4idCRX",
+          "label": "",
+          "name": "release-commit.json",
+          "size": 83,
+          "state": "uploaded",
+          "updatedAt": "2026-09-21T02:26:05Z",
+          "url": "https://github.com/rndaom/execs/releases/download/v0.1.8/release-commit.json"
+        }
+      ],
+      "isDraft": false,
+      "isPrerelease": false,
+      "publishedAt": "2026-09-21T02:26:18Z",
+      "tagName": "v0.1.8"
+    }
+  },
+  "fixture": {
+    "provenance": {
+      "exporterTag": "v0.1.8",
+      "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+      "archives": [
+        {
+          "name": "no-hud",
+          "archiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38"
+        },
+        {
+          "name": "single-hud",
+          "archiveSha256": "4b46fb3144b5c9fcd334505672fc8513fa3f9d629f821fbb4ab53b9da4667ec9"
+        }
+      ],
+      "authored": "Schema-1 library index, profile IDs/names, settings and disposable TF2 root; source export manifests and payload bytes are unchanged except the named library identity fields."
+    },
+    "childEnv": {
+      "APPDATA": "D:\\a\\_temp\\execs-windows-package-Muaopv\\fixture\\roaming",
+      "LOCALAPPDATA": "D:\\a\\_temp\\execs-windows-package-Muaopv\\fixture\\local",
+      "XDG_DATA_HOME": "D:\\a\\_temp\\execs-windows-package-Muaopv\\fixture\\data",
+      "XDG_CONFIG_HOME": "D:\\a\\_temp\\execs-windows-package-Muaopv\\fixture\\config"
+    },
+    "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+    "activeProfileName": "Package smoke - active"
+  },
+  "installer": {
+    "code": 0,
+    "signal": null,
+    "exitedAt": "2026-09-24T00:12:19.523Z",
+    "destination": "D:\\a\\_temp\\execs-windows-package-Muaopv\\installed"
+  },
+  "installed": {
+    "path": "D:\\a\\_temp\\execs-windows-package-Muaopv\\installed\\execs.exe",
+    "sha256": "171df823a15b3f08e871dfc75bd098a9b1954bf30c0913ee81049edd3a06914c",
+    "noticeSha256": "4bc661f74c34dbbf71693e5faf2fe086812d8a85d4e3df3c3cfc8fee5fb56b22"
+  },
+  "policy": {
+    "userData": "D:\\a\\_temp\\execs-windows-package-Muaopv\\fixture\\webview",
+    "applied": true,
+    "entries": 4,
+    "port": 61644
+  },
+  "error": {
+    "message": "Timed out: owned private loopback debug listener",
+    "stack": "Error: Timed out: owned private loopback debug listener\n    at waitUntil (file:///D:/a/execs/execs/scripts/linux-native-webdriver.mjs:18:9)\n    at async main (file:///D:/a/execs/execs/scripts/windows-package-smoke.mjs:511:23)"
+  },
+  "finalPreservation": {
+    "recordedAt": "2026-09-24T00:12:47.228Z",
+    "data": {
+      "files": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "f9bcdf732c076fd819a8d37307c9969ecb30fb1222cb546342e94b700db4483c",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "514ababb56cddf09629a3b33aea8d0dfc0ca3a6fc46f3fbcfadc4efe3f65a96f",
+        "profiles/index.json": "6f16526caf1aa98ea3e1c8279e4a8aed75819d2572ac2535fc741d230ee3a1e6",
+        "settings.json": "82fe2de26d78e13446901f2eeb1e06dd8e1f8231493dbd2a32163629d77ce7fd"
+      },
+      "directories": [
+        "profiles",
+        "profiles/blobs",
+        "profiles/blobs/sha256",
+        "profiles/blobs/sha256/ec",
+        "profiles/f20a0001-8d01-4000-8000-000000000001",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom",
+        "profiles/f20a0001-8d01-4000-8000-000000000002",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui"
+      ]
+    },
+    "live": {
+      "files": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "directories": [
+        "tf",
+        "tf/cfg",
+        "tf/cfg/overrides",
+        "tf/custom"
+      ]
+    },
+    "exported": {
+      "files": {},
+      "directories": []
+    },
+    "originalBytesPreserved": true
+  },
+  "finalErrors": [
+    "Timed out: owned private loopback debug listener",
+    "Owned process cleanup failed"
+  ]
+}

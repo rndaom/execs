@@ -1,0 +1,18 @@
+[Window Title]
+execs could not start
+
+[Content]
+execs stopped before opening to protect your TF2 installation.
+
+execs 0.2.0
+State location: Unavailable: the app data directory could not be resolved.
+
+execs could not start: %APPDATA% is unset or relative, so execs cannot find its settings and profile library.
+
+No recovery markers were cleared and no TF2 files were changed.
+Copy this message (Ctrl+C on Windows; select the text and copy on Linux) and include it in a bug report at:
+https://github.com/rndaom/execs/issues/new/choose
+
+Keep the state files in place so the interrupted operation can be reviewed.
+
+[OK]

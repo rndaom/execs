@@ -1,0 +1,2 @@
+
+(execs:21804): dbind-WARNING **: 00:24:57.546: AT-SPI: Error retrieving accessibility bus address: org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files

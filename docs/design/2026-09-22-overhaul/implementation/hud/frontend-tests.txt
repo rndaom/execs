@@ -1,0 +1,19 @@
+
+> @execs/desktop@0.2.0 test G:\Projects\execs\apps\desktop
+> vitest run "src/HudPane.test.ts" "src/HudPane.interaction.test.tsx" "src/SettingsHost.hud-loading.test.tsx" "src/lib/hud-ui.test.ts" "src/lib/hud-reload-ui.test.ts" "src/components/HudOwnershipDialog.test.tsx" "src/hooks/useHudOwnershipReview.test.tsx"
+
+
+ RUN  v3.2.7 G:/Projects/execs/apps/desktop
+
+ ✓ src/lib/hud-reload-ui.test.ts (2 tests) 3ms
+ ✓ src/lib/hud-ui.test.ts (21 tests) 14ms
+ ✓ src/hooks/useHudOwnershipReview.test.tsx (7 tests) 19ms
+ ✓ src/HudPane.test.ts (5 tests) 28ms
+ ✓ src/HudPane.interaction.test.tsx (14 tests) 300ms
+ ✓ src/components/HudOwnershipDialog.test.tsx (9 tests) 109ms
+ ✓ src/SettingsHost.hud-loading.test.tsx (11 tests) 288ms
+
+ Test Files  7 passed (7)
+      Tests  69 passed (69)
+   Start at  10:38:49
+   Duration  3.29s (transform 953ms, setup 0ms, collect 8.88s, tests 760ms, environment 1.03s, prepare 433ms)

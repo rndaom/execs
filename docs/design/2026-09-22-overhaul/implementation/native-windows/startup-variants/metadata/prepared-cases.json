@@ -1,0 +1,34 @@
+[
+  {
+    "variant": "UnsetAppData",
+    "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140805-startup-unsetappdata-a342d11b",
+    "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+    "markerCount": 0,
+    "settingsSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+    "preparedOnly": true
+  },
+  {
+    "variant": "MismatchedToken",
+    "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-mismatchedtoken-2256bd28",
+    "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+    "markerCount": 1,
+    "settingsSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+    "preparedOnly": true
+  },
+  {
+    "variant": "MultipleMarkers",
+    "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-multiplemarkers-69512509",
+    "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+    "markerCount": 2,
+    "settingsSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+    "preparedOnly": true
+  },
+  {
+    "variant": "UnreadableMarker",
+    "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-140806-startup-unreadablemarker-569b15f9",
+    "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+    "markerCount": 1,
+    "settingsSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+    "preparedOnly": true
+  }
+]

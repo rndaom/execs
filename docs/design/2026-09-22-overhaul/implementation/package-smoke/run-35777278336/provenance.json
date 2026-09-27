@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "runId": 35777278336,
+  "attempt": 1,
+  "headSha": "d80fe576f90fc0ca8a4e5c37ea8decb8274c4475",
+  "checkoutSha": "30624b62b2af65d6fd48ecae1d62618ad2cbc1fa",
+  "baseSha": "0c5aa21e9b16e3bd3c05c1bb4d9d7e9acddfc7be",
+  "artifact": {
+    "id": 10716766911,
+    "name": "development-linux-packages-30624b62b2af65d6fd48ecae1d62618ad2cbc1fa",
+    "bytes": 153673,
+    "apiReportedDigest": "sha256:638db48e9007a6c81daa3ab88aa90602b3c7ed7f93c85bb96f7411da01ef4f99",
+    "source": "GitHub artifact listing; gh run download extracted files, original artifact ZIP not retained",
+    "expiresAt": "2026-09-29T20:10:32Z",
+    "downloadedFiles": 7
+  },
+  "transformation": "API/runtime JSON and PNG bytes retained exactly. Raw JSON uses .gen.json suffix. Logs only have actual/caret-rendered terminal ANSI sequences and embedded BOM characters removed, CRLF/CRCRLF normalized to LF; no lines filtered.",
+  "missingEvidence": [
+    "Native export ZIP was not copied into artifact before failure",
+    "No final X11 window attributes",
+    "No candidate launch or Debian runtime case"
+  ],
+  "files": [
+    {
+      "file": "workflow.log",
+      "source": ".artifacts/development-packages-run-35777278336.log",
+      "rawBytes": 406812,
+      "rawSha256": "a0b0e8158dd9af3f14bf3191a7bdda501d70ab53988810adcc27a15681f3d2cb",
+      "bytes": 387324,
+      "sha256": "237e876fbb8a9fdd40630cd4f350e9ecb2f740f5560ee07a345710d0797af4e7",
+      "transformation": "Terminal formatting removed; LF normalized; no lines filtered"
+    },
+    {
+      "file": "workflow.gen.json",
+      "source": ".artifacts/development-packages-run-35777278336.json",
+      "rawBytes": 3992,
+      "rawSha256": "cef4ae3a376160fde56db63d98e32ea48b4f039aac77585e85864a088bfd1511",
+      "bytes": 3992,
+      "sha256": "cef4ae3a376160fde56db63d98e32ea48b4f039aac77585e85864a088bfd1511",
+      "transformation": "Exact bytes"
+    },
+    {
+      "file": "artifacts.gen.json",
+      "source": ".artifacts/development-packages-artifacts-35777278336.json",
+      "rawBytes": 770,
+      "rawSha256": "894cbe47200f63a5338e7197eb97f1f643b6d22d9915c2a79abeec5a2a1fd735",
+      "bytes": 770,
+      "sha256": "894cbe47200f63a5338e7197eb97f1f643b6d22d9915c2a79abeec5a2a1fd735",
+      "transformation": "Exact bytes"
+    },
+    {
+      "file": "evidence/appimage-upgrade/failure.png",
+      "source": ".artifacts/development-packages-run-35777278336-evidence/execs-development-packages-9gYHhQ/evidence/appimage-upgrade/failure.png",
+      "rawBytes": 65995,
+      "rawSha256": "31710ab11f09458e299287658b473e3f002705a7821ffaa66a015d992da9c2e1",
+      "bytes": 65995,
+      "sha256": "31710ab11f09458e299287658b473e3f002705a7821ffaa66a015d992da9c2e1",
+      "transformation": "Exact bytes"
+    },
+    {
+      "file": "evidence/appimage-upgrade/fixture-baseline.gen.json",
+      "source": ".artifacts/development-packages-run-35777278336-evidence/execs-development-packages-9gYHhQ/evidence/appimage-upgrade/fixture-baseline.json",
+      "rawBytes": 15786,
+      "rawSha256": "dcc8ca3a5f3794130c383f982d1ace0c4b7b7a00abb211860fad23deb15356d4",
+      "bytes": 15786,
+      "sha256": "dcc8ca3a5f3794130c383f982d1ace0c4b7b7a00abb211860fad23deb15356d4",
+      "transformation": "Exact bytes"
+    },
+    {
+      "file": "evidence/appimage-upgrade/previous-export-dialog.png",
+      "source": ".artifacts/development-packages-run-35777278336-evidence/execs-development-packages-9gYHhQ/evidence/appimage-upgrade/previous-export-dialog.png",
+      "rawBytes": 30623,
+      "rawSha256": "63d62813751e87fbdeef96662f475005bbcdff32c9eb2da2057d177e0feea814",
+      "bytes": 30623,
+      "sha256": "63d62813751e87fbdeef96662f475005bbcdff32c9eb2da2057d177e0feea814",
+      "transformation": "Exact bytes"
+    },
+    {
+      "file": "evidence/appimage-upgrade/previous-launch-driver.log",
+      "source": ".artifacts/development-packages-run-35777278336-evidence/execs-development-packages-9gYHhQ/evidence/appimage-upgrade/previous-launch-driver.log",
+      "rawBytes": 204,
+      "rawSha256": "d3a19faa17bacfd484d835befde9a1a2304df24c18ef63c2c0d8d45b814005c6",
+      "bytes": 204,
+      "sha256": "d3a19faa17bacfd484d835befde9a1a2304df24c18ef63c2c0d8d45b814005c6",
+      "transformation": "Terminal formatting removed; LF normalized; no lines filtered"
+    },
+    {
+      "file": "evidence/appimage-upgrade/previous-profile-read.png",
+      "source": ".artifacts/development-packages-run-35777278336-evidence/execs-development-packages-9gYHhQ/evidence/appimage-upgrade/previous-profile-read.png",
+      "rawBytes": 55941,
+      "rawSha256": "a28847b1262596c42179f12dd0f0c0170d24bedba7a321d85935c2e291a8657c",
+      "bytes": 55941,
+      "sha256": "a28847b1262596c42179f12dd0f0c0170d24bedba7a321d85935c2e291a8657c",
+      "transformation": "Exact bytes"
+    },
+    {
+      "file": "evidence/appimage-upgrade/results.gen.json",
+      "source": ".artifacts/development-packages-run-35777278336-evidence/execs-development-packages-9gYHhQ/evidence/appimage-upgrade/results.json",
+      "rawBytes": 18568,
+      "rawSha256": "45e842c6dbf49a8e08aea8299b3b0e8b5002ab4ec1460b95645fa8005235755b",
+      "bytes": 18568,
+      "sha256": "45e842c6dbf49a8e08aea8299b3b0e8b5002ab4ec1460b95645fa8005235755b",
+      "transformation": "Exact bytes"
+    },
+    {
+      "file": "evidence/results.gen.json",
+      "source": ".artifacts/development-packages-run-35777278336-evidence/execs-development-packages-9gYHhQ/evidence/results.json",
+      "rawBytes": 28281,
+      "rawSha256": "2a371d1a5a9abf4eabd656205000fa1e50d9ec6c480890d1f481f7a1cd89bccc",
+      "bytes": 28281,
+      "sha256": "2a371d1a5a9abf4eabd656205000fa1e50d9ec6c480890d1f481f7a1cd89bccc",
+      "transformation": "Exact bytes"
+    }
+  ]
+}

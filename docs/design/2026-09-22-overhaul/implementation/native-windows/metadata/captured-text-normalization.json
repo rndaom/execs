@@ -1,0 +1,155 @@
+{
+  "collectedUtc": "2026-09-22T16:28:51.2363866Z",
+  "files": [
+    {
+      "archivedRelativePath": "01-startup-error-accessibility.txt",
+      "capturedSourceSha256": "D8345315956A832C604467B455932EAB68DCD7992C0C5DA4DA189679C828A64A",
+      "archivedSha256": "8E319EAF7E1FB1E9E502533D11B818C1490EBF6E15BFA582277F4459C03C23AA",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "01-startup-error-copied.txt",
+      "capturedSourceSha256": "5A9E232ACB389F52479B9D660166DD7065DC8E7C9F07C6BF0DA21D2704E56AAE",
+      "archivedSha256": "30D43F4C093C66AFC002D9B104C76C70375A29216322638FC6E7A228FA9FB147",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "02-rootless-finder-accessibility.txt",
+      "capturedSourceSha256": "CB981694C92905DAE555670C24D441073C9868CADF5EF3E5731734F7D9F0F0BD",
+      "archivedSha256": "48890FF8D5ED3EBD7DF4E60ACB141BB305CBC85AD12AADD0F332D80F55DD3154",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "03-app-settings-before-accessibility.txt",
+      "capturedSourceSha256": "AEC325FD577D03E2C656EB8F758233C35D631162A5988C1A00AD1CFF3B6E2102",
+      "archivedSha256": "35FAB71BCBD7C05689173C3F34F648DC7DA38B5911154F7D4277CEE4CB07CA5A",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "04-reduced-motion-saved-accessibility.txt",
+      "capturedSourceSha256": "AEC325FD577D03E2C656EB8F758233C35D631162A5988C1A00AD1CFF3B6E2102",
+      "archivedSha256": "35FAB71BCBD7C05689173C3F34F648DC7DA38B5911154F7D4277CEE4CB07CA5A",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "05-update-switch-keyboard-focus-accessibility.txt",
+      "capturedSourceSha256": "AEC325FD577D03E2C656EB8F758233C35D631162A5988C1A00AD1CFF3B6E2102",
+      "archivedSha256": "35FAB71BCBD7C05689173C3F34F648DC7DA38B5911154F7D4277CEE4CB07CA5A",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "06-app-settings-saved-accessibility.txt",
+      "capturedSourceSha256": "AEC325FD577D03E2C656EB8F758233C35D631162A5988C1A00AD1CFF3B6E2102",
+      "archivedSha256": "35FAB71BCBD7C05689173C3F34F648DC7DA38B5911154F7D4277CEE4CB07CA5A",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "07-picker-canceled-accessibility.txt",
+      "capturedSourceSha256": "C4D54217D17CDA11353A4AED9997196AF068DB9C0567C5806A6B560F4A573555",
+      "archivedSha256": "09830D2AD15FD9F8F91C75D0361E96EEC7F167BA140AD5E0B0E4981465B4400E",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "08-preferences-after-reopen-accessibility.txt",
+      "capturedSourceSha256": "AEC325FD577D03E2C656EB8F758233C35D631162A5988C1A00AD1CFF3B6E2102",
+      "archivedSha256": "35FAB71BCBD7C05689173C3F34F648DC7DA38B5911154F7D4277CEE4CB07CA5A",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "09-native-update-check-accessibility.txt",
+      "capturedSourceSha256": "8E9CE9989AF81893FEC145551354CF401D85B76B8F1BFB84D47F36479A5BD0B3",
+      "archivedSha256": "A16C6A419623A997BC54568C0BCE13FF40B15B9A2D7B3275BB8196FB89CEED88",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "10-inactive-library-before-accessibility.txt",
+      "capturedSourceSha256": "7E64C441B3C1DB272FA5DED3989A903A86411F92F3DB525F59D0251D4A88C5BC",
+      "archivedSha256": "DFD721BEBC163EC56F082201EA840C54FE286C5BA3B9D059DFC4986AEBE30C45",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "11-inactive-profile-menu-accessibility.txt",
+      "capturedSourceSha256": "C3DB986ABF812D7F88DB76B543D1993C48F9756A936E5371233CA126923FF728",
+      "archivedSha256": "20A408430811524786CAF83CF6860F3AA4ED2EB36B4FCC04D31B66744D8A690D",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "12-native-import-review-accessibility.txt",
+      "capturedSourceSha256": "BE373A21B35BF5A2FACD2820AA5302174943C3ABF6C00B48FA5505F40E3B60B0",
+      "archivedSha256": "6B756AD5E62BF44F87427B1E58BDC13E2619987087EFB9459DA7E1E2B02C28B0",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "13-native-import-hud-selected-accessibility.txt",
+      "capturedSourceSha256": "430876AD79BB8B0BE8C65558EF2063AF24FF10945C05F3BBF9D0413D5698143E",
+      "archivedSha256": "11FDCEB1102B773AB6B6C1D877BD940EC5220608B55FBE28A9B94F87C40A1662",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "14-native-import-details-accessibility.txt",
+      "capturedSourceSha256": "5626276789706AA6FDC32C7DA6E15110194FAF091CB7E5451A6C7BD1A9945BCB",
+      "archivedSha256": "63A37490FC1313DD479D408C61F1202D6B796EE8F4214A0D0CF5B5127EDFC7A1",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "15-native-import-cancelled-accessibility.txt",
+      "capturedSourceSha256": "A2CA76165CC1F8BA250F3AAE0AD4A19C3D911075EFEB42435D5761B1F7B27619",
+      "archivedSha256": "1781FDB856C1376C09D4C0C70C069BFC3C4A3ED8F85714A2DFFB554C3266C7AC",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "16-native-profile-actions-accessibility.txt",
+      "capturedSourceSha256": "7CF57370DC43CC7896207FA967A324EDB454F8E3BCB94C5E16AF6A69F39BA96D",
+      "archivedSha256": "78D8BC8563204D4BA54742E957EA61F22F6C5C6E114119A18B73C7C86E51D64C",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "17-native-inactive-delete-confirmation-accessibility.txt",
+      "capturedSourceSha256": "6D5880A5B7558D373177C1ABE54EE069AA29634195492CF078D6F6C3D7E3C6C9",
+      "archivedSha256": "3E9F6282280067D9C69A8D276262FD5D5F6ED60CA55F9DCA77675214009FBBD2",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "18-native-inactive-delete-completed-accessibility.txt",
+      "capturedSourceSha256": "F3C3FC5A535DC6CED2245750BBC1F78A1F9A45AA29438B1F10234B1727121D03",
+      "archivedSha256": "0D31E1D117A97ED67C318442AD69C14F6B5B5830EDA9E03CFD0AD146FB74D70C",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "19-native-inactive-library-corrected-accessibility.txt",
+      "capturedSourceSha256": "E426D1F1321CA3DAEDD1FA3AFD440EECEED6375FFEA83FF8BBE8D0C751FFDDD8",
+      "archivedSha256": "98B12353CCC619F0BB5D9373089D61653369448CE7F12AC2667B0E3A185A03E2",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "20-native-chooser-opened-accessibility.txt",
+      "capturedSourceSha256": "0C6246B86E345FDA341181E20EB0FB901A2676A2BAC3ACE7A4B05908F892F50D",
+      "archivedSha256": "834A0AB5C400EE72DB8B8EA798A4AD3D61189C9AC7B65E5F56BB42480E7EEBDB",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "21-native-chooser-keyboard-focus-accessibility.txt",
+      "capturedSourceSha256": "0C6246B86E345FDA341181E20EB0FB901A2676A2BAC3ACE7A4B05908F892F50D",
+      "archivedSha256": "834A0AB5C400EE72DB8B8EA798A4AD3D61189C9AC7B65E5F56BB42480E7EEBDB",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "22-native-chooser-escape-accessibility.txt",
+      "capturedSourceSha256": "E426D1F1321CA3DAEDD1FA3AFD440EECEED6375FFEA83FF8BBE8D0C751FFDDD8",
+      "archivedSha256": "98B12353CCC619F0BB5D9373089D61653369448CE7F12AC2667B0E3A185A03E2",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "23-native-import-review-corrected-accessibility.txt",
+      "capturedSourceSha256": "FBFE7C4C0D9F19CE8B1291E24D7CE95FB055E9E3F3BB9D0468AB5C2998C12E16",
+      "archivedSha256": "8EEF29B3C9E3FA722950092DC2ABEBCFCAD5724427EEBB2F0254ED6B87D2AA38",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    },
+    {
+      "archivedRelativePath": "24-native-final-positioned-menu-accessibility.txt",
+      "capturedSourceSha256": "B1E923ED268E58CF61215F3C109E1A74AF3D9D48BF7C5D7676112A6B2D91F5FC",
+      "archivedSha256": "BB5C26F622D6E87C0F78A1E414B94C6AEE0F05468BBCC13F14A210E263DC85ED",
+      "transformation": "UTF-8 without BOM; LF line endings; final newline for nonempty text. Captured text content retained."
+    }
+  ]
+}

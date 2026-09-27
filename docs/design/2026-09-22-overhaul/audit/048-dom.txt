@@ -1,0 +1,20 @@
+- main:
+  - paragraph: execs
+  - generic: Find TF2
+  - heading "Confirm your Team Fortress 2 install" [level=1]
+  - paragraph: Profiles are tied to this folder; nothing is written until you confirm.
+  - list:
+    - button "Team Fortress 2 /home/user/.local/share/Steam/steamapps/common/Team Fortress 2":
+      - generic: Team Fortress 2
+      - generic: /home/user/.local/share/Steam/steamapps/common/Team Fortress 2
+  - button "Browse…"
+  - button "Confirm install"
+  - paragraph:
+    - text: v0.2.0 ·
+    - button "Check for updates"
+    - text: ·
+    - button "Report a bug"
+    - text: ·
+    - button "Copy diagnostics"
+  - paragraph: execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+- status

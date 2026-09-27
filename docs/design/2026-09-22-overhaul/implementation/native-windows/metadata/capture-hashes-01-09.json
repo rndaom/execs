@@ -1,0 +1,47 @@
+[
+  {
+    "file": "01-startup-error.jpg",
+    "bytes": 40463,
+    "sha256": "CA9C07CDB768A5194C2C13110AD09C9B80DA50FB04732780096ABA7A207FC429"
+  },
+  {
+    "file": "02-rootless-finder.jpg",
+    "bytes": 65743,
+    "sha256": "9B6CF4529626D0CB36BB4B88ABAB631C1B6790793F8CA5CA2F38EE74BAB9A279"
+  },
+  {
+    "file": "03-app-settings-before.jpg",
+    "bytes": 90449,
+    "sha256": "4396532280832084D35A6F3BE07670D1F5419CD4B0480891F276115CD549E4D9"
+  },
+  {
+    "file": "04-reduced-motion-saved.jpg",
+    "bytes": 89966,
+    "sha256": "A5D17893E517BA0EE4B2147FCF44DB45F92121896DFF1FB611D6C97F0E9C3D5D"
+  },
+  {
+    "file": "05-update-switch-keyboard-focus.jpg",
+    "bytes": 90412,
+    "sha256": "2EBFAF579125BDC08B72B82ADB74890D361E26EE38084BC5615D585C98FB764B"
+  },
+  {
+    "file": "06-app-settings-saved.jpg",
+    "bytes": 90487,
+    "sha256": "E212736B422ACB1BD12A48FE76E1D1D42B66B91D4E53A0C408D74F508407B7AD"
+  },
+  {
+    "file": "07-picker-canceled.jpg",
+    "bytes": 65528,
+    "sha256": "1B9D771ED6636B92327FE8C9393D99516A5CBA4D167901B89824FE3E7D227966"
+  },
+  {
+    "file": "08-preferences-after-reopen.jpg",
+    "bytes": 90372,
+    "sha256": "FDC0634AD1D2D98D83D974A3B64C4029DD80A72162C42AB652AB20696E224545"
+  },
+  {
+    "file": "09-native-update-check.jpg",
+    "bytes": 89345,
+    "sha256": "2C67D692E18E36CD93F7EC20DEC34DC65CB1E1E02A0FCBA7B97A8CD63F688658"
+  }
+]

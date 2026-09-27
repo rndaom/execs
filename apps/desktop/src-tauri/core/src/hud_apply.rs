@@ -54,12 +54,24 @@ pub struct HudControl {
     pub write_file: Option<WriteSnippet>,
     #[serde(rename = "WriteCfg")]
     pub write_cfg: Option<WriteSnippet>,
+    #[serde(rename = "Special")]
+    pub special: Option<String>,
+    #[serde(rename = "SpecialParameters")]
+    pub special_parameters: Option<serde_json::Value>,
+    #[serde(rename = "Pulse")]
+    pub pulse: Option<serde_json::Value>,
+    #[serde(rename = "Shadow")]
+    pub shadow: Option<serde_json::Value>,
     #[serde(rename = "Options")]
     pub options: Option<Vec<HudControl>>,
     #[serde(rename = "Minimum")]
     pub minimum: Option<serde_json::Value>,
     #[serde(rename = "Maximum")]
     pub maximum: Option<serde_json::Value>,
+    /// Preserve unknown upstream fields so compatibility checks can fail closed
+    /// when a new file operation appears in a pinned schema.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -322,7 +334,7 @@ pub fn schema_view(schema: &HudSchema) -> HudSchemaView {
         .iter()
         .map(|(name, controls)| HudSchemaSection {
             name: name.clone(),
-            controls: controls.iter().filter_map(view_control).collect(),
+            controls: controls.iter().map(view_control).collect(),
         })
         .filter(|section| !section.controls.is_empty())
         .collect();
@@ -382,8 +394,8 @@ fn apply_resolved_hud_options(
     let mut cfg_writes = Vec::new();
     for controls in schema.controls.values() {
         for control in controls {
-            // Keep legacy saved values, but never write unconsumed log snippets.
-            if crate::hud_schema_compat::unavailable_reason(control).is_some() {
+            // Keep legacy saved values, but never apply unknown editor operations.
+            if crate::hud_schema_compat::unavailable_top_level_reason(control).is_some() {
                 continue;
             }
             apply_control(
@@ -425,29 +437,36 @@ fn apply_resolved_hud_options(
     })
 }
 
-fn view_control(control: &HudControl) -> Option<HudSchemaControl> {
+fn view_control(control: &HudControl) -> HudSchemaControl {
     let kind = normalize_type(&control.control_type);
-    if !matches!(kind, "checkbox" | "color" | "combo" | "number") {
-        return None;
-    }
-    let choices = control
-        .options
-        .as_ref()
-        .map(|options| {
-            options
-                .iter()
-                .map(|option| HudSchemaChoice {
-                    label: if option.label.is_empty() {
-                        option.value.clone()
-                    } else {
-                        option.label.clone()
-                    },
-                    value: option.value.clone(),
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    Some(HudSchemaControl {
+    let choices = if kind == "crosshair" {
+        HUD_CROSSHAIR_GLYPHS
+            .chars()
+            .map(|glyph| HudSchemaChoice {
+                label: format!("Glyph {glyph}"),
+                value: glyph.to_string(),
+            })
+            .collect()
+    } else {
+        control
+            .options
+            .as_ref()
+            .map(|options| {
+                options
+                    .iter()
+                    .map(|option| HudSchemaChoice {
+                        label: if option.label.is_empty() {
+                            option.value.clone()
+                        } else {
+                            option.label.clone()
+                        },
+                        value: option.value.clone(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    HudSchemaControl {
         name: control.name.clone(),
         label: if control.label.is_empty() {
             control.name.clone()
@@ -457,11 +476,11 @@ fn view_control(control: &HudControl) -> Option<HudSchemaControl> {
         control_type: kind.to_string(),
         value: control.value.clone(),
         choices,
-        unavailable_reason: crate::hud_schema_compat::unavailable_reason(control)
+        unavailable_reason: crate::hud_schema_compat::unavailable_top_level_reason(control)
             .map(str::to_owned),
         minimum: control.minimum.as_ref().map(json_to_string),
         maximum: control.maximum.as_ref().map(json_to_string),
-    })
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -526,7 +545,14 @@ fn apply_control(
                 ));
             }
         }
-        "color" | "number" => {
+        "color" | "number" | "crosshair" => {
+            if kind == "crosshair"
+                && (current.chars().count() != 1 || !HUD_CROSSHAIR_GLYPHS.contains(&current))
+            {
+                return Err(ProfileError::Io(format!(
+                    "Unknown HUD overlay crosshair glyph {current:?}; select one of the available styles"
+                )));
+            }
             apply_value_files(
                 tree, control, &current, custom, enabled, hud_id, layer, cfg_writes,
             )?;
@@ -1552,15 +1578,22 @@ fn substitute(template: &str, value: &str) -> String {
     template.replace("$value", value)
 }
 
-fn normalize_type(raw: &str) -> &'static str {
+pub(crate) fn normalize_type(raw: &str) -> &'static str {
     match raw.to_ascii_lowercase().as_str() {
         "checkbox" | "check" => "checkbox",
         "color" | "colorpicker" | "colour" | "colourpicker" => "color",
         "combobox" | "dropdown" | "dropdownmenu" | "select" => "combo",
         "number" | "integer" | "integerupdown" => "number",
+        "crosshair" | "customcrosshair" => "crosshair",
         _ => "other",
     }
 }
+
+/// Fixed glyph values from the pinned TF2HUD.Editor CrosshairStyles picker.
+/// The glyph maps through the installed HUD's TF2Crosshairs font, so these
+/// plain characters are selectors rather than an accurate visual preview.
+const HUD_CROSSHAIR_GLYPHS: &str =
+    "!#$%'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijkmnopqrstuvwxyz{|}~";
 
 fn is_truthy(value: &str) -> bool {
     matches!(

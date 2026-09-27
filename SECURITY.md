@@ -10,9 +10,7 @@ install, write outside the documented surface (`tf/custom/`,
 `config.cfg` copy), or skip the write lock.
 
 Use [Report a vulnerability](https://github.com/rndaom/execs/security/advisories/new)
-on this repository. If that form is missing, the owner enables it under
-**Settings → Advanced Security → Private vulnerability reporting**, then
-**Enable**. After that, the Advisories page shows **Report a vulnerability**.
+on this repository to send the report privately to the maintainers.
 
 Please include the execs version (footer of the app), the OS, and
 whether you have a crash log

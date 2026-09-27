@@ -1,0 +1,14 @@
+[
+  {
+    "id": "ab24b740-19dc-4d52-8e99-a75d3f3334de",
+    "source": "G:\\Projects\\execs\\docs\\design\\2026-09-22-overhaul\\implementation\\profile-management\\compatibility-v018\\no-hud\\exported-by-v0.1.8.zip",
+    "sourceSha256": "3299CF62CB18DA34785C309803ED2D8ABAD427EAB9B95918EA72B1BF9259AC38",
+    "name": "QA inactive - no HUD"
+  },
+  {
+    "id": "0d13e5ff-1adf-4606-aa0a-481e72ba253d",
+    "source": "G:\\Projects\\execs\\docs\\design\\2026-09-22-overhaul\\implementation\\profile-management\\compatibility-v018\\single-hud\\exported-by-v0.1.8.zip",
+    "sourceSha256": "4B46FB3144B5C9FCD334505672FC8513FA3F9D629F821FBB4AB53B9DA4667EC9",
+    "name": "QA inactive - single HUD"
+  }
+]

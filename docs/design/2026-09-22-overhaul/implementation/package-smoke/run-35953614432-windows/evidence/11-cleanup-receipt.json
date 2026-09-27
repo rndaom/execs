@@ -1,0 +1,29 @@
+{
+  "forcedCleanup": [
+    {
+      "pid": 7904,
+      "parent": 5352,
+      "executable": "C:\\Windows\\system32\\conhost.exe",
+      "created": "2026-09-24T03:58:46.1051230Z",
+      "commandLine": "\\??\\C:\\Windows\\system32\\conhost.exe 0x4",
+      "session": 2
+    },
+    {
+      "pid": 5352,
+      "parent": 1276,
+      "executable": "D:\\a\\_temp\\execs-windows-package-JlaeIR\\downloads\\msedgedriver.exe",
+      "created": "2026-09-24T03:58:46.0994630Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-JlaeIR\\downloads\\msedgedriver.exe --port=58072",
+      "session": 2
+    }
+  ],
+  "alreadyExited": [
+    6100,
+    2128,
+    7612,
+    6828,
+    6724,
+    1784,
+    8144
+  ]
+}

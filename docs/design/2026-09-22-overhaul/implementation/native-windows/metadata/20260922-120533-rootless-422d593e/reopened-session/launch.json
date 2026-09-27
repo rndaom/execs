@@ -1,0 +1,19 @@
+{
+  "scenario": "Rootless",
+  "helperPid": 12476,
+  "helperPackageCode": 15700,
+  "helperParentPid": 30156,
+  "helperParentName": "explorer.exe",
+  "helperParentPackageCode": 15700,
+  "appPid": 5896,
+  "appPackageCode": 15700,
+  "executable": "G:\\Projects\\execs\\apps\\desktop\\src-tauri\\target\\release\\execs.exe",
+  "executableSha256": "E7BC62505EFC1257ACE629EDECB8640EDAEE3860CA2505DED68038FF00D40FAD",
+  "appData": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\roaming",
+  "localAppData": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\local",
+  "webviewUserDataFolder": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\webview2",
+  "workingDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-120533-rootless-422d593e\\work",
+  "defaultTauriLocalData": "C:\\Users\\Random\\AppData\\Local\\com.rndaom.execs",
+  "defaultTauriLocalDataExistedBefore": true,
+  "launchedUtc": "2026-09-22T16:14:09.3496713Z"
+}

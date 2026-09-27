@@ -1,0 +1,19 @@
+{
+  "recordedUtc": "2026-09-22T17:35:21.2016519Z",
+  "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab",
+  "session": {
+    "launchedUtc": "2026-09-22T17:20:29.6885786Z",
+    "appPid": 10656,
+    "exitedUtc": "2026-09-22T17:30:15.3568337Z",
+    "exitCode": 0
+  },
+  "actualNativeExportPath": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\imports\\Actual public v0.1.8 export.zip",
+  "plannedDestination": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-131412-inactiveimport-65ffd4ab\\exports\\native-multiple-huds-v018.zip",
+  "originalLength": 3302,
+  "originalCreatedUtc": "2026-09-22T17:29:46.5349237Z",
+  "originalModifiedUtc": "2026-09-22T17:29:46.5390643Z",
+  "sha256Before": "BE5F3472308C176CB88F6C604D1592C275EED58B9602AC65F4DAADF57E7AE552",
+  "payloadsVerified": 10,
+  "sourceAndDestinationParentsResolvedWithinCase": true,
+  "note": "The root operator reported setting the intended absolute Save path, but filesystem evidence showed the native default filename in imports. This explicit same-case relocation corrects the artifact location only; it does not claim that the native picker accepted the intended destination."
+}

@@ -1,0 +1,176 @@
+
+> execs@ test G:\Projects\execs
+> pnpm -r test && node --test scripts/release-notes.test.mjs scripts/release-guards.test.mjs scripts/appimage-host-libraries.test.mjs
+
+Scope: 2 of 3 workspace projects
+packages/cfglint test$ vitest run
+packages/cfglint test:  RUN  v3.2.7 G:/Projects/execs/packages/cfglint
+packages/cfglint test:  ✓ test/catalog-generator.test.js (3 tests) 5ms
+packages/cfglint test:  ✓ test/lint-options.test.ts (3 tests) 3ms
+packages/cfglint test:  ✓ test/tokenizer.test.ts (8 tests) 3ms
+packages/cfglint test:  ✓ test/golden.test.ts (7 tests) 3ms
+packages/cfglint test:  ✓ test/trust.test.ts (17 tests) 15ms
+packages/cfglint test:  ✓ test/authoring.test.ts (10 tests) 19ms
+packages/cfglint test:  ✓ test/rules.test.ts (38 tests) 20ms
+packages/cfglint test:  ✓ test/adversarial.test.ts (35 tests) 47ms
+packages/cfglint test:  ✓ test/execution.test.ts (35 tests) 93ms
+packages/cfglint test:  ✓ test/catalog.test.ts (4 tests) 181ms
+packages/cfglint test:  Test Files  10 passed (10)
+packages/cfglint test:       Tests  160 passed (160)
+packages/cfglint test:    Start at  10:40:33
+packages/cfglint test:    Duration  753ms (transform 536ms, setup 0ms, collect 2.74s, tests 388ms, environment 1ms, prepare 712ms)
+packages/cfglint test: Done
+apps/desktop test$ vitest run
+apps/desktop test:  RUN  v3.2.7 G:/Projects/execs/apps/desktop
+apps/desktop test:  ✓ src/hooks/settings-close.test.tsx (8 tests) 253ms
+apps/desktop test:  ✓ src/crosshair/StockCrosshairSettings.test.ts (5 tests) 215ms
+apps/desktop test:  ✓ src/components/FilesEditor.test.tsx (9 tests) 488ms
+apps/desktop test:  ✓ src/InventoryPane.test.tsx (3 tests) 392ms
+apps/desktop test:  ✓ src/AppSettingsPane.test.tsx (7 tests) 288ms
+apps/desktop test:  ✓ src/SoundsPane.test.tsx (2 tests) 430ms
+apps/desktop test:  ✓ src/crosshair/CrosshairWorkflow.test.tsx (9 tests) 561ms
+apps/desktop test:  ✓ src/SettingsHost.cfg.test.tsx (23 tests) 600ms
+apps/desktop test:  ✓ src/SettingsHost.mods-routing.test.tsx (14 tests) 791ms
+apps/desktop test:  ✓ src/SettingsFeedback.test.tsx (10 tests) 1075ms
+apps/desktop test:    ✓ retained settings feedback > attributes delayed HUD failures after navigation, keeps them through Sounds success and resolves HUD retry  439ms
+apps/desktop test:  ✓ src/hooks/useFilesExitGuard.test.ts (9 tests) 192ms
+apps/desktop test:  ✓ src/SettingsLayout.test.tsx (6 tests) 173ms
+apps/desktop test:  ✓ src/ViewmodelPane.test.tsx (3 tests) 161ms
+apps/desktop test:  ✓ src/App.files-exit.test.ts (7 tests) 1450ms
+apps/desktop test:    ✓ retains edits when changing install is cancelled, and discards only explicitly  520ms
+apps/desktop test:  ✓ src/Onboarding.test.tsx (5 tests) 144ms
+apps/desktop test:  ✓ src/MutationDrafts.test.tsx (12 tests) 1661ms
+apps/desktop test:    ✓ crosshair writes through the real host outcome contract > retains PNG and library bytes after failure before write  408ms
+apps/desktop test:  ✓ src/SettingsHost.files.test.tsx (12 tests) 1801ms
+apps/desktop test:    ✓ Ctrl+S immediately validates and saves the current edit before the debounce settles  376ms
+apps/desktop test:    ✓ restores a reviewed missing live file only while TF2 is closed (running=false)  336ms
+apps/desktop test:    ✓ restores a reviewed missing live file only while TF2 is closed (running=true)  313ms
+apps/desktop test:    ✓ saves the current buffer under a new cfg identity with an absent destination token  309ms
+apps/desktop test:  ✓ src/App.pending-settings.test.tsx (10 tests) 2542ms
+apps/desktop test:    ✓ identifies a failed HUD save after navigating to Sounds and retries the retained edit  776ms
+apps/desktop test:    ✓ keeps multiple panes protected until each resolves, and explicit discard restores persisted controls  426ms
+apps/desktop test:    ✓ clears a discarded draft's failure while preserving an unrelated pane's failure  380ms
+apps/desktop test:  ✓ src/components/ui/Toast.test.ts (5 tests) 53ms
+apps/desktop test:  ✓ src/hooks/useProfileLibrary.test.ts (20 tests) 48ms
+apps/desktop test:  ✓ src/components/AppFooter.test.ts (2 tests) 47ms
+apps/desktop test:  ✓ src/FilesPane.test.ts (15 tests) 3762ms
+apps/desktop test:    ✓ Files draft navigation > opens incoming callers at their source line and identifies deferred payloads without losing drafts  650ms
+apps/desktop test:    ✓ Files draft navigation > allows in-memory editing while TF2 runs but never saves automatically when it closes  698ms
+apps/desktop test:    ✓ Files draft navigation > refuses Save after worker failure and permits an explicit retry  463ms
+apps/desktop test:  ✓ src/hooks/useLifecycleStatus.test.tsx (10 tests) 41ms
+apps/desktop test:  ✓ src/hooks/useSoundPlayer.test.tsx (8 tests) 28ms
+apps/desktop test:  ✓ src/LaunchPane.test.tsx (6 tests) 168ms
+apps/desktop test:  ✓ src/hooks/useAppUpdate.test.tsx (11 tests) 46ms
+apps/desktop test:  ✓ src/components/ui/Modal.test.ts (8 tests) 125ms
+apps/desktop test:  ✓ src/hooks/useAppPreferences.test.tsx (5 tests) 26ms
+apps/desktop test:  ✓ src/components/ModList.test.tsx (5 tests) 110ms
+apps/desktop test:  ✓ src/components/ProfileDeleteDialog.test.ts (5 tests) 86ms
+apps/desktop test:  ✓ src/hooks/useInventorySnapshot.test.tsx (4 tests) 32ms
+apps/desktop test:  ✓ src/lib/crosshair-color.test.ts (2 tests) 266ms
+apps/desktop test:  ✓ src/hooks/useHudOwnershipReview.test.tsx (7 tests) 27ms
+apps/desktop test:  ✓ src/hooks/useReleaseNotes.test.ts (1 test) 15ms
+apps/desktop test:  ✓ src/components/HudOwnershipDialog.test.tsx (9 tests) 206ms
+apps/desktop test:  ✓ src/components/ReleaseNotes.test.ts (3 tests) 50ms
+apps/desktop test:  ✓ src/components/ProfileImportDialog.test.ts (6 tests) 79ms
+apps/desktop test:  ✓ src/crosshair/CrosshairChoice.test.tsx (2 tests) 76ms
+apps/desktop test:  ✓ src/components/GameBananaBrowser.test.tsx (3 tests) 138ms
+apps/desktop test:  ✓ src/ImportOutcomes.test.tsx (6 tests) 110ms
+apps/desktop test:  ✓ src/lib/bridge-updater.test.ts (7 tests) 244ms
+apps/desktop test:  ✓ src/BindsPane.test.ts (6 tests) 301ms
+apps/desktop test:  ✓ src/lib/files-limits.test.ts (4 tests) 104ms
+apps/desktop test:  ✓ src/lib/crosshair-designer.test.ts (17 tests) 64ms
+apps/desktop test:  ✓ src/lib/files-analysis.test.ts (5 tests) 107ms
+apps/desktop test:  ✓ src/lib/files-ui.test.ts (23 tests) 20ms
+apps/desktop test:  ✓ src/hooks/useNativeCloseGuard.test.ts (7 tests) 184ms
+apps/desktop test:  ✓ src/lib/cfg-state.test.ts (11 tests) 21ms
+apps/desktop test:  ✓ src/lib/gamebanana-browser-ui.test.ts (8 tests) 19ms
+apps/desktop test:  ✓ src/crosshair/PngImportField.test.tsx (1 test) 34ms
+apps/desktop test:  ✓ src/hooks/retained-pane-interaction.test.ts (4 tests) 972ms
+apps/desktop test:    ✓ retained pane interactions > cancels bind recording when hidden and leaves subsequent keys alone  911ms
+apps/desktop test:  ✓ src/hooks/useGameBananaBrowser.test.tsx (7 tests) 158ms
+apps/desktop test:  ✓ src/hooks/draft-lifecycle.test.ts (8 tests) 177ms
+apps/desktop test:  ✓ src/lib/files-create.test.ts (73 tests) 16ms
+apps/desktop test:  ✓ src/lib/sound-library.test.ts (6 tests) 17ms
+apps/desktop test:  ✓ src/lib/community-crosshairs.test.ts (8 tests) 14ms
+apps/desktop test:  ✓ src/lib/inventory-ui.test.ts (4 tests) 13ms
+apps/desktop test:  ✓ src/lib/hud-ui.test.ts (21 tests) 19ms
+apps/desktop test:  ✓ src/lib/viewmodel-groups.test.ts (5 tests) 12ms
+apps/desktop test:  ✓ src/lib/gameplay-ui.test.ts (23 tests) 11ms
+apps/desktop test:  ✓ src/lib/binds-ui.test.ts (26 tests) 10ms
+apps/desktop test:  ✓ src/lib/write-lock-ui.test.ts (8 tests) 7ms
+apps/desktop test:  ✓ src/lib/files-drafts.test.ts (15 tests) 7ms
+apps/desktop test:  ✓ src/components/WriteLockBanner.test.ts (1 test) 6ms
+apps/desktop test:  ✓ src/lib/files-reference.test.ts (7 tests) 7ms
+apps/desktop test:  ✓ src/lib/toast-ui.test.ts (19 tests) 5ms
+apps/desktop test:  ✓ src/lib/files-exit.test.ts (5 tests) 7ms
+apps/desktop test:  ✓ src/lib/crosshair-ui.test.ts (10 tests) 6ms
+apps/desktop test:  ✓ src/lib/mods-ui.test.ts (27 tests) 7ms
+apps/desktop test:  ✓ src/lib/release-notes-ui.test.ts (9 tests) 6ms
+apps/desktop test:  ✓ src/lib/files-completion-catalog.test.ts (1 test) 6ms
+apps/desktop test:  ✓ src/lib/switch-progress-ui.test.ts (10 tests) 5ms
+apps/desktop test:  ✓ src/hooks/useAutosave.test.ts (16 tests) 5ms
+apps/desktop test:  ✓ src/lib/library-ui.test.ts (12 tests) 6ms
+apps/desktop test:  ✓ src/lib/preview.test.ts (2 tests) 6ms
+apps/desktop test:  ✓ src/lib/launch-ui.test.ts (13 tests) 6ms
+apps/desktop test:  ✓ src/lib/preview-bridge.gamebanana.test.ts (3 tests) 5ms
+apps/desktop test:  ✓ src/lib/viewmodel-ui.test.ts (5 tests) 4ms
+apps/desktop test:  ✓ src/lib/cfglint.test.ts (2 tests) 4ms
+apps/desktop test:  ✓ src/lib/files-completion.test.ts (4 tests) 4ms
+apps/desktop test:  ✓ src/lib/comfig-ui.test.ts (7 tests) 4ms
+apps/desktop test:  ✓ src/lib/stock-crosshair-shapes.test.ts (4 tests) 5ms
+apps/desktop test:  ✓ src/lib/updater-ui.test.ts (6 tests) 4ms
+apps/desktop test:  ✓ src/lib/first-run-ui.test.ts (7 tests) 4ms
+apps/desktop test:  ✓ src/lib/hitsound-ui.test.ts (5 tests) 4ms
+apps/desktop test:  ✓ src/lib/settings-busy-ui.test.ts (2 tests) 4ms
+apps/desktop test:  ✓ src/lib/color.test.ts (3 tests) 3ms
+apps/desktop test:  ✓ src/hooks/useSeededDraft.test.ts (8 tests) 3ms
+apps/desktop test:  ✓ src/lib/settings-ui.test.ts (3 tests) 3ms
+apps/desktop test:  ✓ src/lib/hud-reload-ui.test.ts (2 tests) 4ms
+apps/desktop test:  ✓ src/lib/copy-ui.test.ts (2 tests) 2ms
+apps/desktop test:  ✓ src/lib/finder-ui.test.ts (2 tests) 3ms
+apps/desktop test:  ✓ src/ComfigPane.test.ts (3 tests) 305ms
+apps/desktop test:  ✓ src/ModsPane.test.ts (9 tests) 457ms
+apps/desktop test:  ✓ src/HudPane.interaction.test.tsx (14 tests) 389ms
+apps/desktop test:  ✓ src/CrosshairPlacement.test.ts (6 tests) 40ms
+apps/desktop test:  ✓ src/HudPane.test.ts (5 tests) 38ms
+apps/desktop test:  ✓ src/GameplayPane.test.ts (3 tests) 136ms
+apps/desktop test:  ✓ src/components/SwitchProgressList.test.ts (3 tests) 10ms
+apps/desktop test:  ✓ src/SettingsHost.test.ts (18 tests) 115ms
+apps/desktop test:  ✓ src/SettingsHost.hud-loading.test.tsx (11 tests) 350ms
+apps/desktop test:  Test Files  101 passed (101)
+apps/desktop test:       Tests  863 passed (863)
+apps/desktop test:    Start at  10:40:34
+apps/desktop test:    Duration  14.56s (transform 4.34s, setup 0ms, collect 129.59s, tests 23.26s, environment 32.58s, prepare 6.71s)
+apps/desktop test: Done
+✔ removes only Wayland libraries, including versioned copies in multiarch directories (7.0113ms)
+✔ rejects unrelated directories before removing anything (2.4811ms)
+﹣ does not follow symlinks outside the bundle (0.051ms) # SKIP
+﹣ output plugin prunes before packing, forwards arguments and propagates failure (0.0416ms) # SKIP
+﹣ output plugin discovery does not require or mutate an AppDir (0.0362ms) # SKIP
+✔ Minisign verification rejects changed bytes, signatures, keys and comments (4.5892ms)
+✔ release validation binds signatures to both assets and their release (9.0395ms)
+✔ draft URL identity accepts its stable signed API assets and refuses temporary feed URLs (3.9302ms)
+✔ previous installers use actual published asset names with literal or sanitized revisions (0.4027ms)
+✔ stable hotfix versions accept only canonical positive bounded numeric revisions (0.3695ms)
+✔ a hotfix requires its own exact tag, four source versions and substantive changelog section (24.7158ms)
+✔ updater history selects the immediately preceding stable release or numeric hotfix (7.4117ms)
+✔ signed hotfix assets accept literal or encoded plus URLs and reject original-release substitutions (9.475ms)
+✔ all product versions, the tag and substantive notes must agree (9.5284ms)
+✔ package smoke derives and passes the immediately previous changelog release (0.3229ms)
+✔ release workflow always waits for the reusable CI gate (0.6981ms)
+✔ release candidates and tag builds share a product-tag concurrency lock (0.7665ms)
+✔ extracts a dated section and stops at the next heading (0.5431ms)
+✔ accepts an em-dash date and a v prefix (0.5503ms)
+✔ extracts Unreleased (0.1131ms)
+✔ throws when the version is missing (0.2663ms)
+✔ throws when the version section is empty (0.1278ms)
+✔ formats the GitHub install footer (0.0717ms)
+✔ reads the repo changelog for 0.1.0 (0.3294ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 3
+ℹ todo 0
+ℹ duration_ms 127.0635

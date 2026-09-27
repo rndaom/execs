@@ -11,8 +11,125 @@ pub struct ProfileImportReview {
     pub creator: bool,
     pub warnings: Vec<String>,
     pub notes: Vec<String>,
+    pub huds: Vec<String>,
+    pub selected_hud: Option<String>,
     // Approval belongs to these exact bytes, never just to a mutable pathname.
     pub(super) sha256: String,
+}
+
+impl ProfileImportReview {
+    pub fn select_hud(&mut self, selected: Option<String>) -> Result<(), ProfileError> {
+        if self.huds.len() > 1 && selected.is_none() {
+            return Err(ProfileError::HudReviewRequired);
+        }
+        if let Some(folder) = &selected {
+            if !self.huds.contains(folder) {
+                return Err(invalid_zip(
+                    "Choose one of the HUD folders in this import review.",
+                ));
+            }
+        }
+        self.selected_hud =
+            selected.or_else(|| (self.huds.len() == 1).then(|| self.huds[0].clone()));
+        Ok(())
+    }
+}
+
+pub(super) fn payload_huds(payload: &ZipPayload) -> Result<Vec<String>, ProfileError> {
+    let mut roots = Vec::new();
+    for file in &payload.manifest.files {
+        let Some(rest) = file.path.strip_prefix("tf/custom/") else {
+            continue;
+        };
+        if !rest.contains('/') && rest.to_ascii_lowercase().ends_with(".vpk") {
+            let source = match file.storage {
+                FileStorage::Exclusive => payload.exclusive.get(&file.path),
+                FileStorage::Shared => payload.blobs.get(&file.sha256.to_ascii_lowercase()),
+            }
+            .ok_or_else(|| invalid_zip("Missing VPK source in profile."))?;
+            crate::hud::refuse_hud_vpk(source, Some(&file.sha256))?;
+            continue;
+        }
+        let Some((folder, rel)) = rest.split_once('/') else {
+            continue;
+        };
+        if !rel.eq_ignore_ascii_case("info.vdf") {
+            continue;
+        }
+        let source = payload
+            .exclusive
+            .get(&file.path)
+            .ok_or_else(|| invalid_zip("Missing HUD metadata in profile."))?;
+        let bytes = crate::archive::read_regular_file_bounded(source, 1024 * 1024)?
+            .ok_or_else(|| invalid_zip("HUD info.vdf exceeds the inspection limit."))?;
+        if !crate::hash::sha256_hex(&bytes).eq_ignore_ascii_case(&file.sha256) {
+            return Err(invalid_zip("HUD metadata changed during import."));
+        }
+        if crate::hud::is_current_hud_info(&bytes)
+            && !roots
+                .iter()
+                .any(|root: &String| root.eq_ignore_ascii_case(folder))
+        {
+            roots.push(folder.to_string());
+        }
+    }
+    roots.sort_by_key(|root| root.to_ascii_lowercase());
+    Ok(roots)
+}
+
+pub(super) fn hud_options_need_review(
+    payload: &ZipPayload,
+    huds: &[String],
+    selected: Option<&str>,
+) -> Result<bool, ProfileError> {
+    if payload.manifest.hud_review_pending {
+        return Ok(true);
+    }
+    if huds.len() < 2 {
+        return Ok(false);
+    }
+    let owner = payload.manifest.hud_selected_root.as_deref().or_else(|| {
+        payload
+            .manifest
+            .hud
+            .as_ref()
+            .map(|record| record.id.as_str())
+    });
+    if selected
+        .zip(owner)
+        .is_some_and(|(selected, owner)| selected.eq_ignore_ascii_case(owner))
+    {
+        return Ok(false);
+    }
+    if payload
+        .manifest
+        .files
+        .iter()
+        .any(|file| crate::hud::is_managed_hud_cfg(&file.path))
+    {
+        return Ok(true);
+    }
+    for file in &payload.manifest.files {
+        if !file.path.to_ascii_lowercase().ends_with("/autoexec.cfg") {
+            continue;
+        }
+        let source = payload
+            .exclusive
+            .get(&file.path)
+            .ok_or_else(|| invalid_zip("Missing autoexec in profile."))?;
+        let bytes = crate::archive::read_regular_file_bounded(
+            source,
+            crate::hash::MAX_CFG_FILE_BYTES as u64,
+        )?
+        .ok_or_else(|| invalid_zip("Autoexec is too large to inspect."))?;
+        if bytes
+            .windows(crate::hud_apply::HUD_CFG_PREFIX.len())
+            .any(|window| window.eq_ignore_ascii_case(crate::hud_apply::HUD_CFG_PREFIX.as_bytes()))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 pub fn inspect_profile_import(
@@ -40,21 +157,28 @@ where
     let sha256 = sha256_file(zip_path).map_err(io_err)?;
     let staging = StagingDir::create(profiles)?;
     let mut payload = read_profile_zip(zip_path, profiles, &staging.path)?;
+    prepare_stock_built_payload(
+        &mut payload,
+        tf2_root,
+        profiles,
+        &staging.path,
+        &prototype_selected_group_vpk_from_install,
+    )?;
     seed_default_config(&mut payload, tf2_root, profiles, &staging.path)?;
     // Trust can waive command-policy findings, never paths, parser
-    // limits or corrupt archives. Native exports retain strict validation.
+    // limits or corrupt archives.
     if payload.creator {
         validate_payload_with_trust(&mut payload, true)?;
     } else {
         validate_payload(&mut payload)?;
     }
     let mut warnings = Vec::new();
-    if payload.creator {
-        for file in &payload.manifest.files {
-            let staged = match file.storage {
-                FileStorage::Exclusive => &payload.exclusive[&file.path],
-                FileStorage::Shared => &payload.blobs[&file.sha256],
-            };
+    for file in &payload.manifest.files {
+        let staged = match file.storage {
+            FileStorage::Exclusive => &payload.exclusive[&file.path],
+            FileStorage::Shared => &payload.blobs[&file.sha256],
+        };
+        if payload.creator {
             if let Err(err) =
                 validate_imported_profile_file(&file.path, staged, &file.sha256, false)
             {
@@ -69,12 +193,37 @@ where
                 );
             }
         }
+        warnings.extend(credential_warnings_for_file(
+            &file.path,
+            staged,
+            &file.sha256,
+        )?);
     }
     // Also catch replacement while inspection was in progress.
     if sha256_file(zip_path).map_err(io_err)? != sha256 {
         return Err(invalid_zip(
             "The ZIP changed during review. Choose it again.",
         ));
+    }
+    let huds = payload_huds(&payload)?;
+    let selected_hud = payload
+        .manifest
+        .hud_selected_root
+        .clone()
+        .filter(|folder| huds.contains(folder))
+        .or_else(|| {
+            payload.manifest.hud.as_ref().and_then(|record| {
+                huds.iter()
+                    .find(|folder| folder.eq_ignore_ascii_case(&record.id))
+                    .cloned()
+            })
+        })
+        .or_else(|| (huds.len() == 1).then(|| huds[0].clone()));
+    if huds.len() > 1 {
+        payload.import_notes.push("Only the HUD you choose will be loaded by TF2. Other HUD folders remain preserved in this profile and its exports.".into());
+        if hud_options_need_review(&payload, &huds, None)? {
+            payload.import_notes.push("All approved cfg bytes are imported unchanged. Choosing a different HUD may require a separate HUD-options review before this profile can be activated.".into());
+        }
     }
     Ok(ProfileImportReview {
         name: payload.manifest.name,
@@ -83,8 +232,47 @@ where
         creator: payload.creator,
         warnings,
         notes: payload.import_notes,
+        huds,
+        selected_hud,
         sha256,
     })
+}
+
+fn credential_warnings_for_file(
+    path: &str,
+    staged: &Path,
+    expected_hash: &str,
+) -> Result<Vec<String>, ProfileError> {
+    let mut warnings = Vec::new();
+    let mut add = |cfg_path: &str, bytes: &[u8]| {
+        for line in crate::archive::cfg_credential_lines(cfg_path, bytes) {
+            warnings.push(format!(
+                "{cfg_path}:{line} may contain a saved password or remote-console setting. Review it before sharing this profile."
+            ));
+        }
+    };
+    if has_extension(path, "cfg") {
+        add(path, &read_cfg_for_scan(staged, path)?);
+    } else if has_extension(path, "vpk") {
+        let mut source = fs::File::open(staged).map_err(io_err)?;
+        let mut signature = [0u8; 4];
+        if source.read_exact(&mut signature).is_ok() && signature == 0x55aa_1234u32.to_le_bytes() {
+            source.rewind().map_err(io_err)?;
+            let (cfgs, hash) = read_vpk_file_filtered_hashed(
+                &mut source,
+                &|entry| has_extension(entry, "cfg"),
+                MAX_IMPORTED_CFG_BYTES as u64,
+            )
+            .map_err(|err| invalid_zip(format!("invalid profile VPK {path}: {}", err.message())))?;
+            if !hash.eq_ignore_ascii_case(expected_hash) {
+                return Err(invalid_zip(format!("{path} changed during import review")));
+            }
+            for (entry, bytes) in cfgs.files {
+                add(&format!("{path}/{entry}"), &bytes);
+            }
+        }
+    }
+    Ok(warnings)
 }
 
 /// The caller shows the review and obtains explicit trust before calling this
@@ -183,8 +371,11 @@ pub(super) fn read_creator_zip(
             id: None,
             tf2_root: None,
             hud: None,
+            hud_selected_root: None,
+            hud_review_pending: false,
             crosshair: None,
             viewmodel: None,
+            viewmodel_output_sha256: None,
             hitsound: None,
             mods: Vec::new(),
             preloader: Some(crate::preloader::PreloaderSelection::default()),
@@ -192,6 +383,7 @@ pub(super) fn read_creator_zip(
         },
         exclusive: HashMap::new(),
         blobs: HashMap::new(),
+        zip_uncompressed_bytes: 0, // Creator archives always use schema 1.
         creator: true,
         skipped_files: 0,
         import_notes: Vec::new(),

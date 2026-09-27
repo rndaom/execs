@@ -1,0 +1,77 @@
+{
+  "alreadyExited": [],
+  "forcedCleanup": [
+    {
+      "pid": 1500,
+      "parent": 824,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T03:44:14.4070520Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=renderer --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --remote-debugging-port=57501 --video-capture-use-gpu-memory-buffer --lang=en-US --device-scale-factor=1 --num-raster-threads=2 --enable-main-frame-before-activation --renderer-client-id=5 --js-flags=\"--harmony-weak-refs-with-cleanup-some --expose-gc --ms-user-locale=\" --time-ticks-at-unix-epoch=-1790221095849172 --launch-time-ticks=358555312 --field-trial-handle=3656,i,9117032223371037051,13300170131687074475,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=3652 /prefetch:1",
+      "session": 2
+    },
+    {
+      "pid": 1204,
+      "parent": 5844,
+      "executable": "C:\\Windows\\system32\\conhost.exe",
+      "created": "2026-09-24T03:44:16.8359970Z",
+      "commandLine": "\\??\\C:\\Windows\\system32\\conhost.exe 0x4",
+      "session": 2
+    },
+    {
+      "pid": 5844,
+      "parent": 7808,
+      "executable": "D:\\a\\_temp\\execs-windows-package-tol2LK\\downloads\\msedgedriver.exe",
+      "created": "2026-09-24T03:44:16.8314730Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-tol2LK\\downloads\\msedgedriver.exe --port=57516",
+      "session": 2
+    },
+    {
+      "pid": 3260,
+      "parent": 824,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T03:44:14.0901330Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=storage.mojom.StorageService --lang=en-US --service-sandbox-type=service --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=2320,i,9117032223371037051,13300170131687074475,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=2328 /prefetch:8",
+      "session": 2
+    },
+    {
+      "pid": 1052,
+      "parent": 824,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T03:44:13.7176280Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --field-trial-handle=1912,i,9117032223371037051,13300170131687074475,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=2040 /prefetch:3",
+      "session": 2
+    },
+    {
+      "pid": 7512,
+      "parent": 824,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T03:44:13.4549290Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=gpu-process --string-annotations=is-enterprise-managed=no --noerrdialogs --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\webview\\EBWebView\" --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --embedded-browser-webview=1 --embedded-browser-webview-dpi-awareness=2 --gpu-preferences=UAAAAAAAAADgAAAEAAAAAAAAAAAAAAAAAABgAAEAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAA --field-trial-handle=1812,i,9117032223371037051,13300170131687074475,262144 --disable-features=msPdfOOUI,msSmartScreenProtection,msWebOOUI --variations-seed-version --mojo-platform-channel-handle=1808 /prefetch:2",
+      "session": 2
+    },
+    {
+      "pid": 3632,
+      "parent": 824,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T03:44:09.9898280Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --type=crashpad-handler --user-data-dir=D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\webview\\EBWebView /prefetch:4 --monitor-self-annotation=ptype=crashpad-handler --database=D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\webview\\EBWebView\\Crashpad --annotation=IsOfficialBuild=1 --annotation=channel= --annotation=chromium-version=131.0.6778.109 \"--annotation=exe=C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --annotation=plat=Win64 \"--annotation=prod=Edge WebView2\" --annotation=ver=131.0.2903.86 --initial-client-data=0x184,0x188,0x18c,0x160,0x194,0x7ffa77826070,0x7ffa7782607c,0x7ffa77826088",
+      "session": 2
+    },
+    {
+      "pid": 824,
+      "parent": 7984,
+      "executable": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe",
+      "created": "2026-09-24T03:44:09.2434720Z",
+      "commandLine": "\"C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\131.0.2903.86\\msedgewebview2.exe\" --embedded-browser-webview=1 --webview-exe-name=execs.exe --webview-exe-version=0.1.8 --user-data-dir=\"D:\\a\\_temp\\execs-windows-package-tol2LK\\fixture\\webview\\EBWebView\" --noerrdialogs --embedded-browser-webview-dpi-awareness=2 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-address=127.0.0.1 --remote-debugging-port=57501 --lang=en-US --mojo-named-platform-channel-pipe=7984.7848.179379283348580803",
+      "session": 2
+    },
+    {
+      "pid": 7984,
+      "parent": 7808,
+      "executable": "D:\\a\\_temp\\execs-windows-package-tol2LK\\installed\\execs.exe",
+      "created": "2026-09-24T03:44:08.4124760Z",
+      "commandLine": "D:\\a\\_temp\\execs-windows-package-tol2LK\\installed\\execs.exe",
+      "session": 2
+    }
+  ]
+}

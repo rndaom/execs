@@ -1,0 +1,16 @@
+{
+  "scenario": "StartupError",
+  "executable": "G:\\Projects\\execs\\apps\\desktop\\src-tauri\\target\\release\\execs.exe",
+  "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+  "executableLength": 23442432,
+  "executableModifiedUtc": "2026-09-22T17:41:00.2757363Z",
+  "executableProductVersion": "0.2.0",
+  "helperExecutable": "C:\\Users\\Random\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\powershell\\pwsh.exe",
+  "helperExecutableSha256": "362A356CE7F0940EC74F73A8FC2C990A2CC24A38A11C90BBD8ECA947110AD139",
+  "markerSha256": null,
+  "startupVariant": "UnsetAppData",
+  "startupMarkers": [],
+  "inactiveFixture": null,
+  "inactiveImport": null,
+  "preparedUtc": "2026-09-22T18:08:06.0384213Z"
+}

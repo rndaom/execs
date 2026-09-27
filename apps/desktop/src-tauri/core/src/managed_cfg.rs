@@ -9,6 +9,7 @@ pub enum ManagedCfgScope {
     Gameplay,
     Crosshair,
     Sounds,
+    Viewmodels,
 }
 
 impl ManagedCfgScope {
@@ -18,11 +19,23 @@ impl ManagedCfgScope {
             Self::Gameplay => matches!(
                 name.as_slice(),
                 b"fov_desired"
-                    | b"viewmodel_fov"
-                    | b"tf_use_min_viewmodels"
-                    | b"r_drawviewmodel"
                     | b"r_drawtracers_firstperson"
                     | b"r_drawtracers"
+                    | b"cl_autoreload"
+                    | b"hud_fastswitch"
+                    | b"sensitivity"
+                    | b"zoom_sensitivity_ratio"
+                    | b"tf_medigun_autoheal"
+                    | b"hud_combattext"
+                    | b"hud_combattext_batching"
+                    | b"hud_combattext_healing"
+            ),
+            // Same file as Gameplay; the Viewmodels pane writes these lines.
+            Self::Viewmodels => matches!(
+                name.as_slice(),
+                b"viewmodel_fov"
+                    | b"tf_use_min_viewmodels"
+                    | b"r_drawviewmodel"
                     | b"cl_flipviewmodels"
             ),
             Self::Crosshair => matches!(
@@ -287,6 +300,121 @@ pub(crate) fn ensure_exec(existing: &[u8], prefix: &str, stem: &str) -> Vec<u8> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn weapon_controls_share_gameplay_scope_without_overwriting_sibling_settings() {
+        let original = b"// personal\ncl_autoreload 0\nhud_fastswitch 2\ncl_crosshair_scale 43\ntf_dingaling_volume 0.4\nbind r +reload\n";
+        let changed = merge_scope(
+            original,
+            b"cl_autoreload 1\nhud_fastswitch 2\ncl_crosshair_scale 10\ntf_dingaling_volume 1\n",
+            ManagedCfgScope::Gameplay,
+        )
+        .unwrap();
+        assert_eq!(changed, b"// personal\ncl_crosshair_scale 43\ntf_dingaling_volume 0.4\nbind r +reload\ncl_autoreload 1\nhud_fastswitch 2\n");
+
+        for scope in [ManagedCfgScope::Crosshair, ManagedCfgScope::Sounds] {
+            let changed = merge_scope(
+                original,
+                b"cl_autoreload 1\nhud_fastswitch 1\ncl_crosshair_scale 50\ntf_dingaling_volume 0.8\n",
+                scope,
+            )
+            .unwrap();
+            assert_eq!(scalar(&changed, "cl_autoreload").as_deref(), Some("0"));
+            assert_eq!(scalar(&changed, "hud_fastswitch").as_deref(), Some("2"));
+        }
+    }
+
+    #[test]
+    fn mouse_sensitivity_belongs_to_gameplay_and_keeps_its_exact_decimals() {
+        let original = b"sensitivity 3
+cl_crosshair_scale 43
+tf_dingaling_volume 0.4
+";
+        let changed = merge_scope(
+            original,
+            b"sensitivity 2.3456
+zoom_sensitivity_ratio 0.793471
+cl_crosshair_scale 10
+",
+            ManagedCfgScope::Gameplay,
+        )
+        .unwrap();
+        assert_eq!(scalar(&changed, "sensitivity").as_deref(), Some("2.3456"));
+        assert_eq!(
+            scalar(&changed, "zoom_sensitivity_ratio").as_deref(),
+            Some("0.793471")
+        );
+        assert_eq!(
+            scalar(&changed, "cl_crosshair_scale").as_deref(),
+            Some("43")
+        );
+        assert_eq!(
+            scalar(&changed, "tf_dingaling_volume").as_deref(),
+            Some("0.4")
+        );
+
+        // Crosshair and Sounds saves never rewrite the player's sensitivity.
+        for scope in [ManagedCfgScope::Crosshair, ManagedCfgScope::Sounds] {
+            let changed = merge_scope(
+                original,
+                b"sensitivity 9
+cl_crosshair_scale 50
+tf_dingaling_volume 0.8
+",
+                scope,
+            )
+            .unwrap();
+            assert_eq!(scalar(&changed, "sensitivity").as_deref(), Some("3"));
+        }
+    }
+
+    #[test]
+    fn viewmodel_lines_belong_to_the_viewmodels_scope_only() {
+        let original = b"fov_desired 90\nviewmodel_fov 70\nr_drawviewmodel 1\ntf_use_min_viewmodels 0\ncl_flipviewmodels 0\n";
+        let changed = merge_scope(
+            original,
+            b"fov_desired 75\nviewmodel_fov 54.5\nr_drawviewmodel 0\ntf_use_min_viewmodels 1\ncl_flipviewmodels 1\n",
+            ManagedCfgScope::Viewmodels,
+        )
+        .unwrap();
+        assert_eq!(scalar(&changed, "fov_desired").as_deref(), Some("90"));
+        assert_eq!(scalar(&changed, "viewmodel_fov").as_deref(), Some("54.5"));
+        assert_eq!(scalar(&changed, "r_drawviewmodel").as_deref(), Some("0"));
+        assert_eq!(
+            scalar(&changed, "tf_use_min_viewmodels").as_deref(),
+            Some("1")
+        );
+        assert_eq!(scalar(&changed, "cl_flipviewmodels").as_deref(), Some("1"));
+
+        // A Gameplay save never rewrites the viewmodel lines.
+        let changed = merge_scope(
+            original,
+            b"fov_desired 75\nviewmodel_fov 10\nr_drawviewmodel 0\n",
+            ManagedCfgScope::Gameplay,
+        )
+        .unwrap();
+        assert_eq!(scalar(&changed, "fov_desired").as_deref(), Some("75"));
+        assert_eq!(scalar(&changed, "viewmodel_fov").as_deref(), Some("70"));
+        assert_eq!(scalar(&changed, "r_drawviewmodel").as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn comfort_toggles_belong_to_gameplay_only() {
+        let original = b"tf_medigun_autoheal 0\nhud_combattext 1\nhud_combattext_batching 0\nhud_combattext_healing 1\n";
+        let incoming = b"tf_medigun_autoheal 1\nhud_combattext 0\nhud_combattext_batching 1\nhud_combattext_healing 0\n";
+        let changed = merge_scope(original, incoming, ManagedCfgScope::Gameplay).unwrap();
+        assert_eq!(changed, incoming);
+        // Crosshair and Sounds saves never rewrite them.
+        let sibling = b"tf_medigun_autoheal 1\nhud_combattext 0\ncl_crosshair_scale 50\ntf_dingaling_volume 0.8\n";
+        for scope in [ManagedCfgScope::Crosshair, ManagedCfgScope::Sounds] {
+            let changed = merge_scope(original, sibling, scope).unwrap();
+            assert_eq!(
+                scalar(&changed, "tf_medigun_autoheal").as_deref(),
+                Some("0")
+            );
+            assert_eq!(scalar(&changed, "hud_combattext").as_deref(), Some("1"));
+        }
+    }
 
     #[test]
     fn scoped_merge_preserves_other_commands_comments_and_quoted_separators() {

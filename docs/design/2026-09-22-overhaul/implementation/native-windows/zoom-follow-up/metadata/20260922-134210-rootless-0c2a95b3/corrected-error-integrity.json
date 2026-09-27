@@ -1,0 +1,73 @@
+{
+  "passed": true,
+  "checkedUtc": "2026-09-22T17:50:11.2354613Z",
+  "caseDirectory": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3",
+  "sourceCommit": "6ff64004c4366084d997dba25a9076f61f46fb71",
+  "executableSha256": "7D3BBA6B25B6FEAD1EB0CD1E63E34EFA93BE5E2F46974F355987F847BC53817D",
+  "appPid": 36372,
+  "appExitedUtc": "2026-09-22T17:45:51.4427203Z",
+  "expectedErrorMessage": "Could not read app settings: The process cannot access the file because it is being used by another process. (os error 32)",
+  "checks": {
+    "exactCandidateIdentity": true,
+    "unpackagedExplorerHelperAndApp": true,
+    "normalExit": true,
+    "recordedLockTargetsThisRootlessSettings": true,
+    "lockReleaseMatchesHelper": true,
+    "beforeAndFailureBytesExact": true,
+    "retryAndFinalBytesExact": true,
+    "failedPreferenceRemainedFalse": true,
+    "retryPersistedTrue": true,
+    "retainedRootsEmpty": true,
+    "retainedMotionSystem": true,
+    "noProfileLibraryCreated": true,
+    "correctedInlineErrorInCapturedUIA": true,
+    "correctedToastInCapturedUIA": true,
+    "noProfileLibraryWordingInErrorCapture": true,
+    "retryClearedErrorInCapturedUIA": true
+  },
+  "sourceFiles": {
+    "beforeFailure": {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\settings-before-failure.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "bytes": 92,
+      "tf2Root": "",
+      "startupUpdates": false,
+      "motion": "system"
+    },
+    "afterFailure": {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\settings-after-failure.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "bytes": 92,
+      "tf2Root": "",
+      "startupUpdates": false,
+      "motion": "system"
+    },
+    "afterRetry": {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\settings-after-retry.json",
+      "sourceSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "bytes": 120,
+      "tf2Root": "",
+      "startupUpdates": true,
+      "motion": "system"
+    },
+    "afterClose": {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-134210-rootless-0c2a95b3\\roaming\\execs\\settings.json",
+      "sourceSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "bytes": 120,
+      "tf2Root": "",
+      "startupUpdates": true,
+      "motion": "system"
+    }
+  },
+  "capturedText": [
+    {
+      "file": "10-corrected-settings-error.uia.txt",
+      "normalizedArchiveSha256": "0423ABBB55B8E2FDBA6A6D89E0612C1A4D825898600DB4AB25F8033BE61BCA24"
+    },
+    {
+      "file": "11-corrected-error-retry-succeeded.uia.txt",
+      "normalizedArchiveSha256": "6CE78E2DBE0F315B337328401C6232616FEAD8994112046051058BC35FE8D9E1"
+    }
+  ],
+  "note": "Read-only verification of retained fixture bytes, session records and normalized captured UIA text. Source hashes identify original settings bytes before archive normalization. Scope is corrected error copy, failed-write preservation, Retry and normal exit; zoom, restart and other native cases were not repeated."
+}

@@ -33,5 +33,12 @@
     "archiveSha256": "274a3724686145036505eba329a45fc02ef91558335487be08f881f34a3123cb",
     "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/flawhud.json",
     "schemaSha256": "18bbc2d67b9a80ea626f53ae3875aebc83748be682b654bb2f4843d2a2d33d1e"
+  },
+  {
+    "id": "eve-plus",
+    "archiveUrl": "https://codeload.github.com/RoseyLemonz/eve-plus/legacy.zip/2ca73c1227276fa0f6234b0ead9ec4b92ce30d09",
+    "archiveSha256": "3bc50bda8d20ba3ea5d3db16bcf8d9f87ea9a23f9057c0499113af136109baec",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/eve-plus.json",
+    "schemaSha256": "8e2e37b9719ff6cd10da02f82aee97cebe22114d63cbcaf8c56c6308a58287e8"
   }
 ]

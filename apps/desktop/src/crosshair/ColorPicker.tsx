@@ -7,9 +7,11 @@ import type { CrosshairColor } from "../lib/crosshair-ui";
 export function ColorPicker({
   color,
   onChange,
+  compact = false,
 }: {
   color: CrosshairColor;
   onChange: (color: CrosshairColor) => void;
+  compact?: boolean;
 }) {
   const id = useId();
   const [lastHue, setLastHue] = useState(0);
@@ -18,6 +20,7 @@ export function ColorPicker({
   const hue = hsv.s === 0 ? lastHue : hsv.h;
   const hex = rgbToHex(...color);
   const invalid = entry !== null && hexToRgb(entry) === null;
+  const [expanded, setExpanded] = useState(!compact);
   function change(h: number, s: number, v: number) {
     setLastHue(h);
     setEntry(null);
@@ -26,55 +29,14 @@ export function ColorPicker({
   return (
     <fieldset className="min-w-0 max-w-80">
       <legend className="t-row mb-3">Color</legend>
-      <fieldset
-        aria-label="Color field"
-        className="relative h-28 touch-none rounded-md border border-edge-strong"
-        style={{
-          background: `linear-gradient(to top, black, transparent), linear-gradient(to right, white, transparent), hsl(${hue} 100% 50%)`,
-        }}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          const rect = event.currentTarget.getBoundingClientRect();
-          change(
-            hue,
-            (event.clientX - rect.left) / rect.width,
-            1 - (event.clientY - rect.top) / rect.height,
-          );
-        }}
-        onPointerMove={(event) => {
-          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-          const rect = event.currentTarget.getBoundingClientRect();
-          change(
-            hue,
-            (event.clientX - rect.left) / rect.width,
-            1 - (event.clientY - rect.top) / rect.height,
-          );
-        }}
-      >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
-          style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: hex }}
-        />
-      </fieldset>
-      <label className="sr-only" htmlFor={`${id}-h`}>
-        Hue
-      </label>
-      <input
-        id={`${id}-h`}
-        type="range"
-        min={0}
-        max={359}
-        value={Math.round(hue)}
-        onChange={(e) => change(Number(e.target.value), hsv.s || 1, hsv.v || 1)}
-        className="range mt-3 w-full"
-        style={{
-          background: "linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red)",
-        }}
-      />
       <div className="mt-3 flex items-center gap-3">
-        <span
-          aria-hidden="true"
+        <button
+          type="button"
+          aria-label="Color picker"
+          title={expanded ? "Close color picker" : "Open color picker"}
+          aria-expanded={expanded}
+          aria-controls={`${id}-picker`}
+          onClick={() => setExpanded((current) => !current)}
           className="size-8 shrink-0 rounded-md border border-edge-strong"
           style={{ background: hex }}
         />
@@ -85,7 +47,7 @@ export function ColorPicker({
           id={`${id}-hex`}
           aria-invalid={invalid}
           aria-describedby={invalid ? `${id}-error` : undefined}
-          className="input min-w-0 w-28 font-mono"
+          className="input min-w-0 w-28 tnum"
           value={entry ?? hex}
           spellCheck={false}
           maxLength={7}
@@ -100,6 +62,54 @@ export function ColorPicker({
           }}
         />
         <span className="t-meta tnum">{color.join(", ")}</span>
+      </div>
+      <div id={`${id}-picker`} hidden={!expanded}>
+        <fieldset
+          aria-label="Color field"
+          className="relative h-28 touch-none rounded-md border border-edge-strong"
+          style={{
+            background: `linear-gradient(to top, black, transparent), linear-gradient(to right, white, transparent), hsl(${hue} 100% 50%)`,
+          }}
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId);
+            const rect = event.currentTarget.getBoundingClientRect();
+            change(
+              hue,
+              (event.clientX - rect.left) / rect.width,
+              1 - (event.clientY - rect.top) / rect.height,
+            );
+          }}
+          onPointerMove={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            change(
+              hue,
+              (event.clientX - rect.left) / rect.width,
+              1 - (event.clientY - rect.top) / rect.height,
+            );
+          }}
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
+            style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, background: hex }}
+          />
+        </fieldset>
+        <label className="sr-only" htmlFor={`${id}-h`}>
+          Hue
+        </label>
+        <input
+          id={`${id}-h`}
+          type="range"
+          min={0}
+          max={359}
+          value={Math.round(hue)}
+          onChange={(e) => change(Number(e.target.value), hsv.s || 1, hsv.v || 1)}
+          className="range mt-3 w-full"
+          style={{
+            background: "linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red)",
+          }}
+        />
       </div>
       {invalid ? (
         <p id={`${id}-error`} className="t-meta mt-2">

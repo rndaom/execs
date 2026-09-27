@@ -3,10 +3,12 @@ import {
   COMFIG_MODULES,
   COMFIG_PRESETS,
   comfigModuleById,
-  visibleComfigPresets,
+  comfigPresetLabel,
+  oldComfigPresetMessage,
 } from "./comfig-catalog";
 import {
   addonsFromFilePaths,
+  canUseTransparentViewmodels,
   defaultComfigState,
   inferComfigState,
   setModuleLevel,
@@ -21,6 +23,11 @@ describe("comfig module overrides", () => {
 });
 
 describe("comfig addons", () => {
+  it("allows the transparent addon only in a Comfig profile", () => {
+    expect(canUseTransparentViewmodels("comfig")).toBe(true);
+    expect(canUseTransparentViewmodels("vanilla")).toBe(false);
+    expect(canUseTransparentViewmodels(null)).toBe(false);
+  });
   it("toggles official addons", () => {
     expect(toggleComfigAddon([], "no-tutorial")).toEqual(["no-tutorial"]);
     expect(toggleComfigAddon(["no-tutorial"], "no-tutorial")).toEqual([]);
@@ -72,17 +79,21 @@ describe("comfig catalog", () => {
 });
 
 describe("comfig preset catalog", () => {
-  it("shows the four canonical presets until the rest are disclosed", () => {
-    expect(visibleComfigPresets("medium", false).map((preset) => preset.id)).toEqual([
+  it("offers only current mastercomfig presets", () => {
+    expect(COMFIG_PRESETS.map((preset) => preset.id)).toEqual([
       "ultra",
       "high",
       "medium",
       "low",
+      "none",
     ]);
-    expect(visibleComfigPresets("medium", true)).toEqual(COMFIG_PRESETS);
+    expect(comfigPresetLabel("none")).toBe("Custom");
   });
 
-  it("keeps the list open when the selection is not one of the four", () => {
-    expect(visibleComfigPresets("very_low", false)).toEqual(COMFIG_PRESETS);
+  it("explains older saved preset values without offering them anew", () => {
+    expect(comfigPresetLabel("medium_high")).toBe("Medium high");
+    expect(oldComfigPresetMessage("medium_high")).toContain("no longer supports");
+    expect(oldComfigPresetMessage("very_low")).toContain("Destitute");
+    expect(oldComfigPresetMessage("medium")).toBeNull();
   });
 });

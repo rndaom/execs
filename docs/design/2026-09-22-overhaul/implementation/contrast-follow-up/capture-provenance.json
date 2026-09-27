@@ -1,0 +1,73 @@
+{
+  "captures": [
+    {
+      "file": "01-hud-ranking.png",
+      "format": "JPEG",
+      "width": 1920,
+      "height": 889,
+      "sha256": "fc7d483d673ca59345544ddfb88d0dd5664132467ff8d8cf9a145f2242892707"
+    },
+    {
+      "file": "02-hud-credits.png",
+      "format": "JPEG",
+      "width": 1920,
+      "height": 889,
+      "sha256": "5430657b4be90958301f0190fed2e697494fc1a4cd8fffaab26adbe8319e7c18"
+    },
+    {
+      "file": "03-hud-caption.png",
+      "format": "JPEG",
+      "width": 1920,
+      "height": 889,
+      "sha256": "4f53e81e511318f4c5e75ac3266ac4ee26e9cd3f01d57b5904c9751066df3179"
+    },
+    {
+      "file": "04-files-problems.png",
+      "format": "JPEG",
+      "width": 1920,
+      "height": 889,
+      "sha256": "7de0067ed53f57e2b84fb7d99fdc483b5a4e6ade2793678618d189579bfb5f79"
+    },
+    {
+      "file": "05-import-warning-details.png",
+      "format": "JPEG",
+      "width": 1920,
+      "height": 889,
+      "sha256": "87cafabae27d216122a4d2e055d566f90bd0f2300d91db6e9e39570c276d1750"
+    },
+    {
+      "file": "06-app-settings.png",
+      "format": "JPEG",
+      "width": 1920,
+      "height": 889,
+      "sha256": "a67c8396a8538e98063ab21684f891d7d85eab2bc42ea440b9f9d38a3a528793"
+    },
+    {
+      "file": "07-running-deferred.png",
+      "format": "JPEG",
+      "width": 1920,
+      "height": 889,
+      "sha256": "caaf2c589b3f7de02543e37b982623b15f0a917dcf03ddc6de9c10a6b3854372"
+    },
+    {
+      "file": "08-app-settings-failure.png",
+      "format": "JPEG",
+      "width": 1920,
+      "height": 889,
+      "sha256": "27ed791d8ac7ec3f6c41875877d448c481024f35331390de89b9ecd6c47f5edd"
+    },
+    {
+      "file": "09-app-settings-retry.png",
+      "format": "JPEG",
+      "width": 1920,
+      "height": 889,
+      "sha256": "5217947f5886f304592ada6f71b4eba26aa3d12b3da6b5c0db53770a37219a39"
+    }
+  ],
+  "backgroundSpotCheck": {
+    "file": "07-running-deferred.png",
+    "point": [100, 20],
+    "rgb": [40, 36, 25],
+    "purpose": "Clear text-free interior of the translucent running banner; JPEG capture, so allow small encoding differences."
+  }
+}

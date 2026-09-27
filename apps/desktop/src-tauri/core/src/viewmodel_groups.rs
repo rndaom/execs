@@ -1,863 +1,262 @@
-//! Yttrium-style viewmodel visibility groups. Generated from the
-//! CompVMInstaller source (checkbox -> SMD sequence files) with two upstream
-//! fixes: the Wrangler group installs correctly and
-//! dragons_fury_inspect_end is included. Do not hand-edit file lists.
+//! Independent, provisional group candidates from installed Viewmodels links.
+//!
+//! Equal direct local-animation sets are grouped within a class. Shared local
+//! animations remain visible as conflicts: choosing one candidate may affect
+//! another. These are not yet retail-verified selectable builder groups.
 
-pub struct ViewmodelGroup {
-    pub id: &'static str,
-    pub class_id: &'static str,
-    pub zip_folder: &'static str,
-    pub label: &'static str,
-    pub files: &'static [&'static str],
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::hash::sha256_hex;
+use crate::viewmodel_graph::{ActivityRoute, StockActivityGraph};
+use crate::viewmodel_source::StockSourceError;
+
+pub(crate) const MAX_GROUPS: usize = 1024;
+pub(crate) const MAX_ANIMATIONS_PER_GROUP: usize = 256;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViewmodelGroupCandidate {
+    /// Content identity, independent of item ordering and the retired table.
+    pub id: String,
+    pub class: String,
+    pub item_ids: Vec<u32>,
+    pub animations: Vec<String>,
+    /// Inspect routes form their own groups, separate from the weapon's
+    /// ordinary actions, so players can choose them independently.
+    pub inspect: bool,
+    /// Groups in the same class that use at least one of these animations.
+    pub overlaps: Vec<String>,
+    /// At least one item's RED and BLU direct local-animation sets differ.
+    pub team_variants_differ: bool,
 }
 
-pub const VIEWMODEL_GROUPS: &[ViewmodelGroup] = &[
-    ViewmodelGroup {
-        id: "scout/scatterguns",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Scatterguns",
-        files: &[
-            "sg_draw",
-            "sg_idle",
-            "sg_fire",
-            "sg_reload_start",
-            "sg_reload_loop",
-            "sg_reload_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "scout/double-barrels",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Double Barrels",
-        files: &["db_draw", "db_idle", "db_fire", "db_reload"],
-    },
-    ViewmodelGroup {
-        id: "scout/shortstop",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Shortstop",
-        files: &["ss_draw", "ss_idle", "ss_fire", "ss_reload"],
-    },
-    ViewmodelGroup {
-        id: "scout/shortstop-push",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Shortstop Push",
-        files: &["ss_alt_fire"],
-    },
-    ViewmodelGroup {
-        id: "scout/primary-inspect",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Primary Inspect",
-        files: &[
-            "primary_inspect_start",
-            "primary_inspect_idle",
-            "primary_inspect_end",
-            "primary_alt1_inspect_end",
-            "primary_alt1_inspect_idle",
-            "primary_alt1_inspect_start",
-        ],
-    },
-    ViewmodelGroup {
-        id: "scout/pistols",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Pistols",
-        files: &["p_draw", "p_idle", "p_fire", "p_reload"],
-    },
-    ViewmodelGroup {
-        id: "scout/throwables",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Throwables",
-        files: &["throw_draw", "throw_idle", "throw_fire"],
-    },
-    ViewmodelGroup {
-        id: "scout/drinks",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Drinks",
-        files: &["ed_draw", "ed_idle", "ed_throw"],
-    },
-    ViewmodelGroup {
-        id: "scout/secondary-inspect",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Secondary Inspect",
-        files: &[
-            "secondary_inspect_start",
-            "secondary_inspect_idle",
-            "secondary_inspect_end",
-            "secondary_alt1_inspect_end",
-            "secondary_alt1_inspect_idle",
-            "secondary_alt1_inspect_start",
-        ],
-    },
-    ViewmodelGroup {
-        id: "scout/melee",
-        class_id: "scout",
-        zip_folder: "scout",
-        label: "Melee",
-        files: &[
-            "b_idle",
-            "b_draw",
-            "b_swing_a",
-            "b_swing_b",
-            "b_swing_c",
-            "b_throw",
-            "wb_draw",
-            "wb_idle",
-            "wb_swing_a",
-            "wb_swing_b",
-            "wb_swing_c",
-            "wb_fire",
-            "wb_grab",
-            "melee_allclass_idle",
-            "melee_allclass_draw",
-            "melee_allclass_swing",
-        ],
-    },
-    ViewmodelGroup {
-        id: "sniper/rifles",
-        class_id: "sniper",
-        zip_folder: "sniper",
-        label: "Rifles",
-        files: &["draw", "fire", "idle"],
-    },
-    ViewmodelGroup {
-        id: "sniper/huntsman",
-        class_id: "sniper",
-        zip_folder: "sniper",
-        label: "Huntsman",
-        files: &[
-            "bw_idle",
-            "bw_draw",
-            "bw_charge",
-            "bw_idle2",
-            "bw_fire",
-            "bw_noammo",
-            "bw_idle3",
-            "bw_shake",
-            "bw_dryfire",
-        ],
-    },
-    ViewmodelGroup {
-        id: "sniper/primary-inspect",
-        class_id: "sniper",
-        zip_folder: "sniper",
-        label: "Primary Inspect",
-        files: &[
-            "primary_inspect_start",
-            "primary_inspect_idle",
-            "primary_inspect_end",
-            "primary_alt1_inspect_start",
-            "primary_alt1_inspect_idle",
-            "primary_alt1_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "sniper/smgs",
-        class_id: "sniper",
-        zip_folder: "sniper",
-        label: "SMGs",
-        files: &["smg_draw", "smg_idle", "smg_fire", "smg_reload"],
-    },
-    ViewmodelGroup {
-        id: "sniper/throwables",
-        class_id: "sniper",
-        zip_folder: "sniper",
-        label: "Throwables",
-        files: &["pj_draw", "pj_idle", "pj_fire"],
-    },
-    ViewmodelGroup {
-        id: "sniper/secondary-inspect",
-        class_id: "sniper",
-        zip_folder: "sniper",
-        label: "Secondary Inspect",
-        files: &[
-            "secondary_inspect_start",
-            "secondary_inspect_idle",
-            "secondary_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "sniper/melee",
-        class_id: "sniper",
-        zip_folder: "sniper",
-        label: "Melee",
-        files: &[
-            "m_idle",
-            "m_draw",
-            "m_swing_a",
-            "m_swing_b",
-            "m_swing_c",
-            "melee_allclass_idle",
-            "melee_allclass_draw",
-            "melee_allclass_swing_a",
-            "melee_allclass_swing_b",
-            "melee_allclass_swing_c",
-        ],
-    },
-    ViewmodelGroup {
-        id: "soldier/rockets",
-        class_id: "soldier",
-        zip_folder: "soldier",
-        label: "Rockets",
-        files: &[
-            "dh_idle",
-            "dh_fire",
-            "dh_draw",
-            "dh_reload_start",
-            "dh_reload_loop",
-            "dh_reload_finish",
-            "dh_reload_start_alt",
-            "dh_reload_loop_alt",
-            "dh_reload_finish_alt",
-            "mangler_fire_super",
-            "mangler_reload_start",
-            "mangler_reload_loop",
-            "mangler_reload_finish",
-        ],
-    },
-    ViewmodelGroup {
-        id: "soldier/primary-inspect",
-        class_id: "soldier",
-        zip_folder: "soldier",
-        label: "Primary Inspect",
-        files: &[
-            "primary_inspect_start",
-            "primary_inspect_idle",
-            "primary_inspect_end",
-            "primary_alt1_inspect_start",
-            "primary_alt1_inspect_idle",
-            "primary_alt1_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "soldier/shotguns",
-        class_id: "soldier",
-        zip_folder: "soldier",
-        label: "Shotguns",
-        files: &[
-            "draw",
-            "idle",
-            "fire",
-            "reload_start",
-            "reload_loop",
-            "reload_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "soldier/banners",
-        class_id: "soldier",
-        zip_folder: "soldier",
-        label: "Banners",
-        files: &[
-            "bb_draw",
-            "bb_idle",
-            "bb_fire_red",
-            "bb_fire_blue",
-            "wh_draw",
-            "wh_idle",
-            "wh_fire_red",
-            "wh_fire_blue",
-        ],
-    },
-    ViewmodelGroup {
-        id: "soldier/bison",
-        class_id: "soldier",
-        zip_folder: "soldier",
-        label: "Bison",
-        files: &[
-            "bison_draw",
-            "bison_idle",
-            "bison_fire",
-            "bison_reload_start",
-            "bison_reload_loop",
-            "bison_reload_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "soldier/secondary-inspect",
-        class_id: "soldier",
-        zip_folder: "soldier",
-        label: "Secondary Inspect",
-        files: &[
-            "secondary_inspect_start",
-            "secondary_inspect_idle",
-            "secondary_inspect_end",
-            "secondary_alt1_inspect_start",
-            "secondary_alt1_inspect_idle",
-            "secondary_alt1_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "soldier/melee",
-        class_id: "soldier",
-        zip_folder: "soldier",
-        label: "Melee",
-        files: &[
-            "s_draw",
-            "s_idle",
-            "s_swing_a",
-            "s_swing_b",
-            "s_swing_c",
-            "melee_allclass_draw",
-            "melee_allclass_idle",
-            "melee_allclass_swing",
-        ],
-    },
-    ViewmodelGroup {
-        id: "demoman/grenades",
-        class_id: "demoman",
-        zip_folder: "demo",
-        label: "Grenades",
-        files: &[
-            "g_draw",
-            "g_idle",
-            "g_fire",
-            "g_auto_fire",
-            "g_reload_start",
-            "g_reload_loop",
-            "g_reload_end",
-            "loch_reload_start",
-            "loch_reload_loop",
-            "loch_reload_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "demoman/primary-inspect",
-        class_id: "demoman",
-        zip_folder: "demo",
-        label: "Primary Inspect",
-        files: &[
-            "primary_inspect_start",
-            "primary_inspect_idle",
-            "primary_inspect_end",
-            "primary_alt1_inspect_start",
-            "primary_alt1_inspect_idle",
-            "primary_alt1_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "demoman/stickybombs",
-        class_id: "demoman",
-        zip_folder: "demo",
-        label: "Stickybombs",
-        files: &[
-            "sb_idle",
-            "sb_fire",
-            "sb_draw",
-            "sb_autofire",
-            "sb_reload_start",
-            "sb_reload_loop",
-            "sb_reload_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "demoman/secondary-inspect",
-        class_id: "demoman",
-        zip_folder: "demo",
-        label: "Secondary Inspect",
-        files: &[
-            "secondary_inspect_start",
-            "secondary_inspect_idle",
-            "secondary_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "demoman/melee",
-        class_id: "demoman",
-        zip_folder: "demo",
-        label: "Melee",
-        files: &[
-            "b_draw",
-            "b_idle",
-            "b_swing_a",
-            "b_swing_b",
-            "b_swing_c",
-            "melee_allclass_draw",
-            "melee_allclass_idle",
-            "melee_allclass_swing_a",
-            "melee_allclass_swing_b",
-            "melee_allclass_swing_c",
-            "cm_draw",
-            "cm_swing_a",
-            "cm_swing_b",
-            "cm_swing_c",
-        ],
-    },
-    ViewmodelGroup {
-        id: "medic/primaries",
-        class_id: "medic",
-        zip_folder: "medic",
-        label: "Primaries",
-        files: &["sg_draw", "sg_idle", "sg_fire", "sg_reload"],
-    },
-    ViewmodelGroup {
-        id: "medic/primary-inspect",
-        class_id: "medic",
-        zip_folder: "medic",
-        label: "Primary Inspect",
-        files: &[
-            "primary_inspect_start",
-            "primary_inspect_idle",
-            "primary_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "medic/mediguns",
-        class_id: "medic",
-        zip_folder: "medic",
-        label: "Mediguns",
-        files: &["draw", "idle", "fire_on", "fire_loop", "fire_off"],
-    },
-    ViewmodelGroup {
-        id: "medic/secondary-inspect",
-        class_id: "medic",
-        zip_folder: "medic",
-        label: "Secondary Inspect",
-        files: &[
-            "secondary_inspect_start",
-            "secondary_inspect_idle",
-            "secondary_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "medic/melee",
-        class_id: "medic",
-        zip_folder: "medic",
-        label: "Melee",
-        files: &[
-            "bs_draw",
-            "bs_idle",
-            "bs_swing_a",
-            "bs_swing_b",
-            "bs_swing_c",
-            "melee_allclass_draw",
-            "melee_allclass_idle",
-            "melee_allclass_swing",
-        ],
-    },
-    ViewmodelGroup {
-        id: "heavy/miniguns",
-        class_id: "heavy",
-        zip_folder: "heavy",
-        label: "Miniguns",
-        files: &[
-            "m_idle",
-            "m_fire",
-            "m_draw",
-            "m_spool_up",
-            "m_spool_down",
-            "m_spool_idle",
-        ],
-    },
-    ViewmodelGroup {
-        id: "heavy/primary-inspect",
-        class_id: "heavy",
-        zip_folder: "heavy",
-        label: "Primary Inspect",
-        files: &[
-            "primary_inspect_start",
-            "primary_inspect_idle",
-            "primary_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "heavy/shotguns",
-        class_id: "heavy",
-        zip_folder: "heavy",
-        label: "Shotguns",
-        files: &[
-            "draw",
-            "idle",
-            "fire",
-            "reload_start",
-            "reload_loop",
-            "reload_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "heavy/consumables",
-        class_id: "heavy",
-        zip_folder: "heavy",
-        label: "Consumables",
-        files: &["sw_draw", "sw_idle"],
-    },
-    ViewmodelGroup {
-        id: "heavy/secondary-inspect",
-        class_id: "heavy",
-        zip_folder: "heavy",
-        label: "Secondary Inspect",
-        files: &[
-            "secondary_inspect_start",
-            "secondary_inspect_idle",
-            "secondary_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "heavy/melee",
-        class_id: "heavy",
-        zip_folder: "heavy",
-        label: "Melee",
-        files: &[
-            "f_swing_left",
-            "f_swing_right",
-            "f_swing_crit",
-            "f_idle",
-            "f_draw",
-            "bg_swing_left",
-            "bg_swing_right",
-            "bg_swing_crit",
-            "bg_idle",
-            "bg_draw",
-            "melee_allclass_draw",
-            "melee_allclass_idle",
-            "melee_allclass_swing",
-        ],
-    },
-    ViewmodelGroup {
-        id: "pyro/flamethrowers",
-        class_id: "pyro",
-        zip_folder: "pyro",
-        label: "Flamethrowers",
-        files: &[
-            "ft_idle",
-            "ft_fire",
-            "ft_draw",
-            "ft_alt_fire",
-            "df_idle",
-            "df_fire",
-        ],
-    },
-    ViewmodelGroup {
-        id: "pyro/primary-inspect",
-        class_id: "pyro",
-        zip_folder: "pyro",
-        label: "Primary Inspect",
-        files: &[
-            "primary_inspect_start",
-            "primary_inspect_idle",
-            "primary_inspect_end",
-            "primary_alt1_inspect_start",
-            "primary_alt1_inspect_idle",
-            "primary_alt1_inspect_end",
-            "dragons_fury_inspect_start",
-            "dragons_fury_inspect_idle",
-            "dragons_fury_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "pyro/shotguns",
-        class_id: "pyro",
-        zip_folder: "pyro",
-        label: "Shotguns",
-        files: &[
-            "draw",
-            "idle",
-            "fire",
-            "reload_start",
-            "reload_loop",
-            "reload_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "pyro/flare-guns",
-        class_id: "pyro",
-        zip_folder: "pyro",
-        label: "Flare Guns",
-        files: &[
-            "fg_draw", "fg_idle", "fg_fire", "mm_draw", "mm_idle", "mm_fire",
-        ],
-    },
-    ViewmodelGroup {
-        id: "pyro/thermal-thruster",
-        class_id: "pyro",
-        zip_folder: "pyro",
-        label: "Thermal Thruster",
-        files: &[
-            "rocketpack_draw",
-            "rocketpack_holster",
-            "rocketpack_idle",
-            "rocketpack_idle2",
-        ],
-    },
-    ViewmodelGroup {
-        id: "pyro/gas-passer",
-        class_id: "pyro",
-        zip_folder: "pyro",
-        label: "Gas Passer",
-        files: &["gascan_draw", "gascan_idle", "gascan_fire"],
-    },
-    ViewmodelGroup {
-        id: "pyro/secondary-inspect",
-        class_id: "pyro",
-        zip_folder: "pyro",
-        label: "Secondary Inspect",
-        files: &[
-            "secondary_inspect_start",
-            "secondary_inspect_idle",
-            "secondary_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "pyro/melee",
-        class_id: "pyro",
-        zip_folder: "pyro",
-        label: "Melee",
-        files: &[
-            "fa_idle",
-            "fa_draw",
-            "fa_swing_a",
-            "fa_swing_b",
-            "fa_swing_c",
-            "slap",
-            "slap_draw",
-            "slap_idle",
-            "slap2",
-            "slap3",
-            "slap_idle2",
-            "melee_allclass_draw",
-            "melee_allclass_idle",
-            "melee_allclass_swing",
-        ],
-    },
-    ViewmodelGroup {
-        id: "spy/revolvers",
-        class_id: "spy",
-        zip_folder: "spy",
-        label: "Revolvers",
-        files: &["draw", "idle", "fire", "reload", "reload2"],
-    },
-    ViewmodelGroup {
-        id: "spy/primary-inspect",
-        class_id: "spy",
-        zip_folder: "spy",
-        label: "Primary Inspect",
-        files: &[
-            "secondary_inspect_start",
-            "secondary_inspect_idle",
-            "secondary_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "spy/sappers",
-        class_id: "spy",
-        zip_folder: "spy",
-        label: "Sappers",
-        files: &[
-            "c_sapper_draw",
-            "c_sapper_drawDeployed",
-            "c_sapper_idle",
-            "c_sd_sapper_draw",
-            "c_sd_sapper_idle",
-        ],
-    },
-    ViewmodelGroup {
-        id: "spy/melee",
-        class_id: "spy",
-        zip_folder: "spy",
-        label: "Melee",
-        files: &[
-            "eternal_draw",
-            "eternal_idle",
-            "eternal_stab_a",
-            "eternal_stab_b",
-            "eternal_stab_c",
-            "eternal_backstab",
-            "eternal_backstab_up",
-            "eternal_backstab_down",
-            "eternal_backstab_idle",
-            "eternal_stun",
-            "melee_allclass_draw",
-            "melee_allclass_idle",
-            "melee_allclass_swing",
-            "acr_draw",
-            "acr_idle",
-            "acr_stab_a",
-            "acr_stab_b",
-            "acr_stab_c",
-            "acr_backstab",
-            "acr_backstab_up",
-            "acr_backstab_down",
-            "acr_backstab_idle",
-            "acr_stun",
-            "knife_draw",
-            "knife_idle",
-            "knife_stab_a",
-            "knife_stab_b",
-            "knife_stab_c",
-            "knife_backstab",
-            "knife_backstab_up",
-            "knife_backstab_down",
-            "knife_backstab_idle",
-            "knife_stun",
-        ],
-    },
-    ViewmodelGroup {
-        id: "spy/melee-inspect",
-        class_id: "spy",
-        zip_folder: "spy",
-        label: "Melee Inspect",
-        files: &[
-            "melee_inspect_start",
-            "melee_inspect_idle",
-            "melee_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "engineer/shotguns",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Shotguns",
-        files: &[
-            "fj_draw",
-            "fj_idle",
-            "fj_fire",
-            "fj_fire_alt",
-            "fj_reload_start",
-            "fj_reload_loop",
-            "fj_reload_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "engineer/pomson",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Pomson",
-        files: &[
-            "pomson_draw",
-            "pomson_idle",
-            "pomson_fire",
-            "pomson_reload_start",
-            "pomson_reload_loop",
-            "pomson_reload_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "engineer/primary-inspect",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Primary Inspect",
-        files: &[
-            "primary_inspect_start",
-            "primary_inspect_idle",
-            "primary_inspect_end",
-            "primary_alt1_inspect_start",
-            "primary_alt1_inspect_idle",
-            "primary_alt1_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "engineer/pistols",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Pistols",
-        files: &["pstl_draw", "pstl_idle", "pstl_fire", "pstl_reload"],
-    },
-    ViewmodelGroup {
-        id: "engineer/wrangler",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Wrangler",
-        files: &[
-            "wgl_draw",
-            "wgl_idle",
-            "wgl_reload_start",
-            "wgl_reload_loop",
-            "wgl_reload_end",
-            "wgl_idle_rare",
-        ],
-    },
-    ViewmodelGroup {
-        id: "engineer/secondary-inspect",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Secondary Inspect",
-        files: &[
-            "secondary_inspect_start",
-            "secondary_inspect_idle",
-            "secondary_inspect_end",
-            "secondary_alt1_inspect_start",
-            "secondary_alt1_inspect_idle",
-            "secondary_alt1_inspect_end",
-            "secondary_alt2_inspect_start",
-            "secondary_alt2_inspect_idle",
-            "secondary_alt2_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "engineer/wrenches",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Wrenches",
-        files: &[
-            "pdq_idle_tap",
-            "pdq_draw",
-            "pdq_swing_a",
-            "pdq_swing_b",
-            "pdq_swing_c",
-            "spk_idle_tap",
-            "spk_draw",
-            "spk_swing_a",
-            "spk_swing_b",
-            "spk_swing_c",
-            "melee_allclass_idle",
-            "melee_allclass_draw",
-            "melee_allclass_swing",
-        ],
-    },
-    ViewmodelGroup {
-        id: "engineer/gunslinger",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Gunslinger",
-        files: &[
-            "gun_idle",
-            "gun_draw",
-            "gun_swing_a",
-            "gun_swing_B",
-            "gun_idle_rare",
-        ],
-    },
-    ViewmodelGroup {
-        id: "engineer/melee-inspect",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Melee Inspect",
-        files: &[
-            "melee_inspect_start",
-            "melee_inspect_idle",
-            "melee_inspect_end",
-        ],
-    },
-    ViewmodelGroup {
-        id: "engineer/pda",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "PDA",
-        files: &["pda_idle", "pda_draw", "bld_idle", "bld_draw"],
-    },
-    ViewmodelGroup {
-        id: "engineer/toolbox",
-        class_id: "engineer",
-        zip_folder: "engineer",
-        label: "Toolbox",
-        files: &["box_idle", "box_draw"],
-    },
-];
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViewmodelGroupCandidates {
+    pub patch_version: String,
+    pub groups: Vec<ViewmodelGroupCandidate>,
+    /// Shared-hands item/class pairs without a source-backed direct sequence.
+    pub unresolved_items: Vec<(String, u32)>,
+}
 
-/// Yttrium force-hides the Original's animations whenever any Soldier group
-/// is hidden (leaving them stock while others are hidden glitches in game).
-pub const SOLDIER_FORCED_FILES: &[&str] = &[
-    "bet_idle",
-    "bet_fire",
-    "bet_draw",
-    "bet_reload_start",
-    "bet_reload_loop",
-    "bet_reload_finish",
-];
+pub(crate) fn group_id(class: &str, inspect: bool, animations: &[String]) -> String {
+    let mut identity = Vec::new();
+    identity.extend_from_slice(class.as_bytes());
+    identity.push(0);
+    // Ordinary weapon groups keep their earlier identity.
+    if inspect {
+        identity.extend_from_slice(b"inspect");
+        identity.push(0);
+    }
+    for animation in animations {
+        identity.extend_from_slice(animation.as_bytes());
+        identity.push(0);
+    }
+    format!("{class}/{}", sha256_hex(&identity))
+}
+
+/// Cluster item/class candidates by their direct local-animation names.
+/// Inspect routes cluster separately from ordinary weapon actions.
+/// Role-identity fallbacks are omitted until runtime routing is verified.
+/// Repeated sequence blend references reduce to one animation name here,
+/// while the source graph keeps every blend reference for the eventual build.
+pub fn derive_group_candidates(
+    graph: &StockActivityGraph,
+) -> Result<ViewmodelGroupCandidates, StockSourceError> {
+    type Visuals = BTreeMap<&'static str, BTreeSet<String>>;
+    // Index 0 holds ordinary weapon actions and index 1 holds inspect routes.
+    let mut by_item = BTreeMap::<(String, u32), [Visuals; 2]>::new();
+    for edge in &graph.edges {
+        let kinds = by_item
+            .entry((edge.class.clone(), edge.item_id))
+            .or_default();
+        if edge.route == ActivityRoute::RoleIdentity {
+            continue;
+        }
+        let team = kinds[usize::from(edge.route == ActivityRoute::Inspect)]
+            .entry(edge.visual)
+            .or_default();
+        for sequence in &edge.sequences {
+            team.extend(sequence.animations.iter().cloned());
+            if team.len() > MAX_ANIMATIONS_PER_GROUP {
+                return Err(StockSourceError(format!(
+                    "item {} has too many Viewmodels animation candidates",
+                    edge.item_id
+                )));
+            }
+        }
+    }
+
+    let mut clusters = BTreeMap::<(String, bool, Vec<String>), (BTreeSet<u32>, bool)>::new();
+    let mut unresolved_items = Vec::new();
+    for ((class, item_id), kinds) in by_item {
+        let mut resolved = false;
+        for (inspect, visuals) in [false, true].into_iter().zip(kinds) {
+            let team_variants_differ = visuals.get("red") != visuals.get("blu");
+            let animations: Vec<String> = visuals
+                .into_values()
+                .flatten()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            if animations.is_empty() {
+                continue;
+            }
+            resolved = true;
+            let cluster = clusters
+                .entry((class.clone(), inspect, animations))
+                .or_default();
+            cluster.0.insert(item_id);
+            cluster.1 |= team_variants_differ;
+            if clusters.len() > MAX_GROUPS {
+                return Err(StockSourceError(
+                    "Viewmodels candidate group count exceeds the limit".into(),
+                ));
+            }
+        }
+        if !resolved {
+            unresolved_items.push((class, item_id));
+        }
+    }
+
+    let mut groups: Vec<_> = clusters
+        .into_iter()
+        .map(
+            |((class, inspect, animations), (item_ids, team_variants_differ))| {
+                ViewmodelGroupCandidate {
+                    id: group_id(&class, inspect, &animations),
+                    class,
+                    item_ids: item_ids.into_iter().collect(),
+                    animations,
+                    inspect,
+                    overlaps: Vec::new(),
+                    team_variants_differ,
+                }
+            },
+        )
+        .collect();
+    let mut animation_owners = BTreeMap::<(String, String), Vec<usize>>::new();
+    for (group_index, group) in groups.iter().enumerate() {
+        for animation in &group.animations {
+            animation_owners
+                .entry((group.class.clone(), animation.clone()))
+                .or_default()
+                .push(group_index);
+        }
+    }
+    let mut overlaps = vec![BTreeSet::<usize>::new(); groups.len()];
+    for owners in animation_owners.values() {
+        for &left in owners {
+            overlaps[left].extend(owners.iter().copied().filter(|right| *right != left));
+        }
+    }
+    for (group_index, other_indexes) in overlaps.into_iter().enumerate() {
+        groups[group_index].overlaps = other_indexes
+            .into_iter()
+            .map(|other| groups[other].id.clone())
+            .collect();
+    }
+    Ok(ViewmodelGroupCandidates {
+        patch_version: graph.patch_version.clone(),
+        groups,
+        unresolved_items,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::viewmodel_graph::{ItemActivityEdge, StockActivityGraph};
+    use crate::viewmodel_items::CandidateSequence;
+
+    fn edge(
+        item_id: u32,
+        visual: &'static str,
+        animation: &str,
+        route: ActivityRoute,
+    ) -> ItemActivityEdge {
+        ItemActivityEdge {
+            item_id,
+            class: "scout".into(),
+            visual,
+            base_activity: "ACT_VM_DRAW".into(),
+            target_activity: "ACT_PRIMARY_VM_DRAW".into(),
+            route,
+            role_source: None,
+            sequences: vec![CandidateSequence {
+                label: "draw".into(),
+                animations: vec![animation.into()],
+            }],
+        }
+    }
+
+    #[test]
+    fn equal_sets_cluster_and_shared_animations_report_conflicts() {
+        let graph = StockActivityGraph {
+            patch_version: "1".into(),
+            edges: vec![
+                edge(1, "red", "@a", ActivityRoute::RoleTable),
+                edge(1, "blu", "@a", ActivityRoute::RoleTable),
+                edge(2, "red", "@a", ActivityRoute::ItemReplacement),
+                edge(2, "blu", "@a", ActivityRoute::ItemReplacement),
+                edge(3, "red", "@a", ActivityRoute::RoleTable),
+                edge(3, "red", "@b", ActivityRoute::Inspect),
+                edge(3, "blu", "@a", ActivityRoute::RoleTable),
+                edge(3, "blu", "@b", ActivityRoute::Inspect),
+                edge(4, "red", "@ignored", ActivityRoute::RoleIdentity),
+            ],
+            unresolved_roles: Vec::new(),
+            candidate_roles: Vec::new(),
+        };
+        let result = derive_group_candidates(&graph).unwrap();
+        assert_eq!(result.groups.len(), 2);
+        assert_eq!(result.groups[0].item_ids, [1, 2, 3]);
+        assert_eq!(result.groups[0].animations, ["@a"]);
+        assert!(!result.groups[0].inspect);
+        assert_eq!(result.groups[1].item_ids, [3]);
+        assert_eq!(result.groups[1].animations, ["@b"]);
+        assert!(result.groups[1].inspect);
+        assert!(result.groups[0].overlaps.is_empty());
+        assert!(result.groups[1].overlaps.is_empty());
+        assert_eq!(result.unresolved_items, [("scout".into(), 4)]);
+    }
+
+    #[test]
+    fn inspect_groups_keep_a_distinct_identity_and_report_shared_animations() {
+        let graph = StockActivityGraph {
+            patch_version: "1".into(),
+            edges: vec![
+                edge(1, "red", "@a", ActivityRoute::RoleTable),
+                edge(1, "red", "@a", ActivityRoute::Inspect),
+                edge(2, "red", "@only_inspect", ActivityRoute::Inspect),
+            ],
+            unresolved_roles: Vec::new(),
+            candidate_roles: Vec::new(),
+        };
+        let result = derive_group_candidates(&graph).unwrap();
+        assert_eq!(result.groups.len(), 3);
+        let weapon = &result.groups[0];
+        let inspect = &result.groups[1];
+        assert_eq!((weapon.inspect, inspect.inspect), (false, true));
+        assert_eq!(weapon.animations, inspect.animations);
+        assert_ne!(weapon.id, inspect.id);
+        assert_eq!(weapon.id, group_id("scout", false, &weapon.animations));
+        assert_eq!(weapon.overlaps, std::slice::from_ref(&inspect.id));
+        // An item with only an inspect route is still resolved.
+        assert!(result.unresolved_items.is_empty());
+    }
+
+    #[test]
+    fn team_variation_is_preserved_in_the_union() {
+        let graph = StockActivityGraph {
+            patch_version: "1".into(),
+            edges: vec![
+                edge(1, "red", "@red", ActivityRoute::ItemReplacement),
+                edge(1, "blu", "@blu", ActivityRoute::ItemReplacement),
+            ],
+            unresolved_roles: Vec::new(),
+            candidate_roles: Vec::new(),
+        };
+        let result = derive_group_candidates(&graph).unwrap();
+        assert_eq!(result.groups[0].animations, ["@blu", "@red"]);
+        assert!(result.groups[0].team_variants_differ);
+    }
+}

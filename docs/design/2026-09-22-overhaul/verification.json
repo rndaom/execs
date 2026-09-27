@@ -1,0 +1,108 @@
+{
+  "date": "2026-09-22",
+  "boards": [
+    {
+      "file": "options/01-foundry/01-core.png",
+      "status": 200,
+      "sha256": "969c901170b35ba9960ca3d7ade26a600f7e80244266c6f1d1628efcc98ce62d",
+      "bytes": 1552624
+    },
+    {
+      "file": "options/01-foundry/02-customization.png",
+      "status": 200,
+      "sha256": "a282bdffeb1a81214c0597daaeb1c61783b96a03413cc3b3002bf2eff5e6c9f5",
+      "bytes": 1671264
+    },
+    {
+      "file": "options/01-foundry/03-workspaces.png",
+      "status": 200,
+      "sha256": "6c2927b5304a06187a2500eca9e02d0d44a9809f61c15c6297cdaecb8fb4079c",
+      "bytes": 1532033
+    },
+    {
+      "file": "options/01-foundry/04-profiles.png",
+      "status": 200,
+      "sha256": "c1cb2cd83edcf9fa3dc3f2f8ae41d703bff35480b15a9f1afa613ee7a3123066",
+      "bytes": 1480963
+    },
+    {
+      "file": "options/01-foundry/05-states.png",
+      "status": 200,
+      "sha256": "c23479fb0ac881083e637a0516c9b529dc69a363cc610c017f711c770e50b42c",
+      "bytes": 1526811
+    },
+    {
+      "file": "options/02-signal/01-core.png",
+      "status": 200,
+      "sha256": "57bfca259e57273a6ce24af649f634c8d9a407d4a6a102cb23a024b1ee1d82e0",
+      "bytes": 1593002
+    },
+    {
+      "file": "options/02-signal/02-customization.png",
+      "status": 200,
+      "sha256": "b3e7c545036c00c22864e73e121046552d1bce51643e6ea1164c5ef3886a95f1",
+      "bytes": 1735334
+    },
+    {
+      "file": "options/02-signal/03-workspaces.png",
+      "status": 200,
+      "sha256": "aff40a54a4a8a537ca760c09d3b93b753973129186a94b41139af2a1cc1845be",
+      "bytes": 1594565
+    },
+    {
+      "file": "options/02-signal/04-profiles.png",
+      "status": 200,
+      "sha256": "4e4fd2016dd17fb7239716dbba51b492d2e6a8e7fb106d4cdcfc620d9ce30372",
+      "bytes": 1536494
+    },
+    {
+      "file": "options/02-signal/05-states.png",
+      "status": 200,
+      "sha256": "36f8a18114318361eecd4284dd7a22cbc5c4716af53cd8541014cd32122542b5",
+      "bytes": 1522244
+    },
+    {
+      "file": "options/03-afterhours/01-core.png",
+      "status": 200,
+      "sha256": "3d9b697b59ba04b37ad86e1ff811a0a3570828308d2896a964308de446249531",
+      "bytes": 1527348
+    },
+    {
+      "file": "options/03-afterhours/02-customization.png",
+      "status": 200,
+      "sha256": "0d0b3486bfb654ac0fe459c69399e987c0a9ffe16a9d86877d74f05f0ee1d766",
+      "bytes": 1597906
+    },
+    {
+      "file": "options/03-afterhours/03-workspaces.png",
+      "status": 200,
+      "sha256": "bcd6e4982f7a17b967b720ac8a696ba535ceaea5e698fa4f9621a3bc061a1abb",
+      "bytes": 1499100
+    },
+    {
+      "file": "options/03-afterhours/04-profiles.png",
+      "status": 200,
+      "sha256": "d8a13c0458fec823e2169d45aa160b184661c0bc1fef68df9d0365c2fbe4f585",
+      "bytes": 1511041
+    },
+    {
+      "file": "options/03-afterhours/05-states.png",
+      "status": 200,
+      "sha256": "bcbcd106aed2d495c451d029164488527a152e1e1c5589d0196ba8c57c909e66",
+      "bytes": 1498489
+    }
+  ],
+  "storedCaptures": 67,
+  "acceptedCaptures": 66,
+  "browserChecks": [
+    "Three option tabs including ArrowRight and End keyboard selection",
+    "Board Fit and 100% zoom, Escape and focus return",
+    "Final Afterhours states board loads",
+    "Grouped Files evidence opens in viewer",
+    "Motion Details, menu and dialog open/close",
+    "Sample feedback reaches complete and enables replay",
+    "Reduced motion toggles to explicit disabled-transitions state"
+  ],
+  "productImplementationChanged": false,
+  "nativeBehaviorCertified": false
+}

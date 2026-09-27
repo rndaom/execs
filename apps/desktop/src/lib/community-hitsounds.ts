@@ -1,19 +1,14 @@
 /**
- * Community hit sounds — WishingStardust/TF2Hitsounds, pinned to commit
- * f5fea33b in the backend (fetched on demand, cached locally). `levelup` is
- * left out: it is a 32 728 Hz file the engine will not play.
+ * Archival display names for TF2Hitsounds WAVs already installed by older
+ * execs versions. The app no longer offers this remote catalog. `levelup`
+ * was never installed because its 32 728 Hz WAV cannot play in TF2.
  */
 export type CommunityHitsound = {
-  /** Upstream file stem, also the download key. */
+  /** Upstream file stem retained in older profile records. */
   id: string;
   /** Display name. */
   label: string;
 };
-
-export const COMMUNITY_HITSOUND_CREDIT =
-  "Community sounds collected by WishingStardust (TF2Hitsounds); each clip belongs to its original source.";
-
-export const COMMUNITY_HITSOUND_REPO = "https://github.com/WishingStardust/TF2Hitsounds";
 
 export const COMMUNITY_HITSOUNDS: CommunityHitsound[] = [
   { id: "bababa", label: "Bababa" },

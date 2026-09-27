@@ -1,5 +1,5 @@
 export type { CatalogArgument, CatalogEntry, CatalogSource } from "./catalog.ts";
-export { enumerateCatalog, lookupCommand } from "./catalog.ts";
+export { enumerateCatalog, lookupCommand, suggestCvarByRemovingOneCharacter } from "./catalog.ts";
 export { lookupCvar } from "./corpus.ts";
 export { lint } from "./engine.ts";
 export {
@@ -11,6 +11,7 @@ export {
   engineManagedLintOptions,
   normalizeCfgPath,
 } from "./lint-options.ts";
+export { MASTERCOMFIG_STARTUP_ALIASES } from "./mastercomfig-aliases.ts";
 export { parseCommands } from "./parser.ts";
 export { createCfgResolver } from "./search-paths.ts";
 export { sourceOffset, sourcePosition, tokenizeCommands } from "./tokenizer.ts";

@@ -12,6 +12,7 @@ export const SETTINGS_TABS = [
   "mods",
   "files",
   "launch",
+  "inventory",
 ] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
@@ -27,16 +28,21 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
   mods: "Mods",
   files: "Files",
   launch: "Launch",
+  inventory: "Inventory",
 };
 
 /**
- * The sidebar reads as three short groups instead of one nine-item list:
- * what you set up, how it looks, and everything else.
+ * The sidebar reads as three short groups instead of one long list: what you
+ * set up, how it looks, and everything else. A group with no label shows no
+ * heading.
  */
 export const SETTINGS_TAB_GROUPS: { label: string; tabs: readonly SettingsTab[] }[] = [
   { label: "Setup", tabs: ["comfig", "binds", "gameplay"] },
   { label: "Look", tabs: ["hud", "crosshair", "viewmodels", "sounds"] },
   { label: "More", tabs: ["mods", "files", "launch"] },
+  ...(import.meta.env.DEV
+    ? [{ label: "Steam", tabs: ["inventory"] as readonly SettingsTab[] }]
+    : []),
 ];
 
 export function showSettingsChrome(library: ProfileLibrary | null): boolean {

@@ -4,10 +4,21 @@ export type HudSort = "name" | "updated" | "downloads" | "views";
 
 export const HUD_SORTS: { id: HudSort; label: string }[] = [
   { id: "name", label: "A to Z" },
-  { id: "updated", label: "Last updated" },
+  { id: "updated", label: "TF2 HUDs activity" },
   { id: "downloads", label: "Most downloads" },
   { id: "views", label: "Most views" },
 ];
+
+/** hud-db's `Unknown` means the active author is not credited. */
+export function hudAuthorCopy(entry: Pick<HudCatalogEntry, "author">): string {
+  const author = entry.author.trim();
+  return !author || author.toLowerCase() === "unknown" ? "Creator uncredited" : `by ${author}`;
+}
+
+/** A numeric archive ID is searchable but is not a meaningful HUD title. */
+export function hudDisplayName(entry: Pick<HudCatalogEntry, "name">): string {
+  return /^\d+$/.test(entry.name.trim()) ? "Untitled HUD" : entry.name;
+}
 
 export type HudCatalogControls = { query: string; sort: HudSort; page: number };
 export type HudCatalogAction =
@@ -53,7 +64,10 @@ export function sortHudCatalog(
   sort: HudSort,
 ): HudCatalogEntry[] {
   const byName = (a: HudCatalogEntry, b: HudCatalogEntry) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
+    hudDisplayName(a).localeCompare(hudDisplayName(b), undefined, {
+      sensitivity: "base",
+      numeric: true,
+    }) || a.id.localeCompare(b.id);
   const stat = (entry: HudCatalogEntry) => stats[entry.id.toLowerCase()] ?? stats[entry.id];
   if (sort === "name") return [...entries].sort(byName);
   const ranked = entries.flatMap((entry) => {
@@ -64,7 +78,7 @@ export function sortHudCatalog(
   return ranked.map(({ entry }) => entry);
 }
 
-/** "398k downloads · updated Jan 2026", or null when nothing is known. */
+/** "398k downloads · listing activity Jan 2026", or null when nothing is known. */
 export function hudStatCopy(stat: HudStat | undefined): string | null {
   if (!stat) {
     return null;
@@ -77,7 +91,7 @@ export function hudStatCopy(stat: HudStat | undefined): string | null {
     parts.push(`${compactCount(stat.views)} views`);
   }
   if (stat.updated && hudUpdatedTime(stat.updated) !== null) {
-    parts.push(`updated ${monthYear(stat.updated)}`);
+    parts.push(`listing activity ${monthYear(stat.updated)}`);
   }
   return parts.length > 0 ? parts.join(" · ") : null;
 }
@@ -215,7 +229,7 @@ export function filterHudCatalog(entries: HudCatalogEntry[], query: string): Hud
     return entries;
   }
   return entries.filter((entry) => {
-    return [entry.name, entry.author, entry.id].some((value) =>
+    return [entry.name, hudDisplayName(entry), entry.author, entry.id].some((value) =>
       normalizeHudSearch(value).includes(needle),
     );
   });
@@ -354,6 +368,50 @@ export function hudOptionsDirty(
 
 export function isHudCheckboxOn(value: string): boolean {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+/** HUD font overlays are a separate source from TF2's cl_crosshair_* settings.
+ * This reports the schema's intended setting, not the final mounted game file.
+ */
+export function hudOverlayCrosshairState(
+  hudId: string | null,
+  schema: HudSchemaView | null,
+  options: Record<string, string>,
+): "enabled" | "disabled" | "possible" | "none" {
+  if (!hudId || !schema) return "none";
+  const controls = schema.sections.flatMap((section) => section.controls);
+  if (!controls.some((control) => control.controlType === "crosshair")) return "none";
+  const names: Record<string, string[]> = {
+    rayshud: ["rh_toggle_xhair_enable"],
+    budhud: ["bh_toggle_xhair_enable"],
+    kbnhud: ["kbn_crosshair1", "kbn_crosshair2"],
+    flawhud: ["fh_toggle_xhair_enable"],
+    "eve-plus": ["eve_toggle_xhair_enable"],
+  };
+  const toggles = (names[hudId.toLowerCase()] ?? [])
+    .map((name) => controls.find((control) => control.name === name))
+    .filter((control) => control !== undefined);
+  if (!toggles.length || toggles.some((control) => control.unavailableReason)) return "possible";
+  return toggles.some((control) => isHudCheckboxOn(options[control.name] ?? control.value))
+    ? "enabled"
+    : "disabled";
+}
+
+export function hudSchemaUnavailableReason(hudId: string): string {
+  const pending: Record<string, string> = {
+    berryhud:
+      "BerryHUD's catalog archive has multiple HUD roots; its editor schema has not been verified against one selected root. Use the author's customization instructions.",
+    hexhud:
+      "HExHUD's editor schema targets an animation file missing from the checked catalog archive. Use the author's customization instructions.",
+    "hud-fixes":
+      "Community HUD Fixes' editor schema targets an animation file missing from the checked catalog archive. Use the author's customization instructions.",
+    sunsethud:
+      "SunsetHUD's editor schema contains an unresolved crosshair control reference in the checked catalog archive. Use the author's customization instructions.",
+  };
+  return (
+    pending[hudId.toLowerCase()] ??
+    "No in-app options for this HUD. Use the HUD author's customization instructions."
+  );
 }
 
 export function parseHudRgba(value: string): { r: number; g: number; b: number; a: number } {

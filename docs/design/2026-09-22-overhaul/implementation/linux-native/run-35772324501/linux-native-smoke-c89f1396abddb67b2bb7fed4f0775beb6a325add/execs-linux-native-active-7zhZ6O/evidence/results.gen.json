@@ -1,0 +1,324 @@
+{
+  "schema": 1,
+  "status": "failed",
+  "scope": "Linux X11/WebKitGTK real release binary; active owned Vanilla profile, Files draft retention, explicit helper Save and actual native close Cancel/Discard/Save. No installer, updater, Steam or game qualification.",
+  "revision": "c89f1396abddb67b2bb7fed4f0775beb6a325add",
+  "binarySha256": "05c6b4e14f204dc4c2d48e285616e4b456358079e06f2608965ee82a461be4b4",
+  "fixture": {
+    "authored": "Two schema-1 Vanilla profiles with wholly authored cfg payloads and comment-only helpers; A active and mirrored exactly, B an unchanged control. No Steam or game executable. Not an upgrade test."
+  },
+  "isolation": {
+    "HOME": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O/home",
+    "XDG_DATA_HOME": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O/data",
+    "XDG_CONFIG_HOME": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O/config",
+    "XDG_CACHE_HOME": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O/cache",
+    "XDG_RUNTIME_DIR": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O/runtime",
+    "TMPDIR": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O/tmp"
+  },
+  "checks": [
+    {
+      "label": "first-active-launch",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "BODY",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Comfig"
+      },
+      "capabilities": {
+        "browserName": "wry",
+        "browserVersion": "0.55.1",
+        "platformName": "linux",
+        "acceptInsecureCerts": false,
+        "strictFileInteractability": false,
+        "setWindowRect": true,
+        "unhandledPromptBehavior": "dismiss and notify",
+        "pageLoadStrategy": "normal",
+        "proxy": {},
+        "timeouts": {
+          "script": 30000,
+          "pageLoad": 300000,
+          "implicit": 0
+        }
+      },
+      "process": {
+        "pid": 5025,
+        "processGroup": 5017,
+        "startTime": "42145",
+        "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+      }
+    },
+    {
+      "label": "initial-native-helper",
+      "nativeClipboardSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "bytes": 4848,
+      "matchesAuthoredText": true
+    },
+    {
+      "label": "native-unsaved-draft-bytes",
+      "nativeClipboardSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "bytes": 4881,
+      "matchesAuthoredText": true
+    }
+  ],
+  "captures": [
+    {
+      "file": "01-native-active-files.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "DIV",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "02-native-draft-before-navigation.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "DIV",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "failure.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "DIV",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    }
+  ],
+  "preservation": [
+    {
+      "schema": 1,
+      "stage": "before-launch",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O",
+      "recordedAt": "2026-09-22T19:18:46.956Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "d7ad780f9b60a4bbb71f0007c6130f161199602ddfb1bc37c69cf86680c5e4f7",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "d04abb012b981c3f124b5b6e59169d0ee41515c9dfe19c9fb5b2b6bbb245fcaf",
+        "profiles/index.json": "cf2cb97efeae8b953ea276e3c655ec10c2e0d703f29665b600ae284ac8e9d1c6",
+        "settings.json": "272661650bd48ff6e54dbc5b96e819a7202b2e2280b3b641db040be83b504c80"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false
+    },
+    {
+      "schema": 1,
+      "stage": "active-boot-and-files-read",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O",
+      "recordedAt": "2026-09-22T19:18:48.702Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "d7ad780f9b60a4bbb71f0007c6130f161199602ddfb1bc37c69cf86680c5e4f7",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "d04abb012b981c3f124b5b6e59169d0ee41515c9dfe19c9fb5b2b6bbb245fcaf",
+        "profiles/index.json": "cf2cb97efeae8b953ea276e3c655ec10c2e0d703f29665b600ae284ac8e9d1c6",
+        "settings.json": "272661650bd48ff6e54dbc5b96e819a7202b2e2280b3b641db040be83b504c80"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-launch"
+    },
+    {
+      "schema": 1,
+      "stage": "draft-is-memory-only",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O",
+      "recordedAt": "2026-09-22T19:18:50.904Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "d7ad780f9b60a4bbb71f0007c6130f161199602ddfb1bc37c69cf86680c5e4f7",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "d04abb012b981c3f124b5b6e59169d0ee41515c9dfe19c9fb5b2b6bbb245fcaf",
+        "profiles/index.json": "cf2cb97efeae8b953ea276e3c655ec10c2e0d703f29665b600ae284ac8e9d1c6",
+        "settings.json": "272661650bd48ff6e54dbc5b96e819a7202b2e2280b3b641db040be83b504c80"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-launch"
+    },
+    {
+      "schema": 1,
+      "stage": "away-pane-does-not-save-files",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O",
+      "recordedAt": "2026-09-22T19:18:52.922Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "d7ad780f9b60a4bbb71f0007c6130f161199602ddfb1bc37c69cf86680c5e4f7",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "d04abb012b981c3f124b5b6e59169d0ee41515c9dfe19c9fb5b2b6bbb245fcaf",
+        "profiles/index.json": "cf2cb97efeae8b953ea276e3c655ec10c2e0d703f29665b600ae284ac8e9d1c6",
+        "settings.json": "272661650bd48ff6e54dbc5b96e819a7202b2e2280b3b641db040be83b504c80"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-launch"
+    },
+    {
+      "schema": 1,
+      "stage": "final-owned-process-cleanup",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-7zhZ6O",
+      "recordedAt": "2026-09-22T19:19:09.437Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "d7ad780f9b60a4bbb71f0007c6130f161199602ddfb1bc37c69cf86680c5e4f7",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "d04abb012b981c3f124b5b6e59169d0ee41515c9dfe19c9fb5b2b6bbb245fcaf",
+        "profiles/index.json": "cf2cb97efeae8b953ea276e3c655ec10c2e0d703f29665b600ae284ac8e9d1c6",
+        "settings.json": "272661650bd48ff6e54dbc5b96e819a7202b2e2280b3b641db040be83b504c80"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-launch"
+    }
+  ],
+  "error": "Error: Timed out: draft selection and scroll restored\n    at waitUntil (file:///home/runner/work/execs/execs/scripts/linux-native-webdriver.mjs:18:9)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processTimers (node:internal/timers:615:9)\n    at async main (file:///home/runner/work/execs/execs/scripts/linux-native-active.mjs:218:19)\n    at async file:///home/runner/work/execs/execs/scripts/linux-native-active.mjs:341:3"
+}

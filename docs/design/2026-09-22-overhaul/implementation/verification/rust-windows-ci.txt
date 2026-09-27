@@ -1,0 +1,1559 @@
+2026-09-22T15:05:04.8283597Z Current runner version: '2.337.0'
+2026-09-22T15:05:04.8318833Z ##[group]Runner Image Provisioner
+2026-09-22T15:05:04.8320388Z Hosted Compute Agent
+2026-09-22T15:05:04.8321394Z Version: 20260828.587
+2026-09-22T15:05:04.8322499Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-22T15:05:04.8323707Z Build Date: 2026-08-28T16:44:25Z
+2026-09-22T15:05:04.8324773Z Worker ID: {7ee601f9-9774-4698-8bb1-333e4f56a51a}
+2026-09-22T15:05:04.8325970Z Azure Region: eastus
+2026-09-22T15:05:04.8326982Z ##[endgroup]
+2026-09-22T15:05:04.8329273Z ##[group]Operating System
+2026-09-22T15:05:04.8330381Z Microsoft Windows Server 2025
+2026-09-22T15:05:04.8331396Z 10.0.26100
+2026-09-22T15:05:04.8332709Z Datacenter
+2026-09-22T15:05:04.8333638Z ##[endgroup]
+2026-09-22T15:05:04.8334572Z ##[group]Runner Image
+2026-09-22T15:05:04.8335595Z Image: windows-2025-vs2026
+2026-09-22T15:05:04.8336586Z Version: 20260907.229.1
+2026-09-22T15:05:04.8339460Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20260907.229/images/windows/Windows2025-VS2026-Readme.md
+2026-09-22T15:05:04.8342742Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20260907.229
+2026-09-22T15:05:04.8344513Z ##[endgroup]
+2026-09-22T15:05:04.8346565Z ##[group]GITHUB_TOKEN Permissions
+2026-09-22T15:05:04.8349799Z Contents: read
+2026-09-22T15:05:04.8350865Z Metadata: read
+2026-09-22T15:05:04.8351735Z Packages: read
+2026-09-22T15:05:04.8352663Z ##[endgroup]
+2026-09-22T15:05:04.8355526Z Secret source: Actions
+2026-09-22T15:05:04.8356977Z Cache mode: write
+2026-09-22T15:05:04.8358124Z Prepare workflow directory
+2026-09-22T15:05:04.8710192Z Prepare all required actions
+2026-09-22T15:05:04.8758896Z Getting action download info
+2026-09-22T15:05:05.1134827Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-09-22T15:05:05.2508806Z Download action repository 'dtolnay/rust-toolchain@stable' (SHA:6bed0761d98439e5a578e2877258200ad565ba87)
+2026-09-22T15:05:05.3614367Z Download action repository 'Swatinem/rust-cache@v2' (SHA:6323deb102c322ba6fcbdcafc7e3dddab59af2b6)
+2026-09-22T15:05:05.5416434Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-09-22T15:05:05.8659945Z Complete job name: rust-windows
+2026-09-22T15:05:06.0109791Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-22T15:05:06.0121866Z ##[group]Run actions/checkout@v4
+2026-09-22T15:05:06.0122821Z with:
+2026-09-22T15:05:06.0123357Z   repository: rndaom/execs
+2026-09-22T15:05:06.0127439Z   token: ***
+2026-09-22T15:05:06.0128005Z   ssh-strict: true
+2026-09-22T15:05:06.0128532Z   ssh-user: git
+2026-09-22T15:05:06.0129075Z   persist-credentials: true
+2026-09-22T15:05:06.0129747Z   clean: true
+2026-09-22T15:05:06.0130278Z   sparse-checkout-cone-mode: true
+2026-09-22T15:05:06.0130920Z   fetch-depth: 1
+2026-09-22T15:05:06.0131434Z   fetch-tags: false
+2026-09-22T15:05:06.0131970Z   show-progress: true
+2026-09-22T15:05:06.0132542Z   lfs: false
+2026-09-22T15:05:06.0133149Z   submodules: false
+2026-09-22T15:05:06.0134193Z   set-safe-directory: true
+2026-09-22T15:05:06.0134822Z   allow-unsafe-pr-checkout: false
+2026-09-22T15:05:06.0135796Z ##[endgroup]
+2026-09-22T15:05:06.1638959Z Syncing repository: rndaom/execs
+2026-09-22T15:05:06.1642273Z ##[group]Getting Git version info
+2026-09-22T15:05:06.1643535Z Working directory is 'D:\a\execs\execs'
+2026-09-22T15:05:06.2579138Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-09-22T15:05:06.6742822Z git version 2.55.0.windows.5
+2026-09-22T15:05:06.6790162Z ##[endgroup]
+2026-09-22T15:05:06.6809751Z Temporarily overriding HOME='D:\a\_temp\1c70a446-5350-4636-8a6e-2f46c4f15619' before making global git config changes
+2026-09-22T15:05:06.6814209Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-22T15:05:06.6820444Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\execs\execs
+2026-09-22T15:05:06.7585130Z Deleting the contents of 'D:\a\execs\execs'
+2026-09-22T15:05:06.7591441Z ##[group]Initializing the repository
+2026-09-22T15:05:06.7599731Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\execs\execs
+2026-09-22T15:05:06.8425334Z Initialized empty Git repository in D:/a/execs/execs/.git/
+2026-09-22T15:05:06.8471252Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/rndaom/execs
+2026-09-22T15:05:06.9155459Z ##[endgroup]
+2026-09-22T15:05:06.9157166Z ##[group]Disabling automatic garbage collection
+2026-09-22T15:05:06.9164478Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-09-22T15:05:06.9460739Z ##[endgroup]
+2026-09-22T15:05:06.9462688Z ##[group]Setting up auth
+2026-09-22T15:05:06.9472619Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-09-22T15:05:06.9754964Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-09-22T15:05:08.5849472Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-22T15:05:08.6132823Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-09-22T15:05:09.1359119Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-22T15:05:09.1648167Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-09-22T15:05:09.6861081Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-09-22T15:05:09.7165690Z ##[endgroup]
+2026-09-22T15:05:09.7169709Z ##[group]Fetching the repository
+2026-09-22T15:05:09.7181185Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +980a34d0b11b4143f4129329606b454d438c6d91:refs/remotes/pull/60/merge
+2026-09-22T15:05:11.4876122Z From https://github.com/rndaom/execs
+2026-09-22T15:05:11.4877327Z  * [new ref]         980a34d0b11b4143f4129329606b454d438c6d91 -> pull/60/merge
+2026-09-22T15:05:11.4915846Z ##[endgroup]
+2026-09-22T15:05:11.4916917Z ##[group]Determining the checkout info
+2026-09-22T15:05:11.4917877Z ##[endgroup]
+2026-09-22T15:05:11.4927955Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-09-22T15:05:11.5419581Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-09-22T15:05:11.5760782Z ##[group]Checking out the ref
+2026-09-22T15:05:11.5770177Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force refs/remotes/pull/60/merge
+2026-09-22T15:05:12.1860635Z Note: switching to 'refs/remotes/pull/60/merge'.
+2026-09-22T15:05:12.1861482Z
+2026-09-22T15:05:12.1861848Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-09-22T15:05:12.1862647Z changes and commit them, and you can discard any commits you make in this
+2026-09-22T15:05:12.1863493Z state without impacting any branches by switching back to a branch.
+2026-09-22T15:05:12.1863991Z
+2026-09-22T15:05:12.1864329Z If you want to create a new branch to retain commits you create, you may
+2026-09-22T15:05:12.1865150Z do so (now or later) by using -c with the switch command. Example:
+2026-09-22T15:05:12.1865612Z
+2026-09-22T15:05:12.1865780Z   git switch -c <new-branch-name>
+2026-09-22T15:05:12.1867233Z
+2026-09-22T15:05:12.1867395Z Or undo this operation with:
+2026-09-22T15:05:12.1867716Z
+2026-09-22T15:05:12.1867858Z   git switch -
+2026-09-22T15:05:12.1868055Z
+2026-09-22T15:05:12.1868446Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-09-22T15:05:12.1869002Z
+2026-09-22T15:05:12.1869678Z HEAD is now at 980a34d Merge 542b3dd20f2847fc90a1a4e990584f03830fcc6d into 0c5aa21e9b16e3bd3c05c1bb4d9d7e9acddfc7be
+2026-09-22T15:05:12.2118001Z ##[endgroup]
+2026-09-22T15:05:12.2489037Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-09-22T15:05:12.2748911Z 980a34d0b11b4143f4129329606b454d438c6d91
+2026-09-22T15:05:12.3314292Z ##[group]Run dtolnay/rust-toolchain@stable
+2026-09-22T15:05:12.3314641Z with:
+2026-09-22T15:05:12.3314823Z   components: clippy
+2026-09-22T15:05:12.3315018Z   toolchain: stable
+2026-09-22T15:05:12.3315198Z ##[endgroup]
+2026-09-22T15:05:12.3380961Z ##[start-action display=Parse toolchain version;id=__dtolnay_rust-toolchain.parse]
+2026-09-22T15:05:12.3554982Z ##[group]Run if [[ -z $toolchain ]]; then
+2026-09-22T15:05:12.3555340Z if [[ -z $toolchain ]]; then
+2026-09-22T15:05:12.3555865Z   # GitHub does not enforce `required: true` inputs itself. https://github.com/actions/runner/issues/1070
+2026-09-22T15:05:12.3556412Z   echo "'toolchain' is a required input" >&2
+2026-09-22T15:05:12.3556689Z   exit 1
+2026-09-22T15:05:12.3557006Z elif [[ $toolchain =~ ^stable' '[0-9]+' '(year|month|week|day)s?' 'ago$ ]]; then
+2026-09-22T15:05:12.3557415Z   if [[ Windows == macOS ]]; then
+2026-09-22T15:05:12.3557976Z     echo "toolchain=1.$((($(date -v-$(sed 's/stable \([0-9]*\) \(.\).*/\1\2/' <<< $toolchain) +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT
+2026-09-22T15:05:12.3558477Z   else
+2026-09-22T15:05:12.3558865Z     echo "toolchain=1.$((($(date --date "${toolchain#stable }" +%s)/60/60/24-16569)/7/6))" >> $GITHUB_OUTPUT
+2026-09-22T15:05:12.3559322Z   fi
+2026-09-22T15:05:12.3559596Z elif [[ $toolchain =~ ^stable' 'minus' '[0-9]+' 'releases?$ ]]; then
+2026-09-22T15:05:12.3560108Z   echo "toolchain=1.$((($(date +%s)/60/60/24-16569)/7/6-${toolchain//[^0-9]/}))" >> $GITHUB_OUTPUT
+2026-09-22T15:05:12.3560612Z elif [[ $toolchain =~ ^1\.[0-9]+$ ]]; then
+2026-09-22T15:05:12.3561134Z   echo "toolchain=1.$((i=${toolchain#1.}, c=($(date +%s)/60/60/24-16569)/7/6, i+9*i*(10*i<=c)+90*i*(100*i<=c)))" >> $GITHUB_OUTPUT
+2026-09-22T15:05:12.3561613Z else
+2026-09-22T15:05:12.3561838Z   echo "toolchain=$toolchain" >> $GITHUB_OUTPUT
+2026-09-22T15:05:12.3562112Z fi
+2026-09-22T15:05:12.3581943Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:12.3582357Z env:
+2026-09-22T15:05:12.3582541Z   toolchain: stable
+2026-09-22T15:05:12.3582742Z ##[endgroup]
+2026-09-22T15:05:12.5309404Z ##[end-action id=__dtolnay_rust-toolchain.parse;outcome=success;conclusion=success;duration_ms=192]
+2026-09-22T15:05:12.5322386Z ##[start-action display=Construct rustup command line;id=__dtolnay_rust-toolchain.flags]
+2026-09-22T15:05:12.5471815Z ##[group]Run echo "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT
+2026-09-22T15:05:12.5472439Z echo "targets=$(for t in ${targets//,/ }; do echo -n ' --target' $t; done)" >> $GITHUB_OUTPUT
+2026-09-22T15:05:12.5473065Z echo "components=$(for c in ${components//,/ }; do echo -n ' --component' $c; done)" >> $GITHUB_OUTPUT
+2026-09-22T15:05:12.5473558Z echo "downgrade=" >> $GITHUB_OUTPUT
+2026-09-22T15:05:12.5488861Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:12.5489443Z env:
+2026-09-22T15:05:12.5489674Z   targets:
+2026-09-22T15:05:12.5489853Z   components: clippy
+2026-09-22T15:05:12.5490044Z ##[endgroup]
+2026-09-22T15:05:12.6093277Z ##[end-action id=__dtolnay_rust-toolchain.flags;outcome=success;conclusion=success;duration_ms=77]
+2026-09-22T15:05:12.6095847Z ##[start-action display=Set $CARGO_HOME;id=__dtolnay_rust-toolchain.__run]
+2026-09-22T15:05:12.6230667Z ##[group]Run echo CARGO_HOME=${CARGO_HOME:-"$USERPROFILE\.cargo"} >> $GITHUB_ENV
+2026-09-22T15:05:12.6231171Z echo CARGO_HOME=${CARGO_HOME:-"$USERPROFILE\.cargo"} >> $GITHUB_ENV
+2026-09-22T15:05:12.6246992Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:12.6247390Z ##[endgroup]
+2026-09-22T15:05:12.6634549Z ##[end-action id=__dtolnay_rust-toolchain.__run;outcome=success;conclusion=success;duration_ms=53]
+2026-09-22T15:05:12.6639109Z ##[start-action display=Install rustup if needed;id=__dtolnay_rust-toolchain.__run_2]
+2026-09-22T15:05:12.6650386Z ##[end-action id=__dtolnay_rust-toolchain.__run_2;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-09-22T15:05:12.6652599Z ##[start-action display=Install rustup if needed on windows;id=__dtolnay_rust-toolchain.__run_3]
+2026-09-22T15:05:12.6791140Z ##[group]Run if ! command -v rustup &>/dev/null; then
+2026-09-22T15:05:12.6813302Z if ! command -v rustup &>/dev/null; then
+2026-09-22T15:05:12.6815249Z   curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused --location --silent --show-error --fail https://win.rustup.rs/x86_64 --output 'D:\a\_temp\rustup-init.exe'
+2026-09-22T15:05:12.6816290Z   'D:\a\_temp\rustup-init.exe' --default-toolchain none --no-modify-path -y
+2026-09-22T15:05:12.6816735Z   echo "$CARGO_HOME\bin" >> $GITHUB_PATH
+2026-09-22T15:05:12.6817003Z fi
+2026-09-22T15:05:12.6832577Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:12.6832982Z env:
+2026-09-22T15:05:12.6833177Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:12.6833439Z ##[endgroup]
+2026-09-22T15:05:12.7341587Z ##[end-action id=__dtolnay_rust-toolchain.__run_3;outcome=success;conclusion=success;duration_ms=68]
+2026-09-22T15:05:12.7354617Z ##[start-action display=rustup toolchain install stable;id=__dtolnay_rust-toolchain.__run_4]
+2026-09-22T15:05:12.7503842Z ##[group]Run rustup toolchain install stable --component clippy --profile minimal --no-self-update
+2026-09-22T15:05:12.7504498Z rustup toolchain install stable --component clippy --profile minimal --no-self-update
+2026-09-22T15:05:12.7520773Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:12.7521162Z env:
+2026-09-22T15:05:12.7521356Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:12.7521623Z   RUSTUP_PERMIT_COPY_RENAME: 1
+2026-09-22T15:05:12.7521854Z ##[endgroup]
+2026-09-22T15:05:16.4747822Z info: syncing channel updates for stable-x86_64-pc-windows-msvc
+2026-09-22T15:05:17.0333496Z info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+2026-09-22T15:05:17.0718181Z info: component clippy is up to date
+2026-09-22T15:05:17.0734833Z
+2026-09-22T15:05:17.0929535Z   stable-x86_64-pc-windows-msvc unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+2026-09-22T15:05:17.0930294Z
+2026-09-22T15:05:17.1019561Z ##[end-action id=__dtolnay_rust-toolchain.__run_4;outcome=success;conclusion=success;duration_ms=4366]
+2026-09-22T15:05:17.1025862Z ##[start-action display=rustup default stable;id=__dtolnay_rust-toolchain.__run_5]
+2026-09-22T15:05:17.1156884Z ##[group]Run rustup default stable
+2026-09-22T15:05:17.1157145Z rustup default stable
+2026-09-22T15:05:17.1172215Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:17.1172604Z env:
+2026-09-22T15:05:17.1172805Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:17.1173056Z ##[endgroup]
+2026-09-22T15:05:17.1885665Z info: using existing install for stable-x86_64-pc-windows-msvc
+2026-09-22T15:05:17.1985326Z info: default toolchain set to stable-x86_64-pc-windows-msvc
+2026-09-22T15:05:17.1988504Z
+2026-09-22T15:05:17.2179505Z   stable-x86_64-pc-windows-msvc unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+2026-09-22T15:05:17.2179907Z
+2026-09-22T15:05:17.2255131Z ##[end-action id=__dtolnay_rust-toolchain.__run_5;outcome=success;conclusion=success;duration_ms=122]
+2026-09-22T15:05:17.2257554Z ##[start-action display=Create cachekey;id=__dtolnay_rust-toolchain.rustc-version]
+2026-09-22T15:05:17.2384902Z ##[group]Run DATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')
+2026-09-22T15:05:17.2385761Z DATE=$(rustc +stable --version --verbose | sed -ne 's/^commit-date: \(20[0-9][0-9]\)-\([01][0-9]\)-\([0-3][0-9]\)$/\1\2\3/p')
+2026-09-22T15:05:17.2387685Z HASH=$(rustc +stable --version --verbose | sed -ne 's/^commit-hash: //p')
+2026-09-22T15:05:17.2388254Z echo "cachekey=$(echo $DATE$HASH | head -c12)" >> $GITHUB_OUTPUT
+2026-09-22T15:05:17.2402616Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:17.2403018Z env:
+2026-09-22T15:05:17.2403214Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:17.2403457Z ##[endgroup]
+2026-09-22T15:05:18.0837093Z ##[end-action id=__dtolnay_rust-toolchain.rustc-version;outcome=success;conclusion=success;duration_ms=857]
+2026-09-22T15:05:18.0840302Z ##[start-action display=Disable incremental compilation;id=__dtolnay_rust-toolchain.__run_6]
+2026-09-22T15:05:18.0974249Z ##[group]Run if [ -z "${CARGO_INCREMENTAL+set}" ]; then
+2026-09-22T15:05:18.0974609Z if [ -z "${CARGO_INCREMENTAL+set}" ]; then
+2026-09-22T15:05:18.0974915Z   echo CARGO_INCREMENTAL=0 >> $GITHUB_ENV
+2026-09-22T15:05:18.0975205Z fi
+2026-09-22T15:05:18.0990052Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:18.0990443Z env:
+2026-09-22T15:05:18.0990628Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:18.0990882Z ##[endgroup]
+2026-09-22T15:05:18.1380045Z ##[end-action id=__dtolnay_rust-toolchain.__run_6;outcome=success;conclusion=success;duration_ms=53]
+2026-09-22T15:05:18.1382394Z ##[start-action display=Enable colors in Cargo output;id=__dtolnay_rust-toolchain.__run_7]
+2026-09-22T15:05:18.1519632Z ##[group]Run if [ -z "${CARGO_TERM_COLOR+set}" ]; then
+2026-09-22T15:05:18.1519983Z if [ -z "${CARGO_TERM_COLOR+set}" ]; then
+2026-09-22T15:05:18.1520294Z   echo CARGO_TERM_COLOR=always >> $GITHUB_ENV
+2026-09-22T15:05:18.1520559Z fi
+2026-09-22T15:05:18.1535594Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:18.1535982Z env:
+2026-09-22T15:05:18.1536186Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:18.1536447Z   CARGO_INCREMENTAL: 0
+2026-09-22T15:05:18.1536634Z ##[endgroup]
+2026-09-22T15:05:18.1934125Z ##[end-action id=__dtolnay_rust-toolchain.__run_7;outcome=success;conclusion=success;duration_ms=55]
+2026-09-22T15:05:18.1937165Z ##[start-action display=Enable Cargo sparse registry;id=__dtolnay_rust-toolchain.__run_8]
+2026-09-22T15:05:18.2077685Z ##[group]Run # implemented in 1.66, stabilized in 1.68, made default in 1.70
+2026-09-22T15:05:18.2078199Z # implemented in 1.66, stabilized in 1.68, made default in 1.70
+2026-09-22T15:05:18.2078840Z if [ -z "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL+set}" -o -f "D:\a\_temp"/.implicit_cargo_registries_crates_io_protocol ]; then
+2026-09-22T15:05:18.2079500Z   if rustc +stable --version --verbose | grep -q '^release: 1\.6[89]\.'; then
+2026-09-22T15:05:18.2079993Z     touch "D:\a\_temp"/.implicit_cargo_registries_crates_io_protocol || true
+2026-09-22T15:05:18.2080469Z     echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse >> $GITHUB_ENV
+2026-09-22T15:05:18.2080944Z   elif rustc +stable --version --verbose | grep -q '^release: 1\.6[67]\.'; then
+2026-09-22T15:05:18.2081446Z     touch "D:\a\_temp"/.implicit_cargo_registries_crates_io_protocol || true
+2026-09-22T15:05:18.2082669Z     echo CARGO_REGISTRIES_CRATES_IO_PROTOCOL=git >> $GITHUB_ENV
+2026-09-22T15:05:18.2083010Z   fi
+2026-09-22T15:05:18.2083177Z fi
+2026-09-22T15:05:18.2097949Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:18.2098330Z env:
+2026-09-22T15:05:18.2098518Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:18.2098777Z   CARGO_INCREMENTAL: 0
+2026-09-22T15:05:18.2098980Z   CARGO_TERM_COLOR: always
+2026-09-22T15:05:18.2099183Z ##[endgroup]
+2026-09-22T15:05:18.4012696Z ##[end-action id=__dtolnay_rust-toolchain.__run_8;outcome=success;conclusion=success;duration_ms=207]
+2026-09-22T15:05:18.4016325Z ##[start-action display=Work around spurious network errors in curl 8.0;id=__dtolnay_rust-toolchain.__run_9]
+2026-09-22T15:05:18.4166486Z ##[group]Run # https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation
+2026-09-22T15:05:18.4167267Z # https://rust-lang.zulipchat.com/#narrow/stream/246057-t-cargo/topic/timeout.20investigation
+2026-09-22T15:05:18.4167935Z if rustc +stable --version --verbose | grep -q '^release: 1\.7[01]\.'; then
+2026-09-22T15:05:18.4168373Z   echo CARGO_HTTP_MULTIPLEXING=false >> $GITHUB_ENV
+2026-09-22T15:05:18.4168656Z fi
+2026-09-22T15:05:18.4183754Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:18.4184141Z env:
+2026-09-22T15:05:18.4184331Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:18.4184587Z   CARGO_INCREMENTAL: 0
+2026-09-22T15:05:18.4184789Z   CARGO_TERM_COLOR: always
+2026-09-22T15:05:18.4184993Z ##[endgroup]
+2026-09-22T15:05:18.5433074Z ##[end-action id=__dtolnay_rust-toolchain.__run_9;outcome=success;conclusion=success;duration_ms=141]
+2026-09-22T15:05:18.5438113Z ##[start-action display=rustc +stable --version --verbose;id=__dtolnay_rust-toolchain.__run_10]
+2026-09-22T15:05:18.5574309Z ##[group]Run rustc +stable --version --verbose
+2026-09-22T15:05:18.5574660Z rustc +stable --version --verbose
+2026-09-22T15:05:18.5590555Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-09-22T15:05:18.5590943Z env:
+2026-09-22T15:05:18.5591131Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:18.5591389Z   CARGO_INCREMENTAL: 0
+2026-09-22T15:05:18.5591602Z   CARGO_TERM_COLOR: always
+2026-09-22T15:05:18.5591806Z ##[endgroup]
+2026-09-22T15:05:18.6439936Z rustc 1.98.1 (48a229cea 2026-09-01)
+2026-09-22T15:05:18.6440345Z binary: rustc
+2026-09-22T15:05:18.6440606Z commit-hash: 48a229ceaefd4985c50990b14116b6d856af0985
+2026-09-22T15:05:18.6440926Z commit-date: 2026-09-01
+2026-09-22T15:05:18.6441189Z host: x86_64-pc-windows-msvc
+2026-09-22T15:05:18.6441412Z release: 1.98.1
+2026-09-22T15:05:18.6443173Z LLVM version: 22.1.8
+2026-09-22T15:05:18.6559730Z ##[end-action id=__dtolnay_rust-toolchain.__run_10;outcome=success;conclusion=success;duration_ms=112]
+2026-09-22T15:05:18.6790492Z ##[group]Run Swatinem/rust-cache@v2
+2026-09-22T15:05:18.6790826Z with:
+2026-09-22T15:05:18.6791029Z   workspaces: apps/desktop/src-tauri
+2026-09-22T15:05:18.6791286Z   prefix-key: v0-rust
+2026-09-22T15:05:18.6791495Z   add-job-id-key: true
+2026-09-22T15:05:18.6791719Z   add-rust-environment-hash-key: true
+2026-09-22T15:05:18.6791976Z   cache-targets: true
+2026-09-22T15:05:18.6792176Z   cache-all-crates: false
+2026-09-22T15:05:18.6792393Z   cache-workspace-crates: false
+2026-09-22T15:05:18.6792624Z   save-if: true
+2026-09-22T15:05:18.6792810Z   cache-provider: github
+2026-09-22T15:05:18.6793020Z   cache-bin: true
+2026-09-22T15:05:18.6793195Z   lookup-only: false
+2026-09-22T15:05:18.6793377Z   cmd-format: {0}
+2026-09-22T15:05:18.6793538Z env:
+2026-09-22T15:05:18.6793715Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:18.6793967Z   CARGO_INCREMENTAL: 0
+2026-09-22T15:05:18.6794163Z   CARGO_TERM_COLOR: always
+2026-09-22T15:05:18.6794361Z ##[endgroup]
+2026-09-22T15:05:21.5671328Z ##[group]Cache Configuration
+2026-09-22T15:05:21.5672315Z Cache Provider:
+2026-09-22T15:05:21.5672829Z     github
+2026-09-22T15:05:21.5675657Z Workspaces:
+2026-09-22T15:05:21.5676173Z     D:\a\execs\execs\apps\desktop\src-tauri
+2026-09-22T15:05:21.5676723Z Cache Paths:
+2026-09-22T15:05:21.5677147Z     C:\Users\runneradmin\.cargo\bin
+2026-09-22T15:05:21.5677731Z     C:\Users\runneradmin\.cargo\.crates.toml
+2026-09-22T15:05:21.5678778Z     C:\Users\runneradmin\.cargo\.crates2.json
+2026-09-22T15:05:21.5679269Z     C:\Users\runneradmin\.cargo\registry
+2026-09-22T15:05:21.5679856Z     C:\Users\runneradmin\.cargo\git
+2026-09-22T15:05:21.5680418Z     D:\a\execs\execs\apps\desktop\src-tauri\target
+2026-09-22T15:05:21.5680939Z Restore Key:
+2026-09-22T15:05:21.5702118Z     v0-rust-rust-windows-Windows_NT-x64-2113753f
+2026-09-22T15:05:21.5710792Z Cache Key:
+2026-09-22T15:05:21.5712352Z     v0-rust-rust-windows-Windows_NT-x64-2113753f-35576014
+2026-09-22T15:05:21.5713626Z .. Prefix:
+2026-09-22T15:05:21.5714841Z   - v0-rust-rust-windows-Windows_NT-x64
+2026-09-22T15:05:21.5716323Z .. Environment considered:
+2026-09-22T15:05:21.5717077Z   - Rust Versions:
+2026-09-22T15:05:21.5718540Z     - 1.98.1 x86_64-pc-windows-msvc 48a229ceaefd4985c50990b14116b6d856af0985
+2026-09-22T15:05:21.5719800Z   - CARGO_HOME
+2026-09-22T15:05:21.5721120Z   - CARGO_INCREMENTAL
+2026-09-22T15:05:21.5721915Z   - CARGO_TERM_COLOR
+2026-09-22T15:05:21.5722836Z .. Lockfiles considered:
+2026-09-22T15:05:21.5723613Z   - D:\a\execs\execs\.cargo\config.toml
+2026-09-22T15:05:21.5724665Z   - D:\a\execs\execs\apps\desktop\src-tauri\Cargo.lock
+2026-09-22T15:05:21.5725727Z   - D:\a\execs\execs\apps\desktop\src-tauri\Cargo.toml
+2026-09-22T15:05:21.5727384Z   - D:\a\execs\execs\apps\desktop\src-tauri\core\Cargo.toml
+2026-09-22T15:05:21.5728516Z ##[endgroup]
+2026-09-22T15:05:21.5728631Z
+2026-09-22T15:05:21.5728763Z ... Restoring cache ...
+2026-09-22T15:05:21.7772001Z Cache hit for restore-key: v0-rust-rust-windows-Windows_NT-x64-2113753f-9c0d3281
+2026-09-22T15:05:22.8260371Z Received 192937984 of 1021545052 (18.9%), 182.2 MBs/sec
+2026-09-22T15:05:23.9118886Z Received 402653184 of 1021545052 (39.4%), 182.8 MBs/sec
+2026-09-22T15:05:24.9213691Z Received 637534208 of 1021545052 (62.4%), 195.4 MBs/sec
+2026-09-22T15:05:25.9227649Z Received 830472192 of 1021545052 (81.3%), 192.6 MBs/sec
+2026-09-22T15:05:26.9128910Z Received 1021545052 of 1021545052 (100.0%), 190.9 MBs/sec
+2026-09-22T15:05:26.9132223Z Cache Size: ~974 MB (1021545052 B)
+2026-09-22T15:05:26.9172614Z [command]"C:\Program Files\Git\usr\bin\tar.exe" -xf D:/a/_temp/bc71660f-7211-4c3c-b904-ba67a25f58c6/cache.tzst -P -C D:/a/execs/execs --force-local --use-compress-program "zstd -d"
+2026-09-22T15:05:48.3515384Z Cache restored successfully
+2026-09-22T15:05:48.4044067Z Restored from cache key "v0-rust-rust-windows-Windows_NT-x64-2113753f-9c0d3281" full match: false.
+2026-09-22T15:05:48.4445492Z ##[group]Run cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
+2026-09-22T15:05:48.4447422Z cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
+2026-09-22T15:05:48.5272023Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-09-22T15:05:48.5272479Z env:
+2026-09-22T15:05:48.5272736Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:05:48.5273069Z   CARGO_INCREMENTAL: 0
+2026-09-22T15:05:48.5273349Z   CARGO_TERM_COLOR: always
+2026-09-22T15:05:48.5273627Z   CACHE_ON_FAILURE: false
+2026-09-22T15:05:48.5273885Z ##[endgroup]
+2026-09-22T15:05:51.3736923Z     Updating crates.io index
+2026-09-22T15:05:56.2948196Z  Downloading crates ...
+2026-09-22T15:06:09.8913148Z   Downloaded itertools v0.14.0
+2026-09-22T15:06:09.9520977Z   Downloaded libloading v0.8.9
+2026-09-22T15:06:09.9732142Z   Downloaded prost v0.13.5
+2026-09-22T15:06:09.9866537Z   Downloaded prost-derive v0.13.5
+2026-09-22T15:06:10.8923243Z    Compiling anyhow v1.0.104
+2026-09-22T15:06:10.9091033Z     Checking simd-adler32 v0.3.10
+2026-09-22T15:06:10.9228535Z    Compiling either v1.18.0
+2026-09-22T15:06:10.9244230Z     Checking bitflags v1.3.2
+2026-09-22T15:06:15.1592291Z     Checking libloading v0.8.9
+2026-09-22T15:06:18.2893152Z    Compiling itertools v0.14.0
+2026-09-22T15:06:18.5756741Z     Checking miniz_oxide v0.9.1
+2026-09-22T15:06:19.7922019Z     Checking zopfli v0.8.3
+2026-09-22T15:06:19.9228653Z     Checking flate2 v1.1.10
+2026-09-22T15:06:20.3706999Z     Checking fdeflate v0.3.7
+2026-09-22T15:06:20.4557692Z     Checking zip v2.4.2
+2026-09-22T15:06:20.6515997Z     Checking miniz_oxide v0.8.9
+2026-09-22T15:06:21.0729256Z     Checking png v0.17.16
+2026-09-22T15:06:21.4862015Z     Checking execs-core v0.2.0 (D:\a\execs\execs\apps\desktop\src-tauri\core)
+2026-09-22T15:06:26.8703008Z     Checking tauri-utils v2.9.3
+2026-09-22T15:06:33.3035531Z     Checking tauri-runtime v2.11.3
+2026-09-22T15:06:33.3497835Z    Compiling prost-derive v0.13.5
+2026-09-22T15:06:33.9580186Z     Checking tauri-runtime-wry v2.11.4
+2026-09-22T15:06:36.4454794Z     Checking prost v0.13.5
+2026-09-22T15:06:36.8994781Z     Checking execs-inventory-probe v0.1.0 (D:\a\execs\execs\tools\inventory-probe)
+2026-09-22T15:06:38.1103411Z    Compiling tauri-build v2.6.3
+2026-09-22T15:06:38.1104446Z    Compiling tauri-plugin v2.6.3
+2026-09-22T15:06:38.1105202Z    Compiling tauri-codegen v2.6.3
+2026-09-22T15:06:44.2795102Z    Compiling tauri v2.11.5
+2026-09-22T15:06:44.2796089Z    Compiling tauri-macros v2.6.3
+2026-09-22T15:06:44.2796772Z    Compiling tauri-plugin-fs v2.5.1
+2026-09-22T15:06:44.2797463Z    Compiling tauri-plugin-dialog v2.7.2
+2026-09-22T15:06:45.6290859Z    Compiling tauri-plugin-opener v2.5.4
+2026-09-22T15:06:46.1545873Z    Compiling tauri-plugin-updater v2.10.1
+2026-09-22T15:06:46.4585753Z    Compiling execs v0.2.0 (D:\a\execs\execs\apps\desktop\src-tauri)
+2026-09-22T15:06:52.9740837Z     Checking tauri-plugin-single-instance v2.4.4
+2026-09-22T15:06:59.7904898Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 10s
+2026-09-22T15:06:59.9742441Z ##[group]Run cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locked
+2026-09-22T15:06:59.9743242Z cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --locked
+2026-09-22T15:06:59.9811498Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-09-22T15:06:59.9811931Z env:
+2026-09-22T15:06:59.9812194Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:06:59.9812555Z   CARGO_INCREMENTAL: 0
+2026-09-22T15:06:59.9812840Z   CARGO_TERM_COLOR: always
+2026-09-22T15:06:59.9813129Z   CACHE_ON_FAILURE: false
+2026-09-22T15:06:59.9813390Z ##[endgroup]
+2026-09-22T15:07:00.9428063Z    Compiling anyhow v1.0.104
+2026-09-22T15:07:00.9500980Z    Compiling simd-adler32 v0.3.10
+2026-09-22T15:07:00.9560573Z    Compiling adler2 v2.0.1
+2026-09-22T15:07:00.9685568Z    Compiling bitflags v1.3.2
+2026-09-22T15:07:01.1039527Z    Compiling libloading v0.8.9
+2026-09-22T15:07:01.2268427Z    Compiling tauri-utils v2.9.3
+2026-09-22T15:07:01.3956511Z    Compiling miniz_oxide v0.9.1
+2026-09-22T15:07:01.4850159Z    Compiling fdeflate v0.3.7
+2026-09-22T15:07:01.5983826Z    Compiling miniz_oxide v0.8.9
+2026-09-22T15:07:02.3205790Z    Compiling flate2 v1.1.10
+2026-09-22T15:07:02.8226034Z    Compiling png v0.17.16
+2026-09-22T15:07:02.9654252Z    Compiling zopfli v0.8.3
+2026-09-22T15:07:04.5574563Z    Compiling ico v0.5.0
+2026-09-22T15:07:04.9765389Z    Compiling zip v2.4.2
+2026-09-22T15:07:05.4942374Z    Compiling prost-derive v0.13.5
+2026-09-22T15:07:07.6026171Z    Compiling execs-core v0.2.0 (D:\a\execs\execs\apps\desktop\src-tauri\core)
+2026-09-22T15:07:08.2195251Z    Compiling prost v0.13.5
+2026-09-22T15:07:08.8184394Z    Compiling execs-inventory-probe v0.1.0 (D:\a\execs\execs\tools\inventory-probe)
+2026-09-22T15:07:25.3193692Z    Compiling tauri-build v2.6.3
+2026-09-22T15:07:27.4472916Z    Compiling tauri-plugin v2.6.3
+2026-09-22T15:07:28.0694249Z    Compiling tauri-codegen v2.6.3
+2026-09-22T15:07:28.9888199Z    Compiling tauri v2.11.5
+2026-09-22T15:07:31.0102680Z    Compiling tauri-runtime v2.11.3
+2026-09-22T15:07:31.3355962Z    Compiling tauri-macros v2.6.3
+2026-09-22T15:07:31.8481082Z    Compiling tauri-runtime-wry v2.11.4
+2026-09-22T15:07:34.3333537Z    Compiling tauri-plugin-fs v2.5.1
+2026-09-22T15:07:36.4561693Z    Compiling tauri-plugin-updater v2.10.1
+2026-09-22T15:07:37.9519636Z    Compiling tauri-plugin-dialog v2.7.2
+2026-09-22T15:07:39.4321027Z    Compiling tauri-plugin-opener v2.5.4
+2026-09-22T15:07:41.1547802Z    Compiling execs v0.2.0 (D:\a\execs\execs\apps\desktop\src-tauri)
+2026-09-22T15:07:53.7448321Z    Compiling tauri-plugin-single-instance v2.4.4
+2026-09-22T15:08:54.9826486Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 54s
+2026-09-22T15:08:55.0167565Z      Running unittests src\lib.rs (apps\desktop\src-tauri\target\debug\deps\execs_lib-968ff8e1ee8d0b77.exe)
+2026-09-22T15:08:55.0351883Z
+2026-09-22T15:08:55.0352290Z running 125 tests
+2026-09-22T15:08:55.0363371Z test comfig_fetch::tests::live_release_metadata_publishes_sha256_for_every_vpk ... ignored, live network regression
+2026-09-22T15:08:55.0364724Z test commands::comfig::tests::module_payload_cannot_add_cfg_lines ... ok
+2026-09-22T15:08:55.0365903Z test comfig_fetch::tests::downloaded_vpk_must_match_the_published_digest_and_parse_as_a_vpk_header ... ok
+2026-09-22T15:08:55.0369163Z test comfig_fetch::tests::release_assets_require_githubs_sha256_digest_and_canonical_url ... ok
+2026-09-22T15:08:55.0375312Z test commands::files::tests::oversized_paths_are_rejected_before_core ... ok
+2026-09-22T15:08:55.0387086Z test commands::files::tests::editor_requests_are_bounded_by_utf8_bytes ... ok
+2026-09-22T15:08:55.0389839Z test commands::hud::tests::queued_options_refuse_another_profile_or_hud_before_fetching_or_writing ... ok
+2026-09-22T15:08:55.0391615Z test commands::hud::tests::rejected_hud_input_keeps_guidance_without_claiming_a_profile_write_failed ... ok
+2026-09-22T15:08:55.0394701Z test commands::hud::tests::the_payload_is_hud_ui_state_plus_one_camel_case_flag ... ok
+2026-09-22T15:08:55.0397031Z test commands::launch::tests::launch_cancel_requires_steam_and_tf2_to_be_closed ... ok
+2026-09-22T15:08:55.0399367Z test commands::diagnostics::tests::tail_read_keeps_only_the_last_twenty_lines ... ok
+2026-09-22T15:08:55.0402183Z test commands::library::import_tests::approval_is_single_use_and_wrong_tokens_preserve_the_pending_review ... ok
+2026-09-22T15:08:55.0406050Z test commands::diagnostics::tests::tail_read_is_byte_bounded_and_drops_a_partial_first_line ... ok
+2026-09-22T15:08:55.0407409Z test commands::library::import_tests::cancelling_an_old_dialog_does_not_discard_a_new_review ... ok
+2026-09-22T15:08:56.9374370Z test commands::library::orchestration_tests::command_default_library_preflight_refusal_preserves_source_bytes_owner_and_choices ... ok
+2026-09-22T15:08:58.8595375Z test commands::library::orchestration_tests::selected_source_direct_and_external_removal_refuse_without_changing_owner ... ok
+2026-09-22T15:08:58.8597767Z test commands::library::tests::only_the_recorded_profile_can_retry_an_interrupted_switch ... ok
+2026-09-22T15:08:58.8601469Z test commands::lifecycle::tests::failed_or_cancelled_update_releases_only_its_exact_lease ... ok
+2026-09-22T15:08:58.8610170Z test commands::lifecycle::tests::renderer_has_no_raw_install_or_restart_capability ... ok
+2026-09-22T15:08:58.8612747Z test commands::lifecycle::tests::update_version_input_is_small_and_semver_shaped ... ok
+2026-09-22T15:08:58.8615869Z test commands::mods::tests::a_gamebanana_download_becomes_a_vpk_pack_by_name_or_signature ... ok
+2026-09-22T15:08:58.8619634Z test commands::preloader::tests::cancelled_repair_can_only_unlock_after_steam_and_tf2_exit ... ok
+2026-09-22T15:08:58.8622686Z test commands::preloader::tests::profile_preload_recovery_precedes_the_preloader_transaction ... ok
+2026-09-22T15:08:58.8629459Z test commands::preloader::tests::repair_snapshot_refuses_excess_aggregated_path_bytes ... ok
+2026-09-22T15:08:58.8669218Z test commands::preloader::tests::repair_snapshot_refuses_excess_top_level_entries ... ok
+2026-09-22T15:08:58.8672313Z test commands::tests::only_the_two_comfig_hosts_are_navigable ... ok
+2026-09-22T15:08:58.8676311Z test crosshair_fetch::tests::fetching_nothing_touches_nothing ... ok
+2026-09-22T15:08:58.8682333Z test crosshair_fetch::tests::preview_request_names_are_deduplicated_bounded_and_validated_before_work ... ok
+2026-09-22T15:08:58.8685259Z test crosshair_fetch::tests::remote_file_names_are_restricted_to_plain_stems ... ok
+2026-09-22T15:08:58.8688299Z test error::tests::bare_strings_become_unknown ... ok
+2026-09-22T15:08:58.8690956Z test error::tests::preloader_running_error_keeps_its_type ... ok
+2026-09-22T15:08:58.8693653Z test error::tests::profile_errors_keep_their_own_codes_and_prose ... ok
+2026-09-22T15:08:58.8697661Z test error::tests::serializes_with_code_and_message ... ok
+2026-09-22T15:08:58.8700397Z test error::tests::write_lock_error_carries_the_game_running_code ... ok
+2026-09-22T15:08:58.8703359Z test gamebanana::tests::a_bare_vpk_is_told_apart_by_name_or_by_signature ... ok
+2026-09-22T15:08:58.8706294Z test gamebanana::tests::a_search_string_cannot_break_out_of_its_query_parameter ... ok
+2026-09-22T15:08:58.8712138Z test gamebanana::tests::a_selected_category_has_exact_total_and_global_filter_scopes ... ok
+2026-09-22T15:08:58.8717944Z test gamebanana::tests::all_results_hide_excluded_roots_without_shortening_pagination ... ok
+2026-09-22T15:08:58.8722242Z test gamebanana::tests::an_older_overlapping_response_cannot_poison_the_cache ... ok
+2026-09-22T15:08:58.8729736Z test gamebanana::tests::cache_entry_bound_evicts_the_oldest_response ... ok
+2026-09-22T15:08:58.8732701Z test gamebanana::tests::cache_expiry_and_failed_refresh_do_not_publish_bad_data ... ok
+2026-09-22T15:08:58.8735913Z test gamebanana::tests::cache_reports_remaining_freshness_and_refresh_bypasses_it ... ok
+2026-09-22T15:08:58.8739603Z test gamebanana::tests::direct_installs_validate_the_root_category_and_game ... ok
+2026-09-22T15:08:58.8743565Z test gamebanana::tests::index_order_and_missing_source_fields_are_preserved ... ok
+2026-09-22T15:08:58.8748041Z test gamebanana::tests::index_urls_apply_search_and_supported_filters_globally ... ok
+2026-09-22T15:08:58.8750518Z test gamebanana::tests::only_installable_root_categories_are_offered ... ok
+2026-09-22T15:08:58.8751428Z test gamebanana::tests::smoke_the_live_api ... ignored
+2026-09-22T15:08:58.8752837Z test gamebanana::tests::the_frontends_sort_keys_map_to_aliases_the_api_accepts ... ok
+2026-09-22T15:08:58.8757374Z test gamebanana::tests::the_newest_unpackable_file_wins_and_a_vpk_counts ... ok
+2026-09-22T15:08:58.8761057Z test gamebanana::tests::totals_have_explicit_semantics_and_missing_counts_stay_unknown ... ok
+2026-09-22T15:08:58.8764012Z test gamebanana::tests::untrusted_profile_and_thumbnail_metadata_is_not_exposed_to_the_ui ... ok
+2026-09-22T15:08:58.8767716Z test hitsound_fetch::tests::comfig_index_entries_are_deduped_validated_and_named_for_people ... ok
+2026-09-22T15:08:58.8770557Z test hitsound_fetch::tests::comfig_object_ids_are_exact_128_hex_values ... ok
+2026-09-22T15:08:58.8771577Z test hitsound_fetch::tests::live_comfig_object_id_resolves_to_a_usable_wav ... ignored, live network regression
+2026-09-22T15:08:58.9464534Z test hitsound_fetch::tests::picked_gc_preserves_references_and_young_files ... ok
+2026-09-22T15:08:58.9768662Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-picked-link-root-4224-bdbb8e514f5d43b3a2a61ccce352fa82\hitsound-cache\picked <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-picked-link-victim-4224-fe33466f492f446a8b5a4ec89594361f
+2026-09-22T15:08:58.9958727Z test hitsound_fetch::tests::picked_gc_refuses_a_linked_directory_without_touching_the_victim ... ok
+2026-09-22T15:08:58.9961328Z test hitsound_fetch::tests::remote_names_are_restricted_to_plain_stems ... ok
+2026-09-22T15:08:58.9965445Z test hitsound_fetch::tests::tokens_are_32_hex_and_unknown_ones_are_refused ... ok
+2026-09-22T15:08:58.9971357Z test hud_fetch::tests::a_partial_catalog_cache_never_stands_in_for_a_refresh ... ok
+2026-09-22T15:08:58.9977043Z test hud_fetch::tests::a_thread_yields_only_the_last_archive_anchor_by_the_original_author ... ok
+2026-09-22T15:08:58.9982793Z test hud_fetch::tests::an_expired_catalog_walk_reports_failure_without_fetching ... ok
+2026-09-22T15:08:58.9986520Z test hud_fetch::tests::catalog_documents_only_selects_top_level_hud_json_blobs ... ok
+2026-09-22T15:08:58.9990230Z test hud_fetch::tests::dropbox_links_are_forced_to_direct_download ... ok
+2026-09-22T15:08:58.9993771Z test hud_fetch::tests::github_hud_sources_require_https_exact_repo_and_full_commit ... ok
+2026-09-22T15:08:58.9996334Z test hud_fetch::tests::imgur_ids_come_out_of_every_album_spelling ... ok
+2026-09-22T15:08:59.1063864Z test hud_fetch::tests::partial_catalog_refresh_discloses_failures_and_keeps_only_still_listed_cached_entries ... ok
+2026-09-22T15:08:59.1069637Z test hud_fetch::tests::recursive_tree_responses_must_be_complete_and_commit_addressable ... ok
+2026-09-22T15:08:59.1077931Z test hud_fetch::tests::showcase_pages_resolve_to_raw_image_urls ... ok
+2026-09-22T15:08:59.1144748Z test hud_fetch::tests::showcase_parsing_is_bounded_for_hostile_markdown ... ok
+2026-09-22T15:08:59.1145855Z test hud_fetch::tests::stale_live_thread_ids_do_not_resolve_a_reply_as_a_hud_download ... ignored, live network regression
+2026-09-22T15:08:59.1484395Z test hud_fetch::tests::the_catalog_cache_round_trips_and_reads_core_shaped_files ... ok
+2026-09-22T15:08:59.1488274Z test hud_fetch::tests::the_schema_url_and_cache_name_are_both_pinned_to_the_commit ... ok
+2026-09-22T15:08:59.1491057Z test hud_stats::tests::a_partial_or_failed_source_preserves_stale_fields_until_a_complete_walk ... ok
+2026-09-22T15:08:59.1494241Z test hud_stats::tests::a_partial_read_is_served_for_an_hour_and_a_whole_one_for_a_day ... ok
+2026-09-22T15:08:59.1497426Z test hud_stats::tests::comfig_listing_pairs_ids_with_dates ... ok
+2026-09-22T15:08:59.1517191Z test hud_stats::tests::comfig_listing_returns_only_an_overflow_sentinel ... ok
+2026-09-22T15:08:59.1520153Z test hud_stats::tests::comfig_pagination_requires_an_explicit_last_page ... ok
+2026-09-22T15:08:59.1525153Z test hud_stats::tests::duplicate_source_records_cannot_overwrite_or_sum_a_huds_counts ... ok
+2026-09-22T15:08:59.1681126Z test hud_stats::tests::legacy_source_cache_cannot_be_used_as_stale_refresh_input ... ok
+2026-09-22T15:08:59.1684978Z test hud_stats::tests::listing_only_requests_huds_and_distinguishes_malformed_from_empty ... ok
+2026-09-22T15:08:59.3818858Z test hud_stats::tests::refresh_result_discloses_failed_partial_and_recovered_sources_without_losing_cached_values ... ok
+2026-09-22T15:08:59.3824361Z test hud_stats::tests::repository_joins_are_exact_unique_and_subordinate_to_explicit_links ... ok
+2026-09-22T15:08:59.3827264Z test hud_stats::tests::repository_relations_are_followed_without_guessing_display_names ... ok
+2026-09-22T15:08:59.3861504Z test hud_stats::tests::tf2huds_devalue_arrays_are_bounded_during_deserialization ... ok
+2026-09-22T15:08:59.3865130Z test hud_stats::tests::tf2huds_devalue_documents_decode ... ok
+2026-09-22T15:08:59.3872629Z test net::tests::a_body_within_the_cap_reads_through_whole ... ok
+2026-09-22T15:08:59.4259285Z test net::tests::a_cache_file_with_the_wrong_hash_is_re_downloaded_and_replaced ... ok
+2026-09-22T15:08:59.4262981Z test net::tests::a_content_length_claim_cannot_reserve_past_the_ceiling ... ok
+2026-09-22T15:08:59.4306616Z test net::tests::a_download_that_fails_verification_is_refused_and_not_cached ... ok
+2026-09-22T15:08:59.4368732Z test commands::library::orchestration_tests::command_legacy_migration_keeps_local_source_choices_before_switching_away ... ok
+2026-09-22T15:08:59.4414159Z test net::tests::a_verified_download_is_not_reported_successful_when_caching_fails ... ok
+2026-09-22T15:08:59.4485897Z test net::tests::a_verifying_cache_hit_never_touches_the_network ... ok
+2026-09-22T15:08:59.4511958Z test net::tests::an_oversize_cache_is_not_read_or_trusted ... ok
+2026-09-22T15:08:59.4608740Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-net-linked-cache-root-4224\cache <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-net-linked-cache-victim-4224
+2026-09-22T15:08:59.4633566Z test commands::library::orchestration_tests::command_interrupted_switch_recovers_without_erasing_the_source_selection ... ok
+2026-09-22T15:08:59.4639062Z test net::tests::dropbox_download_shards_are_scoped_to_its_redirects ... ok
+2026-09-22T15:08:59.4643128Z test net::tests::gamebanana_filecache_shards_are_scoped_to_its_redirects ... ok
+2026-09-22T15:08:59.4646388Z test net::tests::oversize_is_refused_by_the_running_cap_even_with_no_content_length ... ok
+2026-09-22T15:08:59.4649401Z test net::tests::oversize_is_refused_up_front_when_content_length_says_so ... ok
+2026-09-22T15:08:59.4653015Z test net::tests::a_linked_cache_directory_cannot_delete_or_replace_external_bytes ... ok
+2026-09-22T15:08:59.4657306Z test net::tests::redirects_cannot_downgrade_or_leave_the_source_host_set ... ok
+2026-09-22T15:08:59.4661454Z test net::tests::source_urls_require_https_exact_hosts_and_expected_paths ... ok
+2026-09-22T15:08:59.4734735Z test net::tests::text_documents_are_capped_like_downloads ... ok
+2026-09-22T15:08:59.4842973Z test net::tests::semantic_validation_evicts_a_valid_prefix_cache_and_refetches ... ok
+2026-09-22T15:08:59.4845843Z test net::tests::verify_accepts_matching_hash_and_magic ... ok
+2026-09-22T15:08:59.4849101Z test startup_error::tests::includes_full_revision_path_and_safe_recovery_guidance ... ok
+2026-09-22T15:08:59.4853314Z test startup_error::tests::missing_data_directory_still_gives_an_actionable_diagnostic ... ok
+2026-09-22T15:08:59.4889014Z test net::tests::the_download_cache_is_written_through_a_part_file ... ok
+2026-09-22T15:08:59.5049505Z test startup_tests::a_delayed_launch_keeps_its_lease_until_the_process_appears ... ok
+2026-09-22T15:08:59.5061345Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-lifecycle-linked-maintenance-4224-1\maintenance <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-lifecycle-linked-maintenance-victim-4224-2
+2026-09-22T15:08:59.5229576Z test startup_tests::a_linked_maintenance_directory_cannot_redirect_a_lease_write ... ok
+2026-09-22T15:08:59.5338541Z test startup_tests::a_repair_marker_restores_the_write_gate_after_restart ... ok
+2026-09-22T15:08:59.5341120Z test net::tests::concurrent_pinned_fetches_publish_one_complete_cache_file ... ok
+2026-09-22T15:08:59.5374408Z test startup_tests::an_oversized_marker_cannot_unlock_an_active_operation ... ok
+2026-09-22T15:08:59.5378379Z test startup_tests::an_oversized_marker_fails_startup_closed_after_a_bounded_read ... ok
+2026-09-22T15:08:59.5381747Z test startup_tests::missing_platform_data_directory_is_a_clear_startup_error ... ok
+2026-09-22T15:08:59.5459390Z test startup_tests::normal_startup_does_not_create_maintenance_state ... ok
+2026-09-22T15:08:59.5608790Z test startup_tests::corrupt_mismatched_and_multiple_markers_are_preserved_on_failure ... ok
+2026-09-22T15:08:59.5611359Z test startup_tests::stale_lifecycle_token_cannot_clear_a_new_operation ... ok
+2026-09-22T15:08:59.5766061Z test startup_tests::restored_steam_verification_does_not_block_library_loading ... ok
+2026-09-22T15:08:59.5876265Z test startup_tests::unreadable_marker_refuses_startup_without_replacing_it ... ok
+2026-09-22T15:08:59.5879138Z test viewmodel_fetch::tests::preview_cache_is_keyed_by_the_pinned_commit ... ok
+2026-09-22T15:08:59.5882484Z test viewmodel_fetch::tests::preview_cache_requires_a_complete_structural_jpeg ... ok
+2026-09-22T15:08:59.5885783Z test viewmodel_fetch::tests::preview_names_are_plain_lowercase_stems ... ok
+2026-09-22T15:08:59.6129198Z test startup_tests::stale_same_kind_completion_preserves_the_new_marker_and_generation ... ok
+2026-09-22T15:08:59.6200686Z test startup_tests::completion_cannot_pass_an_external_handoff_in_progress ... ok
+2026-09-22T15:09:00.8670269Z test commands::library::orchestration_tests::command_local_particles_round_trip_reapply_restart_and_export_import_without_library ... ok
+2026-09-22T15:09:00.8671406Z
+2026-09-22T15:09:00.8672075Z test result: ok. 121 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 5.83s
+2026-09-22T15:09:00.8673003Z
+2026-09-22T15:09:00.8718796Z      Running unittests src\main.rs (apps\desktop\src-tauri\target\debug\deps\execs-b9b64f0f05e197f7.exe)
+2026-09-22T15:09:00.8859456Z
+2026-09-22T15:09:00.8860411Z running 0 tests
+2026-09-22T15:09:00.8860633Z
+2026-09-22T15:09:00.8860994Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+2026-09-22T15:09:00.8861429Z
+2026-09-22T15:09:00.8878828Z      Running unittests src\lib.rs (apps\desktop\src-tauri\target\debug\deps\execs_core-2dab202c1435a172.exe)
+2026-09-22T15:09:00.9054112Z
+2026-09-22T15:09:00.9054425Z running 715 tests
+2026-09-22T15:09:01.2419016Z test absorb::tests::a_whole_pack_disappearing_still_prompts_rather_than_absorbing ... ok
+2026-09-22T15:09:01.2788416Z test absorb::tests::a_missing_foreign_pack_is_left_deleted ... ok
+2026-09-22T15:09:01.3053796Z test absorb::tests::a_missing_app_pack_is_restored_without_a_side_file ... ok
+2026-09-22T15:09:01.5349541Z test absorb::tests::absorb_with_no_drift_leaves_config_cfg_untouched ... ok
+2026-09-22T15:09:01.6208331Z test absorb::tests::config_dual_write_stops_before_cloud_when_tf2_starts_mid_operation ... ok
+2026-09-22T15:09:01.8960300Z test absorb::tests::a_dashed_rename_waits_for_update_before_changing_library_identity ... ok
+2026-09-22T15:09:01.9732853Z test absorb::tests::absorb_does_not_migrate_legacy_user_cfgs_into_the_profile ... ok
+2026-09-22T15:09:01.9785332Z test absorb::tests::an_interrupted_write_is_repaired_from_the_library ... ok
+2026-09-22T15:09:02.0705314Z test absorb::tests::dual_write_without_steam_still_writes_live ... ok
+2026-09-22T15:09:02.1946625Z test absorb::tests::deleted_file_in_a_still_live_pack_absorbs_and_is_not_resurrected ... ok
+2026-09-22T15:09:02.5376649Z test absorb::tests::deleted_pack_waits_missing_owned_cfg_is_removed ... ok
+2026-09-22T15:09:02.6489900Z test absorb::tests::interrupted_write_repair_stops_and_remains_retryable_when_tf2_starts ... ok
+2026-09-22T15:09:02.8746248Z test absorb::tests::leading_dash_is_a_distinct_pack ... ok
+2026-09-22T15:09:02.8972400Z test absorb::tests::no_active_profile_is_noop ... ok
+2026-09-22T15:09:02.9302798Z test absorb::tests::dual_write_matches_live_and_cloud ... ok
+2026-09-22T15:09:02.9306330Z test absorb::tests::pack_key_preserves_leading_dash ... ok
+2026-09-22T15:09:03.1969341Z test absorb::tests::new_file_in_existing_pack_absorbs_automatically ... ok
+2026-09-22T15:09:03.2706000Z test absorb::tests::keep_is_remembered_so_the_prompt_does_not_return ... ok
+2026-09-22T15:09:03.4492737Z test absorb::tests::refuse_while_tf2_running ... ok
+2026-09-22T15:09:03.8088394Z test absorb::tests::restore_rewrites_the_removed_packs_and_leaves_the_new_ones ... ok
+2026-09-22T15:09:03.9574241Z test absorb::tests::restore_stops_between_files_when_tf2_starts ... ok
+2026-09-22T15:09:04.0490104Z test absorb::tests::pack_update_adds_and_removes_keep_leaves_library ... ok
+2026-09-22T15:09:04.1002453Z test absorb::tests::stray_part_cleanup_stops_between_removals_when_tf2_starts ... ok
+2026-09-22T15:09:04.1004438Z test absorb::tests::owned_cfg_drift_absorbs_and_new_pack_waits ... ok
+2026-09-22T15:09:04.1011192Z test absorb::tests::windows_pack_keys_fold_case_but_preserve_dashes ... ok
+2026-09-22T15:09:04.3648875Z test absorb::tests::stock_custom_entries_and_part_files_are_never_packs ... ok
+2026-09-22T15:09:04.5000096Z test absorb::tests::stale_junk_ignore_entries_are_dropped ... ok
+2026-09-22T15:09:04.5003286Z test apply::tests::file_safe_paths_reject_user_and_official ... ok
+2026-09-22T15:09:05.0598101Z test apply::tests::inactive_profile_does_not_write_live ... ok
+2026-09-22T15:09:05.1447686Z test apply::tests::dual_writes_config_cfg_when_active ... ok
+2026-09-22T15:09:05.1843952Z test apply::tests::cloud_marker_clear_failure_is_a_retryable_saved_outcome ... ok
+2026-09-22T15:09:05.3015640Z test apply::tests::failed_cloud_write_is_retried_after_live_already_matches ... ok
+2026-09-22T15:09:05.4212845Z test apply::tests::layer_from_comfig_vpk ... ok
+2026-09-22T15:09:05.4219860Z test apply::tests::managed_exec_migrates_only_its_line_and_preserves_user_bytes ... ok
+2026-09-22T15:09:05.4351916Z test apply::tests::managed_cfg_refuses_stale_profile_layer_and_partial_write ... ok
+2026-09-22T15:09:05.7501677Z test apply::tests::refuses_forbidden_and_game_running ... ok
+2026-09-22T15:09:06.1296930Z test apply::tests::profile_file_read_refuses_oversized_sparse_payload ... ok
+2026-09-22T15:09:06.6944873Z test apply::tests::managed_cfg_rolls_back_both_files_after_partial_live_projection ... ok
+2026-09-22T15:09:06.7024497Z test archive::tests::actual_file_bytes_are_bounded_even_when_metadata_was_stale ... ok
+2026-09-22T15:09:06.7060011Z test archive::tests::archives_are_sniffed_by_magic ... ok
+2026-09-22T15:09:06.7071897Z test archive::tests::backend_cfg_policy_matches_blocking_cfglint_boundaries ... ok
+2026-09-22T15:09:06.7106424Z test archive::tests::cfg_scanner_bounds_separator_and_token_storms ... ok
+2026-09-22T15:09:06.7110275Z test archive::tests::dangerous_launch_console_commands_are_refused ... ok
+2026-09-22T15:09:06.7113307Z test archive::tests::escaping_and_absolute_entry_names_are_refused ... ok
+2026-09-22T15:09:06.7140849Z test archive::tests::explicit_creator_trust_preserves_commands_but_not_parser_budget_exceptions ... ok
+2026-09-22T15:09:06.7288900Z test archive::tests::folder_entry_cap_counts_empty_directories ... ok
+2026-09-22T15:09:06.7793513Z test apply::tests::writes_library_and_live_when_active ... ok
+2026-09-22T15:09:06.9289438Z test archive::tests::folder_import_stops_at_the_depth_cap ... ok
+2026-09-22T15:09:06.9308663Z test archive::tests::junk_is_dropped_from_archives_as_well_as_folders ... ok
+2026-09-22T15:09:06.9328359Z test archive::tests::junk_policy_is_case_insensitive_and_matches_profile_ownership ... ok
+2026-09-22T15:09:07.0564080Z test archive::tests::generic_archive_checks_ratio_and_declared_size_against_actual_output ... ok
+2026-09-22T15:09:07.1042485Z test archive::tests::maintained_7z_decoder_reads_the_product_fixture ... ok
+2026-09-22T15:09:07.1069596Z test archive::tests::portable_archive_path_collisions_are_refused ... ok
+2026-09-22T15:09:07.1073681Z test archive::tests::ratio_floor_is_bounded_and_does_not_accept_missing_compressed_data ... ok
+2026-09-22T15:09:07.1078632Z test archive::tests::seven_z_metadata_and_dictionary_preflight_is_bounded ... ok
+2026-09-22T15:09:07.1593378Z test archive::tests::small_high_ratio_entries_still_obey_entry_and_total_byte_caps ... ok
+2026-09-22T15:09:07.1853050Z test archive::tests::small_repetitive_hud_assets_unpack_without_changing_their_bytes ... ok
+2026-09-22T15:09:07.1889437Z test archive::tests::the_caps_are_enforced_by_entry_and_by_total ... ok
+2026-09-22T15:09:07.3296580Z test blob::tests::a_corrupt_stored_blob_is_rewritten_not_trusted ... ok
+2026-09-22T15:09:07.3875689Z test blob::tests::gc_keeps_referenced_hashes ... ok
+2026-09-22T15:09:07.4046610Z test blob::tests::gc_removes_interrupted_incoming_objects ... ok
+2026-09-22T15:09:07.4219669Z test archive::tests::many_small_entries_cannot_bypass_the_total_expansion_ratio ... ok
+2026-09-22T15:09:07.4869935Z test blob::tests::writes_once_under_hash_prefix ... ok
+2026-09-22T15:09:07.4874547Z test cfg_layer::tests::only_top_level_executed_commands_prove_the_loader ... ok
+2026-09-22T15:09:07.4919228Z test blob::tests::path_ingest_names_the_exact_published_bytes ... ok
+2026-09-22T15:09:07.4923590Z test cfg_script::tests::semicolons_and_comment_markers_inside_quotes_are_data ... ok
+2026-09-22T15:09:07.4927717Z test cfg_script::tests::signature_keeps_execution_order_and_splits_semicolons ... ok
+2026-09-22T15:09:07.4935925Z test cfg_script::tests::signature_normalizes_quotes_but_keeps_cvars ... ok
+2026-09-22T15:09:07.4939088Z test cfg_script::tests::signature_sees_rebinds ... ok
+2026-09-22T15:09:07.6502384Z test cfg_script::tests::semicolon_storm_is_consumed_without_a_retained_command_list ... ok
+2026-09-22T15:09:08.0176214Z test comfig::tests::a_source_that_grows_after_the_folder_scan_is_not_published ... ok
+2026-09-22T15:09:08.1263790Z test comfig::tests::a_missing_new_asset_leaves_the_installed_addons_alone ... ok
+2026-09-22T15:09:08.6840079Z test apply::tests::scoped_managed_writes_merge_latest_sibling_settings_in_both_orders ... ok
+2026-09-22T15:09:08.8505350Z test comfig::tests::addon_add_remove_updates_manifest_paths ... ok
+2026-09-22T15:09:09.0545523Z test comfig::tests::addon_change_rolls_back_profile_live_files_and_manifest_together ... ok
+2026-09-22T15:09:09.1733208Z test comfig::tests::custom_import_refuses_untracked_live_content ... ok
+2026-09-22T15:09:09.1925882Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-55\comfig-custom\linked <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-55\outside
+2026-09-22T15:09:09.1998522Z test comfig::tests::folder_import_does_not_follow_a_nested_link_or_junction ... ok
+2026-09-22T15:09:09.5722893Z test comfig::tests::custom_import_rolls_back_profile_and_live_files_if_manifest_commit_fails ... ok
+2026-09-22T15:09:10.0185199Z test comfig::tests::import_copies_file_under_comfig_custom ... ok
+2026-09-22T15:09:10.0619504Z test comfig::tests::import_refuses_a_folder_past_the_caps ... ok
+2026-09-22T15:09:10.1335014Z test comfig::tests::custom_import_is_an_exact_replace_not_a_merge ... ok
+2026-09-22T15:09:10.1352491Z test comfig::tests::module_write_bounds_names_levels_and_entry_count ... ok
+2026-09-22T15:09:10.1871153Z test comfig::tests::import_refuses_a_folder_nested_past_the_depth_cap ... ok
+2026-09-22T15:09:10.3805615Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-60\Team Fortress 2\tf\custom\comfig-custom <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-60\outside-comfig-custom
+2026-09-22T15:09:10.4047488Z test comfig::tests::import_refuses_a_linked_live_parent_before_changing_the_profile ... ok
+2026-09-22T15:09:10.4915001Z test comfig::tests::official_batch_rejects_an_escaping_path_before_any_package_changes ... ok
+2026-09-22T15:09:10.6889573Z test comfig::tests::module_write_rejects_cfg_injection_without_changing_the_profile ... ok
+2026-09-22T15:09:10.6894968Z test comfig::tests::parse_setup_hook_and_modules ... ok
+2026-09-22T15:09:10.9860009Z test comfig::tests::refuses_while_tf2_running ... ok
+2026-09-22T15:09:11.1239779Z test comfig::tests::official_vpk_bytes_are_shared_for_base ... ok
+2026-09-22T15:09:11.5745995Z test comfig::tests::official_batch_rolls_back_every_package_if_manifest_commit_fails ... ok
+2026-09-22T15:09:11.5788026Z test crosshair::tests::a_script_that_will_not_decode_is_skipped_not_fatal ... ok
+2026-09-22T15:09:11.6636556Z test comfig::tests::stored_comfig_cfg_read_accepts_the_limit_and_rejects_one_byte_more ... ok
+2026-09-22T15:09:11.7082989Z test apply::tests::managed_cfg_merges_both_orders_and_preserves_latest_live_autoexec ... ok
+2026-09-22T15:09:11.9340491Z test crosshair::tests::apply_refuses_untracked_content_in_the_app_owned_pack ... ok
+2026-09-22T15:09:12.1865685Z test comfig::tests::write_preset_and_modules_round_trip ... ok
+2026-09-22T15:09:12.5364864Z test crosshair::tests::an_unparseable_weapon_script_is_skipped_not_fatal ... ok
+2026-09-22T15:09:13.0231818Z test crosshair::tests::apply_writes_imported_png_pixels ... ok
+2026-09-22T15:09:13.3678767Z test crosshair::tests::custom_shape_requires_pixels ... ok
+2026-09-22T15:09:13.3690063Z test crosshair::tests::decodes_ice_encrypted_scripts_from_a_synthetic_vpk ... ok
+2026-09-22T15:09:13.3720701Z test crosshair::tests::direct_crosshair_payloads_have_cardinality_and_byte_caps ... ok
+2026-09-22T15:09:13.3721919Z test crosshair::tests::installed_assets_build_only_into_an_isolated_profile ... ignored, Read-only installed TF2 assets; set EXECS_TEST_TF2_ROOT explicitly
+2026-09-22T15:09:14.1091447Z test crosshair::tests::apply_writes_pack_and_clears_stock_file ... ok
+2026-09-22T15:09:14.1096282Z test crosshair::tests::no_pack_color_leaves_the_stock_crosshair_cvars_alone ... ok
+2026-09-22T15:09:14.1197838Z test crosshair::tests::apply_rolls_back_payload_record_and_live_files_if_manifest_commit_fails ... ok
+2026-09-22T15:09:14.1200830Z test crosshair::tests::pack_paths_stay_file_safe ... ok
+2026-09-22T15:09:14.1203950Z test crosshair::tests::patch_changes_only_the_crosshair_block ... ok
+2026-09-22T15:09:14.3997955Z test crosshair::tests::old_crosshair_records_keep_their_mode_and_scale_and_bad_sizes_cannot_mutate ... ok
+2026-09-22T15:09:14.6352760Z test crosshair::tests::refuses_while_tf2_is_running ... ok
+2026-09-22T15:09:14.8075642Z test crosshair::tests::rejects_invalid_library_names ... ok
+2026-09-22T15:09:15.3214025Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-80\tf2\tf\custom\execs-crosshairs <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-80\outside-crosshair-pack
+2026-09-22T15:09:15.3234499Z test crosshair::tests::library_vtf_is_written_verbatim_with_its_own_dimensions ... ok
+2026-09-22T15:09:15.3714662Z test crosshair::tests::remove_refuses_a_linked_live_pack_without_touching_its_target ... ok
+2026-09-22T15:09:15.5258623Z test crosshair::tests::reapply_recovers_imported_pixels_from_the_pack ... ok
+2026-09-22T15:09:15.5261754Z test crosshair::tests::rgba_buffer_len_refuses_dimensions_that_overflow ... ok
+2026-09-22T15:09:15.5954155Z test crosshair::tests::remove_refuses_while_tf2_is_running_even_with_no_tracked_pack_files ... ok
+2026-09-22T15:09:16.1521402Z test crosshair::tests::stored_crosshair_and_gameplay_cfg_reads_are_bounded ... ok
+2026-09-22T15:09:16.1524578Z test crosshair::tests::tint_rides_on_the_cvars_and_textures_stay_white ... ok
+2026-09-22T15:09:16.4223621Z test crosshair::tests::script_stems_strip_one_suffix_only ... ok
+2026-09-22T15:09:16.4240437Z test crosshair::tests::vtf_header_is_7_2_bgra ... ok
+2026-09-22T15:09:16.8107129Z test custom_folders::tests::active_particle_source_references_block_repair_before_any_mutation ... ok
+2026-09-22T15:09:16.8161383Z test crosshair::tests::remove_rolls_back_payload_and_record_if_manifest_commit_fails ... ok
+2026-09-22T15:09:17.3521952Z test crosshair::tests::custom_mode_roundtrip_preserves_assets_scale_and_stock_selection ... ok
+2026-09-22T15:09:17.5609966Z test custom_folders::tests::an_inactive_profile_with_installed_particle_sources_refuses_repair ... ok
+2026-09-22T15:09:18.2441750Z test custom_folders::tests::existing_profiles_diagnose_and_repair_outer_names_with_backups_and_metadata ... ok
+2026-09-22T15:09:18.2447401Z test custom_folders::tests::reserved_names_are_exact_case_insensitive_outer_directories ... ok
+2026-09-22T15:09:18.3748037Z test custom_folders::tests::mixed_case_legacy_ancestors_are_one_windows_repair_or_an_explicit_linux_ambiguity ... ok
+2026-09-22T15:09:18.6691907Z test custom_folders::tests::review_lock_source_drift_and_collision_fail_without_changes ... ok
+2026-09-22T15:09:18.6815479Z test crosshair::tests::unreferenced_library_entries_survive_a_reapply_with_no_bytes ... ok
+2026-09-22T15:09:19.4930469Z test custom_folders::tests::repair_rolls_back_after_the_live_folder_moves ... ok
+2026-09-22T15:09:20.0908372Z test files_workspace::tests::comfig_creation_follows_verified_loader_and_detects_removal ... ok
+2026-09-22T15:09:20.3833926Z test files_workspace::tests::creation_refuses_collisions_and_forbidden_destinations ... ok
+2026-09-22T15:09:21.0581526Z test files_workspace::tests::focused_loader_matches_inventory_without_reading_unrelated_assets ... ok
+2026-09-22T15:09:22.3730725Z test files_workspace::tests::external_edit_and_deletion_require_fresh_reviewed_source ... ok
+2026-09-22T15:09:23.3380681Z test files_workspace::tests::interrupted_creation_rolls_back_and_retry_exports_without_schema_change ... ok
+2026-09-22T15:09:23.6243705Z test files_workspace::tests::creates_empty_inventory_and_nested_helpers_then_rejects_stale_save ... ok
+2026-09-22T15:09:24.0152780Z test custom_folders::tests::saved_particle_selections_follow_repaired_mod_ids_for_active_and_inactive_profiles ... ok
+2026-09-22T15:09:24.2182702Z test files_workspace::tests::orphan_library_bytes_and_parent_case_collisions_are_not_claimed ... ok
+2026-09-22T15:09:24.4886995Z test files_workspace::tests::live_edit_or_creation_during_staging_preserves_external_bytes ... ok
+2026-09-22T15:09:24.5060793Z test files_workspace::tests::non_utf8_is_read_only_and_size_limit_preserves_prior_bytes ... ok
+2026-09-22T15:09:24.8870560Z test files_workspace::tests::profile_root_loader_and_lock_rechecked_before_write ... ok
+2026-09-22T15:09:24.9369139Z test finder::tests::normalizes_root_and_tf_folder ... ok
+2026-09-22T15:09:25.0170955Z test finder::tests::oversized_steam_vdf_files_are_ignored_without_materializing_them ... ok
+2026-09-22T15:09:25.0392241Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-110\decoy\tf <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-110\real\tf
+2026-09-22T15:09:25.0661571Z test finder::tests::rejects_a_tf_directory_that_resolves_outside_the_selected_root ... ok
+2026-09-22T15:09:25.1358120Z test finder::tests::rejects_oversized_steam_inf_without_loading_it ... ok
+2026-09-22T15:09:25.1360066Z test files_workspace::tests::provided_cfg_cannot_be_saved_even_with_valid_source ... ok
+2026-09-22T15:09:25.1364965Z test finder::tests::removes_windows_verbatim_prefixes_from_user_facing_paths ... ok
+2026-09-22T15:09:25.1548031Z test finder::tests::rejects_wrong_app_and_missing_inf ... ok
+2026-09-22T15:09:25.2410953Z test finder::tests::scan_finds_listed_and_manifest_only_libraries ... ok
+2026-09-22T15:09:25.2428208Z test finder::tests::scan_reads_old_libraryfolders_from_config ... ok
+2026-09-22T15:09:25.2670426Z test finder::tests::scan_skips_library_without_440 ... ok
+2026-09-22T15:09:25.2686545Z test first_run::tests::a_non_utf8_config_cfg_still_classifies ... ok
+2026-09-22T15:09:25.3229887Z test first_run::tests::existing_from_autoexec ... ok
+2026-09-22T15:09:25.3269736Z test first_run::tests::existing_from_cloud_only_rebinds ... ok
+2026-09-22T15:09:25.4642236Z test first_run::tests::existing_from_leftover_user_dir ... ok
+2026-09-22T15:09:25.4660082Z test first_run::tests::existing_from_custom_pack ... ok
+2026-09-22T15:09:25.5035726Z test first_run::tests::existing_when_binds_differ ... ok
+2026-09-22T15:09:25.5592229Z test first_run::tests::existing_from_overrides_and_comfig_vpk ... ok
+2026-09-22T15:09:25.5691211Z test first_run::tests::existing_when_config_adds_or_changes_cvars ... ok
+2026-09-22T15:09:25.5860556Z test first_run::tests::existing_when_default_cfg_missing ... ok
+2026-09-22T15:09:25.6379857Z test first_run::tests::existing_when_repeated_commands_are_reordered_on_one_line ... ok
+2026-09-22T15:09:25.8904795Z test first_run::tests::over_limit_surface_is_existing_instead_of_a_first_run_dead_end ... ok
+2026-09-22T15:09:25.9689859Z test first_run::tests::oversized_config_is_existing_instead_of_loaded_or_rejected ... ok
+2026-09-22T15:09:26.0074629Z test first_run::tests::unused_when_empty_or_junk_only ... ok
+2026-09-22T15:09:26.0112190Z test hash::tests::a_failed_replace_keeps_the_old_destination ... ok
+2026-09-22T15:09:26.2184865Z test hash::tests::atomic_replace_and_directory_move_support_long_paths ... ok
+2026-09-22T15:09:26.2199347Z test hash::tests::bounded_read_rejects_an_oversized_sparse_file ... ok
+2026-09-22T15:09:26.2801941Z test hash::tests::copy_and_hash_matches_bytes ... ok
+2026-09-22T15:09:26.3180860Z test hash::tests::copy_leaves_no_part_file_and_replaces_an_existing_dest ... ok
+2026-09-22T15:09:26.3901333Z test hash::tests::exact_copy_never_publishes_short_or_over_limit_sources ... ok
+2026-09-22T15:09:26.3906587Z test hash::tests::hashes_known_vector ... ok
+2026-09-22T15:09:26.3909719Z test hash::tests::md5_matches_the_rfc_1321_vectors ... ok
+2026-09-22T15:09:26.4033383Z test hash::tests::read_only_containment_validation_never_creates_missing_paths ... ok
+2026-09-22T15:09:26.4062920Z test hash::tests::remove_file_force_handles_the_read_only_bit ... ok
+2026-09-22T15:09:26.4269130Z test hash::tests::verified_copy_never_publishes_a_hash_mismatch ... ok
+2026-09-22T15:09:26.4533286Z test files_workspace::tests::source_identity_uses_actual_library_bytes_and_existing_config_keeps_cloud_retry ... ok
+2026-09-22T15:09:26.5033891Z test hash::tests::write_atomic_replaces_and_cleans_up ... ok
+2026-09-22T15:09:26.5039583Z test hash::tests::write_atomic_replaces_a_read_only_destination ... ok
+2026-09-22T15:09:26.5053041Z test hitsound::tests::a_stock_style_wav_passes_through_untouched ... ok
+2026-09-22T15:09:26.5056952Z test hitsound::tests::adpcm_installs_verbatim_but_previews_as_pcm ... ok
+2026-09-22T15:09:26.5061829Z test hitsound::tests::adpcm_step_growth_never_overflows ... ok
+2026-09-22T15:09:26.5064532Z test hitsound::tests::adversarial_adpcm_coefficients_do_not_overflow_the_decoder ... ok
+2026-09-22T15:09:26.5069982Z test hitsound::tests::an_absurd_header_rate_is_refused_not_resampled ... ok
+2026-09-22T15:09:26.5072866Z test hitsound::tests::an_engine_ready_file_is_rewritten_with_only_fmt_and_data ... ok
+2026-09-22T15:09:26.5101867Z test hash::tests::write_target_validation_allows_missing_parents_without_creating_them ... ok
+2026-09-22T15:09:26.5173780Z test hitsound::tests::an_unsupported_rate_or_depth_is_converted_to_16_bit_44100 ... ok
+2026-09-22T15:09:26.5176407Z test hitsound::tests::apply_bounds_record_strings_at_the_core_boundary ... ok
+2026-09-22T15:09:26.6123741Z test files_workspace::tests::reviewed_restore_of_unchanged_library_bytes_reprojects_live ... ok
+2026-09-22T15:09:26.6828190Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-143\tf2\tf\custom\execs-hitsounds <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-143\outside-hitsound-pack
+2026-09-22T15:09:26.7011892Z test hitsound::tests::apply_refuses_a_linked_live_pack_without_touching_its_target ... ok
+2026-09-22T15:09:26.7684954Z test hitsound::tests::an_over_long_clip_is_refused_before_conversion ... ok
+2026-09-22T15:09:26.8206286Z test hitsound::tests::apply_refuses_unprepared_audio_and_a_running_game ... ok
+2026-09-22T15:09:26.8212332Z test hitsound::tests::boost_makes_the_file_louder_without_clipping_hard ... ok
+2026-09-22T15:09:26.9082734Z test hitsound::tests::apply_refuses_untracked_content_in_the_app_owned_pack ... ok
+2026-09-22T15:09:27.3850561Z test hitsound::tests::both_slots_are_validated_before_either_is_changed ... ok
+2026-09-22T15:09:27.3856484Z test hitsound::tests::comfig_style_adpcm_ignores_placeholder_byte_rate_and_times_blocks ... ok
+2026-09-22T15:09:27.3866808Z test hitsound::tests::every_stock_effect_names_a_hit_and_a_kill_file ... ok
+2026-09-22T15:09:27.3878675Z test hitsound::tests::extensible_pcm_is_rewritten_with_a_plain_header ... ok
+2026-09-22T15:09:27.3885708Z test hitsound::tests::malformed_ms_adpcm_is_never_treated_as_engine_ready ... ok
+2026-09-22T15:09:27.3891498Z test hitsound::tests::non_wav_files_are_refused_with_their_kind_named ... ok
+2026-09-22T15:09:27.3903453Z test hitsound::tests::pack_paths_stay_file_safe ... ok
+2026-09-22T15:09:27.3909896Z test hitsound::tests::pcm_header_and_data_alignment_are_validated ... ok
+2026-09-22T15:09:27.4043180Z test hitsound::tests::stock_sounds_come_out_of_a_synthetic_sound_vpk_by_stem ... ok
+2026-09-22T15:09:27.6858945Z test hitsound::tests::stored_hitsound_read_accepts_the_limit_and_rejects_one_byte_more ... ok
+2026-09-22T15:09:27.8406709Z test first_run::tests::many_unique_cfgs_produce_one_bounded_reason ... ok
+2026-09-22T15:09:27.8597489Z test hitsound::tests::both_slots_and_record_roll_back_together_if_manifest_commit_fails ... ok
+2026-09-22T15:09:27.8710073Z test hitsound::tests::apply_writes_both_files_records_them_and_clears_them_again ... ok
+2026-09-22T15:09:28.3719574Z test hud::ownership::tests::hud_vpk_refusal_applies_to_mods_and_legacy_switch_without_touching_originals ... ok
+2026-09-22T15:09:28.4902086Z test hud::ownership::tests::mods_refuse_a_real_hud_in_a_batch_without_misclassifying_other_info_files ... ok
+2026-09-22T15:09:28.6699328Z test hud::ownership::tests::new_hud_options_refuse_an_untracked_live_autoexec ... ok
+2026-09-22T15:09:28.6700648Z test hud::ownership::tests::final_review_check_refuses_a_live_edit_that_arrives_during_staging ... ok
+2026-09-22T15:09:29.3252367Z test hud::ownership::tests::live_review_binds_choice_to_exact_bytes_and_preserves_the_other_hud ... ok
+2026-09-22T15:09:29.9427681Z test hud::ownership::tests::replacement_rechecks_live_cfg_after_transaction_staging ... ok
+2026-09-22T15:09:30.3412034Z test hud::ownership::tests::replacement_refuses_live_only_cfg_edits_without_changing_either_original ... ok
+2026-09-22T15:09:30.4267100Z test hud::ownership::tests::replacement_removes_uppercase_owned_roots_and_keeps_exact_recovery_bytes ... ok
+2026-09-22T15:09:30.5752735Z test hud::tests::a_7z_hud_archive_unpacks_like_a_zip_with_its_wrapper_stripped ... ok
+2026-09-22T15:09:31.0544535Z test hud::ownership::tests::unreadable_hud_metadata_never_disappears_from_review ... ok
+2026-09-22T15:09:31.1132389Z test hud::tests::a_folder_imports_like_an_archive_and_gets_a_safe_id ... ok
+2026-09-22T15:09:31.2621568Z test hud::ownership::tests::same_hud_update_preserves_old_library_and_a_failed_backup_cannot_publish ... ok
+2026-09-22T15:09:31.2629706Z test hud::tests::archives_are_sniffed_by_magic_and_rar_is_named ... ok
+2026-09-22T15:09:31.3042284Z test hud::ownership::tests::replacement_absorb_and_switch_never_readopt_recovery_copies ... ok
+2026-09-22T15:09:31.3046021Z test hud::tests::catalog_entry_collects_screenshots_and_skips_video_urls ... ok
+2026-09-22T15:09:31.3049915Z test hud::tests::catalog_entry_marks_github_and_toonhud ... ok
+2026-09-22T15:09:31.3069421Z test hud::tests::cruelty_style_variant_download_requires_a_choice ... ok
+2026-09-22T15:09:31.3084461Z test hud::tests::extract_only_strips_a_wrapper_that_actually_wraps_a_hud ... ok
+2026-09-22T15:09:31.3555985Z test hud::tests::a_blocked_backup_container_refuses_before_replacing_any_hud_bytes ... ok
+2026-09-22T15:09:31.7659473Z test hud::tests::catalog_cache_and_editable_hud_reads_are_bounded ... ok
+2026-09-22T15:09:31.7674795Z test hud::tests::extract_rejects_hostile_cfg_hidden_in_a_hud ... ok
+2026-09-22T15:09:31.7694745Z test hud::tests::extract_rejects_zip_slip_and_missing_info ... ok
+2026-09-22T15:09:31.7707718Z test hud::tests::extract_strips_wrapper_and_reads_ui_version ... ok
+2026-09-22T15:09:31.8337760Z test hud::tests::active_catalog_match_refuses_a_conflicting_target_pack ... ok
+2026-09-22T15:09:32.2745875Z test hud::tests::hud_detection_ignores_ascii_case ... ok
+2026-09-22T15:09:32.2775951Z test hud::tests::hud_metadata_must_declare_the_current_engine_ui_version ... ok
+2026-09-22T15:09:32.6685763Z test hud::tests::extract_refuses_too_many_entries ... ok
+2026-09-22T15:09:32.7085798Z test hud::tests::importing_an_extracted_variant_uses_the_same_root_rules ... ok
+2026-09-22T15:09:32.9741196Z test hud::tests::hud_tree_from_profile_matches_by_key_not_folder_spelling ... ok
+2026-09-22T15:09:33.1551752Z test hud::tests::filtered_hud_installs_and_updates_without_weakening_rollback ... ok
+2026-09-22T15:09:33.3211711Z test hud::tests::inactive_catalog_match_refuses_a_conflicting_target_pack ... ok
+2026-09-22T15:09:33.3220120Z test hud::tests::install_kind_follows_the_repo_host ... ok
+2026-09-22T15:09:33.4561743Z test hud::tests::infer_local_hud_and_match_catalog ... ok
+2026-09-22T15:09:33.4890302Z test hud::tests::extract_refuses_an_oversized_entry ... ok
+2026-09-22T15:09:34.1135651Z test hud::tests::install_moves_legacy_ignored_oxide_beneath_the_backup_container ... ok
+2026-09-22T15:09:34.2067175Z test hud::tests::install_preserves_a_non_hud_target_without_merging_its_files ... ok
+2026-09-22T15:09:34.2254438Z test hud::tests::install_preserves_a_stray_folder_that_shares_the_key ... ok
+2026-09-22T15:09:34.4672421Z test hud::tests::install_refuses_while_running ... ok
+2026-09-22T15:09:34.7384777Z test hud::tests::install_refuses_a_bad_entry_before_removing_the_old_hud ... ok
+2026-09-22T15:09:34.8151411Z test hud::tests::install_and_replace_hud_with_long_staged_asset_paths ... ok
+2026-09-22T15:09:35.4329196Z test hud::tests::install_prunes_stale_hud_option_cfgs ... ok
+2026-09-22T15:09:35.5125408Z test hud::tests::install_replaces_a_live_folder_that_differs_only_in_case ... ok
+2026-09-22T15:09:35.5418479Z test hud::tests::install_writes_live_files_atomically ... ok
+2026-09-22T15:09:35.6337815Z test hud::tests::live_hud_names_keep_the_real_folder_spelling ... ok
+2026-09-22T15:09:35.6353992Z test hud::tests::nested_hud_wrappers_preserve_every_file_and_byte ... ok
+2026-09-22T15:09:35.6357880Z test hud::tests::new_hud_containers_avoid_all_source_reserved_names ... ok
+2026-09-22T15:09:36.0228004Z test hud::tests::install_replaces_previous_hud_and_preserves_stray_outside_mounted_roots ... ok
+2026-09-22T15:09:36.2211523Z test hud::tests::live_hud_names_keep_every_spelling_and_both_are_preserved ... ok
+2026-09-22T15:09:37.0708524Z test hud::tests::options_recover_a_preexisting_catalog_record_with_an_import_folder ... ok
+2026-09-22T15:09:37.3188650Z test hud::tests::matching_an_import_folder_to_catalog_renames_payload_and_keeps_it_editable ... ok
+2026-09-22T15:09:37.6801710Z test hud::tests::ordinary_absorb_retains_an_owned_dashed_hud_and_its_edits ... ok
+2026-09-22T15:09:37.6804272Z test hud::tests::pinned_catalog_huds_install_update_and_preserve_payloads ... ignored, requires pinned archives in EXECS_HUD_FIXTURES
+2026-09-22T15:09:37.7335206Z test hud::tests::preservation_keeps_both_trees_when_a_legacy_dashed_twin_exists ... ok
+2026-09-22T15:09:38.4202062Z test hud::tests::oxide_to_colly_preserves_edits_without_a_second_mounted_hud_or_absorb_prompt ... ok
+2026-09-22T15:09:38.4204354Z test hud::tests::screenshot_names_are_allowlisted ... ok
+2026-09-22T15:09:38.6487004Z test hud::tests::ordinary_absorb_heals_legacy_oxide_but_still_prompts_for_new_external_huds ... ok
+2026-09-22T15:09:38.6498554Z test hud::tests::unique_nested_hud_does_not_silently_discard_sibling_assets ... ok
+2026-09-22T15:09:38.8572429Z test hud::tests::zip_7z_and_folder_imports_filter_the_same_profile_junk ... ok
+2026-09-22T15:09:38.8586343Z test hud_apply::expressions::tests::a_later_apply_failure_keeps_earlier_edits_out_of_callers_tree ... ok
+2026-09-22T15:09:38.8604218Z test hud::tests::sync_hud_exec_lines_refuses_a_binary_autoexec ... ok
+2026-09-22T15:09:38.8607440Z test hud_apply::expressions::tests::base_include_retains_value_template_for_previous_selection_ownership ... ok
+2026-09-22T15:09:38.8610560Z test hud_apply::expressions::tests::keys_and_static_imported_content_are_not_expression_templates ... ok
+2026-09-22T15:09:38.8615375Z test hud_apply::expressions::tests::malformed_unknown_and_recursive_expressions_are_refused ... ok
+2026-09-22T15:09:38.8677047Z test hud_apply::expressions::tests::nested_schema_data_and_expansion_have_bounded_work ... ok
+2026-09-22T15:09:38.8684092Z test hud_apply::expressions::tests::reference_tokens_are_exact_and_boolean_semantics_are_explicit ... ok
+2026-09-22T15:09:38.8691768Z test hud_apply::expressions::tests::unresolved_reference_reports_control_and_file_and_preserves_tree ... ok
+2026-09-22T15:09:38.8699181Z test hud_apply::maintenance_regressions::base_edits_leave_commented_and_nested_spelling_untouched ... ok
+2026-09-22T15:09:38.8701297Z test hud_apply::expressions::tests::all_four_pinned_font_templates_follow_size_and_outline_in_both_directions ... ok
+2026-09-22T15:09:38.8710149Z test hud_apply::maintenance_regressions::included_logical_header_is_edited_and_ambiguous_headers_refuse ... ok
+2026-09-22T15:09:38.8712168Z test hud_apply::maintenance_regressions::legacy_resource_preserves_every_byte_outside_the_edited_value ... ok
+2026-09-22T15:09:38.8720643Z test hud_apply::maintenance_regressions::ordered_base_branches_reverse_without_touching_other_lines ... ok
+2026-09-22T15:09:38.8722317Z test hud_apply::maintenance_regressions::static_combo_base_choices_replace_the_previous_choice_only ... ok
+2026-09-22T15:09:38.8731167Z test hud_apply::move_tests::checkbox_directory_move_is_reversible_and_missing_source_fails ... ok
+2026-09-22T15:09:38.8738692Z test hud_apply::move_tests::combo_file_and_directory_lists_restore_variants ... ok
+2026-09-22T15:09:38.8743172Z test hud_apply::move_tests::combo_renames_restore_deselected_variants_and_none ... ok
+2026-09-22T15:09:38.8746743Z test hud_apply::move_tests::directory_moves_preserve_bytes_and_portable_identity ... ok
+2026-09-22T15:09:38.8748702Z test hud_apply::move_tests::directory_moves_refuse_collisions_and_invalid_paths_without_mutation ... ok
+2026-09-22T15:09:38.8753746Z test hud_apply::move_tests::later_missing_move_preserves_the_complete_original_tree ... ok
+2026-09-22T15:09:38.8758831Z test hud_apply::move_tests::unknown_combo_selection_refuses_before_resetting_variants ... ok
+2026-09-22T15:09:38.8765401Z test hud_apply::tests::a_file_we_cannot_decode_is_an_error_not_an_empty_string ... ok
+2026-09-22T15:09:38.8776183Z test hud_apply::tests::color_merge_and_folder_swap_and_writecfg ... ok
+2026-09-22T15:09:38.8777191Z test hud_apply::move_tests::file_choices_validate_raw_paths_and_required_folders ... ok
+2026-09-22T15:09:38.8783879Z test hud_apply::tests::combo_writes_hash_base ... ok
+2026-09-22T15:09:38.8785060Z test hud_apply::tests::conditionals_survive_a_res_merge ... ok
+2026-09-22T15:09:38.8790503Z test hud_apply::tests::explicit_platform_patch_changes_only_that_condition ... ok
+2026-09-22T15:09:38.8794397Z test hud_apply::tests::hash_base_appends_when_the_file_has_no_matching_base ... ok
+2026-09-22T15:09:38.8799748Z test hud_apply::tests::hash_base_change_keeps_literal_slashes_condition_and_comment ... ok
+2026-09-22T15:09:38.8805812Z test hud_apply::tests::hash_base_combo_keeps_the_body_of_an_existing_file ... ok
+2026-09-22T15:09:38.8807050Z test hud_apply::tests::hud_exec_lines_append_rewrite_and_prune ... ok
+2026-09-22T15:09:38.8811901Z test hud_apply::tests::line_edits_preserve_comment_spacing_no_final_newline_and_checkbox_inversion ... ok
+2026-09-22T15:09:38.8821415Z test hud_apply::tests::numeric_bounds_are_enforced_on_apply ... ok
+2026-09-22T15:09:38.8833304Z test hud_apply::tests::malformed_resource_and_incomplete_utf16_fail_without_replacing_the_file ... ok
+2026-09-22T15:09:38.8837885Z test hud_apply::tests::schema_comments_and_nameless_options_parse ... ok
+2026-09-22T15:09:38.8843631Z test hud_apply::tests::schema_view_keeps_supported_types ... ok
+2026-09-22T15:09:38.8847430Z test hud_apply::tests::stripping_comments_keeps_non_ascii_strings_intact ... ok
+2026-09-22T15:09:38.8882543Z test hud_apply::tests::unsupported_animation_or_malformed_directives_fail_with_parent_control_and_path ... ok
+2026-09-22T15:09:38.8893504Z test hud_apply::tests::utf16le_res_files_round_trip_instead_of_being_wiped ... ok
+2026-09-22T15:09:38.8895147Z test hud_schema_compat::tests::all_supported_pinned_schemas_have_valid_normalized_identities ... ignored, requires the pinned downloaded schema corpus, EXECS_HUD_SCHEMA_CORPUS
+2026-09-22T15:09:38.8900678Z test hud_schema_compat::tests::catalog_and_stored_hypnotize_ids_share_the_schema ... ok
+2026-09-22T15:09:38.8905362Z test hud_schema_compat::tests::duplicate_top_level_ids_refuse_but_unnamed_choices_are_valid ... ok
+2026-09-22T15:09:38.8974731Z test hud_schema_compat::tests::exact_pinned_duplicate_fragments_normalize_before_identity_validation ... ok
+2026-09-22T15:09:38.8981853Z test hud_schema_compat::tests::log_controls_are_visible_unavailable_and_cannot_mutate_tree_or_saved_values ... ok
+2026-09-22T15:09:38.8988699Z test hud_schema_compat::tests::pinned_kbn_target_corrections_are_independent_and_idempotent ... ok
+2026-09-22T15:09:38.9021869Z test hud_schema_compat::tests::rayshud_alternate_model_uses_its_direct_resource_instructions ... ok
+2026-09-22T15:09:38.9140918Z test hud_schema_compat::tests::rayshud_streamer_mode_hides_both_team_lists ... ok
+2026-09-22T15:09:38.9149232Z test hud_text_edit::tests::appends_nested_nodes_without_losing_tail_comments ... ok
+2026-09-22T15:09:38.9155182Z test hud_text_edit::tests::changes_only_selected_token_with_comments_unicode_and_conditions ... ok
+2026-09-22T15:09:38.9160177Z test hud_text_edit::tests::inserted_multiline_values_keep_their_literal_bytes_in_crlf_documents ... ok
+2026-09-22T15:09:38.9162978Z test hud_text_edit::tests::refuses_stale_tree_and_invalid_literal_values ... ok
+2026-09-22T15:09:38.9170277Z test hud_text_edit::tests::replaced_object_keeps_its_conditional_and_neighbor_bytes ... ok
+2026-09-22T15:09:38.9173382Z test ice::tests::block_round_trips ... ok
+2026-09-22T15:09:38.9177300Z test ice::tests::round_trips_plaintext ... ok
+2026-09-22T15:09:38.9183306Z test inventory::paintkits::tests::reads_exact_paint_identity_and_refuses_bad_framing ... ok
+2026-09-22T15:09:38.9187768Z test inventory::paintkits::tests::swatch_uses_only_exact_primary_texture_and_restricts_paths ... ok
+2026-09-22T15:09:38.9192477Z test inventory::tests::fabricator_reads_output_target_and_rejects_ambiguous_or_malformed_recipes ... ok
+2026-09-22T15:09:38.9195176Z test inventory::tests::icon_requests_cannot_escape_backpack_namespace ... ok
+2026-09-22T15:09:38.9199759Z test inventory::tests::prefab_overrides_keep_inherited_fields_and_reject_cycles ... ok
+2026-09-22T15:09:38.9204176Z test inventory::tests::schema_static_attributes_resolve_without_overriding_instance_data ... ok
+2026-09-22T15:09:38.9207860Z test inventory::tests::variants_use_exact_pattern_and_target_with_validated_numbers ... ok
+2026-09-22T15:09:38.9372887Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-196\Steam\userdata\111\config <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-196\outside-config
+2026-09-22T15:09:38.9380217Z test hud::tests::schema_options_write_into_the_manifest_folder_spelling ... ok
+2026-09-22T15:09:38.9553417Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-196\Steam\userdata\111\440 <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-196\outside-cloud
+2026-09-22T15:09:38.9606374Z test launch::tests::account_discovery_refuses_linked_config_and_cloud_ancestors ... ok
+2026-09-22T15:09:38.9721584Z test hud_apply::tests::reported_control_shapes_apply_both_checkbox_states_and_every_combo_choice ... ok
+2026-09-22T15:09:38.9812575Z test launch::tests::missing_steam_data_is_empty ... ok
+2026-09-22T15:09:39.0193146Z test launch::tests::most_recent_account_wins_even_before_its_440_directory_exists ... ok
+2026-09-22T15:09:39.0379538Z test launch::tests::localconfig_conditionals_survive_the_rewrite ... ok
+2026-09-22T15:09:39.0671824Z test launch::tests::localconfig_write_backs_up_once_and_leaves_no_part_file ... ok
+2026-09-22T15:09:39.0674040Z test launch::tests::oversized_loginusers_is_ignored_during_account_selection ... ok
+2026-09-22T15:09:39.0887097Z test launch::tests::prefers_most_recent_loginusers_account ... ok
+2026-09-22T15:09:39.1031917Z test launch::tests::reads_launch_options_from_account_with_440 ... ok
+2026-09-22T15:09:39.1036923Z test launch::tests::recommended_is_the_official_comfig_set ... ok
+2026-09-22T15:09:39.1133162Z test launch::tests::rechecks_steam_after_parsing_before_any_write ... ok
+2026-09-22T15:09:39.1279101Z test launch::tests::refuses_an_invalid_existing_localconfig_backup ... ok
+2026-09-22T15:09:39.1713738Z test launch::tests::oversized_localconfig_and_backup_are_rejected_without_replacement ... ok
+2026-09-22T15:09:39.3528144Z test launch::tests::set_profile_refuses_while_tf2_running ... ok
+2026-09-22T15:09:39.6250648Z test launch::tests::set_profile_keeps_a_retryable_commit_when_localconfig_sync_fails ... ok
+2026-09-22T15:09:39.7589083Z test launch::tests::set_profile_saves_library_when_steam_is_open ... ok
+2026-09-22T15:09:39.7841443Z test launch::tests::skips_localconfig_when_steam_is_open ... ok
+2026-09-22T15:09:39.7845432Z test launch::tests::strips_banned_launch_tokens ... ok
+2026-09-22T15:09:39.7849713Z test launch::tests::strips_forbidden_commands_around_semicolon_separators ... ok
+2026-09-22T15:09:39.7854182Z test launch::tests::strips_quoted_fragmented_and_nested_banned_launch_tokens ... ok
+2026-09-22T15:09:39.8122115Z test launch::tests::write_rejects_a_non_localconfig_backup_without_writing ... ok
+2026-09-22T15:09:39.8260487Z test launch::tests::write_without_account_is_no_account ... ok
+2026-09-22T15:09:39.8653373Z test launch::tests::set_profile_sanitizes_and_writes_steam_when_closed ... ok
+2026-09-22T15:09:39.8658551Z test managed_cfg::tests::quoted_command_names_never_masquerade_as_exec ... ok
+2026-09-22T15:09:39.8661913Z test managed_cfg::tests::scoped_merge_is_stable_and_refuses_unfinished_quotes ... ok
+2026-09-22T15:09:39.8665836Z test managed_cfg::tests::scoped_merge_preserves_other_commands_comments_and_quoted_separators ... ok
+2026-09-22T15:09:39.8817884Z test managed_cfg::tests::semicolon_heavy_autoexec_streams_without_losing_suffix_exec ... ok
+2026-09-22T15:09:39.8821757Z test managed_cfg::tests::weapon_controls_share_gameplay_scope_without_overwriting_sibling_settings ... ok
+2026-09-22T15:09:39.8824117Z test mdl::tests::normalizes_dirs_the_way_the_engine_compares_them ... ok
+2026-09-22T15:09:39.8826930Z test mdl::tests::reads_material_dirs ... ok
+2026-09-22T15:09:39.8829442Z test mdl::tests::refuses_files_that_are_not_models ... ok
+2026-09-22T15:09:39.8832465Z test mdl::tests::rewrite_keeps_the_original_as_a_fallback_and_reads_back ... ok
+2026-09-22T15:09:39.8835087Z test mdl::tests::rewrite_updates_the_declared_length ... ok
+2026-09-22T15:09:39.9649197Z test launch::tests::setting_launch_options_touches_the_profile_record ... ok
+2026-09-22T15:09:39.9893848Z test launch::tests::writes_localconfig_when_steam_names_empty ... ok
+2026-09-22T15:09:39.9905600Z test mods::tests::a_picked_numbered_vpk_is_refused_only_beside_its_directory_file ... ok
+2026-09-22T15:09:40.1940860Z test mods::tests::a_multi_pack_selection_is_prevalidated_before_any_write ... ok
+2026-09-22T15:09:40.5026968Z test hud::tests::persist_options_and_reapply_after_update ... ok
+2026-09-22T15:09:40.6063615Z test mods::tests::a_valid_multi_pack_selection_is_recorded_together ... ok
+2026-09-22T15:09:40.6080426Z test mods::tests::a_wrapper_folder_is_stripped_and_the_pack_is_named_from_the_archive ... ok
+2026-09-22T15:09:40.6092561Z test mods::tests::an_archive_cannot_silently_drop_loose_content_beside_a_vpk ... ok
+2026-09-22T15:09:40.6102773Z test mods::tests::an_archive_with_no_tf2_content_is_refused ... ok
+2026-09-22T15:09:40.7525465Z test mods::tests::a_second_mod_of_the_same_name_gets_its_own_pack ... ok
+2026-09-22T15:09:40.7540235Z test mods::tests::archives_with_peer_content_roots_are_refused_instead_of_dropping_one ... ok
+2026-09-22T15:09:40.7543938Z test mods::tests::ids_avoid_our_own_packs_and_bump_on_collision ... ok
+2026-09-22T15:09:40.8381066Z test mods::tests::a_vpk_pack_installs_as_one_file_and_lists_its_particles ... ok
+2026-09-22T15:09:41.0695797Z test mods::tests::install_refuses_while_tf2_is_running ... ok
+2026-09-22T15:09:41.4473946Z test mods::tests::inactive_profiles_own_selected_particle_source_is_not_removed ... ok
+2026-09-22T15:09:41.5955139Z test mods::tests::installed_owner_selection_is_guarded_when_manifest_capture_is_stale ... ok
+2026-09-22T15:09:41.7318685Z test mods::tests::another_profiles_selected_particle_source_id_does_not_block_inactive_removal ... ok
+2026-09-22T15:09:42.1609345Z test mods::tests::legacy_owner_marker_is_guarded_until_the_profile_selection_migrates ... ok
+2026-09-22T15:09:42.1625288Z test mods::tests::loose_alternatives_at_different_depths_require_a_choice ... ok
+2026-09-22T15:09:42.2907195Z test mods::tests::installing_a_folder_pack_lands_in_the_profile_and_the_live_tree ... ok
+2026-09-22T15:09:42.6619713Z test mods::tests::a_vpk_whose_entries_overlap_into_gigabytes_is_refused_on_import ... ok
+2026-09-22T15:09:42.6649446Z test mods::tests::one_archived_vpk_installs_but_several_require_a_choice ... ok
+2026-09-22T15:09:42.6660174Z test mods::tests::pre_and_post_steampipe_wrappers_become_a_custom_pack ... ok
+2026-09-22T15:09:42.9026933Z test mods::tests::loose_particle_sources_stop_at_the_pcf_limit ... ok
+2026-09-22T15:09:43.2775917Z test mods::tests::legacy_hud_mod_removal_clears_its_record_without_promoting_an_inactive_original ... ok
+2026-09-22T15:09:43.5447485Z test mods::tests::remove_leaves_a_drifted_live_file_alone ... ok
+2026-09-22T15:09:43.5450718Z test mods::tests::the_source_is_tagged_json_the_frontend_can_switch_on ... ok
+2026-09-22T15:09:43.5455250Z test pcf::tests::a_crafted_array_count_reserves_no_more_than_the_bytes_could_hold ... ok
+2026-09-22T15:09:43.5457724Z test pcf::tests::a_crafted_element_count_does_not_reserve_the_world ... ok
+2026-09-22T15:09:43.5820557Z test mods::tests::running_game_precedes_selected_particle_source_removal_guard ... ok
+2026-09-22T15:09:43.7824338Z test pcf::tests::a_particle_file_past_the_hard_cap_is_refused_before_parsing ... ok
+2026-09-22T15:09:43.7830291Z test pcf::tests::array_item_count_is_rejected_before_reserving_decoded_enums ... ok
+2026-09-22T15:09:43.7831290Z test pcf::tests::corpus_cross_validation ... ignored, needs the local reference corpus
+2026-09-22T15:09:43.7832244Z test pcf::tests::corpus_rebuild_extraction ... ignored, needs the local reference corpus
+2026-09-22T15:09:43.7835246Z test pcf::tests::default_matching_uses_numeric_semantics ... ok
+2026-09-22T15:09:43.7841512Z test pcf::tests::extract_keeps_named_trees_and_rebuilds_root ... ok
+2026-09-22T15:09:43.7997100Z test pcf::tests::many_distinct_attributes_decode_without_quadratic_name_scans ... ok
+2026-09-22T15:09:43.8005063Z test pcf::tests::oversized_dictionary_string_is_rejected_before_reference_amplification ... ok
+2026-09-22T15:09:43.8008656Z test pcf::tests::parents_and_roots ... ok
+2026-09-22T15:09:43.8015853Z test pcf::tests::rejects_unknown_header ... ok
+2026-09-22T15:09:43.8228788Z test pcf::tests::a_dictionary_past_u16_is_an_error_not_a_truncation ... ok
+2026-09-22T15:09:43.8232914Z test pcf::tests::roundtrips_exactly ... ok
+2026-09-22T15:09:43.8239188Z test pcf::tests::shrink_pipeline_dedupes_and_fixes_children ... ok
+2026-09-22T15:09:43.8242436Z test pcf::tests::total_attribute_count_has_an_absolute_budget ... ok
+2026-09-22T15:09:43.8245994Z test pcf::tests::update_materials_swaps_only_materials ... ok
+2026-09-22T15:09:43.8249222Z test preloader::apply::selection_tests::the_profile_mod_list_defaults_to_empty_and_is_skipped_when_it_is ... ok
+2026-09-22T15:09:43.8253578Z test preloader::apply::selection_tests::the_selection_round_trips_the_new_field_in_camel_case ... ok
+2026-09-22T15:09:43.8257432Z test preloader::profiles::tests::removal_guard_unions_saved_and_newer_installed_owner_selections ... ok
+2026-09-22T15:09:43.8310758Z test preloader::tests::a_backup_that_is_not_a_gameinfo_file_is_refused ... ok
+2026-09-22T15:09:43.8507263Z test pcf::tests::repeated_references_to_one_large_element_reuse_its_canonical_group ... ok
+2026-09-22T15:09:44.1561280Z test preloader::tests::a_mod_larger_than_every_stock_particle_file_is_not_decoded ... ok
+2026-09-22T15:09:44.4894960Z test mods::tests::loose_mods_avoid_source_reserved_names_and_collisions_but_vpks_keep_their_name ... ok
+2026-09-22T15:09:44.6889292Z test mods::tests::selected_active_particle_source_is_not_removed_until_selection_changes ... ok
+2026-09-22T15:09:44.7746475Z test preloader::tests::a_failure_after_the_restore_pass_restores_the_previous_pack_and_state ... ok
+2026-09-22T15:09:45.2391118Z test preloader::tests::a_pristine_snapshot_the_game_outdated_is_discarded_not_written_back ... ok
+2026-09-22T15:09:45.6628702Z test preloader::tests::a_texture_only_model_mod_gets_a_model_material_that_follows_the_relocation ... ok
+2026-09-22T15:09:45.9783616Z test preloader::tests::a_snapshot_without_a_sidecar_is_reported_but_not_trusted_for_restore ... ok
+2026-09-22T15:09:46.2743314Z test preloader::tests::a_published_committed_marker_is_not_rolled_back_on_sync_ambiguity ... ok
+2026-09-22T15:09:46.2874090Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-246\data\preloader <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-246\outside-preloader-data
+2026-09-22T15:09:46.2916469Z test preloader::tests::all_preloader_app_data_mutations_refuse_a_linked_preloader_parent ... ok
+2026-09-22T15:09:46.2959546Z test preloader::tests::an_already_bypassed_gameinfo_without_a_pristine_backup_is_refused ... ok
+2026-09-22T15:09:46.4609832Z test preloader::tests::addon_materials_that_replace_stock_assets_still_ship_loose ... ok
+2026-09-22T15:09:46.5540573Z test preloader::tests::a_torn_state_file_reports_recovery_without_authorizing_archive_writes ... ok
+2026-09-22T15:09:46.6166633Z test preloader::tests::an_empty_selection_does_not_force_the_bypass_on ... ok
+2026-09-22T15:09:47.5820424Z test preloader::tests::a_resized_vpk_restores_tracked_patches_instead_of_discarding_them ... ok
+2026-09-22T15:09:47.6631596Z test preloader::tests::catalog_lists_addons_and_particles ... ok
+2026-09-22T15:09:47.7232777Z test preloader::tests::an_unexplained_snapshot_survives_restore_and_torn_writes_do_not ... ok
+2026-09-22T15:09:47.8404017Z test preloader::tests::an_entry_modified_before_execs_touched_it_blocks_apply_until_repaired ... ok
+2026-09-22T15:09:48.0492425Z test preloader::tests::custom_pack_write_rechecks_the_process_at_its_live_write_boundary ... ok
+2026-09-22T15:09:48.0495494Z test preloader::tests::extension_checks_ignore_letter_case ... ok
+2026-09-22T15:09:48.6137453Z test preloader::tests::apply_patches_and_revert_restores ... ok
+2026-09-22T15:09:48.6622659Z test preloader::tests::corrupt_replacement_payload_leaves_the_installed_selection_byte_exact ... ok
+2026-09-22T15:09:48.7915743Z test preloader::tests::crafted_non_particle_state_cannot_authorize_an_official_archive_write ... ok
+2026-09-22T15:09:48.9566577Z test preloader::tests::failed_profile_projection_restores_the_previous_owner_and_bytes ... ok
+2026-09-22T15:09:48.9730482Z test preloader::tests::gameinfo_does_not_toggle_prefixes_or_lines_with_extra_tokens ... ok
+2026-09-22T15:09:49.0503896Z test preloader::tests::gameinfo_backup_refreshes_after_a_game_update_and_restores ... ok
+2026-09-22T15:09:49.0963053Z test preloader::tests::gameinfo_preserves_crlf_and_bom ... ok
+2026-09-22T15:09:49.1095966Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-262\game\tf <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-262\outside-tf
+2026-09-22T15:09:49.1141396Z test preloader::tests::gameinfo_reads_and_writes_refuse_a_linked_tf_parent ... ok
+2026-09-22T15:09:49.1241140Z test preloader::tests::gameinfo_status_does_not_create_a_missing_tf_parent ... ok
+2026-09-22T15:09:49.1308683Z test preloader::tests::gameinfo_rechecks_a_fresh_process_sample_at_the_write_boundary ... ok
+2026-09-22T15:09:49.2898999Z test preloader::tests::gameinfo_toggle_roundtrips ... ok
+2026-09-22T15:09:49.3242403Z test preloader::tests::gameinfo_toggles_only_the_first_type_line ... ok
+2026-09-22T15:09:49.4734370Z test preloader::tests::fingerprint_covers_the_sibling_archives ... ok
+2026-09-22T15:09:49.5114028Z test preloader::tests::gameinfo_trailing_comment_is_not_a_bypass_and_survives_the_round_trip ... ok
+2026-09-22T15:09:49.5430704Z test preloader::tests::malformed_gameinfo_status_is_an_error_not_a_clean_disabled_state ... ok
+2026-09-22T15:09:49.5433929Z test preloader::tests::model_materials_move_under_console_and_the_model_follows ... ok
+2026-09-22T15:09:50.7661024Z test preloader::tests::final_state_failure_rolls_the_installed_selection_back_byte_exact ... ok
+2026-09-22T15:09:50.8837827Z test preloader::tests::orphan_textures_get_a_material_preferring_the_stock_one ... ok
+2026-09-22T15:09:50.9411636Z test preloader::tests::mtime_drift_does_not_reset_baseline ... ok
+2026-09-22T15:09:51.2268853Z test preloader::tests::oversized_mod_is_skipped_with_notice ... ok
+2026-09-22T15:09:51.2656420Z test preloader::tests::oversized_state_and_gameinfo_inputs_fail_closed_without_unbounded_reads ... ok
+2026-09-22T15:09:51.2970482Z test preloader::tests::invalid_late_original_name_refuses_recovery_before_any_live_mutation ... ok
+2026-09-22T15:09:51.4185290Z test preloader::tests::interrupted_apply_cannot_clobber_or_trust_unmatched_snapshots ... ok
+2026-09-22T15:09:51.7358844Z test preloader::tests::particle_patch_rechecks_the_process_at_its_live_write_boundary ... ok
+2026-09-22T15:09:51.7452962Z test preloader::tests::patch_refuses_a_directory_mapping_that_changed_after_inspection ... ok
+2026-09-22T15:09:51.7881676Z test preloader::tests::oversized_gameinfo_backup_and_particle_snapshot_are_rejected ... ok
+2026-09-22T15:09:51.9242526Z test preloader::tests::preload_profile_cleanup_is_acknowledged_one_success_at_a_time ... ok
+2026-09-22T15:09:52.0400073Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-282\game\tf\custom <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-282\outside-custom
+2026-09-22T15:09:52.1974681Z test preloader::tests::preloader_pack_reads_writes_and_removals_refuse_a_linked_custom_parent ... ok
+2026-09-22T15:09:52.2088440Z test preloader::tests::preloader_status_does_not_create_a_missing_custom_directory ... ok
+2026-09-22T15:09:52.2663986Z test preloader::tests::particle_snapshots_keep_preload_wanted_when_state_is_missing ... ok
+2026-09-22T15:09:52.9130400Z test preloader::tests::oversized_transaction_backup_is_rejected_before_recovery_writes ... ok
+2026-09-22T15:09:53.0373038Z test preloader::tests::profile_particle_cleanup_keeps_current_sources_and_handles_legacy_state ... ok
+2026-09-22T15:09:53.1179267Z test preloader::tests::preload_is_wanted_tracks_installed_mods ... ok
+2026-09-22T15:09:53.2374756Z test preloader::tests::preloader_writes_refuse_while_tf2_runs_and_touch_nothing ... ok
+2026-09-22T15:09:54.3283373Z test preloader::tests::profile_particle_cleanup_failure_keeps_the_old_install_and_snapshots ... ok
+2026-09-22T15:09:54.3286109Z test preloader::tests::rebuild_keep_lists_prefer_sole_homes ... ok
+2026-09-22T15:09:54.7966970Z test preloader::tests::profile_particle_cleanup_needs_no_library_for_an_empty_target_and_preserves_bypass ... ok
+2026-09-22T15:09:54.7969694Z test preloader::tests::relocation_is_a_noop_without_models_or_matching_materials ... ok
+2026-09-22T15:09:55.4225655Z test preloader::tests::profile_particle_cleanup_rebuilds_overridden_library_particles_and_preserves_addons ... ok
+2026-09-22T15:09:55.7673880Z test preloader::tests::profile_projection_replaces_addons_and_particles_then_restores_the_previous_profile ... ok
+2026-09-22T15:09:56.1032070Z test preloader::tests::recovery_refuses_a_same_size_archive_entry_from_a_new_game_version ... ok
+2026-09-22T15:09:56.5002165Z test preloader::tests::restore_rechecks_the_process_and_keeps_support_for_a_retry ... ok
+2026-09-22T15:09:56.8751684Z test preloader::tests::reopen_recovers_a_final_state_crash_to_the_exact_previous_selection ... ok
+2026-09-22T15:09:56.9006963Z test preloader::tests::restore_refuses_an_entry_the_game_replaced_in_place ... ok
+2026-09-22T15:09:56.9732534Z test preloader::tests::stale_patches_execs_does_not_track_are_reported_everywhere ... ok
+2026-09-22T15:09:56.9878655Z test preloader::tests::snapshot_names_are_hashed_and_legacy_names_migrate ... ok
+2026-09-22T15:09:57.0070281Z test preloader::tests::status_never_treats_an_unreadable_sibling_as_clean ... ok
+2026-09-22T15:09:57.4039865Z test preloader::tests::restore_untracks_an_entry_that_already_holds_stock_bytes ... ok
+2026-09-22T15:09:57.4678372Z test preloader::tests::revert_without_the_archive_keeps_everything_needed_for_a_retry ... ok
+2026-09-22T15:09:57.4681083Z test preloader::transaction::tests::cleanup_budget_allows_every_backup_plus_the_intent_only ... ok
+2026-09-22T15:09:57.4683659Z test process_lock::tests::matches_ticket_process_names_only ... ok
+2026-09-22T15:09:57.4686451Z test process_lock::tests::refuse_is_typed_not_silent ... ok
+2026-09-22T15:09:57.4689059Z test process_lock::tests::steam_is_the_main_client_only ... ok
+2026-09-22T15:09:58.1325295Z test preloader::tests::unknown_addon_fails_before_anything_is_restored ... ok
+2026-09-22T15:09:58.8221015Z test profile::deletion::tests::active_delete_requires_explicit_keep_installed_and_clears_tracking ... ok
+2026-09-22T15:09:59.3636356Z test profile::deletion::tests::changed_index_during_recovery_preserves_remaining_payload ... ok
+2026-09-22T15:09:59.5359225Z test preloader::tests::switching_to_imported_profile_clears_global_mods_and_preserves_the_legacy_selection ... ok
+2026-09-22T15:10:00.4086234Z test profile::deletion::tests::inactive_delete_preserves_active_payload_live_files_and_shared_base ... ok
+2026-09-22T15:10:00.4395521Z test preloader::tests::verified_current_stock_reconciles_a_mapping_changed_preloader_transaction ... ok
+2026-09-22T15:10:00.5893332Z test profile::deletion::tests::interruption_before_commit_cancels_delete_on_restart_without_losing_data ... ok
+2026-09-22T15:10:00.7078613Z test profile::deletion::tests::interruption_after_commit_retries_only_deleted_payload_cleanup_on_restart ... ok
+2026-09-22T15:10:01.6522438Z test profile::deletion::tests::running_and_pending_switch_refuse_before_journal_or_index_changes ... ok
+2026-09-22T15:10:01.8331913Z test profile::deletion::tests::last_delete_keeps_installed_setup_and_preloader_recovery_snapshots ... ok
+2026-09-22T15:10:02.0731295Z test profile::tests::a_live_only_nested_hud_backup_rolls_back_when_the_game_starts ... ok
+2026-09-22T15:10:02.0846916Z test profile::tests::batch_rejects_portable_case_collisions_before_writing ... ok
+2026-09-22T15:10:02.1451624Z test profile::deletion::tests::unreadable_remaining_manifest_prevents_shared_blob_collection ... ok
+2026-09-22T15:10:02.4586903Z test profile::tests::committed_recovery_preflights_every_staged_file_before_publishing_any ... ok
+2026-09-22T15:10:02.4645273Z test profile::tests::create_requires_a_name ... ok
+2026-09-22T15:10:02.7063191Z test profile::deletion::tests::missing_or_corrupt_target_can_be_removed_without_trusting_its_manifest ... ok
+2026-09-22T15:10:02.7071137Z test profile::tests::file_safe_predicate_is_the_only_allowlist ... ok
+2026-09-22T15:10:02.9858834Z test profile::tests::committed_recovery_rolls_live_projection_forward_before_cleanup ... ok
+2026-09-22T15:10:03.1392536Z test profile::tests::first_save_sets_active_second_does_not_steal ... ok
+2026-09-22T15:10:03.1977813Z test profile::tests::init_and_create_record ... ok
+2026-09-22T15:10:03.6339025Z test profile::tests::exclusive_and_shared_storage ... ok
+2026-09-22T15:10:03.6344072Z test profile::tests::legacy_launch_sync_state_is_pending_and_false_is_persisted ... ok
+2026-09-22T15:10:03.7641165Z test profile::tests::interrupted_payload_transaction_recovers_on_the_next_writer ... ok
+2026-09-22T15:10:03.8722002Z test profile::tests::legacy_hud_journal_recovers_before_any_hud_metadata_is_hydrated ... ok
+2026-09-22T15:10:03.8727537Z test profile::tests::live_rename_descendants_use_portable_case_and_component_boundaries ... ok
+2026-09-22T15:10:03.8733321Z test profile::tests::live_renames_allow_only_exact_nested_hud_backup_endpoints ... ok
+2026-09-22T15:10:03.8807626Z test profile::tests::load_missing_library_does_not_write ... ok
+2026-09-22T15:10:03.9915637Z test profile::tests::legacy_verbatim_roots_are_clean_on_read_and_next_authorized_write ... ok
+2026-09-22T15:10:04.1282663Z test profile::tests::manifest_paths_outside_the_file_safe_surface_are_refused ... ok
+2026-09-22T15:10:04.1293618Z test profile::tests::normalize_rejects_drive_letters_ads_and_device_names ... ok
+2026-09-22T15:10:04.5813923Z test profile::tests::combined_domain_transaction_rolls_back_files_metadata_and_live_projection ... ok
+2026-09-22T15:10:04.7099764Z test profile::tests::mutation_resamples_process_lock_immediately_before_live_commit ... ok
+2026-09-22T15:10:04.8165011Z test profile::tests::payload_update_rolls_back_when_the_index_commit_fails ... ok
+2026-09-22T15:10:04.8953118Z test profile::tests::populated_creation_never_exposes_a_profile_when_index_publication_fails ... ok
+2026-09-22T15:10:04.9603356Z test profile::tests::live_pack_rename_reprojects_unchanged_descendants_with_one_case ... ok
+2026-09-22T15:10:04.9672078Z test profile::tests::populated_creation_reconciles_an_index_rename_with_failed_parent_sync ... ok
+2026-09-22T15:10:05.2448065Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-335\execs\profiles\f9840999-1387-4048-9b83-df59c3c3661b <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-335\outside-profile
+2026-09-22T15:10:05.2521928Z test profile::tests::profile_json_reads_refuse_oversized_sparse_files ... ok
+2026-09-22T15:10:05.2525336Z test profile::tests::profiles_dir_sits_next_to_settings ... ok
+2026-09-22T15:10:05.2737032Z test profile::tests::profile_uuid_link_cannot_redirect_load_or_mutation_outside_the_library ... ok
+2026-09-22T15:10:05.3582724Z test profile::tests::profile_delete_keeps_payload_when_index_cannot_commit ... ok
+2026-09-22T15:10:05.5101022Z test profile::tests::prepared_recovery_preflights_every_backup_before_restoring_any_file ... ok
+2026-09-22T15:10:05.7664836Z test profile::tests::recovery_never_trusts_a_consistently_tampered_index_and_journal_root ... ok
+2026-09-22T15:10:05.7696720Z test profile::tests::refuses_writes_while_tf2_running ... ok
+2026-09-22T15:10:05.8264075Z test profile::tests::recovering_one_profile_never_restores_a_stale_full_library_index ... ok
+2026-09-22T15:10:06.0290791Z test profile::tests::root_mismatch_hides_profiles ... ok
+2026-09-22T15:10:06.1090960Z test profile::tests::published_commit_marker_with_sync_error_reports_committed_success ... ok
+2026-09-22T15:10:06.2738490Z test profile::tests::rejects_forbidden_and_traversal_paths ... ok
+2026-09-22T15:10:06.2911621Z test profile::tests::save_current_refuses_while_tf2_running ... ok
+2026-09-22T15:10:06.5358206Z test profile::tests::save_current_copies_surface_and_leaves_live_untouched ... ok
+2026-09-22T15:10:06.7271463Z test profile::tests::save_current_reuse_rolls_name_files_and_launch_back_together ... ok
+2026-09-22T15:10:06.7287055Z test profile::tests::strict_profile_ownership_rejects_global_stock_and_junk_aliases ... ok
+2026-09-22T15:10:06.7288570Z test profile::tests::recovery_preflights_every_profile_before_restoring_the_first_one ... ok
+2026-09-22T15:10:06.8750115Z test settings::tests::concurrent_confirmation_and_preferences_do_not_drop_each_other ... ok
+2026-09-22T15:10:06.8760228Z test settings::tests::data_dir_refuses_an_unset_appdata ... ok
+2026-09-22T15:10:06.8763392Z test settings::tests::data_dir_uses_spec_paths ... ok
+2026-09-22T15:10:06.8914064Z test settings::tests::changing_install_and_preferences_preserves_the_other_global_fields ... ok
+2026-09-22T15:10:06.9043365Z test settings::tests::legacy_inherit_binds_key_is_ignored_not_fatal ... ok
+2026-09-22T15:10:06.9052415Z test settings::tests::invalid_existing_settings_are_not_replaced_by_preference_defaults ... ok
+2026-09-22T15:10:06.9156189Z test settings::tests::partial_preference_objects_keep_backwards_compatible_defaults ... ok
+2026-09-22T15:10:06.9163715Z test settings::tests::reading_missing_preferences_uses_defaults_without_creating_files ... ok
+2026-09-22T15:10:06.9649535Z test settings::tests::preferences_persist_before_a_profile_or_install_exists ... ok
+2026-09-22T15:10:06.9660384Z test profile::tests::save_reuses_empty_singleton_and_uses_cloud_config ... ok
+2026-09-22T15:10:06.9936276Z test settings::tests::remembered_root_migrates_legacy_verbatim_settings ... ok
+2026-09-22T15:10:06.9942274Z test settings::tests::save_creates_a_missing_platform_data_hierarchy ... ok
+2026-09-22T15:10:06.9945518Z test steam_inf::tests::accepts_tf2_app_id_any_case ... ok
+2026-09-22T15:10:06.9948951Z test steam_inf::tests::rejects_other_apps_and_missing_id ... ok
+2026-09-22T15:10:07.0169238Z test settings::tests::settings_read_accepts_the_limit_and_rejects_one_byte_more ... ok
+2026-09-22T15:10:07.0321035Z test settings::tests::round_trip_and_reject_stale_root ... ok
+2026-09-22T15:10:07.0326219Z test surface::tests::empty_custom_and_missing_config_are_ok ... ok
+2026-09-22T15:10:07.0328330Z test surface::tests::global_custom_list_matches_the_preloader_writer ... ok
+2026-09-22T15:10:07.0457861Z test surface::tests::comfig_mode_from_loader_contents_and_shared_vpk_name ... ok
+2026-09-22T15:10:07.0565286Z test surface::tests::hud_backups_cannot_be_captured_owned_or_classified_as_packs ... ok
+2026-09-22T15:10:07.0687866Z test surface::tests::rejects_accumulated_path_data_over_the_limit ... ok
+2026-09-22T15:10:07.0821656Z test surface::tests::preloader_pack_stays_out_of_the_profile_surface ... ok
+2026-09-22T15:10:07.0824147Z test surface::tests::migrates_user_and_parks_collisions ... ok
+2026-09-22T15:10:07.1027340Z test surface::tests::rejects_an_ordinary_tree_wider_than_the_entry_limit ... ok
+2026-09-22T15:10:07.1175032Z test surface::tests::skipped_diagnostics_are_bounded ... ok
+2026-09-22T15:10:07.1431749Z test surface::tests::stock_custom_entries_and_part_files_stay_out_of_the_surface ... ok
+2026-09-22T15:10:07.1440845Z test surface::tests::vanilla_migrate_and_cloud_config_fallback ... ok
+2026-09-22T15:10:07.5169561Z test surface::tests::vanilla_takes_user_cfgs_custom_and_skips_stock ... ok
+2026-09-22T15:10:07.5887896Z test surface::tests::rejects_an_ordinary_tree_deeper_than_the_surface_limit ... ok
+2026-09-22T15:10:08.2270482Z test switch::tests::a_corrupt_target_source_fails_before_remove ... ok
+2026-09-22T15:10:08.2892254Z test switch::tests::a_manifest_path_outside_the_file_safe_surface_is_refused ... ok
+2026-09-22T15:10:08.6294064Z test switch::tests::a_failure_after_the_remove_step_clears_the_active_profile ... ok
+2026-09-22T15:10:09.1660978Z test profile::tests::save_current_manifest_writes_do_not_grow_with_file_count ... ok
+2026-09-22T15:10:09.2462196Z test switch::tests::a_missing_source_file_fails_before_any_live_file_is_removed ... ok
+2026-09-22T15:10:10.1034009Z test switch::tests::a_retry_after_a_failed_switch_finishes_the_remove_step ... ok
+2026-09-22T15:10:10.1673104Z test switch::tests::active_commit_failure_keeps_a_durable_snapshot_and_never_emits_done ... ok
+2026-09-22T15:10:10.3636799Z test switch::tests::dual_write_on_switch ... ok
+2026-09-22T15:10:10.3889339Z test switch::tests::pruning_clears_a_husk_left_by_the_game_sound_cache ... ok
+2026-09-22T15:10:10.4143248Z test switch::tests::pruning_leaves_a_folder_that_still_has_real_files ... ok
+2026-09-22T15:10:10.6871968Z test switch::tests::refuse_while_running_and_unknown_profile ... ok
+2026-09-22T15:10:11.1003651Z test switch::tests::remove_keeps_modified_and_unknown_files ... ok
+2026-09-22T15:10:11.4236845Z test switch::tests::full_switch_keeps_launch_sync_pending_until_same_active_retry ... ok
+2026-09-22T15:10:11.7282953Z test switch::tests::extra_hud_stays_in_the_library_without_an_absorb_deletion ... ok
+2026-09-22T15:10:11.7618045Z test switch::tests::same_active_switch_retries_and_clears_pending_launch_sync ... ok
+2026-09-22T15:10:12.4967411Z test switch::tests::legacy_target_requires_explicit_choice_independent_of_another_profiles_live_hud ... ok
+2026-09-22T15:10:12.8337102Z test switch::tests::switching_to_active_is_noop ... ok
+2026-09-22T15:10:12.8825853Z test switch::tests::switch_surfaces_the_launch_options_write_reason ... ok
+2026-09-22T15:10:12.8829770Z test vdf::tests::a_bracket_that_is_not_a_conditional_stays_a_token ... ok
+2026-09-22T15:10:12.8833144Z test vdf::tests::conditionals_do_not_shift_the_following_key ... ok
+2026-09-22T15:10:12.8836477Z test vdf::tests::conditionals_round_trip_through_serialize ... ok
+2026-09-22T15:10:12.8841250Z test vdf::tests::hud_literal_backslashes_round_trip_without_changing_steam_escapes ... ok
+2026-09-22T15:10:12.8844380Z test vdf::tests::hud_serializer_refuses_values_that_literal_mode_cannot_represent ... ok
+2026-09-22T15:10:12.8847380Z test vdf::tests::merge_from_updates_nested_strings ... ok
+2026-09-22T15:10:12.8852321Z test vdf::tests::parses_modern_libraryfolders ... ok
+2026-09-22T15:10:12.8855289Z test vdf::tests::parses_old_numeric_libraryfolders ... ok
+2026-09-22T15:10:12.8861751Z test vdf::tests::reads_installdir_from_acf ... ok
+2026-09-22T15:10:12.9026521Z test vdf::tests::runaway_nesting_is_an_error_not_a_stack_overflow ... ok
+2026-09-22T15:10:12.9032654Z test vdf::tests::serialize_round_trips_launch_options ... ok
+2026-09-22T15:10:12.9035383Z test vdf::tests::set_path_creates_objects_and_updates_leaf ... ok
+2026-09-22T15:10:12.9038933Z test vdf::tests::skips_line_comments ... ok
+2026-09-22T15:10:13.4587970Z test switch::tests::switch_replaces_surface_and_keeps_official_files ... ok
+2026-09-22T15:10:13.4592029Z test viewmodel::tests::direct_import_metadata_has_practical_bounds ... ok
+2026-09-22T15:10:14.1354652Z test viewmodel::tests::comfig_preload_uses_the_overrides_exec_target ... ok
+2026-09-22T15:10:14.2622480Z test switch::tests::switching_away_keeps_a_removed_packs_library_copy_and_the_keep_list ... ok
+2026-09-22T15:10:14.3516195Z test viewmodel::tests::disabling_preload_removes_the_managed_cfg_and_launch_token ... ok
+2026-09-22T15:10:14.4209763Z test viewmodel::tests::enabling_preload_without_viewmodels_is_side_effect_free ... ok
+2026-09-22T15:10:14.5500699Z test viewmodel::tests::game_running_wins_before_invalid_or_oversized_import_validation ... ok
+2026-09-22T15:10:14.7568592Z test viewmodel::tests::import_refuses_untracked_legacy_viewmodel_content_without_mutating ... ok
+2026-09-22T15:10:15.2626581Z test switch::tests::switching_to_colly_preserves_ignored_legacy_oxide_and_only_mounts_colly ... ok
+2026-09-22T15:10:15.3265985Z test viewmodel::tests::import_installs_vpk_and_preload ... ok
+2026-09-22T15:10:15.3269591Z test viewmodel::tests::preload_cfg_preserves_caching_and_engine_failure_evidence ... ok
+2026-09-22T15:10:15.3274197Z test viewmodel::tests::preload_launch_replaces_all_managed_spellings_without_repeating_the_hook ... ok
+2026-09-22T15:10:15.3277869Z test viewmodel::tests::preload_launch_supports_both_cfg_layers ... ok
+2026-09-22T15:10:15.6721643Z test viewmodel::tests::malformed_localconfig_leaves_the_committed_change_pending_for_retry ... ok
+2026-09-22T15:10:15.8112546Z test viewmodel::tests::oversized_prior_live_pack_is_rejected_without_materializing_a_snapshot ... ok
+2026-09-22T15:10:15.8302093Z test viewmodel::tests::import_transaction_rolls_back_pack_preload_record_and_launch_together ... ok
+2026-09-22T15:10:15.9648549Z test viewmodel::tests::refuses_while_tf2_is_running ... ok
+2026-09-22T15:10:16.1252263Z test viewmodel::tests::remove_refuses_an_untracked_canonical_viewmodel_vpk_without_mutating ... ok
+2026-09-22T15:10:16.1443700Z test viewmodel::tests::preload_updates_steam_launch_options_when_steam_is_closed ... ok
+2026-09-22T15:10:16.1544839Z test viewmodel_build::tests::archive_paths_must_be_enclosed_normal_relative_paths ... ok
+2026-09-22T15:10:16.1548595Z test viewmodel_build::tests::bounded_stream_refuses_the_first_byte_beyond_its_limit ... ok
+2026-09-22T15:10:16.1645177Z test viewmodel_build::tests::compiled_file_size_is_checked_on_its_open_handle ... ok
+2026-09-22T15:10:16.1796125Z test viewmodel_build::tests::compiler_log_limit_is_smaller_than_the_timeout_disk_risk ... ok
+2026-09-22T15:10:16.1853878Z test viewmodel_build::tests::compiler_log_reader_keeps_only_the_bounded_tail ... ok
+2026-09-22T15:10:16.1858367Z test viewmodel_build::tests::compressed_archive_length_is_bounded_without_allocating_a_fixture ... ok
+2026-09-22T15:10:16.2045063Z test viewmodel_build::tests::extraction_enforces_the_remaining_aggregate_budget_before_writing ... ok
+2026-09-22T15:10:16.2048951Z test viewmodel_build::tests::hide_all_bones_cuts_at_the_located_line_not_the_first_word ... ok
+2026-09-22T15:10:16.2051974Z test viewmodel_build::tests::hide_mode_round_trips_through_options ... ok
+2026-09-22T15:10:16.2055491Z test viewmodel_build::tests::hides_all_bones_and_preserves_frame_count ... ok
+2026-09-22T15:10:16.2291470Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-412\studio <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-413
+2026-09-22T15:10:16.2418294Z test viewmodel_build::tests::linked_studio_parent_cannot_redirect_recursive_staging_cleanup ... ok
+2026-09-22T15:10:16.2785026Z test viewmodel_build::tests::missing_compiler_is_named_and_staging_is_cleaned ... ok
+2026-09-22T15:10:16.2789437Z test viewmodel_build::tests::qc_model_name_must_be_a_normal_relative_mdl_path ... ok
+2026-09-22T15:10:16.2792226Z test viewmodel_build::tests::rejects_smd_without_skeleton ... ok
+2026-09-22T15:10:16.2796421Z test viewmodel_build::tests::resolves_model_name_from_qc ... ok
+2026-09-22T15:10:16.2800014Z test viewmodel_build::tests::rewritten_smd_builder_refuses_growth_past_its_bound ... ok
+2026-09-22T15:10:16.2804571Z test viewmodel_build::tests::soldier_hides_force_the_original_files ... ok
+2026-09-22T15:10:16.2807628Z test viewmodel_build::tests::unknown_group_is_an_error ... ok
+2026-09-22T15:10:16.2811971Z test viewmodel_build::tests::weapon_mode_hides_only_weapon_bones_and_keeps_hand_frames ... ok
+2026-09-22T15:10:16.2814694Z test viewmodel_build::tests::weapon_mode_needs_weapon_bones ... ok
+2026-09-22T15:10:16.2817481Z test vpk::tests::a_space_extension_reads_back_as_no_extension ... ok
+2026-09-22T15:10:16.3189599Z test vpk::tests::caller_materialization_limits_are_exact_and_aggregate ... ok
+2026-09-22T15:10:16.3439513Z test vpk::tests::entry_length_is_checked_before_allocation ... ok
+2026-09-22T15:10:16.4925343Z test viewmodel::tests::remove_refuses_untracked_legacy_viewmodel_content_without_mutating ... ok
+2026-09-22T15:10:16.5081954Z test vpk::tests::hashed_filtered_reader_keeps_preloads_and_data_across_stream_chunks ... ok
+2026-09-22T15:10:16.6343577Z test viewmodel::tests::remove_preserves_drifted_live_viewmodel_files ... ok
+2026-09-22T15:10:16.6350294Z test vpk::tests::junk_and_unwritable_names_are_left_out_and_paths_are_lowercased ... ok
+2026-09-22T15:10:16.7973905Z test vpk::tests::imported_vpk_inner_entry_count_is_bounded_even_for_empty_bodies ... ok
+2026-09-22T15:10:16.8113267Z test vpk::tests::patch_refuses_a_hard_linked_split_archive_and_preserves_the_victim ... ok
+2026-09-22T15:10:16.8118477Z test vpk::tests::portable_colliding_vpk_paths_are_rejected_before_cfg_filtering ... ok
+2026-09-22T15:10:16.8269811Z test vpk::tests::reads_sibling_archive_and_refuses_escape_names ... ok
+2026-09-22T15:10:16.8273690Z test vpk::tests::rejects_bad_signature ... ok
+2026-09-22T15:10:16.8278623Z test vpk::tests::rejects_dotdot_paths ... ok
+2026-09-22T15:10:16.8282091Z test vpk::tests::split_archive_budget_never_grows_past_the_global_ceiling ... ok
+2026-09-22T15:10:16.8285949Z test vpk::tests::v2_entries_cannot_point_into_checksum_sections ... ok
+2026-09-22T15:10:16.8290111Z test vpk::tests::v2_header_matches_the_layout_the_game_ships ... ok
+2026-09-22T15:10:16.8295139Z test vpk::tests::v2_round_trips_through_the_reader ... ok
+2026-09-22T15:10:16.8299376Z test vpk::tests::validate_reports_what_a_read_would_refuse ... ok
+2026-09-22T15:10:16.8302704Z test vpk::tests::writes_and_reads_a_single_file ... ok
+2026-09-22T15:10:16.8306439Z test vtf_read::tests::decodes_bgra_72_with_mips_and_frames ... ok
+2026-09-22T15:10:16.8309202Z test vtf_read::tests::decodes_dxt1_solid_block ... ok
+2026-09-22T15:10:16.8313011Z test vtf_read::tests::decodes_dxt3_explicit_alpha ... ok
+2026-09-22T15:10:16.8315829Z test vtf_read::tests::decodes_dxt5_alpha_endpoints ... ok
+2026-09-22T15:10:16.8319030Z test vtf_read::tests::decodes_i8_ia88_and_a8 ... ok
+2026-09-22T15:10:16.8321836Z test vtf_read::tests::reads_73_resource_dictionary ... ok
+2026-09-22T15:10:16.8324814Z test vtf_read::tests::rejects_a_resource_offset_inside_the_declared_header ... ok
+2026-09-22T15:10:16.8328333Z test vtf_read::tests::rejects_an_undersized_declared_header ... ok
+2026-09-22T15:10:16.8332140Z test vtf_read::tests::rejects_garbage ... ok
+2026-09-22T15:10:16.8339515Z test vtf_read::tests::rejects_zero_or_excessive_mip_counts_without_panicking ... ok
+2026-09-22T15:10:17.0712342Z test wizard::tests::current_start_rejects_an_oversized_profile_config ... ok
+2026-09-22T15:10:17.0829896Z test wizard::tests::fresh_start_rejects_an_oversized_valve_config_before_profile_creation ... ok
+2026-09-22T15:10:17.1506182Z test vpk::tests::filtered_path_read_streams_single_file_vpk_data ... ok
+2026-09-22T15:10:17.1658012Z test wizard::tests::missing_base_vpk_is_an_error ... ok
+2026-09-22T15:10:17.1661733Z test wizard::tests::missing_official_asset_is_an_error ... ok
+2026-09-22T15:10:17.1669918Z test wizard::tests::picks_base_and_selected_addons_skips_override_packs ... ok
+2026-09-22T15:10:17.1787028Z test wizard::tests::refuses_while_tf2_running ... ok
+2026-09-22T15:10:17.1791512Z test wizard::tests::required_assets_include_base_and_addons ... ok
+2026-09-22T15:10:17.3503339Z test wizard::tests::materialize_writes_hook_shared_base_and_addons ... ok
+2026-09-22T15:10:17.4911153Z test viewmodel::tests::removing_a_viewmodel_pack_keeps_the_preload_the_mods_preloader_needs ... ok
+2026-09-22T15:10:17.5399678Z test wizard::tests::start_from_current_without_an_active_profile_errors ... ok
+2026-09-22T15:10:17.6400994Z test wizard::tests::staging_failure_never_publishes_a_partial_or_duplicate_wizard_profile ... ok
+2026-09-22T15:10:17.8298329Z test wizard::tests::start_from_current_copies_the_active_config_verbatim ... ok
+2026-09-22T15:10:17.9725560Z test vpk::tests::overlapping_entries_far_past_the_file_size_are_refused_before_allocating ... ok
+2026-09-22T15:10:18.0921255Z test wizard::tests::start_from_fresh_still_uses_stock_binds ... ok
+2026-09-22T15:10:18.5686308Z test zip::tests::creator_commands_require_review_and_approval_is_bound_to_zip_bytes ... ok
+2026-09-22T15:10:18.6780328Z test wizard::tests::switch_applies_wizard_and_clears_previous_custom ... ok
+2026-09-22T15:10:18.7881915Z test zip::tests::creator_review_never_waives_archive_integrity ... ok
+2026-09-22T15:10:18.9788135Z test zip::tests::creator_confirmation_rechecks_game_lock_and_library_root ... ok
+2026-09-22T15:10:19.0205237Z test zip::tests::creator_without_config_requires_readable_defaults_before_publication ... ok
+2026-09-22T15:10:19.1319742Z test zip::tests::changing_imported_hud_preserves_approved_cfg_until_separate_option_reset_review ... ok
+2026-09-22T15:10:19.1339591Z test zip::tests::entry_budget_refuses_oversized_and_over_total ... ok
+2026-09-22T15:10:19.3252264Z test zip::tests::creator_vpk_review_preserves_approved_bytes_and_still_refuses_private_export ... ok
+2026-09-22T15:10:19.6520099Z test zip::tests::export_cleans_legacy_verbatim_root_without_mutating_library ... ok
+2026-09-22T15:10:19.9111055Z test zip::tests::creator_and_native_multiple_huds_require_choice_and_preserve_inactive_originals ... ok
+2026-09-22T15:10:20.0342996Z test zip::tests::failed_export_preserves_an_existing_destination_and_refuses_credentials ... ok
+2026-09-22T15:10:20.2395126Z test zip::tests::export_inspects_exclusive_and_shared_vpk_cfgs_before_replacing_destination ... ok
+2026-09-22T15:10:20.2403944Z test zip::tests::forbidden_paths_rejected ... ok
+2026-09-22T15:10:20.3772634Z test zip::tests::hostile_cfg_and_launch_payloads_are_rejected_before_profile_creation ... ok
+2026-09-22T15:10:20.4030619Z test zip::tests::failed_publication_is_invisible_and_a_retry_creates_one_complete_profile ... ok
+2026-09-22T15:10:20.6030486Z test zip::tests::import_never_trusts_sender_launch_projection_state ... ok
+2026-09-22T15:10:20.9365054Z test zip::tests::import_refuses_an_absurd_compression_ratio ... ok
+2026-09-22T15:10:21.1162688Z test zip::tests::import_does_not_set_active_profile_id ... ok
+2026-09-22T15:10:21.2234374Z test zip::tests::import_rejects_entries_outside_the_file_safe_surface ... ok
+2026-09-22T15:10:21.2571328Z Junction created for C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-449\profiles\.import-staging <<===>> C:\Users\RUNNER~1\AppData\Local\Temp\execs-core-4820-449\victim
+2026-09-22T15:10:21.2677344Z test zip::tests::highly_compressible_texture_round_trips_through_profile_export ... ok
+2026-09-22T15:10:21.2764628Z test zip::tests::linked_import_staging_cannot_redirect_recursive_cleanup ... ok
+2026-09-22T15:10:21.2767176Z test zip::tests::local_creator_zip_import_and_switch ... ignored, requires a local creator ZIP via EXECS_CREATOR_ZIP
+2026-09-22T15:10:21.3675899Z test zip::tests::import_refuses_while_tf2_running ... ok
+2026-09-22T15:10:21.3726980Z test zip::tests::manifest_file_and_path_budgets_are_checked_before_payload_lookup ... ok
+2026-09-22T15:10:22.2870135Z test zip::tests::live_tf_tree_untouched ... ok
+2026-09-22T15:10:22.4762231Z test zip::tests::mod_records_and_ignored_packs_survive_export_import ... ok
+2026-09-22T15:10:22.6086359Z test zip::tests::profile_zip_paths_use_portable_collision_rules ... ok
+2026-09-22T15:10:22.6876458Z test zip::tests::malformed_signed_vpk_export_fails_but_opaque_legacy_packs_roundtrip ... ok
+2026-09-22T15:10:22.7383456Z test zip::tests::profile_import_refuses_real_hud_vpks_but_keeps_ordinary_and_opaque_vpks ... ok
+2026-09-22T15:10:22.7389541Z test zip::tests::safe_name_strips_path_chars ... ok
+2026-09-22T15:10:23.5617695Z test zip::tests::round_trip_export_import ... ok
+2026-09-22T15:10:23.6523716Z test zip::tests::public_schema_one_zip_without_new_fields_can_be_repaired_and_roundtripped ... ok
+2026-09-22T15:10:23.8296778Z test zip::tests::shared_blob_dedup_on_import ... ok
+2026-09-22T15:10:23.8328960Z test zip::tests::streamed_entry_is_checked_against_actual_size_and_ratio ... ok
+2026-09-22T15:10:24.0528499Z test zip::tests::signed_vpk_that_exceeds_parser_limits_fails_closed ... ok
+2026-09-22T15:10:24.0730343Z test zip::tests::tf2_root_rewritten_and_launch_sanitized ... ok
+2026-09-22T15:10:24.0806762Z test zip::tests::vpk_inspection_and_copy_both_refuse_changed_sources ... ok
+2026-09-22T15:10:24.1419714Z test zip::tests::zip_slip_rejected ... ok
+2026-09-22T15:10:24.2050887Z test zip::tests::split_creator_bundle_combines_custom_trees_and_seeds_clean_settings ... ok
+2026-09-22T15:10:24.5614703Z test zip::tests::valid_vpk_export_roundtrips_exact_members_and_engine_unset_password ... ok
+2026-09-22T15:10:24.7677098Z test zip::tests::creator_zip_import_preserves_files_and_switches_only_when_requested ... ok
+2026-09-22T15:10:24.7678242Z
+2026-09-22T15:10:24.7678890Z test result: ok. 709 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 83.86s
+2026-09-22T15:10:24.7679985Z
+2026-09-22T15:10:24.7738772Z      Running tests\absorb_integrity.rs (apps\desktop\src-tauri\target\debug\deps\absorb_integrity-9105eea4b4e6f913.exe)
+2026-09-22T15:10:24.7910369Z
+2026-09-22T15:10:24.7910774Z running 15 tests
+2026-09-22T15:10:25.1277695Z test a_locked_global_pack_is_still_excluded_from_capture ... ok
+2026-09-22T15:10:25.3216974Z test a_real_nested_file_deletion_is_still_absorbed ... ok
+2026-09-22T15:10:26.6741162Z test a_case_renamed_file_in_a_dashed_pack_keeps_its_bytes_and_ownership ... ok
+2026-09-22T15:10:30.5397510Z test accepted_mod_removal_exports_imports_and_switches_without_stale_records ... ok
+2026-09-22T15:10:31.6513015Z test managed_sound_and_viewmodel_deletions_self_heal_and_keep_records ... ok
+2026-09-22T15:10:34.1045189Z test keep_and_restore_preserve_missing_mod_records_and_payload ... ok
+2026-09-22T15:10:34.3986409Z test accepted_hud_removal_clears_its_record_but_keep_and_restore_preserve_it ... ok
+2026-09-22T15:10:34.7388305Z test partial_mod_changes_recompute_counts_and_bytes_and_round_trip ... ok
+2026-09-22T15:10:34.8753993Z test save_current_refuses_an_unreadable_custom_file ... ok
+2026-09-22T15:10:36.2350169Z test unreadable_mod_inventory_and_write_lock_do_not_remove_records ... ok
+2026-09-22T15:10:36.7174149Z test unreadable_owned_directory_preserves_its_entire_library_subtree ... ok
+2026-09-22T15:10:37.1981422Z test rename_to_dashed_peer_drops_only_old_record_and_preserves_new_bytes ... ok
+2026-09-22T15:10:37.4047224Z test selected_particle_source_external_removal_is_refused_before_update_mutates_state ... ok
+2026-09-22T15:10:38.3797347Z test unreadable_owned_file_preserves_library_and_blocks_switch_until_retry ... ok
+2026-09-22T15:10:39.4176577Z test case_only_file_and_directory_renames_survive_absorb_and_switch_round_trips ... ok
+2026-09-22T15:10:39.4177333Z
+2026-09-22T15:10:39.4177765Z test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.63s
+2026-09-22T15:10:39.4178380Z
+2026-09-22T15:10:39.4214166Z      Running tests\hud_catalog_options.rs (apps\desktop\src-tauri\target\debug\deps\hud_catalog_options-451fa4c0603ce81b.exe)
+2026-09-22T15:10:39.4326201Z
+2026-09-22T15:10:39.4326552Z running 4 tests
+2026-09-22T15:10:39.4327958Z test budhud_youtuber_directory_choices_round_trip_payloads ... ignored, requires pinned HUD archives; set EXECS_HUD_AUDIT_FIXTURES
+2026-09-22T15:10:39.4343557Z test flawhud_full_schema_applies_supported_choices_without_log_files ... ignored, requires pinned HUD archives; set EXECS_HUD_AUDIT_FIXTURES
+2026-09-22T15:10:39.4345610Z test hypnotize_checkbox_bases_apply_both_states_in_full_schema ... ignored, requires pinned HUD archives; set EXECS_HUD_AUDIT_FIXTURES
+2026-09-22T15:10:39.4347355Z test rayshud_full_schema_default_and_alternate_controls_preserve_legacy_comment ... ignored, requires pinned HUD archives; set EXECS_HUD_AUDIT_FIXTURES
+2026-09-22T15:10:39.4348375Z
+2026-09-22T15:10:39.4348800Z test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+2026-09-22T15:10:39.4349381Z
+2026-09-22T15:10:39.4350435Z      Running tests\hud_expression_archives.rs (apps\desktop\src-tauri\target\debug\deps\hud_expression_archives-a7eba442df4a8deb.exe)
+2026-09-22T15:10:39.4460010Z
+2026-09-22T15:10:39.4460308Z running 1 test
+2026-09-22T15:10:39.4462774Z test real_font_templates_reapply_and_resolve_to_declared_fonts ... ignored, requires downloaded pinned HUD archives; set EXECS_HUD_AUDIT_FIXTURES
+2026-09-22T15:10:39.4463785Z
+2026-09-22T15:10:39.4464223Z test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+2026-09-22T15:10:39.4464827Z
+2026-09-22T15:10:39.4480802Z      Running tests\hud_schema_integrity.rs (apps\desktop\src-tauri\target\debug\deps\hud_schema_integrity-b6f43220a45b60c2.exe)
+2026-09-22T15:10:39.4653943Z
+2026-09-22T15:10:39.4654148Z running 3 tests
+2026-09-22T15:10:40.6055778Z test late_schema_errors_leave_every_library_live_cfg_and_manifest_byte_unchanged ... ok
+2026-09-22T15:10:40.7496416Z test refused_live_projection_or_game_lock_does_not_publish_options ... ok
+2026-09-22T15:10:41.2189361Z test hud_options_publish_identical_library_live_bytes_and_reapply_idempotently ... ok
+2026-09-22T15:10:41.2189763Z
+2026-09-22T15:10:41.2190615Z test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.75s
+2026-09-22T15:10:41.2191203Z
+2026-09-22T15:10:41.2222496Z      Running tests\pack_identity.rs (apps\desktop\src-tauri\target\debug\deps\pack_identity-3e5c62d1b5d76c53.exe)
+2026-09-22T15:10:41.2401959Z
+2026-09-22T15:10:41.2402439Z running 12 tests
+2026-09-22T15:10:42.9235761Z test a_hidden_incomplete_or_shadowed_loader_does_not_prove_comfig ... ok
+2026-09-22T15:10:42.9308080Z test base_removal_refuses_stale_writes_then_uses_vanilla_after_update ... ok
+2026-09-22T15:10:43.4254419Z test coexisting_dashed_hud_peers_are_not_legacy_backups ... ok
+2026-09-22T15:10:45.0736010Z test dashed_addition_and_plain_removal_keep_update_and_restore_are_separate ... ok
+2026-09-22T15:10:48.5287661Z test dashed_peers_survive_absorb_export_and_exact_switch ... ok
+2026-09-22T15:10:49.5830158Z test advanced_options_script_survives_capture_absorb_export_and_switch ... ok
+2026-09-22T15:10:49.5832295Z test published_mastercomfig_base_and_standalone_addon_match_the_supported_loader ... ignored, requires explicitly downloaded mastercomfig 9.100.1 assets
+2026-09-22T15:10:49.8126220Z test addons_and_orphan_overrides_keep_executed_vanilla_cfgs ... ok
+2026-09-22T15:10:50.1296577Z test removing_owned_pack_does_not_remove_an_identical_dashed_peer ... ok
+2026-09-22T15:10:50.6254944Z test switch_preserves_a_kept_identical_dashed_peer ... ok
+2026-09-22T15:10:52.1498616Z test nested_cfg_folder_names_survive_capture_export_and_switch ... ok
+2026-09-22T15:10:52.1782988Z test installed_renamed_and_extracted_loaders_agree_and_preserve_nested_cfgs ... ok
+2026-09-22T15:10:52.1783446Z
+2026-09-22T15:10:52.1783740Z test result: ok. 11 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 10.94s
+2026-09-22T15:10:52.1784105Z
+2026-09-22T15:10:52.1819828Z    Doc-tests execs_lib
+2026-09-22T15:10:53.3297900Z
+2026-09-22T15:10:53.3298386Z running 0 tests
+2026-09-22T15:10:53.3298595Z
+2026-09-22T15:10:53.3301321Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+2026-09-22T15:10:53.3301861Z
+2026-09-22T15:10:53.3413254Z    Doc-tests execs_core
+2026-09-22T15:10:54.3564220Z
+2026-09-22T15:10:54.3564791Z running 0 tests
+2026-09-22T15:10:54.3565064Z
+2026-09-22T15:10:54.3566015Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+2026-09-22T15:10:54.3567418Z
+2026-09-22T15:10:54.5150878Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-22T15:10:54.5152329Z ##[group]Run actions/setup-node@v4
+2026-09-22T15:10:54.5152592Z with:
+2026-09-22T15:10:54.5152765Z   node-version: 24
+2026-09-22T15:10:54.5152959Z   always-auth: false
+2026-09-22T15:10:54.5153152Z   check-latest: false
+2026-09-22T15:10:54.5156080Z   token: ***
+2026-09-22T15:10:54.5156273Z env:
+2026-09-22T15:10:54.5156466Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:10:54.5156755Z   CARGO_INCREMENTAL: 0
+2026-09-22T15:10:54.5156955Z   CARGO_TERM_COLOR: always
+2026-09-22T15:10:54.5157161Z   CACHE_ON_FAILURE: false
+2026-09-22T15:10:54.5157354Z ##[endgroup]
+2026-09-22T15:10:54.7191694Z Found in cache @ C:\hostedtoolcache\windows\node\24.20.0\x64
+2026-09-22T15:10:54.7201371Z (node:3956) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-22T15:10:54.7202634Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-22T15:10:54.7205672Z ##[group]Environment details
+2026-09-22T15:11:00.4105490Z node: v24.20.0
+2026-09-22T15:11:00.4105825Z npm: 11.19.0
+2026-09-22T15:11:00.4106013Z yarn: 1.22.22
+2026-09-22T15:11:00.4106479Z ##[endgroup]
+2026-09-22T15:11:00.4398156Z ##[group]Run node scripts/verify-pinned-huds.mjs
+2026-09-22T15:11:00.4398593Z node scripts/verify-pinned-huds.mjs
+2026-09-22T15:11:00.4478976Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-09-22T15:11:00.4479344Z env:
+2026-09-22T15:11:00.4479551Z   CARGO_HOME: C:\Users\runneradmin\.cargo
+2026-09-22T15:11:00.4479826Z   CARGO_INCREMENTAL: 0
+2026-09-22T15:11:00.4480039Z   CARGO_TERM_COLOR: always
+2026-09-22T15:11:00.4480256Z   CACHE_ON_FAILURE: false
+2026-09-22T15:11:00.4480462Z ##[endgroup]
+2026-09-22T15:11:10.3782158Z Pinned HUD fixture evidence: C:\Users\RUNNER~1\AppData\Local\Temp\execs-pinned-huds-gp90DO
+2026-09-22T15:11:10.7186737Z    Compiling proc-macro2 v1.0.107
+2026-09-22T15:11:10.7222730Z    Compiling serde_core v1.0.229
+2026-09-22T15:11:10.7242012Z    Compiling windows-sys v0.61.2
+2026-09-22T15:11:10.7242780Z    Compiling miniz_oxide v0.9.1
+2026-09-22T15:11:12.2198437Z    Compiling quote v1.0.47
+2026-09-22T15:11:12.5438043Z    Compiling syn v3.0.4
+2026-09-22T15:11:12.6284679Z    Compiling syn v2.0.119
+2026-09-22T15:11:12.9421692Z    Compiling serde v1.0.229
+2026-09-22T15:11:13.4626304Z    Compiling serde_json v1.0.151
+2026-09-22T15:11:13.9365279Z    Compiling winapi-util v0.1.11
+2026-09-22T15:11:14.2976717Z    Compiling flate2 v1.1.10
+2026-09-22T15:11:15.1384422Z    Compiling uuid v1.11.1
+2026-09-22T15:11:15.7476234Z    Compiling same-file v1.0.6
+2026-09-22T15:11:16.4160354Z    Compiling thiserror-impl v2.0.20
+2026-09-22T15:11:16.6065366Z    Compiling serde_derive v1.0.229
+2026-09-22T15:11:17.4006749Z    Compiling displaydoc v0.2.7
+2026-09-22T15:11:18.6114854Z    Compiling thiserror v2.0.20
+2026-09-22T15:11:18.6882720Z    Compiling zip v2.4.2
+2026-09-22T15:11:18.9554003Z    Compiling windows-implement v0.57.0
+2026-09-22T15:11:18.9555064Z    Compiling windows-interface v0.57.0
+2026-09-22T15:11:20.8266424Z    Compiling windows-core v0.57.0
+2026-09-22T15:11:22.5246137Z    Compiling windows v0.57.0
+2026-09-22T15:11:53.8834106Z    Compiling sysinfo v0.33.1
+2026-09-22T15:11:57.2863508Z    Compiling execs-core v0.2.0 (D:\a\execs\execs\apps\desktop\src-tauri\core)
+2026-09-22T15:12:23.0145993Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 12s
+2026-09-22T15:12:23.0285089Z      Running tests\hud_catalog_options.rs (apps\desktop\src-tauri\target\debug\deps\hud_catalog_options-8d939e94207e15a2.exe)
+2026-09-22T15:12:23.0394903Z
+2026-09-22T15:12:23.0395211Z running 4 tests
+2026-09-22T15:12:24.7351997Z test budhud_youtuber_directory_choices_round_trip_payloads ... ok
+2026-09-22T15:12:26.3074933Z test hypnotize_checkbox_bases_apply_both_states_in_full_schema ... ok
+2026-09-22T15:13:16.3967731Z test flawhud_full_schema_applies_supported_choices_without_log_files ... ok
+2026-09-22T15:13:23.0415411Z test rayshud_full_schema_default_and_alternate_controls_preserve_legacy_comment has been running for over 60 seconds
+2026-09-22T15:13:49.7485990Z test rayshud_full_schema_default_and_alternate_controls_preserve_legacy_comment ... ok
+2026-09-22T15:13:49.7486429Z
+2026-09-22T15:13:49.7486807Z test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 86.71s
+2026-09-22T15:13:49.7487167Z
+2026-09-22T15:13:49.7521921Z      Running tests\hud_expression_archives.rs (apps\desktop\src-tauri\target\debug\deps\hud_expression_archives-3633d21507e571a6.exe)
+2026-09-22T15:13:49.7634056Z
+2026-09-22T15:13:49.7634449Z running 1 test
+2026-09-22T15:13:53.8254765Z test real_font_templates_reapply_and_resolve_to_declared_fonts ... ok
+2026-09-22T15:13:53.8255452Z
+2026-09-22T15:13:53.8261079Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.06s
+2026-09-22T15:13:53.8261651Z
+2026-09-22T15:13:54.1235617Z    Compiling execs-core v0.2.0 (D:\a\execs\execs\apps\desktop\src-tauri\core)
+2026-09-22T15:14:31.2896508Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 37.42s
+2026-09-22T15:14:31.3037016Z      Running unittests src\lib.rs (apps\desktop\src-tauri\target\debug\deps\execs_core-49ec95c174e21a96.exe)
+2026-09-22T15:14:31.3223391Z
+2026-09-22T15:14:31.3223940Z running 1 test
+2026-09-22T15:15:31.3230883Z test hud::tests::pinned_catalog_huds_install_update_and_preserve_payloads has been running for over 60 seconds
+2026-09-22T15:21:09.9847011Z test hud::tests::pinned_catalog_huds_install_update_and_preserve_payloads ... ok
+2026-09-22T15:21:09.9847533Z
+2026-09-22T15:21:09.9847988Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 714 filtered out; finished in 398.66s
+2026-09-22T15:21:09.9848418Z
+2026-09-22T15:21:09.9895778Z      Running tests\absorb_integrity.rs (apps\desktop\src-tauri\target\debug\deps\absorb_integrity-a1e11dbfaa931678.exe)
+2026-09-22T15:21:10.0088883Z
+2026-09-22T15:21:10.0089536Z running 0 tests
+2026-09-22T15:21:10.0089879Z
+2026-09-22T15:21:10.0091261Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+2026-09-22T15:21:10.0091942Z
+2026-09-22T15:21:10.0117200Z      Running tests\hud_catalog_options.rs (apps\desktop\src-tauri\target\debug\deps\hud_catalog_options-8d939e94207e15a2.exe)
+2026-09-22T15:21:10.0179847Z
+2026-09-22T15:21:10.0180282Z running 0 tests
+2026-09-22T15:21:10.0180561Z
+2026-09-22T15:21:10.0181077Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+2026-09-22T15:21:10.0181498Z
+2026-09-22T15:21:10.0198352Z      Running tests\hud_expression_archives.rs (apps\desktop\src-tauri\target\debug\deps\hud_expression_archives-3633d21507e571a6.exe)
+2026-09-22T15:21:10.0258348Z
+2026-09-22T15:21:10.0259031Z running 0 tests
+2026-09-22T15:21:10.0259415Z
+2026-09-22T15:21:10.0260167Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+2026-09-22T15:21:10.0260938Z
+2026-09-22T15:21:10.0277661Z      Running tests\hud_schema_integrity.rs (apps\desktop\src-tauri\target\debug\deps\hud_schema_integrity-f4d906023153338a.exe)
+2026-09-22T15:21:10.0453929Z
+2026-09-22T15:21:10.0454541Z running 0 tests
+2026-09-22T15:21:10.0454947Z
+2026-09-22T15:21:10.0455703Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+2026-09-22T15:21:10.0456395Z
+2026-09-22T15:21:10.0477905Z      Running tests\pack_identity.rs (apps\desktop\src-tauri\target\debug\deps\pack_identity-1c8406c6278af560.exe)
+2026-09-22T15:21:10.0648429Z
+2026-09-22T15:21:10.0649093Z running 0 tests
+2026-09-22T15:21:10.0649437Z
+2026-09-22T15:21:10.0650255Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+2026-09-22T15:21:10.0651017Z
+2026-09-22T15:21:10.6241250Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-22T15:21:10.6242761Z Post job cleanup.
+2026-09-22T15:21:10.7784391Z (node:5420) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-22T15:21:10.7785601Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-22T15:21:10.8109146Z Post job cleanup.
+2026-09-22T15:21:10.9780628Z ##[group]Cache Configuration
+2026-09-22T15:21:10.9783129Z Cache Provider:
+2026-09-22T15:21:10.9786054Z     github
+2026-09-22T15:21:10.9786705Z Workspaces:
+2026-09-22T15:21:10.9787386Z     D:\a\execs\execs\apps\desktop\src-tauri
+2026-09-22T15:21:10.9788373Z Cache Paths:
+2026-09-22T15:21:10.9789000Z     C:\Users\runneradmin\.cargo\bin
+2026-09-22T15:21:10.9789805Z     C:\Users\runneradmin\.cargo\.crates.toml
+2026-09-22T15:21:10.9790583Z     C:\Users\runneradmin\.cargo\.crates2.json
+2026-09-22T15:21:10.9791365Z     C:\Users\runneradmin\.cargo\registry
+2026-09-22T15:21:10.9792136Z     C:\Users\runneradmin\.cargo\git
+2026-09-22T15:21:10.9792887Z     D:\a\execs\execs\apps\desktop\src-tauri\target
+2026-09-22T15:21:10.9793596Z Restore Key:
+2026-09-22T15:21:10.9794280Z     v0-rust-rust-windows-Windows_NT-x64-2113753f
+2026-09-22T15:21:10.9794970Z Cache Key:
+2026-09-22T15:21:10.9795722Z     v0-rust-rust-windows-Windows_NT-x64-2113753f-35576014
+2026-09-22T15:21:10.9796434Z .. Prefix:
+2026-09-22T15:21:10.9797032Z   - v0-rust-rust-windows-Windows_NT-x64
+2026-09-22T15:21:10.9797788Z .. Environment considered:
+2026-09-22T15:21:10.9798383Z   - Rust Versions:
+2026-09-22T15:21:10.9799170Z     - 1.98.1 x86_64-pc-windows-msvc 48a229ceaefd4985c50990b14116b6d856af0985
+2026-09-22T15:21:10.9800035Z   - CARGO_HOME
+2026-09-22T15:21:10.9800536Z   - CARGO_INCREMENTAL
+2026-09-22T15:21:10.9801129Z   - CARGO_TERM_COLOR
+2026-09-22T15:21:10.9801714Z .. Lockfiles considered:
+2026-09-22T15:21:10.9802701Z   - D:\a\execs\execs\.cargo\config.toml
+2026-09-22T15:21:10.9803524Z   - D:\a\execs\execs\apps\desktop\src-tauri\Cargo.lock
+2026-09-22T15:21:10.9804383Z   - D:\a\execs\execs\apps\desktop\src-tauri\Cargo.toml
+2026-09-22T15:21:10.9805239Z   - D:\a\execs\execs\apps\desktop\src-tauri\core\Cargo.toml
+2026-09-22T15:21:10.9806438Z ##[endgroup]
+2026-09-22T15:21:10.9806816Z
+2026-09-22T15:21:25.4627607Z ... Cleaning D:\a\execs\execs\apps\desktop\src-tauri\target ...
+2026-09-22T15:21:25.7697400Z ... Cleaning cargo registry (cache-all-crates: false) ...
+2026-09-22T15:21:35.2584594Z ... Cleaning cargo/bin ...
+2026-09-22T15:21:35.2658729Z ... Cleaning cargo git cache ...
+2026-09-22T15:21:35.2664607Z ... Saving cache ...
+2026-09-22T15:21:35.3687372Z [command]"C:\Program Files\Git\usr\bin\tar.exe" --posix -cf cache.tzst --exclude cache.tzst -P -C D:/a/execs/execs --files-from manifest.txt --force-local --use-compress-program "zstd -T0"
+2026-09-22T15:21:55.0229097Z Sent 0 of 1146329307 (0.0%), 0.0 MBs/sec
+2026-09-22T15:21:56.0330947Z Sent 536870912 of 1146329307 (46.8%), 253.7 MBs/sec
+2026-09-22T15:21:57.0403026Z Sent 536870912 of 1146329307 (46.8%), 169.3 MBs/sec
+2026-09-22T15:21:58.0505495Z Sent 1079220443 of 1146329307 (94.1%), 255.4 MBs/sec
+2026-09-22T15:21:58.0714235Z Sent 1146329307 of 1146329307 (100.0%), 269.5 MBs/sec
+2026-09-22T15:21:58.3470818Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-22T15:21:58.3472534Z Post job cleanup.
+2026-09-22T15:21:58.5781031Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-09-22T15:21:58.6185586Z git version 2.55.0.windows.5
+2026-09-22T15:21:58.6259884Z Temporarily overriding HOME='D:\a\_temp\111241f2-0a85-40f1-a98e-3c0711fd1644' before making global git config changes
+2026-09-22T15:21:58.6261268Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-22T15:21:58.6272108Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\execs\execs
+2026-09-22T15:21:58.6614946Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-09-22T15:21:58.6963649Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-09-22T15:21:59.2698880Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-22T15:21:59.2979283Z http.https://github.com/.extraheader
+2026-09-22T15:21:59.3040692Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-09-22T15:21:59.3415609Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-09-22T15:21:59.9208371Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-09-22T15:21:59.9521435Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-09-22T15:22:00.5638873Z Cleaning up orphan processes
+2026-09-22T15:22:00.5804623Z Terminate orphan process: pid (4472) (vctip)
+2026-09-22T15:22:00.6143907Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

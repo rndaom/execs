@@ -152,10 +152,13 @@ export function slotChange(
       return boost === boostOf(installed)
         ? { change: "keep" }
         : { change: "install", pick: { kind: "installed", slot: kind }, boost };
-    default:
-      // A stock effect: the file is dormant either way, and dropping it keeps
-      // the pack honest about what plays.
-      return installed ? { change: "clear" } : { change: "keep" };
+    case "stock":
+      // A nonzero built-in effect leaves a saved custom WAV dormant. Keep it
+      // when unrelated settings change; selecting the default file effect
+      // must clear it or the old custom WAV would play instead of TF2's ding.
+      return installed && stockEffect(slot.choice.effect) === 0
+        ? { change: "clear" }
+        : { change: "keep" };
   }
 }
 
@@ -206,7 +209,7 @@ export function choiceLabel(choice: SoundChoice): string {
 export function choiceSourceLabel(choice: SoundChoice): string {
   switch (choice.kind) {
     case "stock":
-      return "Built into TF2";
+      return choice.effect === 0 ? "TF2 default sound path" : "Built into TF2";
     case "community":
       return "Community pack";
     case "file":
@@ -215,10 +218,10 @@ export function choiceSourceLabel(choice: SoundChoice): string {
       return "comfig.app";
     default:
       return choice.entry.source === "community"
-        ? "Community pack · installed"
+        ? "Community pack · saved by execs"
         : choice.entry.source === "comfig"
-          ? "comfig.app · installed"
-          : "Your file · installed";
+          ? "comfig.app · saved by execs"
+          : "Your file · saved by execs";
   }
 }
 

@@ -262,19 +262,22 @@ export function seedCrosshairDraft(record: CrosshairRecord | null | undefined): 
   // "circle" or "dot" — the same string as a first-party shape. Rename those on
   // the way in so the chip grid, the selects and the pack all mean one thing.
   const rename = (name: string) => migrateCommunityName(name, isBuiltinCrosshairShape);
+  const storedLibrary = record?.library ?? {};
+  const renameSelection = (name: string) => (name in storedLibrary ? rename(name) : name);
   const library: Record<string, CrosshairLibraryEntry> = {};
-  for (const [name, format] of Object.entries(record?.library ?? {})) {
+  for (const [name, format] of Object.entries(storedLibrary)) {
     if (validCrosshairName(name)) {
       library[rename(name)] = { format: format === "rgba" ? "rgba" : "vtf", bytes: null };
     }
   }
   const known = (value: string) => isBuiltinCrosshairShape(value) || value in library;
-  const raw = record?.shape ?? "cross";
+  const raw = renameSelection(record?.shape ?? "cross");
   const shape = known(raw) ? raw : "cross";
   const assignments: Record<string, CrosshairShape> = {};
   for (const [script, value] of Object.entries(record?.assignments ?? {})) {
-    if (known(value)) {
-      assignments[script] = value;
+    const selected = renameSelection(value);
+    if (known(selected)) {
+      assignments[script] = selected;
     }
   }
   const storedColor = record?.color ?? null;

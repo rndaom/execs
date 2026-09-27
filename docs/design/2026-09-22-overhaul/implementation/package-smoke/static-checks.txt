@@ -1,0 +1,5 @@
+Checked 6 files in 8ms. No fixes applied.
+PASS: Node syntax checks for both modules; scoped git diff --check.
+PASS: four retained archive hashes independently rechecked.
+PASS: PowerShell empty process filter returns success with no names.
+PASS: all 96 locked registry dependency versions/checksums match prior compatibility harness.

@@ -1,0 +1,110 @@
+{
+  "inputArchiveSha256": "77CC3C6F9DED610E56084F1EF7DDD410DEFE6F04162303054A0CEE274D234727",
+  "nativeExportArchiveSha256": "BE5F3472308C176CB88F6C604D1592C275EED58B9602AC65F4DAADF57E7AE552",
+  "executableSha256": "E09343CC38637D2B99D2FEE1843C3FA15FA73B741218B77EFC2CB0FA9DAA1A65",
+  "importedPassed": 10,
+  "exportedPassed": 10,
+  "payloads": [
+    {
+      "path": "tf/cfg/config.cfg",
+      "storage": "exclusive",
+      "archiveMember": "files/tf/cfg/config.cfg",
+      "publicV018Sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+      "nativeImportedSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+      "nativeExportedSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+      "importedExact": true,
+      "exportedExact": true
+    },
+    {
+      "path": "tf/cfg/overrides/autoexec.cfg",
+      "storage": "exclusive",
+      "archiveMember": "files/tf/cfg/overrides/autoexec.cfg",
+      "publicV018Sha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+      "nativeImportedSha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+      "nativeExportedSha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+      "importedExact": true,
+      "exportedExact": true
+    },
+    {
+      "path": "tf/cfg/overrides/compat.cfg",
+      "storage": "exclusive",
+      "archiveMember": "files/tf/cfg/overrides/compat.cfg",
+      "publicV018Sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+      "nativeImportedSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+      "nativeExportedSha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+      "importedExact": true,
+      "exportedExact": true
+    },
+    {
+      "path": "tf/cfg/overrides/execs_hud_fixture.cfg",
+      "storage": "exclusive",
+      "archiveMember": "files/tf/cfg/overrides/execs_hud_fixture.cfg",
+      "publicV018Sha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+      "nativeImportedSha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+      "nativeExportedSha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+      "importedExact": true,
+      "exportedExact": true
+    },
+    {
+      "path": "tf/custom/compat-pack.vpk",
+      "storage": "exclusive",
+      "archiveMember": "files/tf/custom/compat-pack.vpk",
+      "publicV018Sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+      "nativeImportedSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+      "nativeExportedSha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+      "importedExact": true,
+      "exportedExact": true
+    },
+    {
+      "path": "tf/custom/fixturehud/info.vdf",
+      "storage": "exclusive",
+      "archiveMember": "files/tf/custom/fixturehud/info.vdf",
+      "publicV018Sha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+      "nativeImportedSha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+      "nativeExportedSha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+      "importedExact": true,
+      "exportedExact": true
+    },
+    {
+      "path": "tf/custom/fixturehud/resource/ui/layout.res",
+      "storage": "exclusive",
+      "archiveMember": "files/tf/custom/fixturehud/resource/ui/layout.res",
+      "publicV018Sha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+      "nativeImportedSha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+      "nativeExportedSha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+      "importedExact": true,
+      "exportedExact": true
+    },
+    {
+      "path": "tf/custom/mastercomfig-base.vpk",
+      "storage": "shared",
+      "archiveMember": "blobs/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+      "publicV018Sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+      "nativeImportedSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+      "nativeExportedSha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+      "importedExact": true,
+      "exportedExact": true
+    },
+    {
+      "path": "tf/custom/secondhud/info.vdf",
+      "storage": "exclusive",
+      "archiveMember": "files/tf/custom/secondhud/info.vdf",
+      "publicV018Sha256": "fb21c5a21c43cb1150eee897ff064114208ec02e29ace0cccfee00deb4f0de48",
+      "nativeImportedSha256": "fb21c5a21c43cb1150eee897ff064114208ec02e29ace0cccfee00deb4f0de48",
+      "nativeExportedSha256": "fb21c5a21c43cb1150eee897ff064114208ec02e29ace0cccfee00deb4f0de48",
+      "importedExact": true,
+      "exportedExact": true
+    },
+    {
+      "path": "tf/custom/secondhud/resource/ui/layout.res",
+      "storage": "exclusive",
+      "archiveMember": "files/tf/custom/secondhud/resource/ui/layout.res",
+      "publicV018Sha256": "5178c2034cdebf4c5f73a80b94488e6b1bba00d41eff3ab1ab548da41dcfa875",
+      "nativeImportedSha256": "5178c2034cdebf4c5f73a80b94488e6b1bba00d41eff3ab1ab548da41dcfa875",
+      "nativeExportedSha256": "5178c2034cdebf4c5f73a80b94488e6b1bba00d41eff3ab1ab548da41dcfa875",
+      "importedExact": true,
+      "exportedExact": true
+    }
+  ],
+  "source": "Imported hashes from the completed E093 native-session report; exported hashes read from the archived exact native ZIP. No binary-bound validator was rerun during archival."
+}

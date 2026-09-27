@@ -5,11 +5,17 @@ import {
   ensureAutoexecExecLine,
   FOV_MAX,
   FOV_MIN,
+  formatCvarNumber,
   GAMEPLAY_HEADER,
   GAMEPLAY_STEM,
   gameplayPath,
+  managedCfgScopeOf,
+  parseSensitivityInput,
+  SENSITIVITY_MAX,
   seedGameplay,
   serializeGameplay,
+  serializeGameplayScope,
+  syncGameOptionsFromConfig,
 } from "./gameplay-ui";
 
 describe("gameplay clamp", () => {
@@ -102,6 +108,25 @@ describe("gameplay serialize and parse", () => {
     expect(serializeGameplay(defaultGameplay())).toContain('cl_crosshair_file ""');
   });
 
+  it("preserves an external crosshair material when changing color or gameplay", () => {
+    for (const seeded of [
+      seedGameplay("cl_crosshair_file myreticle\n", {}),
+      seedGameplay("", { cl_crosshair_file: "myreticle" }),
+    ]) {
+      expect(seeded.cl_crosshair_file).toBe("myreticle");
+      const changed = { ...seeded, cl_crosshair_red: 17, fov_desired: 80 };
+      const saved = serializeGameplay(changed);
+      expect(saved).toContain("cl_crosshair_file myreticle\n");
+      expect(seedGameplay(saved, {}).cl_crosshair_file).toBe("myreticle");
+    }
+  });
+
+  it("quotes external material values that contain whitespace", () => {
+    const seeded = seedGameplay('cl_crosshair_file "my reticle"\n', {});
+    expect(seeded.cl_crosshair_file).toBe("my reticle");
+    expect(seedGameplay(serializeGameplay(seeded), {}).cl_crosshair_file).toBe("my reticle");
+  });
+
   it("uses sensible defaults including fov 90", () => {
     const defaults = defaultGameplay();
     expect(defaults.fov_desired).toBe(90);
@@ -119,6 +144,36 @@ describe("gameplay paths", () => {
 });
 
 describe("gameplay seed", () => {
+  it("seeds weapon controls from effective cfg and lets managed values win", () => {
+    const effective = { cl_autoreload: "0", hud_fastswitch: "2" };
+    expect(seedGameplay("", effective)).toMatchObject({ cl_autoreload: 0, hud_fastswitch: 2 });
+    expect(seedGameplay("cl_autoreload 1\nhud_fastswitch 1\n", effective)).toMatchObject({
+      cl_autoreload: 1,
+      hud_fastswitch: 1,
+    });
+  });
+
+  it.each([0, 1, 2, 3, 7])("preserves weapon selection mode %s through unrelated edits", (mode) => {
+    const original = seedGameplay(`hud_fastswitch ${mode}\ncl_autoreload 0\n`, {});
+    const changed = { ...original, fov_desired: 80, r_drawviewmodel: 0 as const };
+    expect(seedGameplay(serializeGameplay(changed), {})).toMatchObject({
+      hud_fastswitch: mode,
+      cl_autoreload: 0,
+      fov_desired: 80,
+    });
+  });
+
+  it("acknowledges weapon controls only within the gameplay draft scope", () => {
+    const original = defaultGameplay();
+    const changed = { ...original, cl_autoreload: 0 as const, hud_fastswitch: 2 };
+    expect(serializeGameplayScope(changed, "gameplay")).not.toBe(
+      serializeGameplayScope(original, "gameplay"),
+    );
+    for (const scope of ["crosshair", "sounds"] as const) {
+      expect(serializeGameplayScope(changed, scope)).toBe(serializeGameplayScope(original, scope));
+    }
+  });
+
   it.each([0.1, 45, 54.12345, 100, 179.9])(
     "preserves viewmodel FOV %s through unrelated edits",
     (value) => {
@@ -163,5 +218,161 @@ describe("autoexec exec line", () => {
     expect(ensureAutoexecExecLine("", GAMEPLAY_STEM, "comfig")).toBe(
       "exec overrides/execs_gameplay // execs:managed\n",
     );
+  });
+});
+
+describe("mouse sensitivity", () => {
+  it("keeps exact decimals from cfg and writes them back unrounded", () => {
+    const seeded = seedGameplay("", { sensitivity: "2.3456", zoom_sensitivity_ratio: "0.793471" });
+    expect(seeded.sensitivity).toBe(2.3456);
+    expect(seeded.zoom_sensitivity_ratio).toBe(0.793471);
+    const text = serializeGameplay(seeded);
+    expect(text).toContain("\nsensitivity 2.3456\n");
+    expect(text).toContain("\nzoom_sensitivity_ratio 0.793471\n");
+    // The managed file wins over config.cfg, as for every Gameplay value.
+    expect(seedGameplay("sensitivity 1.5\n", { sensitivity: "3" }).sensitivity).toBe(1.5);
+  });
+
+  it("uses TF2's defaults and ignores values that are not positive numbers", () => {
+    expect(defaultGameplay().sensitivity).toBe(3);
+    expect(defaultGameplay().zoom_sensitivity_ratio).toBe(1);
+    expect(seedGameplay("", { sensitivity: "0", zoom_sensitivity_ratio: "abc" }).sensitivity).toBe(
+      3,
+    );
+    expect(clampGameplay({ ...defaultGameplay(), sensitivity: -1 }).sensitivity).toBe(3);
+  });
+
+  it("belongs to the Gameplay scope only", () => {
+    const settings = { ...defaultGameplay(), sensitivity: 2.5 };
+    expect(serializeGameplayScope(settings, "gameplay")).toContain("sensitivity");
+    expect(serializeGameplayScope(settings, "crosshair")).not.toContain("sensitivity");
+    expect(serializeGameplayScope(settings, "sounds")).not.toContain("sensitivity");
+  });
+
+  it("formats numbers as plain cfg decimals", () => {
+    expect(formatCvarNumber(2.35)).toBe("2.35");
+    expect(formatCvarNumber(3)).toBe("3");
+    expect(formatCvarNumber(0.0000001)).toBe("0.0000001");
+  });
+
+  it("accepts only plain positive decimals up to the limit", () => {
+    expect(parseSensitivityInput(" 2.35 ")).toEqual({ value: 2.35, problem: null });
+    expect(parseSensitivityInput(".5").value).toBe(0.5);
+    expect(parseSensitivityInput("3.").value).toBe(3);
+    expect(parseSensitivityInput("").problem).toBe("Enter a number, like 2.5.");
+    expect(parseSensitivityInput("2,5").problem).toBe("Enter a number, like 2.5.");
+    expect(parseSensitivityInput("1e3").problem).toBe("Enter a number, like 2.5.");
+    expect(parseSensitivityInput("-1").problem).toBe("Enter a number, like 2.5.");
+    expect(parseSensitivityInput("0").problem).toBe("Use a number above 0.");
+    expect(parseSensitivityInput(String(SENSITIVITY_MAX + 1)).problem).toBe("Use 1000 or less.");
+  });
+});
+
+describe("mouse sync after a game session", () => {
+  const managed =
+    "// execs gameplay — managed, do not edit by hand\r\nfov_desired 90\r\nsensitivity 3\r\nzoom_sensitivity_ratio 1\r\ncl_crosshair_scale 32\r\n";
+
+  it("follows a sensitivity changed in TF2's options and keeps every other byte", () => {
+    const next = syncGameOptionsFromConfig(
+      managed,
+      'sensitivity "2.2"\nzoom_sensitivity_ratio "0.793471"\n',
+    );
+    expect(next).toBe(
+      "// execs gameplay — managed, do not edit by hand\r\nfov_desired 90\r\nsensitivity 2.2\r\nzoom_sensitivity_ratio 0.793471\r\ncl_crosshair_scale 32\r\n",
+    );
+  });
+
+  it("changes nothing when the values already match or config.cfg has none", () => {
+    expect(syncGameOptionsFromConfig(managed, 'sensitivity "3.000000"\n')).toBe(managed);
+    expect(syncGameOptionsFromConfig(managed, "bind w +forward\n")).toBe(managed);
+    expect(syncGameOptionsFromConfig(managed, 'sensitivity "0"\n')).toBe(managed);
+  });
+
+  it("never adds mouse lines the managed file did not already set", () => {
+    const without = "fov_desired 90\n";
+    expect(syncGameOptionsFromConfig(without, 'sensitivity "2"\n')).toBe(without);
+  });
+});
+
+describe("comfort options", () => {
+  it("uses TF2's defaults only when a value is absent", () => {
+    const fresh = seedGameplay("", {});
+    expect(fresh.tf_medigun_autoheal).toBe(0);
+    expect(fresh.hud_combattext).toBe(1);
+    expect(fresh.hud_combattext_batching).toBe(0);
+    expect(fresh.hud_combattext_healing).toBe(1);
+
+    const effective = seedGameplay("", {
+      tf_medigun_autoheal: "1",
+      hud_combattext: "0",
+      hud_combattext_batching: "1",
+      hud_combattext_healing: "0",
+    });
+    expect(effective.tf_medigun_autoheal).toBe(1);
+    expect(effective.hud_combattext).toBe(0);
+    expect(effective.hud_combattext_batching).toBe(1);
+    expect(effective.hud_combattext_healing).toBe(0);
+    // The managed file wins over config.cfg; an unreadable value keeps what was there.
+    expect(seedGameplay("hud_combattext 1\n", { hud_combattext: "0" }).hud_combattext).toBe(1);
+    expect(seedGameplay("", { hud_combattext: "maybe" }).hud_combattext).toBe(1);
+  });
+
+  it("writes every comfort cvar and keeps it in the Gameplay scope", () => {
+    const settings = {
+      ...defaultGameplay(),
+      tf_medigun_autoheal: 1 as const,
+      hud_combattext: 0 as const,
+    };
+    const text = serializeGameplay(settings);
+    expect(text).toContain("\ntf_medigun_autoheal 1\n");
+    expect(text).toContain("\nhud_combattext 0\n");
+    expect(text).toContain("\nhud_combattext_batching 0\n");
+    expect(text).toContain("\nhud_combattext_healing 1\n");
+    expect(serializeGameplayScope(settings, "gameplay")).toContain("hud_combattext");
+    expect(serializeGameplayScope(settings, "crosshair")).not.toContain("hud_combattext");
+    expect(serializeGameplayScope(settings, "sounds")).not.toContain("tf_medigun_autoheal");
+  });
+
+  it("follows TF2's options after a game session like the mouse values", () => {
+    const managed =
+      "cl_autoreload 1\nhud_fastswitch 2\ntf_medigun_autoheal 0\nhud_combattext 1\nhud_combattext_healing 1\n";
+    const config =
+      'cl_autoreload "0"\nhud_fastswitch "1"\ntf_medigun_autoheal "1"\nhud_combattext "0"\nhud_combattext_healing "1"\n';
+    expect(syncGameOptionsFromConfig(managed, config)).toBe(
+      "cl_autoreload 0\nhud_fastswitch 1\ntf_medigun_autoheal 1\nhud_combattext 0\nhud_combattext_healing 1\n",
+    );
+  });
+
+  it("ignores config.cfg values TF2's options would not write", () => {
+    const managed = "tf_medigun_autoheal 0\nhud_fastswitch 1\n";
+    expect(
+      syncGameOptionsFromConfig(managed, 'tf_medigun_autoheal "2"\nhud_fastswitch "1.5"\n'),
+    ).toBe(managed);
+    // Lines the managed file does not set are never added.
+    expect(syncGameOptionsFromConfig(managed, 'hud_combattext "0"\n')).toBe(managed);
+  });
+});
+
+describe("managed cfg scopes", () => {
+  it("gives every managed cvar to exactly one pane", () => {
+    expect(managedCfgScopeOf("viewmodel_fov")).toBe("viewmodels");
+    expect(managedCfgScopeOf("R_DrawViewModel")).toBe("viewmodels");
+    expect(managedCfgScopeOf("tf_use_min_viewmodels")).toBe("viewmodels");
+    expect(managedCfgScopeOf("cl_flipviewmodels")).toBe("viewmodels");
+    expect(managedCfgScopeOf("fov_desired")).toBe("gameplay");
+    expect(managedCfgScopeOf("hud_combattext")).toBe("gameplay");
+    expect(managedCfgScopeOf("cl_crosshair_scale")).toBe("crosshair");
+    expect(managedCfgScopeOf("tf_dingaling_volume")).toBe("sounds");
+    expect(managedCfgScopeOf("bind")).toBeNull();
+    for (const name of Object.keys(defaultGameplay())) {
+      expect(managedCfgScopeOf(name), name).not.toBeNull();
+    }
+  });
+
+  it("keeps Gameplay and Viewmodels drafts from acknowledging each other's lines", () => {
+    const settings = { ...defaultGameplay(), viewmodel_fov: 70, fov_desired: 80 };
+    expect(serializeGameplayScope(settings, "gameplay")).not.toContain("viewmodel_fov");
+    expect(serializeGameplayScope(settings, "viewmodels")).toContain("viewmodel_fov");
+    expect(serializeGameplayScope(settings, "viewmodels")).not.toContain("fov_desired");
   });
 });

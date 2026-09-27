@@ -1,0 +1,106 @@
+Window: "execs", App: execs.exe.
+	0 window execs Secondary Actions: Raise
+		1 pane
+			2 pane execs
+				3 pane (disabled)
+				4 region execs - Web content
+					5 region
+						6 region
+							7 region
+								8 region
+								9 region
+									10 region
+										11 region
+											12 region
+												13 region
+												23 document execs Value: http://tauri.localhost/ ID: RootWebArea
+													24 group ID: root
+														25 main
+															26 section header
+																27 text execs
+																28 details
+																	29 disclosure triangle Profile Profiles
+																		30 text Profile
+																		31 text Profiles
+																		32 graphic
+																33 group Description: G:\Projects\execs\.artifacts\native-isolation\20260922-120750-inactivelibrary-ff33a080\tf2-root
+																	34 text tf2-root
+																35 button Copy install path Description: Copy install path — G:\Projects\execs\.artifacts\native-isolation\20260922-120750-inactivelibrary-ff33a080\tf2-root
+																	36 graphic
+																	37 group
+																38 button (disabled) Launch TF2 Description: Wait for the current operation to finish.
+																	39 graphic
+																75 status
+																	76 text Wait for the current operation to finish.
+															87 dialog Review profile import Secondary Actions: Raise
+																88 text Review profile import
+																89 text Create a profile from a ZIP.
+																90 status
+																	91 text Ready for your review
+																	92 progress indicator Profile import stages Value: 1
+																	93 list
+																		94 list item Read ZIP
+																		95 list item Review files
+																		96 list item Save profile
+																97 text Actual public v0.1.8 export
+																98 text 10
+																99 text files to import
+																100 text Your current profile stays active until you switch.
+																101 group Choose the HUD to use
+																	102 text Choose the HUD to use
+																	103 text Other HUD folders stay in the profile as preserved originals and won’t be loaded by TF2.
+																	104 radio button (selectable, settable, string) fixturehud ID: profile-import-hud-0
+																	105 text fixturehud
+																	106 radio button (selectable, settable, string) secondhud Selected ID: profile-import-hud-1
+																	107 text secondhud
+																	113 text Selected
+																108 details
+																	109 disclosure triangle Import details
+																		110 text Import details
+																	114 text Only the HUD you choose will be loaded by TF2. Other HUD folders remain preserved in this profile and its exports.
+																	115 text All approved cfg bytes are imported unchanged. Choosing a different HUD may require a separate HUD-options review before this profile can be activated.
+																111 button Cancel
+																112 button Import profile
+															40 text PROFILE LIBRARY
+															41 text 2 profiles
+															42 button (disabled) Change install
+															43 group Description: execs 0.2.0
+																44 text v0.2.0
+															45 text ·
+															46 button Check for updates
+															47 text ·
+															48 button Report a bug
+															49 text ·
+															50 button Copy diagnostics
+															51 text ·
+															52 button App settings
+															53 text execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+														54 status
+								14 region
+						15 region
+						16 region
+		17 title bar (settable, string) Value: execs
+			18 menu bar System ID: MenuBar
+				19 menu item System
+			20 button Minimize
+			21 button Maximize
+			22 button Close
+
+Document text: ```
+execs
+Profile
+Profiles
+￼
+￼
+tf2-root
+￼
+￼
+￼
+Launch TF2
+PROFILE LIBRARY
+2 profiles
+Change install
+v0.2.0 · Check for updates · Report a bug · Copy diagnostics · App settings
+execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress and Steam are trademarks of Valve Corporation.
+￼
+```

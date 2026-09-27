@@ -6,7 +6,7 @@ use execs_core::absorb::{
 use execs_core::apply::{get_active_profile_detail_from, write_managed_cfg_to};
 use execs_core::profile::{
     create_profile_record_to, exclusive_file_path, load_manifest, mutate_profile_files_to,
-    save_current_as_to, ProfileLiveProjection, SaveCurrentOptions,
+    save_current_as_to, ProfileError, ProfileLiveProjection, SaveCurrentOptions,
 };
 use execs_core::surface::{inventory_live_surface, CfgLayer};
 use execs_core::switch::switch_profile_to;
@@ -218,7 +218,7 @@ fn removing_owned_pack_does_not_remove_an_identical_dashed_peer() {
 }
 
 #[test]
-fn switch_preserves_a_kept_identical_dashed_peer() {
+fn switch_requires_capture_of_a_kept_identical_dashed_peer() {
     let f = Fixture::new();
     let plain = "tf/custom/alpha/materials/a.txt";
     let dashed = "tf/custom/-alpha/materials/a.txt";
@@ -227,8 +227,16 @@ fn switch_preserves_a_kept_identical_dashed_peer() {
     f.write(dashed, b"same bytes");
     f.choose(PackChoice::Keep);
     let empty = f.empty_profile(&id);
+    let err =
+        switch_profile_to(&f.profiles, &f.root, &empty, unlocked(), opts(), |_| {}).unwrap_err();
+    assert_eq!(err, ProfileError::KeptPackHandoff(vec!["-alpha".into()]));
+    assert_eq!(fs::read(f.root.join(dashed)).unwrap(), b"same bytes");
+    f.choose(PackChoice::CaptureKept);
     f.switch(&empty);
     assert!(!f.root.join(plain).exists());
+    assert!(!f.root.join(dashed).exists());
+    assert_eq!(f.stored(&id, dashed), b"same bytes");
+    f.switch(&id);
     assert_eq!(fs::read(f.root.join(dashed)).unwrap(), b"same bytes");
 }
 
@@ -286,6 +294,7 @@ fn dashed_addition_and_plain_removal_keep_update_and_restore_are_separate() {
                 assert_eq!(fs::read(f.root.join(dashed)).unwrap(), b"dashed");
                 assert_eq!(f.delta().packs_added, ["-alpha"]);
             }
+            PackChoice::CaptureKept => unreachable!("this case does not choose CaptureKept"),
         }
     }
 }

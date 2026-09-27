@@ -1,0 +1,421 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "scope": "Linux X11/WebKitGTK no-bundle release binary; owned inactive library, global preferences and keyboard zoom. Not installer, updater, Steam or game qualification.",
+  "revision": "b321d3d0aacc99ab16777cc3c9670b1310f28907",
+  "binarySha256": "f2cda2ec6f81957c9bd4ae2801949d89e72155769565f1c28a61838f9f0288e7",
+  "fixture": {
+    "exporterTag": "v0.1.8",
+    "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+    "sourceArchiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38",
+    "authored": "Six inactive identities, index/settings and synthetic TF2 root; owned no-HUD payload bytes reused unchanged. This is runtime evidence, not an upgrade test."
+  },
+  "isolation": {
+    "HOME": "/home/runner/work/_temp/execs-linux-native-JudcgZ/home",
+    "XDG_DATA_HOME": "/home/runner/work/_temp/execs-linux-native-JudcgZ/data",
+    "XDG_CONFIG_HOME": "/home/runner/work/_temp/execs-linux-native-JudcgZ/config",
+    "XDG_CACHE_HOME": "/home/runner/work/_temp/execs-linux-native-JudcgZ/cache",
+    "XDG_RUNTIME_DIR": "/home/runner/work/_temp/execs-linux-native-JudcgZ/runtime",
+    "TMPDIR": "/home/runner/work/_temp/execs-linux-native-JudcgZ/tmp"
+  },
+  "checks": [
+    {
+      "label": "first-launch",
+      "state": {
+        "native": true,
+        "width": 1200,
+        "motion": "system",
+        "scrollY": 0,
+        "menuOpen": false,
+        "href": "tauri://localhost",
+        "height": 800,
+        "focusedTag": "BODY",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Choose a profile"
+      },
+      "capabilities": {
+        "browserName": "wry",
+        "browserVersion": "0.55.1",
+        "platformName": "linux",
+        "acceptInsecureCerts": false,
+        "strictFileInteractability": false,
+        "setWindowRect": true,
+        "unhandledPromptBehavior": "dismiss and notify",
+        "pageLoadStrategy": "normal",
+        "proxy": {},
+        "timeouts": {
+          "script": 30000,
+          "pageLoad": 300000,
+          "implicit": 0
+        }
+      }
+    },
+    {
+      "label": "inactive-six-profile-menu",
+      "state": {
+        "profiles": 6,
+        "width": 960,
+        "focused": {
+          "x": 180,
+          "width": 330,
+          "left": 180,
+          "right": 510,
+          "top": 206.5,
+          "height": 20,
+          "y": 206.5,
+          "bottom": 226.5
+        },
+        "focusText": "MainSwitch",
+        "height": 640,
+        "panel": {
+          "x": 151,
+          "width": 430,
+          "left": 151,
+          "right": 581,
+          "top": 111.5,
+          "height": 433.6875,
+          "y": 111.5,
+          "bottom": 545.1875
+        },
+        "focusHit": true,
+        "lastActionHit": true,
+        "open": true
+      }
+    },
+    {
+      "label": "real-keyboard-zoom-dimensions",
+      "baseline": {
+        "native": true,
+        "width": 960,
+        "motion": "system",
+        "scrollY": 0,
+        "menuOpen": false,
+        "href": "tauri://localhost",
+        "height": 640,
+        "focusedTag": "SUMMARY",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Choose a profile"
+      },
+      "zoomSteps": [
+        {
+          "native": true,
+          "width": 799,
+          "motion": "system",
+          "scrollY": 0,
+          "menuOpen": false,
+          "href": "tauri://localhost",
+          "height": 533,
+          "focusedTag": "SUMMARY",
+          "dpr": 1,
+          "scrollX": 0,
+          "heading": "Choose a profile"
+        },
+        {
+          "native": true,
+          "width": 685,
+          "motion": "system",
+          "scrollY": 0,
+          "menuOpen": false,
+          "href": "tauri://localhost",
+          "height": 457,
+          "focusedTag": "SUMMARY",
+          "dpr": 1,
+          "scrollX": 0,
+          "heading": "Choose a profile"
+        },
+        {
+          "native": true,
+          "width": 600,
+          "motion": "system",
+          "scrollY": 0,
+          "menuOpen": false,
+          "href": "tauri://localhost",
+          "height": 400,
+          "focusedTag": "SUMMARY",
+          "dpr": 1,
+          "scrollX": 0,
+          "heading": "Choose a profile"
+        },
+        {
+          "native": true,
+          "width": 533,
+          "motion": "system",
+          "scrollY": 0,
+          "menuOpen": false,
+          "href": "tauri://localhost",
+          "height": 355,
+          "focusedTag": "SUMMARY",
+          "dpr": 1,
+          "scrollX": 0,
+          "heading": "Choose a profile"
+        },
+        {
+          "native": true,
+          "width": 480,
+          "motion": "system",
+          "scrollY": 0,
+          "menuOpen": false,
+          "href": "tauri://localhost",
+          "height": 320,
+          "focusedTag": "SUMMARY",
+          "dpr": 1,
+          "scrollX": 0,
+          "heading": "Choose a profile"
+        }
+      ]
+    },
+    {
+      "label": "zoomed-native-pointer-diagnostic",
+      "chooserTabs": 2,
+      "result": "driver-coordinate-mismatch",
+      "zoomClick": {
+        "expected": {
+          "height": 320,
+          "box": {
+            "x": 177.359375,
+            "width": 125.2734375,
+            "left": 177.359375,
+            "right": 302.6328125,
+            "top": 64.5,
+            "height": 37.5,
+            "y": 64.5,
+            "bottom": 102
+          },
+          "width": 480,
+          "hit": true
+        },
+        "events": [
+          {
+            "x": 119,
+            "onTarget": false,
+            "trusted": true,
+            "target": "MAIN:execsProfileProfilesProfiles6 profilesNew profileMainSwitchCasualSwitchCompetiti",
+            "type": "pointerdown",
+            "y": 41
+          },
+          {
+            "x": 119,
+            "onTarget": false,
+            "trusted": true,
+            "target": "MAIN:execsProfileProfilesProfiles6 profilesNew profileMainSwitchCasualSwitchCompetiti",
+            "type": "click",
+            "y": 41
+          }
+        ],
+        "afterBox": {
+          "x": 177.359375,
+          "width": 125.2734375,
+          "left": 177.359375,
+          "right": 302.6328125,
+          "top": 64.5,
+          "height": 37.5,
+          "y": 64.5,
+          "bottom": 102
+        }
+      }
+    },
+    {
+      "label": "zoomed-native-keyboard-menu",
+      "zoomMenu": {
+        "profiles": 6,
+        "width": 480,
+        "focused": {
+          "x": 153.71875,
+          "width": 145.5703125,
+          "left": 153.71875,
+          "right": 299.2890625,
+          "top": 247.6953125,
+          "height": 39.5,
+          "y": 247.6953125,
+          "bottom": 287.1953125
+        },
+        "focusText": "Change install",
+        "height": 320,
+        "panel": {
+          "x": 34,
+          "width": 430,
+          "left": 34,
+          "right": 464,
+          "top": 16,
+          "height": 288,
+          "y": 16,
+          "bottom": 304
+        },
+        "focusHit": true,
+        "lastActionHit": true,
+        "open": true
+      }
+    },
+    {
+      "label": "restart",
+      "state": {
+        "native": true,
+        "width": 1200,
+        "motion": "reduce",
+        "scrollY": 0,
+        "menuOpen": false,
+        "href": "tauri://localhost",
+        "height": 800,
+        "focusedTag": "BODY",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Choose a profile"
+      },
+      "capabilities": {
+        "browserName": "wry",
+        "browserVersion": "0.55.1",
+        "platformName": "linux",
+        "acceptInsecureCerts": false,
+        "strictFileInteractability": false,
+        "setWindowRect": true,
+        "unhandledPromptBehavior": "dismiss and notify",
+        "pageLoadStrategy": "normal",
+        "proxy": {},
+        "timeouts": {
+          "script": 30000,
+          "pageLoad": 300000,
+          "implicit": 0
+        }
+      }
+    },
+    {
+      "label": "native-settings-persistence-and-restart",
+      "result": "passed"
+    }
+  ],
+  "captures": [
+    {
+      "file": "01-native-inactive-1200.png",
+      "state": {
+        "native": true,
+        "width": 1200,
+        "motion": "system",
+        "scrollY": 0,
+        "menuOpen": false,
+        "href": "tauri://localhost",
+        "height": 800,
+        "focusedTag": "BODY",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Choose a profile"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "02-native-menu-960.png",
+      "state": {
+        "native": true,
+        "width": 960,
+        "motion": "system",
+        "scrollY": 0,
+        "menuOpen": true,
+        "href": "tauri://localhost",
+        "height": 640,
+        "focusedTag": "BUTTON",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Choose a profile"
+      },
+      "pixels": [
+        960,
+        640
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "03-native-keyboard-zoom-menu.png",
+      "state": {
+        "native": true,
+        "width": 480,
+        "motion": "system",
+        "scrollY": 0,
+        "menuOpen": true,
+        "href": "tauri://localhost",
+        "height": 320,
+        "focusedTag": "BUTTON",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Choose a profile"
+      },
+      "pixels": [
+        960,
+        640
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "04-native-preferences-saved.png",
+      "state": {
+        "native": true,
+        "width": 960,
+        "motion": "reduce",
+        "scrollY": 0,
+        "menuOpen": false,
+        "href": "tauri://localhost",
+        "height": 640,
+        "focusedTag": "INPUT",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "App settings"
+      },
+      "pixels": [
+        960,
+        640
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "05-native-preferences-after-restart.png",
+      "state": {
+        "native": true,
+        "width": 1200,
+        "motion": "reduce",
+        "scrollY": 0,
+        "menuOpen": false,
+        "href": "tauri://localhost",
+        "height": 800,
+        "focusedTag": "BUTTON",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "App settings"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    }
+  ],
+  "preservation": [
+    {
+      "stage": "before-launch",
+      "motion": "system",
+      "profiles": 6,
+      "activeProfileId": null,
+      "libraryAndLivePayloadsPreserved": true,
+      "allowedAdditiveMetadataObserved": []
+    },
+    {
+      "stage": "after-ui-save",
+      "motion": "reduce",
+      "profiles": 6,
+      "activeProfileId": null,
+      "libraryAndLivePayloadsPreserved": true,
+      "allowedAdditiveMetadataObserved": []
+    },
+    {
+      "stage": "after-native-exit",
+      "motion": "reduce",
+      "profiles": 6,
+      "activeProfileId": null,
+      "libraryAndLivePayloadsPreserved": true,
+      "allowedAdditiveMetadataObserved": []
+    }
+  ]
+}

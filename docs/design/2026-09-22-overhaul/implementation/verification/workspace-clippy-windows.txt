@@ -1,0 +1,2 @@
+    Checking execs v0.2.0 (G:\Projects\execs\apps\desktop\src-tauri)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.82s

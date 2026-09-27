@@ -8,11 +8,16 @@
 //! ceiling.
 
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::Read;
-use std::net::{IpAddr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::time::{Duration, Instant};
+
+#[cfg(test)]
+use curl::easy::SslOpt;
+use curl::easy::{Easy, List};
 
 /// Honest product identification. Some hosts (comfig.app's sound CDN) hand a
 /// bot challenge to empty or bare-library user agents; a product token with
@@ -62,6 +67,7 @@ const RESERVE_MAX: usize = 16 * MIB as usize;
 #[derive(Debug, Clone, Copy)]
 pub enum Verify<'a> {
     Sha256(&'a str),
+    #[cfg(test)]
     Magic(&'a [u8]),
 }
 
@@ -69,6 +75,7 @@ impl Verify<'_> {
     pub fn accepts(&self, bytes: &[u8]) -> bool {
         match self {
             Self::Sha256(expected) => execs_core::hash::sha256_hex(bytes) == *expected,
+            #[cfg(test)]
             Self::Magic(magic) => bytes.starts_with(magic),
         }
     }
@@ -88,7 +95,6 @@ pub enum RemoteSource {
     GameBananaApi,
     GameBananaDownload,
     ComfigApp,
-    ComfigHits,
     Tf2Huds,
 }
 
@@ -112,7 +118,6 @@ impl RemoteSource {
                 "files.gamebanana.com",
             ],
             Self::ComfigApp => &["comfig.app", "www.comfig.app"],
-            Self::ComfigHits => &["hits.comfig.app"],
             Self::Tf2Huds => &["tf2huds.dev", "www.tf2huds.dev"],
         }
     }
@@ -158,7 +163,6 @@ impl RemoteSource {
                 host == "files.gamebanana.com" || path.starts_with("/dl/")
             }
             Self::ComfigApp => path.starts_with("/huds"),
-            Self::ComfigHits => path.ends_with(".wav"),
             Self::Tf2Huds => path == "/" || path.starts_with("/huds/") || path.starts_with("/hud/"),
         }
     }
@@ -182,7 +186,6 @@ fn source_for_url(url: &reqwest::Url) -> Option<RemoteSource> {
         }
         "files.gamebanana.com" => RemoteSource::GameBananaDownload,
         "comfig.app" | "www.comfig.app" => RemoteSource::ComfigApp,
-        "hits.comfig.app" => RemoteSource::ComfigHits,
         "tf2huds.dev" | "www.tf2huds.dev" => RemoteSource::Tf2Huds,
         _ => return None,
     })
@@ -190,6 +193,24 @@ fn source_for_url(url: &reqwest::Url) -> Option<RemoteSource> {
 
 fn host_matches(url: &reqwest::Url, allowed: &[&str]) -> bool {
     url.host_str().is_some_and(|host| allowed.contains(&host))
+}
+
+fn is_dropbox_shard_host(host: &str) -> bool {
+    host.strip_suffix(".dl.dropboxusercontent.com")
+        .is_some_and(|label| {
+            !label.is_empty()
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        })
+}
+
+fn is_gamebanana_shard_host(host: &str) -> bool {
+    host.strip_suffix(".gamebanana.com")
+        .and_then(|label| label.strip_prefix("filecache"))
+        .is_some_and(|number| {
+            !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+        })
 }
 
 fn validate_url_shape(
@@ -216,24 +237,10 @@ fn validate_url_shape(
     // and only on redirects, never arbitrary subdomains or initial URLs.
     let dropbox_shard = redirect
         && source == RemoteSource::Dropbox
-        && url.host_str().is_some_and(|host| {
-            host.strip_suffix(".dl.dropboxusercontent.com")
-                .is_some_and(|label| {
-                    !label.is_empty()
-                        && label
-                            .bytes()
-                            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
-                })
-        });
+        && url.host_str().is_some_and(is_dropbox_shard_host);
     let gamebanana_shard = redirect
         && source == RemoteSource::GameBananaDownload
-        && url.host_str().is_some_and(|host| {
-            host.strip_suffix(".gamebanana.com")
-                .and_then(|label| label.strip_prefix("filecache"))
-                .is_some_and(|number| {
-                    !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
-                })
-        });
+        && url.host_str().is_some_and(is_gamebanana_shard_host);
     if !host_matches(url, allowed) && !dropbox_shard && !gamebanana_shard {
         return Err("The download redirected to an untrusted host.".into());
     }
@@ -253,49 +260,109 @@ pub fn validate_url_for(url: &str, source: RemoteSource) -> Result<reqwest::Url,
     Ok(parsed)
 }
 
+fn ipv6_has_prefix(ip: Ipv6Addr, prefix: Ipv6Addr, bits: u32) -> bool {
+    ip.to_bits() >> (128 - bits) == prefix.to_bits() >> (128 - bits)
+}
+
 fn ip_is_private_or_special(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(ip) => {
-            let [a, b, c, _] = ip.octets();
+            let [a, b, c, d] = ip.octets();
             a == 0
                 || a == 10
                 || a == 127
                 || (a == 100 && (64..=127).contains(&b))
                 || (a == 169 && b == 254)
                 || (a == 172 && (16..=31).contains(&b))
-                || (a == 192 && b == 0 && c == 0)
+                // IANA lists only .9 and .10 as globally reachable in this /24.
+                // https://www.iana.org/assignments/iana-ipv4-special-registry
+                || (a == 192 && b == 0 && c == 0 && d != 9 && d != 10)
                 || (a == 192 && b == 168)
                 || (a == 192 && b == 0 && c == 2)
+                || (a == 192 && b == 88 && c == 99 && d == 2)
                 || (a == 198 && (b == 18 || b == 19))
                 || (a == 198 && b == 51 && c == 100)
                 || (a == 203 && b == 0 && c == 113)
                 || a >= 224
         }
         IpAddr::V6(ip) => {
-            let octets = ip.octets();
-            ip.is_unspecified()
-                || ip.is_loopback()
-                || ip.is_multicast()
-                || (octets[0] & 0xfe) == 0xfc
-                || (octets[0] == 0xfe && (octets[1] & 0xc0) == 0x80)
-                || ip.segments()[..2] == [0x2001, 0x0db8]
-                || ip
-                    .to_ipv4_mapped()
-                    .is_some_and(|ip| ip_is_private_or_special(IpAddr::V4(ip)))
+            // The NAT64 well-known prefix is globally reachable, but RFC 6052
+            // forbids embedding non-global IPv4 addresses in it. Keep public
+            // DNS64 destinations usable without trusting a translator to
+            // enforce that rule for us.
+            // https://www.iana.org/assignments/iana-ipv6-special-registry
+            // https://www.rfc-editor.org/rfc/rfc6052.html#section-3.1
+            if ipv6_has_prefix(ip, Ipv6Addr::new(0x64, 0xff9b, 0, 0, 0, 0, 0, 0), 96) {
+                let octets = ip.octets();
+                let embedded = Ipv4Addr::new(octets[12], octets[13], octets[14], octets[15]);
+                return ip_is_private_or_special(IpAddr::V4(embedded));
+            }
+
+            // IANA currently allocates global IPv6 unicast from 2000::/3.
+            // The other ranges are reserved, local, multicast, or transition
+            // space (including deprecated IPv4-compatible and site-local
+            // addresses and IPv4-mapped addresses). A local route to one of
+            // those ranges must not turn a download into a local request.
+            // https://www.iana.org/assignments/ipv6-address-space
+            if !ipv6_has_prefix(ip, Ipv6Addr::new(0x2000, 0, 0, 0, 0, 0, 0, 0), 3) {
+                return true;
+            }
+
+            // 2001::/23 is reserved for IETF protocol assignments except
+            // these explicitly globally reachable anycast and protocol
+            // prefixes. In particular, Teredo and benchmarking stay blocked.
+            // The 6to4 prefix can encapsulate traffic toward an embedded
+            // private IPv4 address, so reject the whole transition range.
+            // 3ffe::/16 was returned to IANA; 3fff::/20 is documentation.
+            // https://www.iana.org/assignments/iana-ipv6-special-registry
+            // https://www.iana.org/assignments/ipv6-unicast-address-assignments
+            // https://www.rfc-editor.org/rfc/rfc3964.html
+            let ietf_protocol_assignment =
+                ipv6_has_prefix(ip, Ipv6Addr::new(0x2001, 0, 0, 0, 0, 0, 0, 0), 23);
+            let globally_reachable_ietf_assignment = [
+                (Ipv6Addr::new(0x2001, 1, 0, 0, 0, 0, 0, 1), 128),
+                (Ipv6Addr::new(0x2001, 1, 0, 0, 0, 0, 0, 2), 128),
+                (Ipv6Addr::new(0x2001, 1, 0, 0, 0, 0, 0, 3), 128),
+                (Ipv6Addr::new(0x2001, 3, 0, 0, 0, 0, 0, 0), 32),
+                (Ipv6Addr::new(0x2001, 4, 0x112, 0, 0, 0, 0, 0), 48),
+                (Ipv6Addr::new(0x2001, 0x20, 0, 0, 0, 0, 0, 0), 28),
+                (Ipv6Addr::new(0x2001, 0x30, 0, 0, 0, 0, 0, 0), 28),
+            ]
+            .iter()
+            .any(|(prefix, bits)| ipv6_has_prefix(ip, *prefix, *bits));
+            (ietf_protocol_assignment && !globally_reachable_ietf_assignment)
+                || ipv6_has_prefix(ip, Ipv6Addr::new(0x2001, 0x0db8, 0, 0, 0, 0, 0, 0), 32)
+                || ipv6_has_prefix(ip, Ipv6Addr::new(0x2002, 0, 0, 0, 0, 0, 0, 0), 16)
+                || ipv6_has_prefix(ip, Ipv6Addr::new(0x3ffe, 0, 0, 0, 0, 0, 0, 0), 16)
+                || ipv6_has_prefix(ip, Ipv6Addr::new(0x3fff, 0, 0, 0, 0, 0, 0, 0), 20)
         }
     }
 }
 
+fn public_socket_addrs(addresses: Vec<SocketAddr>) -> Result<Vec<SocketAddr>, std::io::Error> {
+    if addresses.is_empty()
+        || addresses
+            .iter()
+            .any(|address| ip_is_private_or_special(address.ip()))
+    {
+        return Err(std::io::Error::other(
+            "The download host resolves to a private or reserved address.",
+        ));
+    }
+    Ok(addresses)
+}
+
 type DnsKey = (String, u16);
 type DnsLookupRegistry = HashMap<DnsKey, Weak<DnsLookup>>;
+type DnsAddressCache = HashMap<DnsKey, (Instant, Vec<SocketAddr>)>;
 
-fn dns_cache() -> &'static Mutex<HashMap<DnsKey, Instant>> {
-    static CACHE: OnceLock<Mutex<HashMap<DnsKey, Instant>>> = OnceLock::new();
+fn dns_cache() -> &'static Mutex<DnsAddressCache> {
+    static CACHE: OnceLock<Mutex<DnsAddressCache>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 struct DnsLookup {
-    result: Mutex<Option<Result<(), String>>>,
+    result: Mutex<Option<Result<Vec<SocketAddr>, String>>>,
     ready: Condvar,
 }
 
@@ -304,19 +371,19 @@ fn dns_lookups() -> &'static Mutex<DnsLookupRegistry> {
     LOOKUPS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn validate_public_resolution(url: &reqwest::Url) -> Result<(), String> {
+fn validated_destination_addrs(url: &reqwest::Url) -> Result<Vec<SocketAddr>, String> {
     let host = url
         .host_str()
         .ok_or_else(|| "The download URL has no host.".to_string())?;
     let port = url.port_or_known_default().unwrap_or(443);
     let key = (host.to_string(), port);
-    if dns_cache()
+    if let Some((_, addresses)) = dns_cache()
         .lock()
         .ok()
-        .and_then(|cache| cache.get(&key).copied())
-        .is_some_and(|checked| checked.elapsed() < DNS_CHECK_TTL)
+        .and_then(|cache| cache.get(&key).cloned())
+        .filter(|(checked, _)| checked.elapsed() < DNS_CHECK_TTL)
     {
-        return Ok(());
+        return Ok(addresses);
     }
 
     let (lookup, start) = {
@@ -344,19 +411,11 @@ fn validate_public_resolution(url: &reqwest::Url) -> Result<(), String> {
                 .map_err(|_| "Could not resolve the download host.".to_string())
                 .and_then(|addresses| {
                     let addresses = addresses.collect::<Vec<_>>();
-                    if addresses.is_empty()
-                        || addresses
-                            .iter()
-                            .any(|address| ip_is_private_or_special(address.ip()))
-                    {
-                        Err("The download host resolves to a private or reserved address.".into())
-                    } else {
-                        Ok(())
-                    }
+                    public_socket_addrs(addresses).map_err(|err| err.to_string())
                 });
-            if result.is_ok() {
+            if let Ok(addresses) = &result {
                 if let Ok(mut cache) = dns_cache().lock() {
-                    cache.insert(lookup_key, Instant::now());
+                    cache.insert(lookup_key, (Instant::now(), addresses.clone()));
                 }
             }
             if let Ok(mut slot) = lookup.result.lock() {
@@ -389,39 +448,437 @@ fn validate_public_resolution(url: &reqwest::Url) -> Result<(), String> {
     }
 }
 
+/// The fetchers share one policy; each transfer owns its curl handle so a
+/// redirect can never inherit a prior hop's CONNECT destination.
+#[derive(Clone)]
+pub struct Client {
+    connect_timeout: Duration,
+    total_timeout: Duration,
+    idle: Arc<Mutex<Vec<(ConnectionKey, Easy)>>>,
+    #[cfg(test)]
+    fixture: Option<FixtureTransport>,
+}
+
+#[cfg(test)]
+#[derive(Clone)]
+struct FixtureTransport {
+    addresses: Vec<SocketAddr>,
+    addresses_by_host: HashMap<String, Vec<SocketAddr>>,
+    proxy: Option<String>,
+    no_proxy: Option<String>,
+    ca_path: Option<PathBuf>,
+}
+
+/// Reuse a TLS connection only for the same original name, vetted numeric
+/// destination and proxy environment. A changed address or proxy route gets
+/// a different handle and cannot inherit a prior connection.
+#[derive(PartialEq, Eq)]
+struct ConnectionKey {
+    host: String,
+    address: SocketAddr,
+    port: u16,
+    proxy_environment: [Option<OsString>; 6],
+    #[cfg(test)]
+    fixture_proxy: Option<String>,
+    #[cfg(test)]
+    fixture_no_proxy: Option<String>,
+}
+
+impl ConnectionKey {
+    fn new(_client: &Client, host: &str, address: SocketAddr, port: u16) -> Self {
+        let proxy_environment = [
+            std::env::var_os("HTTPS_PROXY"),
+            std::env::var_os("https_proxy"),
+            std::env::var_os("ALL_PROXY"),
+            std::env::var_os("all_proxy"),
+            std::env::var_os("NO_PROXY"),
+            std::env::var_os("no_proxy"),
+        ];
+        Self {
+            host: host.to_string(),
+            address,
+            port,
+            proxy_environment,
+            #[cfg(test)]
+            fixture_proxy: _client
+                .fixture
+                .as_ref()
+                .and_then(|fixture| fixture.proxy.clone()),
+            #[cfg(test)]
+            fixture_no_proxy: _client
+                .fixture
+                .as_ref()
+                .and_then(|fixture| fixture.no_proxy.clone()),
+        }
+    }
+}
+
+impl Client {
+    fn take_handle(&self, key: &ConnectionKey) -> Easy {
+        self.idle
+            .lock()
+            .ok()
+            .and_then(|mut idle| {
+                idle.iter()
+                    .position(|(candidate, _)| candidate == key)
+                    .map(|index| idle.swap_remove(index).1)
+            })
+            .unwrap_or_else(Easy::new)
+    }
+
+    fn recycle_handle(&self, key: ConnectionKey, easy: Easy) {
+        if let Ok(mut idle) = self.idle.lock() {
+            if idle.len() == 24 {
+                idle.remove(0);
+            }
+            idle.push((key, easy));
+        }
+    }
+}
+
+pub fn client() -> Result<Client, String> {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    Ok(CLIENT
+        .get_or_init(|| build(DOWNLOAD_CONNECT_TIMEOUT, DOWNLOAD_TIMEOUT))
+        .clone())
+}
+
+pub fn api_client() -> Result<Client, String> {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    Ok(CLIENT
+        .get_or_init(|| build(API_CONNECT_TIMEOUT, API_TIMEOUT))
+        .clone())
+}
+
+fn build(connect: Duration, total: Duration) -> Client {
+    Client {
+        connect_timeout: connect,
+        total_timeout: total,
+        idle: Arc::new(Mutex::new(Vec::new())),
+        #[cfg(test)]
+        fixture: None,
+    }
+}
+
+#[derive(Debug)]
+struct Response {
+    status: reqwest::StatusCode,
+    location: Option<String>,
+    body: Vec<u8>,
+}
+
+#[derive(Default)]
+struct TransferState {
+    status: Option<u16>,
+    location: Option<String>,
+    content_length: Option<u64>,
+    header_bytes: usize,
+    body: Vec<u8>,
+    abort_reason: Option<String>,
+    redirect_abort: bool,
+}
+
+fn curl_error(err: curl::Error) -> String {
+    if err.is_operation_timedout() {
+        "The request timed out. Check your connection and try again.".into()
+    } else if err.is_couldnt_connect() || err.is_couldnt_resolve_proxy() {
+        "Could not connect. Check your connection and try again.".into()
+    } else {
+        format!("The download failed ({err})")
+    }
+}
+
+#[derive(Debug)]
+struct TransferFailure {
+    message: String,
+    retryable: bool,
+}
+
+impl TransferFailure {
+    fn fatal(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            retryable: false,
+        }
+    }
+
+    fn from_perform(err: curl::Error) -> Self {
+        let retryable = err.is_couldnt_connect();
+        Self {
+            message: curl_error(err),
+            retryable,
+        }
+    }
+}
+
+fn curl_setup_error(err: curl::Error) -> TransferFailure {
+    TransferFailure::fatal(curl_error(err))
+}
+
+fn connect_to_entry(host: &str, address: SocketAddr, port: u16) -> String {
+    let ip = match address.ip() {
+        IpAddr::V4(ip) => ip.to_string(),
+        IpAddr::V6(ip) => format!("[{ip}]"),
+    };
+    format!("{host}:{port}:{ip}:{port}")
+}
+
+fn parse_header(state: &mut TransferState, bytes: &[u8], max_bytes: u64) -> bool {
+    state.header_bytes = state.header_bytes.saturating_add(bytes.len());
+    if state.header_bytes > 64 * 1024 {
+        state.abort_reason = Some("The download returned oversized HTTP headers.".into());
+        return false;
+    }
+    if bytes.starts_with(b"HTTP/") {
+        let status = bytes
+            .split(|&byte| byte == b' ')
+            .nth(1)
+            .and_then(|raw| std::str::from_utf8(raw).ok())
+            .and_then(|raw| raw.trim().parse::<u16>().ok());
+        state.status = status;
+        state.location = None;
+        state.content_length = None;
+        state.header_bytes = bytes.len();
+    } else if let Some(separator) = bytes.iter().position(|&byte| byte == b':') {
+        let (name, raw) = bytes.split_at(separator);
+        let raw = &raw[1..];
+        let value = raw.strip_suffix(b"\r\n").unwrap_or(raw);
+        let value = value.strip_prefix(b" ").unwrap_or(value);
+        if name.eq_ignore_ascii_case(b"location") {
+            if state.location.is_some() {
+                state.abort_reason =
+                    Some("The download returned multiple redirect destinations.".into());
+                return false;
+            }
+            state.location = std::str::from_utf8(value).ok().map(str::to_owned);
+        } else if name.eq_ignore_ascii_case(b"content-length") {
+            if state.content_length.is_some() {
+                state.abort_reason =
+                    Some("The download returned multiple Content-Length values.".into());
+                return false;
+            }
+            match std::str::from_utf8(value)
+                .ok()
+                .and_then(|v| v.trim().parse::<u64>().ok())
+            {
+                Some(length)
+                    if length <= max_bytes
+                        || state.status.is_some_and(|s| (300..400).contains(&s)) =>
+                {
+                    state.content_length = Some(length);
+                }
+                Some(_) => {
+                    state.abort_reason = Some(too_large(max_bytes));
+                    return false;
+                }
+                None => {
+                    state.abort_reason =
+                        Some("The download returned an invalid Content-Length.".into());
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+
+fn transfer_one(
+    client: &Client,
+    url: &reqwest::Url,
+    address: SocketAddr,
+    deadline: Instant,
+    max_bytes: u64,
+) -> Result<Response, TransferFailure> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return Err(TransferFailure::fatal("The download timed out."));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| TransferFailure::fatal("The download URL has no host."))?;
+    let port = url.port_or_known_default().unwrap_or(443);
+    let key = ConnectionKey::new(client, host, address, port);
+    let mut easy = client.take_handle(&key);
+    // curl_easy_reset clears prior hop options (especially CONNECT_TO), but
+    // keeps live connections for this exact vetted origin/route key.
+    easy.reset();
+    easy.url(url.as_str()).map_err(curl_setup_error)?;
+    easy.useragent(USER_AGENT).map_err(curl_setup_error)?;
+    easy.follow_location(false).map_err(curl_setup_error)?;
+    easy.connect_timeout(client.connect_timeout.min(remaining))
+        .map_err(curl_setup_error)?;
+    easy.timeout(remaining).map_err(curl_setup_error)?;
+    easy.ssl_verify_peer(true).map_err(curl_setup_error)?;
+    easy.ssl_verify_host(true).map_err(curl_setup_error)?;
+    easy.proxy_ssl_verify_peer(true).map_err(curl_setup_error)?;
+    easy.proxy_ssl_verify_host(true).map_err(curl_setup_error)?;
+    let mut destinations = List::new();
+    destinations
+        .append(&connect_to_entry(host, address, port))
+        .map_err(curl_setup_error)?;
+    easy.connect_to(destinations).map_err(curl_setup_error)?;
+    #[cfg(test)]
+    if let Some(fixture) = &client.fixture {
+        if let Some(proxy) = &fixture.proxy {
+            easy.proxy(proxy).map_err(curl_setup_error)?;
+        }
+        if let Some(no_proxy) = &fixture.no_proxy {
+            easy.noproxy(no_proxy).map_err(curl_setup_error)?;
+        }
+        if let Some(ca_path) = &fixture.ca_path {
+            easy.cainfo(
+                ca_path
+                    .to_str()
+                    .ok_or_else(|| TransferFailure::fatal("Invalid CA path."))?,
+            )
+            .map_err(curl_setup_error)?;
+            easy.proxy_cainfo(
+                ca_path
+                    .to_str()
+                    .ok_or_else(|| TransferFailure::fatal("Invalid CA path."))?,
+            )
+            .map_err(curl_setup_error)?;
+            if cfg!(windows) {
+                // The disposable fixture CA has no CRL endpoint. This test
+                // setting is absent from the production transport.
+                easy.ssl_options(SslOpt::new().no_revoke(true))
+                    .map_err(curl_setup_error)?;
+                easy.proxy_ssl_options(SslOpt::new().no_revoke(true))
+                    .map_err(curl_setup_error)?;
+            }
+        }
+    }
+
+    let state = std::cell::RefCell::new(TransferState::default());
+    let performed = {
+        let mut transfer = easy.transfer();
+        transfer
+            .header_function(|header| parse_header(&mut state.borrow_mut(), header, max_bytes))
+            .map_err(curl_setup_error)?;
+        transfer
+            .write_function(|chunk| {
+                let mut state = state.borrow_mut();
+                if state
+                    .status
+                    .is_some_and(|status| (300..400).contains(&status))
+                {
+                    state.redirect_abort = true;
+                    return Ok(0);
+                }
+                if state.body.len() as u64 + chunk.len() as u64 > max_bytes {
+                    state.abort_reason = Some(too_large(max_bytes));
+                    return Ok(0);
+                }
+                state.body.extend_from_slice(chunk);
+                Ok(chunk.len())
+            })
+            .map_err(curl_setup_error)?;
+        transfer.perform()
+    };
+    let state = state.into_inner();
+    if let Some(reason) = state.abort_reason {
+        return Err(TransferFailure::fatal(reason));
+    }
+    let proxy_code = easy.http_connectcode().map_err(curl_setup_error)?;
+    if proxy_code != 0 && proxy_code != 200 {
+        let message = if proxy_code == 407 {
+            "The configured proxy rejected its credentials (407).".to_string()
+        } else {
+            format!("The configured proxy refused the connection ({proxy_code}).")
+        };
+        return Err(TransferFailure::fatal(message));
+    }
+    if let Err(err) = performed {
+        if !state.redirect_abort {
+            return Err(TransferFailure::from_perform(err));
+        }
+    }
+    let status_code = easy.response_code().map_err(curl_setup_error)?;
+    let status_code = u16::try_from(status_code)
+        .map_err(|_| TransferFailure::fatal("The download returned an invalid HTTP status."))?;
+    let status = reqwest::StatusCode::from_u16(status_code)
+        .map_err(|_| TransferFailure::fatal("The download returned an invalid HTTP status."))?;
+    let response = Response {
+        status,
+        location: state.location,
+        body: state.body,
+    };
+    client.recycle_handle(key, easy);
+    Ok(response)
+}
+
 fn send_get(
-    client: &reqwest::blocking::Client,
+    client: &Client,
     url: &str,
     source: RemoteSource,
     timeout: Option<Duration>,
-) -> Result<reqwest::blocking::Response, String> {
+    max_bytes: u64,
+) -> Result<Response, String> {
     let mut current = validate_url_for(url, source)?;
-    let deadline = timeout.map(|timeout| Instant::now() + timeout);
+    let deadline = Instant::now() + timeout.unwrap_or(client.total_timeout);
     for redirects in 0..=MAX_REDIRECTS {
-        validate_public_resolution(&current)?;
-        let mut request = client.get(current.clone());
-        if let Some(deadline) = deadline {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("The download timed out.".into());
+        #[cfg(test)]
+        let addresses = if let Some(fixture) = &client.fixture {
+            let addresses = current
+                .host_str()
+                .and_then(|host| fixture.addresses_by_host.get(host))
+                .cloned()
+                .unwrap_or_else(|| fixture.addresses.clone());
+            public_socket_addrs(addresses).map_err(|err| err.to_string())?
+        } else {
+            validated_destination_addrs(&current)?
+        };
+        #[cfg(not(test))]
+        let addresses = validated_destination_addrs(&current)?;
+        let mut last_error = None;
+        let mut last_retryable = false;
+        let mut response = None;
+        for address in addresses {
+            match transfer_one(client, &current, address, deadline, max_bytes) {
+                Ok(received) => {
+                    response = Some(received);
+                    break;
+                }
+                Err(err) => {
+                    let retryable = err.retryable;
+                    last_error = Some(err.message);
+                    last_retryable = retryable;
+                    // Never let curl resolve the origin hostname as a fallback.
+                    // A fresh transfer can only use another vetted address.
+                    if !retryable || Instant::now() >= deadline {
+                        break;
+                    }
+                }
             }
-            request = request.timeout(remaining);
         }
-        let response = request.send().map_err(request_error)?;
-        if !response.status().is_redirection() {
+        let response = match response {
+            Some(response) => response,
+            None => {
+                if last_retryable {
+                    if let (Some(host), Some(port)) =
+                        (current.host_str(), current.port_or_known_default())
+                    {
+                        if let Ok(mut cache) = dns_cache().lock() {
+                            cache.remove(&(host.to_string(), port));
+                        }
+                    }
+                }
+                return Err(
+                    last_error.unwrap_or_else(|| "The download host has no addresses.".into())
+                );
+            }
+        };
+        if !response.status.is_redirection() {
             return Ok(response);
         }
         if redirects == MAX_REDIRECTS {
             return Err("The download redirected too many times.".into());
         }
         let location = response
-            .headers()
-            .get(reqwest::header::LOCATION)
-            .ok_or_else(|| "The download returned a redirect with no destination.".to_string())?
-            .to_str()
-            .map_err(|_| "The download returned an invalid redirect.".to_string())?;
+            .location
+            .ok_or_else(|| "The download returned a redirect with no destination.".to_string())?;
         let next = current
-            .join(location)
+            .join(&location)
             .map_err(|_| "The download returned an invalid redirect.".to_string())?;
         validate_url_shape(&next, source, true)?;
         current = next;
@@ -429,81 +886,42 @@ fn send_get(
     Err("The download redirected too many times.".into())
 }
 
-pub fn client() -> Result<reqwest::blocking::Client, String> {
-    static CLIENT: OnceLock<Result<reqwest::blocking::Client, String>> = OnceLock::new();
-    CLIENT
-        .get_or_init(|| build(DOWNLOAD_CONNECT_TIMEOUT, DOWNLOAD_TIMEOUT))
-        .clone()
-}
-
-pub fn api_client() -> Result<reqwest::blocking::Client, String> {
-    static CLIENT: OnceLock<Result<reqwest::blocking::Client, String>> = OnceLock::new();
-    CLIENT
-        .get_or_init(|| build(API_CONNECT_TIMEOUT, API_TIMEOUT))
-        .clone()
-}
-
-fn build(connect: Duration, total: Duration) -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
-        .user_agent(USER_AGENT)
-        .connect_timeout(connect)
-        .timeout(total)
-        .https_only(true)
-        // Redirects are followed manually so every hop receives the same host,
-        // scheme and private-address checks as the initial request.
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|err| err.to_string())
-}
-
-pub fn request_error(err: reqwest::Error) -> String {
-    if err.is_timeout() {
-        "The request timed out. Check your connection and try again.".into()
-    } else if err.is_connect() {
-        "Could not connect. Check your connection and try again.".into()
-    } else {
-        format!("The download failed ({err})")
-    }
-}
-
 /// GET a small text document with the API timeout policy. The body is read
 /// under `API_MAX_BYTES`, never buffered whole on the server's say-so.
-pub fn get_text_for(
-    client: &reqwest::blocking::Client,
-    url: &str,
-    source: RemoteSource,
-) -> Result<String, String> {
+pub fn get_text_for(client: &Client, url: &str, source: RemoteSource) -> Result<String, String> {
     get_text_for_limit(client, url, source, API_MAX_BYTES)
 }
 
 pub fn get_text_for_limit(
-    client: &reqwest::blocking::Client,
+    client: &Client,
     url: &str,
     source: RemoteSource,
     max_bytes: u64,
 ) -> Result<String, String> {
-    let mut response = send_get(client, url, source, Some(API_TIMEOUT))?;
-    if !response.status().is_success() {
-        return Err(format!("Could not download {url} ({})", response.status()));
+    let response = send_get(
+        client,
+        url,
+        source,
+        Some(API_TIMEOUT),
+        max_bytes.min(API_MAX_BYTES),
+    )?;
+    if !response.status.is_success() {
+        return Err(format!("Could not download {url} ({})", response.status));
     }
-    let hint = response.content_length();
-    let bytes = read_capped(&mut response, max_bytes.min(API_MAX_BYTES), hint)?;
-    Ok(text_from_bytes(bytes))
+    Ok(text_from_bytes(response.body))
 }
 
 /// GET a JSON document with the API timeout policy, under the same ceiling.
 pub fn get_json_for<T: serde::de::DeserializeOwned>(
-    client: &reqwest::blocking::Client,
+    client: &Client,
     url: &str,
     source: RemoteSource,
 ) -> Result<T, String> {
-    let mut response = send_get(client, url, source, Some(API_TIMEOUT))?;
-    if !response.status().is_success() {
-        return Err(format!("Could not read {url} ({})", response.status()));
+    let response = send_get(client, url, source, Some(API_TIMEOUT), API_MAX_BYTES)?;
+    if !response.status.is_success() {
+        return Err(format!("Could not read {url} ({})", response.status));
     }
-    let hint = response.content_length();
-    let bytes = read_capped(&mut response, API_MAX_BYTES, hint)?;
-    serde_json::from_slice(&bytes).map_err(|err| err.to_string())
+    serde_json::from_slice(&response.body).map_err(|err| err.to_string())
 }
 
 /// Every host this app reads text from serves UTF-8; a stray byte becomes
@@ -573,6 +991,24 @@ pub fn download_bytes(url: &str, max_bytes: u64) -> Result<Vec<u8>, String> {
     download_bytes_for(url, max_bytes, source)
 }
 
+/// Like `download_bytes`, but a completed non-success response comes back as
+/// its status so the caller can explain it (a file its host no longer has).
+pub fn download_bytes_or_status(
+    url: &str,
+    max_bytes: u64,
+) -> Result<Result<Vec<u8>, reqwest::StatusCode>, String> {
+    let parsed = reqwest::Url::parse(url.trim())
+        .map_err(|_| "The download URL is not valid.".to_string())?;
+    let source = source_for_url(&parsed)
+        .ok_or_else(|| "The download host is not on the app's allowlist.".to_string())?;
+    let response = send_get(&client()?, url, source, Some(DOWNLOAD_TIMEOUT), max_bytes)?;
+    Ok(if response.status.is_success() {
+        Ok(response.body)
+    } else {
+        Err(response.status)
+    })
+}
+
 pub fn download_bytes_for(
     url: &str,
     max_bytes: u64,
@@ -587,29 +1023,17 @@ pub fn download_bytes_for_timeout(
     source: RemoteSource,
     timeout: Option<Duration>,
 ) -> Result<Vec<u8>, String> {
-    let mut response = send_get(
+    let response = send_get(
         &client()?,
         url,
         source,
         Some(timeout.unwrap_or(DOWNLOAD_TIMEOUT)),
+        max_bytes,
     )?;
-    if !response.status().is_success() {
-        return Err(format!("Could not download {url} ({})", response.status()));
+    if !response.status.is_success() {
+        return Err(format!("Could not download {url} ({})", response.status));
     }
-    let hint = response.content_length();
-    read_capped(&mut response, max_bytes, hint)
-}
-
-/// A pinned asset, from the cache when it still verifies and from the network
-/// otherwise. The cache file is only written once the bytes pass `verify`.
-pub fn download_pinned_for(
-    url: &str,
-    cache_path: &Path,
-    verify: Verify<'_>,
-    max_bytes: u64,
-    source: RemoteSource,
-) -> Result<Vec<u8>, String> {
-    download_pinned_validated_for(url, cache_path, verify, max_bytes, source, |_| Ok(()))
+    Ok(response.body)
 }
 
 pub fn download_pinned_validated_for(
@@ -750,6 +1174,7 @@ fn cached_file_accepts_within(
         Verify::Sha256(expected) => {
             execs_core::hash::sha256_file(path).is_ok_and(|actual| actual == expected)
         }
+        #[cfg(test)]
         Verify::Magic(_) => read_cache_file_capped(cache_root, path, max_bytes)
             .is_ok_and(|bytes| verify.accepts(&bytes)),
     }
@@ -759,6 +1184,8 @@ fn cached_file_accepts_within(
 mod tests {
     use super::*;
     use std::cell::Cell;
+    use std::io::Write;
+    use std::net::TcpListener;
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("execs-net-{name}-{}", std::process::id()));
@@ -1010,6 +1437,298 @@ mod tests {
             RemoteSource::GameBananaDownload
         )
         .is_ok());
+        assert!(source_for_url(
+            &reqwest::Url::parse("https://hits.comfig.app/retired.wav").unwrap()
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn curl_connect_proxy_receives_only_a_vetted_numeric_target() {
+        for (address, authority) in [
+            ("1.1.1.1:443", "1.1.1.1:443"),
+            ("[2606:4700:4700::1111]:443", "[2606:4700:4700::1111]:443"),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let proxy = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    let mut chunk = [0u8; 256];
+                    let count = stream.read(&mut chunk).unwrap();
+                    assert!(count > 0 && request.len() < 4096);
+                    request.extend_from_slice(&chunk[..count]);
+                }
+                stream
+                    .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
+                    .unwrap();
+                String::from_utf8(request).unwrap()
+            });
+            let client = Client {
+                connect_timeout: Duration::from_secs(2),
+                total_timeout: Duration::from_secs(3),
+                idle: Arc::new(Mutex::new(Vec::new())),
+                fixture: Some(FixtureTransport {
+                    addresses: vec![address.parse().unwrap()],
+                    addresses_by_host: HashMap::new(),
+                    proxy: Some(format!("http://tester:pass@127.0.0.1:{port}")),
+                    no_proxy: Some(String::new()),
+                    ca_path: None,
+                }),
+            };
+            let _ = send_get(
+                &client,
+                "https://api.github.com/repos/o/r",
+                RemoteSource::GitHubApi,
+                None,
+                1024,
+            );
+            let request = proxy.join().unwrap();
+            assert!(
+                request.starts_with(&format!("CONNECT {authority} HTTP/1.1\r\n")),
+                "{request}"
+            );
+            assert!(
+                request.contains("Proxy-Authorization: Basic dGVzdGVyOnBhc3M=\r\n"),
+                "{request}"
+            );
+            assert!(!request.contains("CONNECT api.github.com:443"), "{request}");
+        }
+    }
+
+    /// Run with tools/d8-product-proxy-probe.py.
+    #[test]
+    #[ignore = "requires the ephemeral loopback proxy and CA fixture"]
+    fn curl_product_tls_fixture() {
+        let proxy = std::env::var("D8_PROXY").unwrap();
+        let target = std::env::var("D8_TARGET").unwrap();
+        let ca_path = PathBuf::from(std::env::var("D8_CA").unwrap());
+        let case = std::env::var("D8_CASE").unwrap();
+        let stalled = matches!(case.as_str(), "proxy_connect_stall" | "origin_body_stall");
+        let client = Client {
+            connect_timeout: if stalled {
+                Duration::from_millis(700)
+            } else {
+                Duration::from_secs(3)
+            },
+            total_timeout: if stalled {
+                Duration::from_millis(700)
+            } else {
+                Duration::from_secs(5)
+            },
+            idle: Arc::new(Mutex::new(Vec::new())),
+            fixture: Some(FixtureTransport {
+                addresses: if case == "no_proxy" {
+                    vec![target.parse().unwrap()]
+                } else if case == "bad_cert" {
+                    vec![
+                        format!("{target}:443").parse().unwrap(),
+                        "8.8.8.8:443".parse().unwrap(),
+                    ]
+                } else {
+                    vec![format!("{target}:443").parse().unwrap()]
+                },
+                // Simulate a private DNS answer for the approved redirect
+                // destination; send_get must filter each hop before CONNECT.
+                addresses_by_host: if case == "private_redirect" {
+                    HashMap::from([(
+                        "objects.githubusercontent.com".to_string(),
+                        vec!["127.0.0.1:443".parse().unwrap()],
+                    )])
+                } else {
+                    HashMap::new()
+                },
+                proxy: (!matches!(case.as_str(), "env_proxy" | "socks5h" | "no_proxy"))
+                    .then_some(proxy),
+                no_proxy: (case != "no_proxy").then(String::new),
+                ca_path: Some(ca_path),
+            }),
+        };
+        if case == "reuse" {
+            for _ in 0..2 {
+                let response = send_get(
+                    &client,
+                    "https://api.github.com/repos/o/r",
+                    RemoteSource::GitHubApi,
+                    None,
+                    1024,
+                )
+                .unwrap();
+                assert_eq!(response.status, reqwest::StatusCode::OK);
+                assert_eq!(response.body, b"ok");
+            }
+            assert_eq!(client.idle.lock().unwrap().len(), 1);
+            println!("REUSED");
+            return;
+        }
+        let (url, source) = if matches!(
+            case.as_str(),
+            "redirect" | "blocked_redirect" | "private_redirect"
+        ) {
+            (
+                "https://github.com/o/r/releases/download/v/x",
+                RemoteSource::GitHubRelease,
+            )
+        } else {
+            ("https://api.github.com/repos/o/r", RemoteSource::GitHubApi)
+        };
+        let started = Instant::now();
+        let result = if case == "no_proxy" {
+            let address = client.fixture.as_ref().unwrap().addresses[0];
+            let direct_url = reqwest::Url::parse(&format!(
+                "https://api.github.com:{}/repos/o/r",
+                address.port()
+            ))
+            .unwrap();
+            transfer_one(
+                &client,
+                &direct_url,
+                address,
+                Instant::now() + Duration::from_secs(5),
+                1024,
+            )
+            .map_err(|error| error.message)
+        } else {
+            send_get(&client, url, source, None, 1024)
+        };
+        match case.as_str() {
+            "valid" | "no_proxy" | "env_proxy" | "socks5h" => {
+                let response = result.unwrap();
+                assert_eq!(response.status, reqwest::StatusCode::OK);
+                assert_eq!(response.body, b"ok");
+                println!("ok");
+            }
+            "bad_cert" => {
+                let error = result.unwrap_err();
+                eprintln!("{error}");
+                assert!(
+                    error.to_ascii_lowercase().contains("certificate"),
+                    "{error}"
+                );
+                println!("CERT_REJECTED");
+            }
+            "oversize_declared" | "oversize_streamed" => {
+                let error = result.unwrap_err();
+                assert!(error.contains("larger than"), "{error}");
+                println!("TOO_LARGE");
+            }
+            "redirect" => {
+                let response = result.unwrap();
+                assert_eq!(response.status, reqwest::StatusCode::OK);
+                assert_eq!(response.body, b"ok");
+                println!("REDIRECT_OK");
+            }
+            "blocked_redirect" => {
+                let error = result.unwrap_err();
+                assert!(error.contains("untrusted host"), "{error}");
+                println!("REDIRECT_BLOCKED");
+            }
+            "private_redirect" => {
+                let error = result.unwrap_err();
+                assert!(error.contains("private or reserved address"), "{error}");
+                println!("PRIVATE_REDIRECT_BLOCKED");
+            }
+            "proxy_connect_stall" | "origin_body_stall" => {
+                let error = result.unwrap_err();
+                assert!(error.to_ascii_lowercase().contains("timed out"), "{error}");
+                let elapsed = started.elapsed();
+                assert!(elapsed < Duration::from_millis(1600), "{elapsed:?}");
+                println!("DEADLINE_ENFORCED:{case}:{}", elapsed.as_millis());
+            }
+            "https_proxy_bad_cert" => {
+                let error = result.unwrap_err();
+                assert!(
+                    error.to_ascii_lowercase().contains("certificate"),
+                    "{error}"
+                );
+                println!("PROXY_CERT_REJECTED");
+            }
+            "https_proxy_407" => {
+                match result {
+                    Ok(response) => {
+                        assert_eq!(
+                            response.status,
+                            reqwest::StatusCode::PROXY_AUTHENTICATION_REQUIRED
+                        )
+                    }
+                    Err(error) => {
+                        assert!(
+                            error.to_ascii_lowercase().contains("proxy") || error.contains("407"),
+                            "{error}"
+                        );
+                    }
+                }
+                println!("PROXY_AUTH_REJECTED");
+            }
+            _ => panic!("unknown D8 fixture case"),
+        }
+    }
+
+    #[test]
+    fn private_destination_is_refused_before_the_proxy_is_contacted() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let client = Client {
+            connect_timeout: Duration::from_secs(2),
+            total_timeout: Duration::from_secs(3),
+            idle: Arc::new(Mutex::new(Vec::new())),
+            fixture: Some(FixtureTransport {
+                addresses: vec!["127.0.0.1:443".parse().unwrap()],
+                addresses_by_host: HashMap::new(),
+                proxy: Some(format!(
+                    "http://127.0.0.1:{}",
+                    listener.local_addr().unwrap().port()
+                )),
+                no_proxy: Some(String::new()),
+                ca_path: None,
+            }),
+        };
+        let error = send_get(
+            &client,
+            "https://api.github.com/repos/o/r",
+            RemoteSource::GitHubApi,
+            None,
+            1024,
+        )
+        .unwrap_err();
+        assert!(error.contains("private or reserved"), "{error}");
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+    }
+
+    #[test]
+    fn curl_response_headers_preserve_origin_metadata_and_enforce_the_cap() {
+        let mut state = TransferState::default();
+        assert!(parse_header(
+            &mut state,
+            b"HTTP/1.1 200 Connection established\r\n",
+            1024
+        ));
+        assert!(parse_header(&mut state, b"Content-Length: 0\r\n", 1024));
+        assert!(parse_header(&mut state, b"HTTP/2 200\r\n", 1024));
+        assert_eq!(state.status, Some(200));
+        assert!(parse_header(&mut state, b"Content-Length: 32\r\n", 1024));
+        assert_eq!(state.content_length, Some(32));
+        assert!(parse_header(&mut state, b"HTTP/2 302\r\n", 1024));
+        assert!(parse_header(
+            &mut state,
+            b"Location: https://raw.githubusercontent.com/o/r/file\r\n",
+            1024
+        ));
+        assert_eq!(
+            state.location.as_deref(),
+            Some("https://raw.githubusercontent.com/o/r/file")
+        );
+        assert!(parse_header(&mut state, b"HTTP/2 200\r\n", 1024));
+        assert!(state.location.is_none());
+        assert!(!parse_header(&mut state, b"Content-Length: 1025\r\n", 1024));
+        assert!(state.abort_reason.unwrap().contains("larger than"));
     }
 
     #[test]
@@ -1023,6 +1742,95 @@ mod tests {
         assert!(ip_is_private_or_special("169.254.169.254".parse().unwrap()));
         assert!(ip_is_private_or_special("::1".parse().unwrap()));
         assert!(!ip_is_private_or_special("1.1.1.1".parse().unwrap()));
+    }
+
+    #[test]
+    fn direct_destinations_reject_non_global_and_transition_addresses() {
+        // IANA IPv4/IPv6 special-purpose registries and IPv6 address space:
+        // https://www.iana.org/assignments/iana-ipv4-special-registry
+        // https://www.iana.org/assignments/iana-ipv6-special-registry
+        // https://www.iana.org/assignments/ipv6-address-space
+        for literal in [
+            "0.0.0.1",
+            "10.0.0.1",
+            "100.64.0.1",
+            "127.0.0.1",
+            "169.254.169.254",
+            "172.16.0.1",
+            "192.0.0.8",
+            "192.0.0.170",
+            "192.0.2.1",
+            "192.88.99.2",
+            "192.168.0.1",
+            "198.18.0.1",
+            "198.51.100.1",
+            "203.0.113.1",
+            "224.0.0.1",
+            "240.0.0.1",
+            "::",
+            "::1",
+            "::7f00:1",        // Deprecated IPv4-compatible loopback.
+            "::a00:1",         // Deprecated IPv4-compatible private IPv4.
+            "::ffff:7f00:1",   // IPv4-mapped loopback.
+            "::ffff:101:101",  // IPv4-mapped addresses are not IPv6-global.
+            "64:ff9b::7f00:1", // Well-known NAT64 prefix plus loopback.
+            "64:ff9b::a00:1",  // Well-known NAT64 prefix plus private IPv4.
+            "64:ff9b:1::1",    // Local-use NAT64 prefix.
+            "100::1",          // Discard-only.
+            "100:0:0:1::1",    // Dummy prefix.
+            "2001::1",         // Teredo.
+            "2001:1::4",       // Unallocated IETF protocol assignment.
+            "2001:2::1",       // Benchmarking.
+            "2001:10::1",      // Deprecated ORCHID.
+            "2001:db8::1",     // Documentation.
+            "2002:7f00:1::1",  // 6to4 with embedded loopback IPv4.
+            "2002:101:101::1", // Reject all 6to4 tunnels.
+            "3ffe::1",         // Returned 6bone range.
+            "3fff::1",         // Documentation.
+            "4000::1",         // Reserved outside global unicast space.
+            "5f00::1",         // Special-purpose SRv6 range.
+            "fc00::1",         // Unique-local.
+            "fe80::1",         // Link-local.
+            "fec0::1",         // Deprecated site-local.
+            "ff02::1",         // Multicast.
+        ] {
+            let ip: IpAddr = literal.parse().unwrap();
+            assert!(
+                ip_is_private_or_special(ip),
+                "unexpectedly allowed {literal}"
+            );
+            assert!(
+                public_socket_addrs(vec![SocketAddr::new(ip, 443)]).is_err(),
+                "unexpectedly connected to {literal}"
+            );
+        }
+
+        for literal in [
+            "1.1.1.1",
+            "8.8.8.8",
+            "192.0.0.9",        // Globally reachable IANA anycast exception.
+            "192.0.0.10",       // Globally reachable IANA anycast exception.
+            "64:ff9b::101:101", // Well-known NAT64 prefix plus public IPv4.
+            "2001:1::1",        // Globally reachable IANA anycast exception.
+            "2001:1::2",        // Globally reachable IANA anycast exception.
+            "2001:1::3",        // Globally reachable IANA anycast exception.
+            "2001:3::1",        // AMT.
+            "2001:4:112::1",    // AS112-v6.
+            "2001:20::1",       // ORCHIDv2.
+            "2001:30::1",       // DETs.
+            "2606:4700:4700::1111",
+        ] {
+            let ip: IpAddr = literal.parse().unwrap();
+            assert!(
+                !ip_is_private_or_special(ip),
+                "unexpectedly blocked {literal}"
+            );
+            assert_eq!(
+                public_socket_addrs(vec![SocketAddr::new(ip, 443)]).unwrap(),
+                vec![SocketAddr::new(ip, 443)],
+                "unexpectedly refused {literal}"
+            );
+        }
     }
 
     #[test]

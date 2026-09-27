@@ -4,6 +4,7 @@ import {
   canExportProfile,
   canImportProfile,
   canSaveCurrent,
+  duplicateProfileName,
   emptyLibrary,
   hasPackChanges,
   libraryStatusCopy,
@@ -12,6 +13,7 @@ import {
   previewPackDelta,
   previewSavedLibrary,
   previewSwitchLibrary,
+  profileNameProblem,
   shouldAbsorbOnLockChange,
   switchStepIndex,
 } from "./library-ui";
@@ -132,5 +134,27 @@ describe("shouldAbsorbOnLockChange", () => {
     expect(shouldAbsorbOnLockChange(null, true)).toBe(false);
     expect(shouldAbsorbOnLockChange(false, true)).toBe(false);
     expect(shouldAbsorbOnLockChange(true, true)).toBe(false);
+  });
+});
+
+describe("profile name rules", () => {
+  it("matches native rename validation", () => {
+    expect(profileNameProblem("Main")).toBeNull();
+    expect(profileNameProblem("  Casual ✨ 日本  ")).toBeNull();
+    expect(profileNameProblem("é".repeat(80))).toBeNull();
+    expect(profileNameProblem("")).toBe("Enter a name.");
+    expect(profileNameProblem("   ")).toBe("Enter a name.");
+    expect(profileNameProblem("x".repeat(81))).toBe("Use 80 characters or fewer.");
+    expect(profileNameProblem("tab\there")).toBe("Remove tabs and line breaks.");
+  });
+});
+
+describe("duplicate profile names", () => {
+  it("suggests a copy name within the limit", () => {
+    expect(duplicateProfileName("Main")).toBe("Main copy");
+    expect(duplicateProfileName("  Casual  ")).toBe("Casual copy");
+    const long = duplicateProfileName("é".repeat(80));
+    expect([...long].length).toBe(80);
+    expect(long.endsWith(" copy")).toBe(true);
   });
 });

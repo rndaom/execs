@@ -1,11 +1,11 @@
-import { type ReactNode, useContext, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useContext, useEffect, useRef, useState } from "react";
+import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
-import { PaneSection } from "./components/ui/PaneSection";
 import { Segmented } from "./components/ui/Segmented";
-import { CommunityPicker } from "./crosshair/CommunityPicker";
-import { CrosshairDesigner } from "./crosshair/CrosshairDesigner";
+import { CrosshairDesigner, type CrosshairDesignerDraft } from "./crosshair/CrosshairDesigner";
 import { CrosshairLibraryChips } from "./crosshair/CrosshairLibraryChips";
-import { CrosshairPreview } from "./crosshair/CrosshairPreview";
+import { CrosshairPreview, crosshairShapeLabel } from "./crosshair/CrosshairPreview";
+import { CrosshairThumb } from "./crosshair/CrosshairThumb";
 import { PngImportField } from "./crosshair/PngImportField";
 import { designLibrary, useCrosshairDraft } from "./crosshair/useCrosshairDraft";
 import {
@@ -14,12 +14,22 @@ import {
   WeaponOverrideTable,
 } from "./crosshair/WeaponOverrideTable";
 import { useAppStatus } from "./hooks/useAppStatus";
-import { AutosaveActivity, AutosavePending } from "./hooks/useAutosave";
+import { AutosaveActivity } from "./hooks/useAutosave";
+import { useExplicitDraft } from "./hooks/useExplicitDraft";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
-import type { CrosshairAssetPayload, CrosshairRecord, StockCrosshairSprite } from "./lib/bridge";
-import { isTauri } from "./lib/bridge";
-import { COMMUNITY_CROSSHAIR_CREDIT } from "./lib/community-crosshairs";
-import { defaultCrosshairDesign, parseDesign } from "./lib/crosshair-designer";
+import type {
+  ContentIndex,
+  CrosshairAssetPayload,
+  CrosshairRecord,
+  CrosshairSourceStatus,
+  StockCrosshairSprite,
+} from "./lib/bridge";
+import {
+  defaultCrosshairDesign,
+  designFromPreset,
+  parseDesign,
+  renderCrosshairDesign,
+} from "./lib/crosshair-designer";
 import {
   CROSSHAIR_CASUAL_COPY,
   CROSSHAIR_SHAPES,
@@ -28,19 +38,18 @@ import {
   CUSTOM_CROSSHAIR_SHAPE,
   crosshairDraftDirty,
 } from "./lib/crosshair-ui";
-import { type GameplayLayer, gameplayPath } from "./lib/gameplay-ui";
+import type { GameplayLayer } from "./lib/gameplay-ui";
 import { CrosshairControls, useCrosshairControls } from "./StockCrosshairSettings";
 
 /**
  * The Crosshair pane: TF2's own crosshair controls, then the first-party
  * custom-crosshair builder. Orchestration only — the preview, chip grid,
- * override table, community picker and designer are their own components and
+ * override table and designer are their own components and
  * the draft plus every mutation on it live in `useCrosshairDraft`.
  */
 export function CrosshairPane({
   profileId,
   record,
-  layer,
   effective,
   stockSprites = null,
   packPreviews = null,
@@ -49,6 +58,12 @@ export function CrosshairPane({
   onApply,
   onRemove,
   onDeactivate,
+  stockArtSources = null,
+  sourceStatus = null,
+  onOpenMods,
+  hudOverlayState = "none",
+  hudName,
+  onOpenHud,
   scene,
 }: {
   /** The profile these drafts belong to; a switch discards them. */
@@ -74,6 +89,12 @@ export function CrosshairPane({
   ) => Promise<boolean>;
   onRemove: () => void;
   onDeactivate?: () => Promise<unknown>;
+  stockArtSources?: ContentIndex | null;
+  sourceStatus?: CrosshairSourceStatus | null;
+  onOpenMods?: () => void;
+  hudOverlayState?: "enabled" | "disabled" | "possible" | "none";
+  hudName?: string;
+  onOpenHud?: () => void;
   scene?: ReactNode;
 }) {
   const { running, busy } = useAppStatus();
@@ -88,7 +109,6 @@ export function CrosshairPane({
     setDraft,
     seeded,
     previewFor,
-    addCommunity,
     removeLibraryEntry,
     saveDesign,
     setImportedPng,
@@ -101,10 +121,23 @@ export function CrosshairPane({
   // picking a shape is what makes it dirty.
   const dirty = crosshairDraftDirty({ ...draft, color: null }, { ...seeded, color: null });
   const [classTab, setClassTab] = useState<ClassTab>(ALL_CLASSES_TAB);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [designerOpen, setDesignerOpen] = useState(false);
+  const [designerSession, setDesignerSession] = useSeededDraft<{
+    initial: CrosshairDesignerDraft;
+    current: CrosshairDesignerDraft;
+  } | null>(null, JSON.stringify, draftRecordKey(profileId, "crosshair-designer"));
+  const designerDirty =
+    designerSession !== null &&
+    JSON.stringify(designerSession.initial) !== JSON.stringify(designerSession.current);
 
   const libraryNames = Object.keys(draft.library).sort();
+  const hasSavedVtf =
+    Object.entries(record?.library ?? {}).some(
+      ([name, format]) => name.startsWith("venom_") || format === "vtf",
+    ) ||
+    Object.entries(draft.library).some(
+      ([name, entry]) => name.startsWith("venom_") || entry.format === "vtf",
+    );
   const usesCustom =
     draft.customRgba !== null ||
     previewFor("custom") !== null ||
@@ -130,6 +163,14 @@ export function CrosshairPane({
     onSaveStock,
     mode === activeMode,
   );
+  const stockFile = controls.draft.cl_crosshair_file;
+  const stockArtPaths = /^crosshair[1-7]$/i.test(stockFile)
+    ? [
+        `materials/vgui/crosshairs/${stockFile.toLowerCase()}.vtf`,
+        `materials/vgui/crosshairs/${stockFile.toLowerCase()}.vmt`,
+      ]
+    : [];
+  const stockArtConflict = stockArtPaths.flatMap((path) => stockArtSources?.hits[path] ?? [])[0];
   const color: CrosshairColor = [
     controls.draft.cl_crosshair_red,
     controls.draft.cl_crosshair_green,
@@ -139,10 +180,9 @@ export function CrosshairPane({
   useEffect(() => {
     if (!activity) {
       setDesignerOpen(false);
-      setPickerOpen(false);
     }
   }, [activity]);
-  const [source, setSource] = useState<"builtin" | "designs" | "community" | "import">("builtin");
+  const [source, setSource] = useState<"builtin" | "designs" | "import">("builtin");
   const [search, setSearch] = useState("");
   const filteredChoices = shapeChoices
     .filter((name) =>
@@ -150,11 +190,7 @@ export function CrosshairPane({
         ? (CROSSHAIR_SHAPES as readonly string[]).includes(name)
         : source === "import"
           ? name === "custom"
-          : source === "community"
-            ? name.startsWith("venom_")
-            : !name.startsWith("venom_") &&
-              !(CROSSHAIR_SHAPES as readonly string[]).includes(name) &&
-              name !== "custom",
+          : !(CROSSHAIR_SHAPES as readonly string[]).includes(name) && name !== "custom",
     )
     .filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()));
   const [stockSelection, setStockSelection] = useState(
@@ -166,17 +202,39 @@ export function CrosshairPane({
   const [customScale, setCustomScale] = useState(
     record?.scale ?? controls.draft.cl_crosshair_scale,
   );
-  const reportPending = useContext(AutosavePending);
-  const draftId = useId();
-  const pendingPack = dirty || mode !== activeMode;
-  useEffect(() => {
-    reportPending?.(draftId, pendingPack);
-    return () => reportPending?.(draftId, false);
-  }, [reportPending, draftId, pendingPack]);
+  const pendingPack = dirty || mode !== activeMode || designerDirty;
+  useExplicitDraft(pendingPack);
   function discardPack() {
+    setDesignerOpen(false);
+    setDesignerSession(null);
     discard();
     setMode(activeMode);
     if (mode !== activeMode) controls.reset();
+  }
+  function openDesigner(fromPreset = false) {
+    if (!designerSession) {
+      const initial = {
+        design:
+          parseDesign(designLibrary(draft.design)[draft.shape]) ??
+          (fromPreset ? designFromPreset(draft.shape) : defaultCrosshairDesign()),
+        name: draft.shape.startsWith("design-") ? draft.shape.slice(7).replaceAll("-", " ") : "",
+      };
+      setDesignerSession({ initial, current: initial });
+    }
+    setSource("designs");
+    setDesignerOpen(true);
+  }
+  function closeDesigner() {
+    setDesignerOpen(false);
+    setDesignerSession(null);
+  }
+  function saveDesigner() {
+    if (!designerSession) return;
+    saveDesign(
+      designerSession.current.design,
+      designerSession.current.name.trim() || "My crosshair",
+    );
+    closeDesigner();
   }
   function chooseMode(next: "custom" | "stock") {
     if (mode === "custom") setCustomScale(controls.draft.cl_crosshair_scale);
@@ -216,216 +274,383 @@ export function CrosshairPane({
     controls.patch({ cl_crosshair_file: "" });
   }
 
+  const editingDesign =
+    mode === "custom" && source === "designs" && designerOpen && designerSession !== null;
+  const editorPixels = editingDesign
+    ? {
+        width: 64,
+        height: 64,
+        rgba: Array.from(renderCrosshairDesign(designerSession.current.design)),
+      }
+    : null;
+
   return (
     <section data-testid="settings-crosshair" className="min-w-0 text-left">
       <PaneHeader
         title="Crosshair"
-        lede="TF2's own crosshair, or a pack you build."
-        actions={<p className="t-meta font-mono text-ink-faint">{gameplayPath(layer)}</p>}
+        actions={
+          <Segmented
+            label="Crosshair mode"
+            testIdPrefix="crosshair-mode"
+            options={[
+              { id: "stock", label: "In-game" },
+              { id: "custom", label: "Custom" },
+            ]}
+            value={mode}
+            disabled={busy}
+            onChange={chooseMode}
+          />
+        }
       />
-
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <Segmented
-          label="Crosshair mode"
-          testIdPrefix="crosshair-mode"
-          options={[
-            { id: "stock", label: "In-game" },
-            { id: "custom", label: "Custom" },
-          ]}
-          value={mode}
-          disabled={busy}
-          onChange={chooseMode}
-        />
-        {pendingPack ? (
-          <button type="button" className="btn btn-ghost" disabled={busy} onClick={discardPack}>
-            Discard custom edits
-          </button>
-        ) : null}
-        {mode !== activeMode ? (
-          <span className="t-meta">
-            {activeMode === "custom" ? "Custom is installed" : "In-game is active"} · mode change
-            not applied
-          </span>
-        ) : null}
-      </div>
+      {mode !== activeMode ? (
+        <p className="t-meta mb-4">
+          {activeMode === "custom" ? "Custom is installed" : "In-game is active"} · mode change not
+          applied
+        </p>
+      ) : null}
+      {record?.sourceChanged ? (
+        <div className="pane-note mb-4" data-testid="crosshair-source-changed">
+          <p>
+            This saved crosshair pack changed outside execs. Its previews and weapon assignments may
+            not match the saved design. Review its assets, then Build pack or remove the saved pack.
+          </p>
+          {mode !== "custom" ? (
+            <button
+              type="button"
+              className="btn btn-ghost mt-2"
+              onClick={() => chooseMode("custom")}
+            >
+              Review custom pack
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {record && sourceStatus && !["none", "current"].includes(sourceStatus.state) ? (
+        <div className="pane-note mb-4" data-testid="crosshair-script-source-status">
+          <p>
+            {sourceStatus.state === "changed"
+              ? "TF2's weapon scripts changed since this pack was built. Review the pack and Build pack again to refresh its scripts."
+              : sourceStatus.state === "unverified"
+                ? "This older crosshair pack has no recorded TF2 weapon-script version. Review and Build pack to verify it against the current game files."
+                : `Could not check TF2's weapon scripts: ${sourceStatus.reason ?? "the source is unavailable"}.`}
+          </p>
+          {mode !== "custom" ? (
+            <button
+              type="button"
+              className="btn btn-ghost mt-2"
+              onClick={() => chooseMode("custom")}
+            >
+              Review custom pack
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {hasSavedVtf ? (
+        <p className="pane-note mb-4" data-testid="crosshair-retired-source-notice">
+          Saved VTF crosshairs stay in this profile. New Venom downloads are no longer offered in
+          execs. Build pack reuses files already in the saved pack; if one is missing, the build
+          stops without changing the installed pack. Choose a Shape or import your own PNG to
+          replace a missing crosshair.
+        </p>
+      ) : null}
+      {hudOverlayState === "enabled" || hudOverlayState === "possible" ? (
+        <div className="pane-note mb-4" data-testid="crosshair-hud-overlay-notice">
+          <p>
+            {hudOverlayState === "enabled"
+              ? `${hudName ?? "Your HUD"} has a crosshair overlay selected. TF2 may draw it along with the engine crosshair shown here.`
+              : `${hudName ?? "Your HUD"} includes crosshair overlay controls. Its in-game state cannot be confirmed from the saved options.`}
+          </p>
+          {onOpenHud ? (
+            <button type="button" className="btn btn-ghost mt-2" onClick={onOpenHud}>
+              Open HUD options
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {mode === "stock" && stockArtConflict ? (
+        <div className="pane-note mb-4" data-testid="crosshair-stock-art-notice">
+          <p>
+            {stockArtConflict.pack} also supplies {stockArtConflict.member}. The preview uses
+            Valve's original sprite, so TF2 may draw different art.
+          </p>
+          {onOpenMods ? (
+            <button type="button" className="btn btn-ghost mt-2" onClick={onOpenMods}>
+              Open installed mods
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {mode === "stock" && stockArtSources?.incomplete.length ? (
+        <p className="pane-note mb-4" data-testid="crosshair-source-scan-incomplete">
+          Some custom packs could not be checked for crosshair art: {stockArtSources.incomplete[0]}
+        </p>
+      ) : null}
       <CrosshairControls
         {...controls}
         sprites={stockSprites}
         custom={mode === "custom"}
         scene={scene}
+        customContent={
+          mode === "custom" ? (
+            <div>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <Segmented
+                  label="Crosshair source"
+                  size="sm"
+                  value={source}
+                  onChange={(value) => {
+                    setSource(value);
+                    setSearch("");
+                  }}
+                  options={[
+                    { id: "builtin", label: "Shapes" },
+                    { id: "designs", label: "Saved library" },
+                    { id: "import", label: "Import PNG" },
+                  ]}
+                />
+              </div>
+              {source === "builtin" ? (
+                <p className="t-meta mb-4">
+                  Select a shape, then Customize shape to make an editable copy. Saved copies appear
+                  in Saved library.
+                </p>
+              ) : source === "designs" ? (
+                <p className="t-meta mb-4">
+                  Your saved designs and imported crosshairs. Design your own starts a new one;
+                  select a design to edit it.
+                </p>
+              ) : null}
+              {editingDesign ? (
+                <CrosshairDesigner
+                  open
+                  embedded
+                  showActions={false}
+                  initial={designerSession.initial.design}
+                  initialName={designerSession.initial.name}
+                  value={designerSession.current}
+                  color={color}
+                  onChange={(current) =>
+                    setDesignerSession((session) => (session ? { ...session, current } : null))
+                  }
+                  onSave={saveDesigner}
+                  onClose={closeDesigner}
+                />
+              ) : (
+                <>
+                  {source === "designs" ? (
+                    <input
+                      aria-label="Find a crosshair"
+                      placeholder="Find a crosshair"
+                      className="input mb-4 w-full"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                    />
+                  ) : null}
+                  {source === "import" ? (
+                    <PngImportField locked={locked} onImport={setImportedPng} />
+                  ) : null}
+                  <CrosshairLibraryChips
+                    choices={filteredChoices}
+                    selected={draft.shape}
+                    color={color}
+                    customRgba={draft.customRgba}
+                    previewFor={previewFor}
+                    locked={locked}
+                    hasDesign={Boolean(designLibrary(draft.design)[draft.shape])}
+                    showDesigner={
+                      source === "designs" ||
+                      (source === "builtin" &&
+                        (CROSSHAIR_SHAPES as readonly string[]).includes(draft.shape))
+                    }
+                    designerLabel={source === "builtin" ? "Customize shape" : undefined}
+                    onSelect={(shape) => setDraft((current) => ({ ...current, shape }))}
+                    onRemove={removeLibraryEntry}
+                    onOpenDesigner={() => openDesigner(source === "builtin")}
+                  />
+                  {filteredChoices.length === 0 && source !== "import" ? (
+                    <p className="pane-note mt-3">
+                      {source === "designs"
+                        ? search.trim()
+                          ? "No saved crosshairs match."
+                          : "Create a named design, then build it into your pack."
+                        : "No crosshairs match."}
+                    </p>
+                  ) : null}
+                  {designerDirty ? (
+                    <button
+                      type="button"
+                      onClick={() => openDesigner()}
+                      className="btn btn-ghost mt-3"
+                    >
+                      Resume unsaved design
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : undefined
+        }
         preview={
           mode === "custom" ? (
             <CrosshairPreview
-              shape={draft.shape}
-              customRgba={draft.customRgba}
+              shape={editingDesign ? "designer-preview" : draft.shape}
+              customRgba={editingDesign ? null : draft.customRgba}
               color={color}
-              preview={previewFor(draft.shape)}
+              preview={editorPixels ?? previewFor(draft.shape)}
               scale={controls.draft.cl_crosshair_scale}
               scene={scene}
             />
           ) : undefined
         }
-      />
-      {mode === "stock" && activeMode === "custom" ? (
-        <button
-          type="button"
-          className="btn btn-primary mt-6"
-          disabled={removeLocked}
-          onClick={() => {
-            void onDeactivate?.().catch(() => {});
-          }}
-        >
-          Use in-game crosshair
-        </button>
-      ) : null}
-
-      {mode === "custom" ? (
-        <PaneSection
-          title="Custom crosshairs"
-          meta={
-            <span className={`badge ${record ? "badge-ok" : ""}`}>
-              {activeMode === "custom"
-                ? "Pack installed"
-                : record
-                  ? "Saved, inactive"
-                  : "Not installed"}
-            </span>
-          }
-        >
-          <div className="mt-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <Segmented
-                label="Crosshair source"
-                size="sm"
-                value={source}
-                onChange={(value) => {
-                  setSource(value);
-                  setSearch("");
-                }}
-                options={[
-                  { id: "builtin", label: "Built-in" },
-                  { id: "designs", label: "My designs" },
-                  { id: "community", label: "Community" },
-                  { id: "import", label: "Import PNG" },
-                ]}
-              />
-              {source === "designs" || source === "community" ? (
-                <input
-                  aria-label="Find a crosshair"
-                  placeholder="Find a crosshair"
-                  className="input w-44"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+        previewActions={
+          mode === "custom" ? (
+            <div className="action-panel mt-4 block">
+              <div className="flex items-start gap-3">
+                <div className="surface shrink-0 p-2">
+                  <CrosshairThumb
+                    shape={editingDesign ? "designer-preview" : draft.shape}
+                    customRgba={editingDesign ? null : draft.customRgba}
+                    color={color}
+                    preview={editorPixels ?? previewFor(draft.shape)}
+                    size={40}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="t-row capitalize">
+                    {editingDesign
+                      ? designerSession.current.name || "My crosshair"
+                      : crosshairShapeLabel(draft.shape)}
+                  </p>
+                  <p className="t-meta mt-1">
+                    {editingDesign
+                      ? "Save to library to use this design."
+                      : `${Object.keys(draft.assignments).length} weapon overrides · size ${controls.draft.cl_crosshair_scale}`}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {editingDesign ? (
+                  <>
+                    <button
+                      type="button"
+                      data-testid="crosshair-designer-save"
+                      className="btn btn-primary"
+                      onClick={saveDesigner}
+                    >
+                      Save to library
+                    </button>
+                    <button type="button" className="btn btn-ghost" onClick={closeDesigner}>
+                      Cancel design
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      data-testid="crosshair-build"
+                      className="btn btn-primary"
+                      disabled={removeLocked || editingDesign || designerDirty}
+                      onClick={() => {
+                        void build().catch(() => {});
+                      }}
+                    >
+                      Build pack
+                    </button>
+                    {pendingPack ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        disabled={busy}
+                        onClick={discardPack}
+                      >
+                        Discard custom edits
+                      </button>
+                    ) : null}
+                  </>
+                )}
+              </div>
+              {editingDesign ? (
+                <p className="t-meta mt-3">Save the design, then Build pack to apply it.</p>
+              ) : dirty || activeMode !== "custom" ? (
+                <p className="t-meta mt-3">
+                  {dirty
+                    ? "Custom edits have not been built."
+                    : record
+                      ? "Your saved pack is inactive."
+                      : "Build applies the base shape and weapon overrides."}
+                </p>
               ) : null}
+              <p className="t-meta mt-3">Color and display size save automatically.</p>
             </div>
-            {source === "import" ? (
-              <PngImportField locked={locked} onImport={setImportedPng} />
-            ) : null}
-            <div className="min-w-0">
-              <CrosshairLibraryChips
-                choices={filteredChoices}
-                selected={draft.shape}
-                color={color}
-                customRgba={draft.customRgba}
-                previewFor={previewFor}
-                locked={locked}
-                canBrowseCommunity={isTauri()}
-                hasDesign={Boolean(designLibrary(draft.design)[draft.shape])}
-                showDesigner={source === "designs"}
-                showCommunity={source === "community"}
-                onSelect={(shape) => setDraft((current) => ({ ...current, shape }))}
-                onRemove={removeLibraryEntry}
-                onOpenDesigner={() => setDesignerOpen(true)}
-                onOpenCommunity={() => setPickerOpen(true)}
-              />
-
-              <WeaponOverrideTable
-                profileId={profileId}
-                draft={{ ...draft, color }}
-                choices={shapeChoices}
-                classTab={classTab}
-                locked={locked}
-                previewFor={previewFor}
-                onSelectClass={setClassTab}
-                onChange={setDraft}
-              />
-            </div>
-          </div>
-
-          <div className="t-meta mt-8 grid gap-x-10 gap-y-1 border-t border-edge pt-4 md:grid-cols-2">
-            <p>{CROSSHAIR_CASUAL_COPY}</p>
-            <p>Build pack applies the base shape and every weapon override.</p>
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-            {record ? (
+          ) : activeMode === "custom" ? (
+            <div className="action-panel mt-4 block">
+              <p className="t-meta mb-3">Your custom designs and weapon overrides stay saved.</p>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="btn btn-primary"
                 disabled={removeLocked}
-                onClick={onRemove}
+                onClick={() => {
+                  void onDeactivate?.().catch(() => {});
+                }}
               >
-                Remove saved pack
+                Use in-game crosshair
               </button>
-            ) : null}
-            <p className="t-meta">
-              {dirty
-                ? "Custom edits have not been built."
-                : activeMode === "custom"
-                  ? "Custom pack installed."
-                  : "Ready to build."}
-            </p>
+              <button
+                type="button"
+                className="btn btn-quiet ml-2"
+                disabled={busy}
+                onClick={discardPack}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <p className="pane-note mt-4">Changes save automatically.</p>
+          )
+        }
+      />
+
+      {mode === "custom" ? (
+        <WeaponOverrideTable
+          profileId={profileId}
+          draft={{ ...draft, color }}
+          choices={shapeChoices}
+          classTab={classTab}
+          locked={locked}
+          previewFor={previewFor}
+          onSelectClass={setClassTab}
+          onChange={setDraft}
+        />
+      ) : null}
+      <section className="section">
+        <Disclosure
+          profileId={profileId}
+          storageKey="crosshair-about"
+          summary={mode === "custom" ? "About crosshair packs and previews" : "About previews"}
+        >
+          {record ? (
             <button
               type="button"
-              data-testid="crosshair-build"
-              className="btn btn-primary"
+              className="btn btn-ghost mt-3"
               disabled={removeLocked}
-              onClick={() => {
-                void build().catch(() => {});
-              }}
+              onClick={onRemove}
             >
-              Build pack
+              Remove saved pack
             </button>
-          </div>
-        </PaneSection>
-      ) : null}
-
-      <p className="t-meta mt-8 text-ink-faint">
-        {COMMUNITY_CROSSHAIR_CREDIT} Scene screenshots by yttrium and Oblique (CompVMInstaller).
-        Stock crosshair previews are decoded from your own copy of the game. execs is not affiliated
-        with Valve or Steam; Team Fortress 2 and its sprites are © Valve Corporation.
-      </p>
-
-      {/* Mounted only while open so each visit starts from the current draft
-          (the designer seeds its params once) and from a clean search box. */}
-      {pickerOpen ? (
-        <CommunityPicker
-          open
-          existing={draft.library}
-          color={color}
-          onAdd={addCommunity}
-          onClose={() => setPickerOpen(false)}
-        />
-      ) : null}
-
-      {designerOpen ? (
-        <CrosshairDesigner
-          open
-          initial={
-            parseDesign(designLibrary(draft.design)[draft.shape]) ?? defaultCrosshairDesign()
-          }
-          initialName={
-            draft.shape.startsWith("design-") ? draft.shape.slice(7).replaceAll("-", " ") : ""
-          }
-          color={color}
-          onSave={(design, name) => {
-            saveDesign(design, name);
-            setDesignerOpen(false);
-          }}
-          onClose={() => setDesignerOpen(false)}
-        />
-      ) : null}
+          ) : null}
+          {mode === "custom" ? (
+            <p className="pane-note mt-3">
+              {CROSSHAIR_CASUAL_COPY} Build pack applies the base shape and every weapon override.
+            </p>
+          ) : null}
+          <p className="pane-note mt-3">
+            Previously installed Venom Crosshairs are credited to HbiVnm and their respective
+            creators. The neutral scene is a size and contrast reference, not an in-game capture.
+            Stock crosshair previews are decoded from your own copy of the game. execs is not
+            affiliated with Valve or Steam; Team Fortress 2 and its sprites are © Valve Corporation.
+          </p>
+        </Disclosure>
+      </section>
     </section>
   );
 }

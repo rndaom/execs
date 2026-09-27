@@ -9,11 +9,47 @@ use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{
-    active_manifest, archive_too_large, blocking, read_bounded_file, with_profile, ActiveContext,
+    active_manifest, archive_too_large, blocking, read_bounded_file, with_profile, with_root,
+    ActiveContext,
 };
 use crate::error::CommandError;
 use crate::hud_fetch::HUD_ZIP_MAX_BYTES;
 use crate::WriteGate;
+
+#[tauri::command]
+pub async fn get_hud_ownership(
+    profile_id: String,
+) -> Result<execs_core::hud::HudOwnershipReview, CommandError> {
+    with_root(move |root| {
+        Ok(execs_core::hud::get_hud_ownership_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn select_profile_hud(
+    gate: tauri::State<'_, WriteGate>,
+    profile_id: String,
+    hud_folder: String,
+    expected_fingerprint: String,
+) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        Ok(execs_core::hud::select_profile_hud_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+            &hud_folder,
+            &expected_fingerprint,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
+}
 
 #[tauri::command]
 pub async fn get_hud_catalog(
@@ -34,8 +70,8 @@ pub struct HudStatePayload {
     pub profile_id: String,
 }
 
-/// Popularity and recency per HUD id, from comfig.app (last updated) and
-/// tf2huds.dev (downloads, views). Cached for a day; `refresh` forces a read.
+/// TF2 HUDs listing activity and popularity per hud-db id. The date describes
+/// the tf2huds.dev listing, not a hud-db release. Cached for a day.
 #[tauri::command]
 pub async fn get_hud_stats(
     refresh: bool,
@@ -46,13 +82,19 @@ pub async fn get_hud_stats(
 /// The pictures behind a HUD's external album (Imgur, or a GitHub showcase
 /// page), so the lightbox can show them in-app instead of linking out.
 #[tauri::command]
-pub async fn get_hud_album(id: String) -> Result<Vec<crate::hud_fetch::AlbumImage>, CommandError> {
+pub async fn get_hud_album(
+    id: String,
+    refresh: Option<bool>,
+) -> Result<Vec<crate::hud_fetch::AlbumImage>, CommandError> {
     blocking(move || {
         let entry = crate::hud_fetch::catalog_entry(&id)?;
         let Some(album) = entry.album else {
             return Ok(Vec::new());
         };
-        Ok(crate::hud_fetch::fetch_hud_album(&album)?)
+        Ok(crate::hud_fetch::fetch_hud_album(
+            &album,
+            refresh.unwrap_or(false),
+        )?)
     })
     .await
 }
@@ -283,6 +325,24 @@ pub async fn match_hud_catalog(
             &profile_id,
             &entry.id,
             Some(entry.hash),
+        )?)
+    })
+    .await
+}
+
+/// Remove the active profile's HUD so TF2 uses its own. Nothing is fetched.
+#[tauri::command]
+pub async fn return_to_stock_hud(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_profile(|root, profile_id| {
+        execs_core::refuse_if_running()?;
+        Ok(execs_core::hud::return_to_stock_hud_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+            execs_core::process_lock::live_process_names(),
         )?)
     })
     .await

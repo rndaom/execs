@@ -1,0 +1,3329 @@
+{
+  "schema": 1,
+  "status": "passed",
+  "scope": "Linux X11/WebKitGTK real release binary; active owned Vanilla profile, Files draft retention, explicit helper Save and actual native close Cancel/Discard/Save. No installer, updater, Steam or game qualification.",
+  "revision": "4c363147a62a624a7bda7f2ecae13541d505d37f",
+  "binarySha256": "5d2c8db19b80cff62392943b03f32ae9a2bb4fc6fa8a1e45771e66ab4044507c",
+  "fixture": {
+    "authored": "Two schema-1 Vanilla profiles with wholly authored cfg payloads and comment-only helpers; A active and mirrored exactly, B an unchanged control. No Steam or game executable. Not an upgrade test."
+  },
+  "isolation": {
+    "HOME": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy/home",
+    "XDG_DATA_HOME": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy/data",
+    "XDG_CONFIG_HOME": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy/config",
+    "XDG_CACHE_HOME": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy/cache",
+    "XDG_RUNTIME_DIR": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy/runtime",
+    "TMPDIR": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy/tmp"
+  },
+  "checks": [
+    {
+      "label": "first-active-launch",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "BODY",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": null
+      },
+      "capabilities": {
+        "browserName": "wry",
+        "browserVersion": "0.55.1",
+        "platformName": "linux",
+        "acceptInsecureCerts": false,
+        "strictFileInteractability": false,
+        "setWindowRect": true,
+        "unhandledPromptBehavior": "dismiss and notify",
+        "pageLoadStrategy": "normal",
+        "proxy": {},
+        "timeouts": {
+          "script": 30000,
+          "pageLoad": 300000,
+          "implicit": 0
+        }
+      },
+      "process": {
+        "pid": 5155,
+        "processGroup": 5147,
+        "startTime": "52027",
+        "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+      }
+    },
+    {
+      "label": "initial-native-helper",
+      "nativeClipboardSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "bytes": 4848,
+      "matchesAuthoredText": true
+    },
+    {
+      "label": "native-unsaved-draft-bytes",
+      "nativeClipboardSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "bytes": 4881,
+      "matchesAuthoredText": true
+    },
+    {
+      "label": "native-pane-navigation-retains-selection-and-scroll",
+      "result": "passed",
+      "before": {
+        "saveEnabled": true,
+        "activeElement": {
+          "label": "Contents of tf/cfg/native-fixture.cfg",
+          "box": {
+            "x": -1809,
+            "height": 2767,
+            "width": 2992,
+            "y": -1011
+          },
+          "id": "",
+          "testId": null,
+          "tag": "DIV"
+        },
+        "left": 2239,
+        "scrollHeight": 2767,
+        "paneScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "width": 1200,
+        "editable": true,
+        "top": 1210,
+        "height": 800,
+        "selection": "SELECTION-A",
+        "path": "Contents of tf/cfg/native-fixture.cfg",
+        "windowScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+        "clientWidth": 786,
+        "focused": true,
+        "scrollWidth": 3025,
+        "clientHeight": 480,
+        "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+        "position": "Ln 80, Col 363"
+      },
+      "beforeNavigation": {
+        "saveEnabled": true,
+        "activeElement": {
+          "label": "Contents of tf/cfg/native-fixture.cfg",
+          "box": {
+            "x": -1809,
+            "height": 2767,
+            "width": 2992,
+            "y": -1011
+          },
+          "id": "",
+          "testId": null,
+          "tag": "DIV"
+        },
+        "left": 2239,
+        "scrollHeight": 2767,
+        "paneScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "width": 1200,
+        "editable": true,
+        "top": 1210,
+        "height": 800,
+        "selection": "SELECTION-A",
+        "path": "Contents of tf/cfg/native-fixture.cfg",
+        "windowScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+        "clientWidth": 786,
+        "focused": true,
+        "scrollWidth": 3025,
+        "clientHeight": 480,
+        "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+        "position": "Ln 80, Col 363"
+      },
+      "firstRender": {
+        "saveEnabled": true,
+        "activeElement": {
+          "label": "Files",
+          "box": {
+            "x": 8,
+            "height": 36,
+            "width": 163,
+            "y": 464
+          },
+          "id": "",
+          "testId": "settings-tab-files",
+          "tag": "BUTTON"
+        },
+        "left": 2239,
+        "scrollHeight": 2767,
+        "paneScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "width": 1200,
+        "editable": true,
+        "top": 1210,
+        "height": 800,
+        "selection": null,
+        "path": "Contents of tf/cfg/native-fixture.cfg",
+        "windowScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+        "clientWidth": 786,
+        "focused": false,
+        "scrollWidth": 3025,
+        "clientHeight": 480,
+        "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+        "position": "Ln 80, Col 363"
+      },
+      "afterPaintBeforeFocus": {
+        "saveEnabled": true,
+        "activeElement": {
+          "label": "Files",
+          "box": {
+            "x": 8,
+            "height": 36,
+            "width": 163,
+            "y": 464
+          },
+          "id": "",
+          "testId": "settings-tab-files",
+          "tag": "BUTTON"
+        },
+        "left": 2239,
+        "scrollHeight": 2767,
+        "paneScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "width": 1200,
+        "editable": true,
+        "top": 1210,
+        "height": 800,
+        "selection": null,
+        "path": "Contents of tf/cfg/native-fixture.cfg",
+        "windowScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+        "clientWidth": 786,
+        "focused": false,
+        "scrollWidth": 3025,
+        "clientHeight": 480,
+        "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+        "position": "Ln 80, Col 363"
+      },
+      "tabTraversal": [
+        {
+          "tabs": 0,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "Files",
+              "box": {
+                "x": 8,
+                "height": 36,
+                "width": 163,
+                "y": 464
+              },
+              "id": "",
+              "testId": "settings-tab-files",
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 1,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "Launch",
+              "box": {
+                "x": 8,
+                "height": 36,
+                "width": 163,
+                "y": 500
+              },
+              "id": "",
+              "testId": "settings-tab-launch",
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 2,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "App settings",
+              "box": {
+                "x": 8,
+                "height": 36,
+                "width": 163,
+                "y": 724
+              },
+              "id": "",
+              "testId": "app-settings-open",
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 3,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "",
+              "box": {
+                "x": 205,
+                "height": 36,
+                "width": 86.65625,
+                "y": 130
+              },
+              "id": "files-search",
+              "testId": null,
+              "tag": "INPUT"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 4,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "New cfg",
+              "box": {
+                "x": 297.65625,
+                "height": 33,
+                "width": 90.34375,
+                "y": 131.5
+              },
+              "id": "",
+              "testId": "files-new",
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 5,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+              "box": {
+                "x": 197,
+                "height": 32,
+                "width": 199,
+                "y": 240
+              },
+              "id": "",
+              "testId": "files-item",
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 6,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "File actions",
+              "box": {
+                "x": 987.5625,
+                "height": 39,
+                "width": 35,
+                "y": 124
+              },
+              "id": "",
+              "testId": "files-actions",
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 7,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "Discard file",
+              "box": {
+                "x": 1026.5625,
+                "height": 39,
+                "width": 79.90625,
+                "y": 124
+              },
+              "id": "",
+              "testId": null,
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 8,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "Save",
+              "box": {
+                "x": 1110.46875,
+                "height": 39,
+                "width": 60.53125,
+                "y": 124
+              },
+              "id": "",
+              "testId": "files-save",
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 9,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "Find",
+              "box": {
+                "x": 405,
+                "height": 24,
+                "width": 40,
+                "y": 170
+              },
+              "id": "",
+              "testId": null,
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 10,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "Wrap lines",
+              "box": {
+                "x": 449,
+                "height": 24,
+                "width": 46.59375,
+                "y": 170
+              },
+              "id": "",
+              "testId": null,
+              "tag": "BUTTON"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": null,
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": false,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        },
+        {
+          "tabs": 11,
+          "state": {
+            "saveEnabled": true,
+            "activeElement": {
+              "label": "Contents of tf/cfg/native-fixture.cfg",
+              "box": {
+                "x": -1809,
+                "height": 2767,
+                "width": 2992,
+                "y": -1011
+              },
+              "id": "",
+              "testId": null,
+              "tag": "DIV"
+            },
+            "left": 2239,
+            "scrollHeight": 2767,
+            "paneScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "width": 1200,
+            "editable": true,
+            "top": 1210,
+            "height": 800,
+            "selection": "SELECTION-A",
+            "path": "Contents of tf/cfg/native-fixture.cfg",
+            "windowScroll": {
+              "left": 0,
+              "top": 0
+            },
+            "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+            "clientWidth": 786,
+            "focused": true,
+            "scrollWidth": 3025,
+            "clientHeight": 480,
+            "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+            "position": "Ln 80, Col 363"
+          }
+        }
+      ],
+      "polls": [
+        {
+          "saveEnabled": true,
+          "activeElement": {
+            "label": "Contents of tf/cfg/native-fixture.cfg",
+            "box": {
+              "x": -1809,
+              "height": 2767,
+              "width": 2992,
+              "y": -1011
+            },
+            "id": "",
+            "testId": null,
+            "tag": "DIV"
+          },
+          "left": 2239,
+          "scrollHeight": 2767,
+          "paneScroll": {
+            "left": 0,
+            "top": 0
+          },
+          "width": 1200,
+          "editable": true,
+          "top": 1210,
+          "height": 800,
+          "selection": "SELECTION-A",
+          "path": "Contents of tf/cfg/native-fixture.cfg",
+          "windowScroll": {
+            "left": 0,
+            "top": 0
+          },
+          "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+          "clientWidth": 786,
+          "focused": true,
+          "scrollWidth": 3025,
+          "clientHeight": 480,
+          "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+          "position": "Ln 80, Col 363"
+        }
+      ],
+      "pollCount": 1,
+      "lastAssertion": null,
+      "after": {
+        "saveEnabled": true,
+        "activeElement": {
+          "label": "Contents of tf/cfg/native-fixture.cfg",
+          "box": {
+            "x": -1809,
+            "height": 2767,
+            "width": 2992,
+            "y": -1011
+          },
+          "id": "",
+          "testId": null,
+          "tag": "DIV"
+        },
+        "left": 2239,
+        "scrollHeight": 2767,
+        "paneScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "width": 1200,
+        "editable": true,
+        "top": 1210,
+        "height": 800,
+        "selection": "SELECTION-A",
+        "path": "Contents of tf/cfg/native-fixture.cfg",
+        "windowScroll": {
+          "left": 0,
+          "top": 0
+        },
+        "status": "ProblemsHelpNo blocking issuesCtrl+S Save · Ctrl+Shift+S Save as · Ctrl+F Find · Alt+Z Wrap · Ctrl+Space CompleteLn 80, Col 363",
+        "clientWidth": 786,
+        "focused": true,
+        "scrollWidth": 3025,
+        "clientHeight": 480,
+        "selectedFile": "native-fixture.cfg, unsaved. tf/cfg/native-fixture.cfg",
+        "position": "Ln 80, Col 363"
+      }
+    },
+    {
+      "label": "native-draft-bytes-after-navigation",
+      "nativeClipboardSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "bytes": 4881,
+      "matchesAuthoredText": true
+    },
+    {
+      "label": "native-close-candidate-draft",
+      "nativeClipboardSha256": "773fa65daca187adf84a17bafd6ef10af98171fa898bb483b04a7de7377513b1",
+      "bytes": 4927,
+      "matchesAuthoredText": true
+    },
+    {
+      "label": "close-cancel-x11-inspect",
+      "observation": {
+        "process": {
+          "pid": 5155,
+          "processGroup": 5147,
+          "startTime": "52027",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window"
+            ]
+          },
+          {
+            "id": 2097155,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            },
+            "rejectionReasons": []
+          },
+          {
+            "id": 2097197,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window",
+              "Overrides window-manager control"
+            ]
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097197,
+          4194305,
+          8388609
+        ],
+        "mode": "inspect",
+        "pid": 5155
+      }
+    },
+    {
+      "label": "close-cancel-x11-request",
+      "observation": {
+        "process": {
+          "pid": 5155,
+          "processGroup": 5147,
+          "startTime": "52027",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window"
+            ]
+          },
+          {
+            "id": 2097155,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            },
+            "rejectionReasons": []
+          },
+          {
+            "id": 2097197,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window",
+              "Overrides window-manager control"
+            ]
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097197,
+          4194305,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 5155,
+        "selectedId": 2097155,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      }
+    },
+    {
+      "label": "close-cancel",
+      "closeRequest": {
+        "process": {
+          "pid": 5155,
+          "processGroup": 5147,
+          "startTime": "52027",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          },
+          {
+            "id": 2097155,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            }
+          },
+          {
+            "id": 2097197,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097197,
+          4194305,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 5155,
+        "selectedId": 2097155,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      }
+    },
+    {
+      "label": "close-cancel-dialog",
+      "dialog": {
+        "buttons": [
+          {
+            "disabled": false,
+            "text": "Save and continue"
+          },
+          {
+            "disabled": false,
+            "text": "Discard and continue"
+          },
+          {
+            "disabled": false,
+            "text": "Cancel"
+          }
+        ],
+        "text": "Save Files drafts?Save your edits before continuing, or explicitly discard them.tf/cfg/native-fixture.cfgSave and continueDiscard and continueCancel",
+        "focus": "Cancel"
+      }
+    },
+    {
+      "label": "native-close-cancel-retains-draft",
+      "nativeClipboardSha256": "773fa65daca187adf84a17bafd6ef10af98171fa898bb483b04a7de7377513b1",
+      "bytes": 4927,
+      "matchesAuthoredText": true
+    },
+    {
+      "label": "close-discard-x11-inspect",
+      "observation": {
+        "process": {
+          "pid": 5155,
+          "processGroup": 5147,
+          "startTime": "52027",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window"
+            ]
+          },
+          {
+            "id": 2097155,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            },
+            "rejectionReasons": []
+          },
+          {
+            "id": 2097197,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window",
+              "Overrides window-manager control"
+            ]
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097197,
+          4194305,
+          8388609
+        ],
+        "mode": "inspect",
+        "pid": 5155
+      }
+    },
+    {
+      "label": "close-discard-x11-request",
+      "observation": {
+        "process": {
+          "pid": 5155,
+          "processGroup": 5147,
+          "startTime": "52027",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window"
+            ]
+          },
+          {
+            "id": 2097155,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            },
+            "rejectionReasons": []
+          },
+          {
+            "id": 2097197,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window",
+              "Overrides window-manager control"
+            ]
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097197,
+          4194305,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 5155,
+        "selectedId": 2097155,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      }
+    },
+    {
+      "label": "close-discard",
+      "closeRequest": {
+        "process": {
+          "pid": 5155,
+          "processGroup": 5147,
+          "startTime": "52027",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          },
+          {
+            "id": 2097155,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            }
+          },
+          {
+            "id": 2097197,
+            "pid": 5155,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097197,
+          4194305,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 5155,
+        "selectedId": 2097155,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      }
+    },
+    {
+      "label": "close-discard-dialog",
+      "dialog": {
+        "buttons": [
+          {
+            "disabled": false,
+            "text": "Save and continue"
+          },
+          {
+            "disabled": false,
+            "text": "Discard and continue"
+          },
+          {
+            "disabled": false,
+            "text": "Cancel"
+          }
+        ],
+        "text": "Save Files drafts?Save your edits before continuing, or explicitly discard them.tf/cfg/native-fixture.cfgSave and continueDiscard and continueCancel",
+        "focus": "Cancel"
+      }
+    },
+    {
+      "label": "native-close-Discard and continue",
+      "process": {
+        "pid": 5155,
+        "processGroup": 5147,
+        "startTime": "52027",
+        "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+      },
+      "processExitedBeforeCleanup": true,
+      "nativeExitCode": null,
+      "nativeExitStatus": "not observed; tauri-driver owns the child",
+      "responseError": "Error: POST /session/e5f75f1a-42d1-4034-9370-ad47100722ad/element/node-9A335FCD-707D-411B-A77D-57BF4B4E8DE1/click: unknown error: "
+    },
+    {
+      "label": "restart-after-discard",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "BODY",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Comfig"
+      },
+      "capabilities": {
+        "browserName": "wry",
+        "browserVersion": "0.55.1",
+        "platformName": "linux",
+        "acceptInsecureCerts": false,
+        "strictFileInteractability": false,
+        "setWindowRect": true,
+        "unhandledPromptBehavior": "dismiss and notify",
+        "pageLoadStrategy": "normal",
+        "proxy": {},
+        "timeouts": {
+          "script": 30000,
+          "pageLoad": 300000,
+          "implicit": 0
+        }
+      },
+      "process": {
+        "pid": 5330,
+        "processGroup": 5327,
+        "startTime": "54327",
+        "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+      }
+    },
+    {
+      "label": "native-discard-restart-loads-last-save",
+      "nativeClipboardSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "bytes": 4881,
+      "matchesAuthoredText": true
+    },
+    {
+      "label": "native-close-save-candidate",
+      "nativeClipboardSha256": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+      "bytes": 4911,
+      "matchesAuthoredText": true
+    },
+    {
+      "label": "close-save-x11-inspect",
+      "observation": {
+        "process": {
+          "pid": 5330,
+          "processGroup": 5327,
+          "startTime": "54327",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5330,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window"
+            ]
+          },
+          {
+            "id": 2097155,
+            "pid": 5330,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            },
+            "rejectionReasons": []
+          },
+          {
+            "id": 2097263,
+            "pid": 5330,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window",
+              "Overrides window-manager control"
+            ]
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097263,
+          4194305,
+          8388609
+        ],
+        "mode": "inspect",
+        "pid": 5330
+      }
+    },
+    {
+      "label": "close-save-x11-request",
+      "observation": {
+        "process": {
+          "pid": 5330,
+          "processGroup": 5327,
+          "startTime": "54327",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5330,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window"
+            ]
+          },
+          {
+            "id": 2097155,
+            "pid": 5330,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            },
+            "rejectionReasons": []
+          },
+          {
+            "id": 2097263,
+            "pid": 5330,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window",
+              "Overrides window-manager control"
+            ]
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097263,
+          4194305,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 5330,
+        "selectedId": 2097155,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      }
+    },
+    {
+      "label": "close-save",
+      "closeRequest": {
+        "process": {
+          "pid": 5330,
+          "processGroup": 5327,
+          "startTime": "54327",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5330,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          },
+          {
+            "id": 2097155,
+            "pid": 5330,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            }
+          },
+          {
+            "id": 2097263,
+            "pid": 5330,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097263,
+          4194305,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 5330,
+        "selectedId": 2097155,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      }
+    },
+    {
+      "label": "close-save-dialog",
+      "dialog": {
+        "buttons": [
+          {
+            "disabled": false,
+            "text": "Save and continue"
+          },
+          {
+            "disabled": false,
+            "text": "Discard and continue"
+          },
+          {
+            "disabled": false,
+            "text": "Cancel"
+          }
+        ],
+        "text": "Save Files drafts?Save your edits before continuing, or explicitly discard them.tf/cfg/native-fixture.cfgSave and continueDiscard and continueCancel",
+        "focus": "Cancel"
+      }
+    },
+    {
+      "label": "native-close-Save and continue",
+      "process": {
+        "pid": 5330,
+        "processGroup": 5327,
+        "startTime": "54327",
+        "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+      },
+      "processExitedBeforeCleanup": true,
+      "nativeExitCode": null,
+      "nativeExitStatus": "not observed; tauri-driver owns the child"
+    },
+    {
+      "label": "restart-after-close-save",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "BODY",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": null
+      },
+      "capabilities": {
+        "browserName": "wry",
+        "browserVersion": "0.55.1",
+        "platformName": "linux",
+        "acceptInsecureCerts": false,
+        "strictFileInteractability": false,
+        "setWindowRect": true,
+        "unhandledPromptBehavior": "dismiss and notify",
+        "pageLoadStrategy": "normal",
+        "proxy": {},
+        "timeouts": {
+          "script": 30000,
+          "pageLoad": 300000,
+          "implicit": 0
+        }
+      },
+      "process": {
+        "pid": 5460,
+        "processGroup": 5457,
+        "startTime": "55210",
+        "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+      }
+    },
+    {
+      "label": "native-close-save-restart-loads-committed-bytes",
+      "nativeClipboardSha256": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+      "bytes": 4911,
+      "matchesAuthoredText": true
+    },
+    {
+      "label": "clean-native-close-x11-inspect",
+      "observation": {
+        "process": {
+          "pid": 5460,
+          "processGroup": 5457,
+          "startTime": "55210",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5460,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window"
+            ]
+          },
+          {
+            "id": 2097155,
+            "pid": 5460,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            },
+            "rejectionReasons": []
+          },
+          {
+            "id": 2097245,
+            "pid": 5460,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window",
+              "Overrides window-manager control"
+            ]
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097245,
+          4194305,
+          8388609
+        ],
+        "mode": "inspect",
+        "pid": 5460
+      }
+    },
+    {
+      "label": "clean-native-close-x11-request",
+      "observation": {
+        "process": {
+          "pid": 5460,
+          "processGroup": 5457,
+          "startTime": "55210",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5460,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window"
+            ]
+          },
+          {
+            "id": 2097155,
+            "pid": 5460,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            },
+            "rejectionReasons": []
+          },
+          {
+            "id": 2097245,
+            "pid": 5460,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            },
+            "rejectionReasons": [
+              "Not viewable with mapped ancestors",
+              "Not an InputOutput window",
+              "Overrides window-manager control"
+            ]
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097245,
+          4194305,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 5460,
+        "selectedId": 2097155,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      }
+    },
+    {
+      "label": "clean-native-close",
+      "closeRequest": {
+        "process": {
+          "pid": 5460,
+          "processGroup": 5457,
+          "startTime": "55210",
+          "executable": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/execs"
+        },
+        "windows": [
+          {
+            "id": 2097153,
+            "pid": 5460,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          },
+          {
+            "id": 2097155,
+            "pid": 5460,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            }
+          },
+          {
+            "id": 2097245,
+            "pid": 5460,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          2097155,
+          2097156,
+          2097161,
+          2097245,
+          4194305,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 5460,
+        "selectedId": 2097155,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      }
+    },
+    {
+      "label": "clean-native-close",
+      "processExitedBeforeCleanup": true,
+      "nativeExitCode": null,
+      "nativeExitStatus": "not observed; tauri-driver owns the child"
+    }
+  ],
+  "captures": [
+    {
+      "file": "01-native-active-files.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "DIV",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "02-native-draft-before-navigation.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "DIV",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "03-native-draft-after-navigation.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "DIV",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "04-native-explicit-save.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "BODY",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "05-native-close-cancel-dialog.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": "Save Files drafts?Save your edits before continuing, or explicitly discard them.tf/cfg/native-fixture.cfgSave and continueDiscard and continueCancel",
+        "filesAvailable": true,
+        "focusedTag": "BUTTON",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "06-native-close-discard-dialog.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": "Save Files drafts?Save your edits before continuing, or explicitly discard them.tf/cfg/native-fixture.cfgSave and continueDiscard and continueCancel",
+        "filesAvailable": true,
+        "focusedTag": "BUTTON",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "07-native-after-discard-restart.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "DIV",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "08-native-close-save-dialog.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": "Save Files drafts?Save your edits before continuing, or explicitly discard them.tf/cfg/native-fixture.cfgSave and continueDiscard and continueCancel",
+        "filesAvailable": true,
+        "focusedTag": "BUTTON",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    },
+    {
+      "file": "09-native-after-close-save-restart.png",
+      "state": {
+        "motion": "system",
+        "width": 1200,
+        "scrollY": 0,
+        "href": "tauri://localhost",
+        "height": 800,
+        "dialog": null,
+        "filesAvailable": true,
+        "focusedTag": "DIV",
+        "native": true,
+        "selectedProfile": "ProfileNative Files AActive",
+        "dpr": 1,
+        "scrollX": 0,
+        "heading": "Files"
+      },
+      "pixels": [
+        1200,
+        800
+      ],
+      "stableFrames": 3
+    }
+  ],
+  "preservation": [
+    {
+      "schema": 1,
+      "stage": "before-launch",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:22.843Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "6148cc6e956890fbf936e5bcb5f7afd3250b0b2af2abcaa8fad6e49bd95b86b4",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "f6c4f2213d1bfe16f6cc8ee3002b3fab030f243494949ae262848b7d4afa20a2",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false
+    },
+    {
+      "schema": 1,
+      "stage": "active-boot-and-files-read",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:24.543Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "6148cc6e956890fbf936e5bcb5f7afd3250b0b2af2abcaa8fad6e49bd95b86b4",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "f6c4f2213d1bfe16f6cc8ee3002b3fab030f243494949ae262848b7d4afa20a2",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-launch"
+    },
+    {
+      "schema": 1,
+      "stage": "draft-is-memory-only",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:30.243Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "6148cc6e956890fbf936e5bcb5f7afd3250b0b2af2abcaa8fad6e49bd95b86b4",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "f6c4f2213d1bfe16f6cc8ee3002b3fab030f243494949ae262848b7d4afa20a2",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-launch"
+    },
+    {
+      "schema": 1,
+      "stage": "away-pane-does-not-save-files",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:32.899Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "6148cc6e956890fbf936e5bcb5f7afd3250b0b2af2abcaa8fad6e49bd95b86b4",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "f6c4f2213d1bfe16f6cc8ee3002b3fab030f243494949ae262848b7d4afa20a2",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-launch"
+    },
+    {
+      "schema": 1,
+      "stage": "retained-draft-is-still-memory-only",
+      "phase": "original",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:35.183Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+      "helperBytes": 4848,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-22T00:00:00Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "6148cc6e956890fbf936e5bcb5f7afd3250b0b2af2abcaa8fad6e49bd95b86b4",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "f6c4f2213d1bfe16f6cc8ee3002b3fab030f243494949ae262848b7d4afa20a2",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "71f0a601868c061fd5edf6ce2d2ee41d7043e73823f0e274c748f0134eb85333",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-launch"
+    },
+    {
+      "schema": 1,
+      "stage": "explicit-files-save",
+      "phase": "explicit-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:35.537Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "helperBytes": 4881,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:35Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "bdc687f50e6c63b5ddae5adf57da133325b1d09949d1df916e8b418ce0f19ca9",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "2f36f14eef3bf9978a2b81c5b3b8300d43549a2699be4b2c6ea912af081c6390",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": true
+    },
+    {
+      "schema": 1,
+      "stage": "close-candidate-is-memory-only",
+      "phase": "explicit-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:38.462Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "helperBytes": 4881,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:35Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "bdc687f50e6c63b5ddae5adf57da133325b1d09949d1df916e8b418ce0f19ca9",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "2f36f14eef3bf9978a2b81c5b3b8300d43549a2699be4b2c6ea912af081c6390",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": true,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "explicit-files-save"
+    },
+    {
+      "schema": 1,
+      "stage": "close-cancel-before-decision",
+      "phase": "explicit-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:38.574Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "helperBytes": 4881,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:35Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "bdc687f50e6c63b5ddae5adf57da133325b1d09949d1df916e8b418ce0f19ca9",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "2f36f14eef3bf9978a2b81c5b3b8300d43549a2699be4b2c6ea912af081c6390",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": true,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "explicit-files-save"
+    },
+    {
+      "schema": 1,
+      "stage": "native-close-cancel-preserves-checkpoint",
+      "phase": "explicit-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:43.617Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "helperBytes": 4881,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:35Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "bdc687f50e6c63b5ddae5adf57da133325b1d09949d1df916e8b418ce0f19ca9",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "2f36f14eef3bf9978a2b81c5b3b8300d43549a2699be4b2c6ea912af081c6390",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": true,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "explicit-files-save"
+    },
+    {
+      "schema": 1,
+      "stage": "close-discard-before-decision",
+      "phase": "explicit-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:43.906Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "helperBytes": 4881,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:35Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "bdc687f50e6c63b5ddae5adf57da133325b1d09949d1df916e8b418ce0f19ca9",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "2f36f14eef3bf9978a2b81c5b3b8300d43549a2699be4b2c6ea912af081c6390",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": true,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "explicit-files-save"
+    },
+    {
+      "schema": 1,
+      "stage": "native-discard-closed-without-saving",
+      "phase": "explicit-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:45.577Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "helperBytes": 4881,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:35Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "bdc687f50e6c63b5ddae5adf57da133325b1d09949d1df916e8b418ce0f19ca9",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "2f36f14eef3bf9978a2b81c5b3b8300d43549a2699be4b2c6ea912af081c6390",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": true,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "explicit-files-save"
+    },
+    {
+      "schema": 1,
+      "stage": "after-discard-process-cleanup",
+      "phase": "explicit-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:45.733Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "helperBytes": 4881,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:35Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "bdc687f50e6c63b5ddae5adf57da133325b1d09949d1df916e8b418ce0f19ca9",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "2f36f14eef3bf9978a2b81c5b3b8300d43549a2699be4b2c6ea912af081c6390",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": true,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "explicit-files-save"
+    },
+    {
+      "schema": 1,
+      "stage": "native-discard-restart-preserves-checkpoint",
+      "phase": "explicit-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:47.303Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "helperBytes": 4881,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:35Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "bdc687f50e6c63b5ddae5adf57da133325b1d09949d1df916e8b418ce0f19ca9",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "2f36f14eef3bf9978a2b81c5b3b8300d43549a2699be4b2c6ea912af081c6390",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "explicit-files-save"
+    },
+    {
+      "schema": 1,
+      "stage": "close-save-before-decision",
+      "phase": "explicit-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:49.354Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+      "helperBytes": 4881,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:35Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "bdc687f50e6c63b5ddae5adf57da133325b1d09949d1df916e8b418ce0f19ca9",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "2f36f14eef3bf9978a2b81c5b3b8300d43549a2699be4b2c6ea912af081c6390",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "43bb261b456decc6d3f732b54b2454685e23bc67598e932ff862e9f0e28f776c",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "explicit-files-save"
+    },
+    {
+      "schema": 1,
+      "stage": "native-close-save-committed",
+      "phase": "close-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:54.401Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+      "helperBytes": 4911,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:54Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "55c22619101c8bf794c2087db898808131e041c757310d2a49271904fca691f5",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "ff185696aed53a25e19b0c4142bb3ae69f3dc4fa10eb06a57877950830a17c24",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": true
+    },
+    {
+      "schema": 1,
+      "stage": "after-close-save-process-cleanup",
+      "phase": "close-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:54.567Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+      "helperBytes": 4911,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:54Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "55c22619101c8bf794c2087db898808131e041c757310d2a49271904fca691f5",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "ff185696aed53a25e19b0c4142bb3ae69f3dc4fa10eb06a57877950830a17c24",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": true,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "native-close-save-committed"
+    },
+    {
+      "schema": 1,
+      "stage": "native-close-save-restart-preserves-checkpoint",
+      "phase": "close-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:56.088Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+      "helperBytes": 4911,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:54Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "55c22619101c8bf794c2087db898808131e041c757310d2a49271904fca691f5",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "ff185696aed53a25e19b0c4142bb3ae69f3dc4fa10eb06a57877950830a17c24",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "native-close-save-committed"
+    },
+    {
+      "schema": 1,
+      "stage": "final-clean-native-exit",
+      "phase": "close-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:57.131Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+      "helperBytes": 4911,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:54Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "55c22619101c8bf794c2087db898808131e041c757310d2a49271904fca691f5",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "ff185696aed53a25e19b0c4142bb3ae69f3dc4fa10eb06a57877950830a17c24",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "native-close-save-committed"
+    },
+    {
+      "schema": 1,
+      "stage": "final-owned-process-cleanup",
+      "phase": "close-saved",
+      "scratch": "/home/runner/work/_temp/execs-linux-native-active-Y00bgy",
+      "recordedAt": "2026-09-24T00:17:57.134Z",
+      "activeProfileId": "f2000002-0000-4000-8000-000000000001",
+      "profiles": 2,
+      "helperSha256": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+      "helperBytes": 4911,
+      "libraryAndLiveMatch": true,
+      "unrelatedPayloadsAndMetadataPreserved": true,
+      "settingsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "protectedFiles": 12,
+      "activeUpdatedAt": "2026-09-24T00:17:54Z",
+      "dataHashes": {
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "profiles/f2000002-0000-4000-8000-000000000001/files/tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "profiles/f2000002-0000-4000-8000-000000000001/manifest.json": "55c22619101c8bf794c2087db898808131e041c757310d2a49271904fca691f5",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/config.cfg": "1c1222e72e9abb2d0d1fe23676137d3718f962354e4cfeea9c77767e0d9476cf",
+        "profiles/f2000002-0000-4000-8000-000000000002/files/tf/cfg/native-fixture.cfg": "3daad9d9ce1fc2147eb9677a0fa0d5a381f4a966e518e246c84cfa455151c819",
+        "profiles/f2000002-0000-4000-8000-000000000002/manifest.json": "c705427b880ff21954b6a2c64c59417b2b053f33b0481871ff133e08099d21bd",
+        "profiles/index.json": "ff185696aed53a25e19b0c4142bb3ae69f3dc4fa10eb06a57877950830a17c24",
+        "settings.json": "b434e918b1e2a2574457885f3b466ff0fe5c71cff00ca7d609f292da07020452"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "fab8167160c88e4e4f76202e66a283887899cb38d952aecfb0bd6c9a1d8d16af",
+        "tf/cfg/config_default.cfg": "3fdc3771c2e394f09548c35548a537784d677b03f66024a92acaa6a229a35d5a",
+        "tf/cfg/native-fixture.cfg": "3479861e447a048cb55e678fd844349b58a42ee91101071f11ed7126ecbfe6a0",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "emptyMutationContainer": false,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "native-close-save-committed"
+    }
+  ]
+}

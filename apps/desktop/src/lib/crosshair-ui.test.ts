@@ -128,12 +128,23 @@ describe("crosshair names and slots", () => {
   it("namespaces a legacy library entry that collides with a first-party shape", () => {
     const seeded = seedCrosshairDraft({
       id: "execs-crosshairs",
-      shape: "cross",
-      assignments: {},
-      library: { circle: "vtf", bomo1: "vtf" },
+      shape: "circle",
+      assignments: { tf_weapon_scattergun: "dot" },
+      library: { circle: "vtf", dot: "vtf", bomo1: "vtf" },
       color: null,
       design: null,
     });
-    expect(Object.keys(seeded.library).sort()).toEqual(["bomo1", "venom_circle"]);
+    expect(Object.keys(seeded.library).sort()).toEqual(["bomo1", "venom_circle", "venom_dot"]);
+    expect(seeded.shape).toBe("venom_circle");
+    expect(seeded.assignments.tf_weapon_scattergun).toBe("venom_dot");
+
+    const firstParty = seedCrosshairDraft({
+      id: "execs-crosshairs",
+      shape: "circle",
+      assignments: { tf_weapon_scattergun: "dot" },
+      library: { bomo1: "vtf" },
+    });
+    expect(firstParty.shape).toBe("circle");
+    expect(firstParty.assignments.tf_weapon_scattergun).toBe("dot");
   });
 });

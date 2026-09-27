@@ -31,6 +31,7 @@ const CATALOG_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 const PARTIAL_CATALOG_TTL: Duration = Duration::from_secs(60 * 60);
 const CATALOG_DEADLINE: Duration = Duration::from_secs(120);
 const ALBUM_CACHE_MAX_BYTES: u64 = 4 * MIB;
+const ALBUM_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
 const SCHEMA_CACHE_MAX_BYTES: u64 = 4 * MIB;
 const MAX_ALBUM_IMAGES: usize = 256;
 const MAX_ALBUM_URL_BYTES: usize = 4096;
@@ -83,6 +84,23 @@ pub struct HudCatalogPayload {
 }
 
 impl CatalogCache {
+    fn pin_legacy_art_urls(&mut self) {
+        for entry in &mut self.entries {
+            let old = format!("{RAW_HUD_DB}/main/hud-resources/{}/", entry.id);
+            let pinned = format!("{RAW_HUD_DB}/{}/hud-resources/{}/", self.tree_sha, entry.id);
+            if let Some(banner) = &mut entry.banner {
+                if let Some(name) = banner.strip_prefix(&old) {
+                    *banner = format!("{pinned}{name}");
+                }
+            }
+            for screenshot in &mut entry.screenshots {
+                if let Some(name) = screenshot.strip_prefix(&old) {
+                    *screenshot = format!("{pinned}{name}");
+                }
+            }
+        }
+    }
+
     fn payload(&self) -> HudCatalogPayload {
         HudCatalogPayload {
             entries: self.entries.clone(),
@@ -121,7 +139,7 @@ fn load_catalog_cache(root: &Path, dir: &Path) -> Result<Option<CatalogCache>, S
     let cache = net::read_cache_file_capped(root, &path, CATALOG_CACHE_MAX_BYTES)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<CatalogCache>(&bytes).ok());
-    let Some(cache) = cache else {
+    let Some(mut cache) = cache else {
         return Ok(None);
     };
     let valid = valid_git_sha(&cache.tree_sha)
@@ -132,6 +150,10 @@ fn load_catalog_cache(root: &Path, dir: &Path) -> Result<Option<CatalogCache>, S
     if !valid {
         return Ok(None);
     }
+    // Older caches built art URLs from moving `main` even though their JSON
+    // documents were pinned to tree_sha. Repair those URLs in memory, including
+    // when an offline launch has to use the stale catalog.
+    cache.pin_legacy_art_urls();
     Ok(Some(cache))
 }
 
@@ -225,8 +247,12 @@ fn refresh_catalog(
             documents.len()
         ));
     }
-    let (entries, failures) =
-        fetch_catalog_entries(&client, &documents, Instant::now() + CATALOG_DEADLINE)?;
+    let (entries, failures) = fetch_catalog_entries(
+        &client,
+        &tree.sha,
+        &documents,
+        Instant::now() + CATALOG_DEADLINE,
+    )?;
     finish_catalog_refresh(
         root,
         dir,
@@ -330,7 +356,8 @@ fn now_secs() -> u64 {
 /// only a majority failure is treated as "the refresh did not work". The
 /// count rides back with the entries so the cache knows it is partial.
 fn fetch_catalog_entries(
-    client: &reqwest::blocking::Client,
+    client: &net::Client,
+    tree_sha: &str,
     documents: &[(String, String)],
     deadline: Instant,
 ) -> Result<(Vec<HudCatalogEntry>, usize), String> {
@@ -341,7 +368,7 @@ fn fetch_catalog_entries(
             RemoteSource::GitHubRaw,
             CATALOG_DOCUMENT_MAX_BYTES,
         )?;
-        catalog_entry_from_json(id, &raw).map_err(|err| err.message().to_string())
+        catalog_entry_from_json(id, &raw, tree_sha).map_err(|err| err.message().to_string())
     })
 }
 
@@ -726,18 +753,21 @@ pub struct AlbumImage {
     pub height: u32,
 }
 
-/// The album behind `social.album`, cached forever by URL (albums are
-/// effectively immutable once published; a refresh is a catalog refresh).
-pub fn fetch_hud_album(album: &str) -> Result<Vec<AlbumImage>, String> {
+/// The album behind `social.album`. Showcase pages may change without the
+/// hud-db URL changing, so a normal read has a short cache lifetime and the
+/// Pictures refresh action bypasses it entirely.
+pub fn fetch_hud_album(album: &str, refresh: bool) -> Result<Vec<AlbumImage>, String> {
     let root = execs_core::try_execs_data_dir()?;
     let cache = root.join("hud-catalog").join("albums").join(format!(
         "{}.json",
         execs_core::hash::sha256_hex(album.as_bytes())
     ));
-    if let Ok(bytes) = net::read_cache_file_capped(&root, &cache, ALBUM_CACHE_MAX_BYTES) {
-        if let Ok(images) = serde_json::from_slice::<Vec<AlbumImage>>(&bytes) {
-            if valid_album_images(&images) {
-                return Ok(images);
+    if !refresh && album_cache_is_fresh(&cache, SystemTime::now()) {
+        if let Ok(bytes) = net::read_cache_file_capped(&root, &cache, ALBUM_CACHE_MAX_BYTES) {
+            if let Ok(images) = serde_json::from_slice::<Vec<AlbumImage>>(&bytes) {
+                if valid_album_images(&images) {
+                    return Ok(images);
+                }
             }
         }
     }
@@ -749,6 +779,15 @@ pub fn fetch_hud_album(album: &str) -> Result<Vec<AlbumImage>, String> {
     net::write_cache_file_within(&root, &cache, text.as_bytes())
         .map_err(|err| format!("Could not save the HUD album ({err})."))?;
     Ok(images)
+}
+
+fn album_cache_is_fresh(path: &Path, now: SystemTime) -> bool {
+    std::fs::symlink_metadata(path)
+        .ok()
+        .filter(|metadata| metadata.is_file() && !metadata.file_type().is_symlink())
+        .and_then(|metadata| metadata.modified().ok())
+        .and_then(|modified| now.duration_since(modified).ok())
+        .is_some_and(|age| age < ALBUM_CACHE_TTL)
 }
 
 fn valid_album_images(images: &[AlbumImage]) -> bool {
@@ -1032,6 +1071,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn showcase_cache_expires_and_future_timestamps_do_not_count_as_fresh() {
+        let dir = temp_dir("album-cache-age");
+        std::fs::create_dir_all(&dir).unwrap();
+        let cache = dir.join("showcase.json");
+        std::fs::write(&cache, b"[]").unwrap();
+        let modified = std::fs::metadata(&cache).unwrap().modified().unwrap();
+        assert!(album_cache_is_fresh(
+            &cache,
+            modified + ALBUM_CACHE_TTL - Duration::from_secs(1)
+        ));
+        assert!(!album_cache_is_fresh(&cache, modified + ALBUM_CACHE_TTL));
+        assert!(!album_cache_is_fresh(
+            &cache,
+            modified - Duration::from_secs(1)
+        ));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn catalog_documents_only_selects_top_level_hud_json_blobs() {
         let commit = "0123456789abcdef0123456789abcdef01234567";
         let tree = vec![
@@ -1180,8 +1238,30 @@ mod tests {
         catalog_entry_from_json(
             id,
             r#"{"name":"Rays","author":"r","repo":"https://github.com/o/r","hash":"abc"}"#,
+            "1111111111111111111111111111111111111111",
         )
         .unwrap()
+    }
+
+    #[test]
+    fn old_catalog_cache_art_urls_are_pinned_to_its_document_revision() {
+        let mut old = entry("rayshud");
+        old.banner = Some(format!(
+            "{RAW_HUD_DB}/main/hud-resources/rayshud/banner.webp"
+        ));
+        old.screenshots = vec![old.banner.clone().unwrap()];
+        let mut cache = CatalogCache {
+            tree_sha: "1111111111111111111111111111111111111111".into(),
+            entries: vec![old],
+            failures: 0,
+            fetched_at: 1,
+        };
+        cache.pin_legacy_art_urls();
+        let expected = format!(
+            "{RAW_HUD_DB}/1111111111111111111111111111111111111111/hud-resources/rayshud/banner.webp"
+        );
+        assert_eq!(cache.entries[0].banner.as_deref(), Some(expected.as_str()));
+        assert_eq!(cache.entries[0].screenshots, vec![expected]);
     }
 
     #[test]

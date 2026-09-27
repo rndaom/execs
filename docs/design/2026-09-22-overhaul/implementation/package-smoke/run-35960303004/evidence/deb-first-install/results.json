@@ -1,0 +1,758 @@
+{
+  "label": "deb-first-install",
+  "status": "passed",
+  "fixture": {
+    "exporterTag": "v0.1.8",
+    "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
+    "archives": [
+      {
+        "name": "no-hud",
+        "archiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38"
+      },
+      {
+        "name": "single-hud",
+        "archiveSha256": "4b46fb3144b5c9fcd334505672fc8513fa3f9d629f821fbb4ab53b9da4667ec9"
+      }
+    ],
+    "authored": "Schema-1 library index, profile IDs/names, settings and disposable TF2 root; source export manifests and payload bytes are unchanged except the named library identity fields. This Linux case additionally authors isolated HOME/XDG/TMPDIR and disables candidate startup update checking before recording its baseline. Actual installed-old UI export provenance must be recorded by the runner; fixture metadata alone does not prove it."
+  },
+  "isolation": {
+    "APPDATA": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH/roaming",
+    "LOCALAPPDATA": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH/local",
+    "XDG_DATA_HOME": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH/data",
+    "XDG_CONFIG_HOME": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH/config",
+    "HOME": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH/home",
+    "XDG_CACHE_HOME": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH/cache",
+    "XDG_RUNTIME_DIR": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH/runtime",
+    "TMPDIR": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH/tmp"
+  },
+  "checks": [
+    {
+      "label": "candidate-launch",
+      "application": "/usr/bin/execs",
+      "kind": "deb",
+      "process": {
+        "pid": 14960,
+        "processGroup": 14957,
+        "startTime": "58754",
+        "executable": "/usr/bin/execs"
+      },
+      "state": {
+        "profiles": [
+          "Package smoke - activeCurrent",
+          "Package smoke - saved HUDSwitch"
+        ],
+        "native": true,
+        "width": 1200,
+        "href": "tauri://localhost",
+        "height": 800,
+        "importDialog": null,
+        "switchDetail": null,
+        "editorPath": null,
+        "heading": "Comfig",
+        "profile": "Package smoke - active"
+      },
+      "capabilities": {
+        "browserName": "wry",
+        "browserVersion": "0.55.1",
+        "platformName": "linux",
+        "acceptInsecureCerts": false,
+        "strictFileInteractability": false,
+        "setWindowRect": true,
+        "unhandledPromptBehavior": "dismiss and notify",
+        "pageLoadStrategy": "normal",
+        "proxy": {},
+        "timeouts": {
+          "script": 30000,
+          "pageLoad": 300000,
+          "implicit": 0
+        }
+      },
+      "binarySha256": "edcfcb17ddb8cd6d2904f5f1dc216bac981c2d5cc24233fd34be98b613a89bc3"
+    },
+    {
+      "label": "candidate-preserved-profile-read",
+      "configClipboardSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+      "bytes": 55,
+      "expectedProfile": "Package smoke - active",
+      "nativeCopyVerified": true
+    },
+    {
+      "label": "candidate-close-before-reopen",
+      "request": {
+        "process": {
+          "pid": 14960,
+          "processGroup": 14957,
+          "startTime": "58754",
+          "executable": "/usr/bin/execs"
+        },
+        "windows": [
+          {
+            "id": 4194305,
+            "pid": 14960,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          },
+          {
+            "id": 4194307,
+            "pid": 14960,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            }
+          },
+          {
+            "id": 4194381,
+            "pid": 14960,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          4194305,
+          4194307,
+          4194308,
+          4194313,
+          4194381,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 14960,
+        "selectedId": 4194307,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      },
+      "processExitedBeforeCleanup": true,
+      "nativeExitCode": null,
+      "nativeExitStatus": "not observed; external driver owns child"
+    },
+    {
+      "label": "candidate-reopen",
+      "application": "/usr/bin/execs",
+      "kind": "deb",
+      "process": {
+        "pid": 15085,
+        "processGroup": 15082,
+        "startTime": "59019",
+        "executable": "/usr/bin/execs"
+      },
+      "state": {
+        "profiles": [
+          "Package smoke - activeCurrent",
+          "Package smoke - saved HUDSwitch"
+        ],
+        "native": true,
+        "width": 1200,
+        "href": "tauri://localhost",
+        "height": 800,
+        "importDialog": null,
+        "switchDetail": null,
+        "editorPath": null,
+        "heading": "Comfig",
+        "profile": "Package smoke - active"
+      },
+      "capabilities": {
+        "browserName": "wry",
+        "browserVersion": "0.55.1",
+        "platformName": "linux",
+        "acceptInsecureCerts": false,
+        "strictFileInteractability": false,
+        "setWindowRect": true,
+        "unhandledPromptBehavior": "dismiss and notify",
+        "pageLoadStrategy": "normal",
+        "proxy": {},
+        "timeouts": {
+          "script": 30000,
+          "pageLoad": 300000,
+          "implicit": 0
+        }
+      },
+      "binarySha256": "edcfcb17ddb8cd6d2904f5f1dc216bac981c2d5cc24233fd34be98b613a89bc3"
+    },
+    {
+      "label": "candidate-profile-after-reopen",
+      "configClipboardSha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+      "bytes": 55,
+      "expectedProfile": "Package smoke - active",
+      "nativeCopyVerified": true
+    },
+    {
+      "label": "candidate-final-close",
+      "request": {
+        "process": {
+          "pid": 15085,
+          "processGroup": 15082,
+          "startTime": "59019",
+          "executable": "/usr/bin/execs"
+        },
+        "windows": [
+          {
+            "id": 4194305,
+            "pid": 15085,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 10,
+              "y": 10,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          },
+          {
+            "id": 4194307,
+            "pid": 15085,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 2,
+            "windowClass": 1,
+            "overrideRedirect": false,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": {
+              "name": "execs",
+              "class": "Execs"
+            },
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 800,
+              "borderWidth": 0,
+              "depth": 24
+            }
+          },
+          {
+            "id": 4194433,
+            "pid": 15085,
+            "title": "execs",
+            "deleteProtocol": true,
+            "protocolAtoms": [
+              239,
+              242,
+              254,
+              266
+            ],
+            "mapState": 0,
+            "windowClass": 2,
+            "overrideRedirect": true,
+            "parent": 1293,
+            "root": 1293,
+            "transientFor": null,
+            "classHint": null,
+            "geometry": {
+              "x": -100,
+              "y": -100,
+              "width": 10,
+              "height": 10,
+              "borderWidth": 0,
+              "depth": 0
+            }
+          }
+        ],
+        "treeWindowIds": [
+          1293,
+          2097153,
+          4194305,
+          4194307,
+          4194308,
+          4194313,
+          4194433,
+          8388609
+        ],
+        "mode": "request",
+        "pid": 15085,
+        "selectedId": 4194307,
+        "requested": "WM_PROTOCOLS/WM_DELETE_WINDOW"
+      },
+      "processExitedBeforeCleanup": true,
+      "nativeExitCode": null,
+      "nativeExitStatus": "not observed; external driver owns child"
+    }
+  ],
+  "captures": [
+    {
+      "file": "candidate-preserved-profile-read.png",
+      "state": {
+        "profiles": [
+          "Package smoke - activeCurrent",
+          "Package smoke - saved HUDSwitch"
+        ],
+        "native": true,
+        "width": 1200,
+        "href": "tauri://localhost",
+        "height": 800,
+        "importDialog": null,
+        "switchDetail": null,
+        "editorPath": "Contents of tf/cfg/config.cfg",
+        "heading": "Files",
+        "profile": "Package smoke - active"
+      },
+      "sha256": "fd6e84be6b50cd11f6819d2a4e65f3c1a1981ed72334d78dc0b29fc999a753bc",
+      "stableFrames": 3
+    },
+    {
+      "file": "candidate-profile-after-reopen.png",
+      "state": {
+        "profiles": [
+          "Package smoke - activeCurrent",
+          "Package smoke - saved HUDSwitch"
+        ],
+        "native": true,
+        "width": 1200,
+        "href": "tauri://localhost",
+        "height": 800,
+        "importDialog": null,
+        "switchDetail": null,
+        "editorPath": "Contents of tf/cfg/config.cfg",
+        "heading": "Files",
+        "profile": "Package smoke - active"
+      },
+      "sha256": "500ca12d2ca5620065d10c62b6ee4042f1757e023c630b83c19d73e2f7e74e11",
+      "stableFrames": 3
+    }
+  ],
+  "preservation": [
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "before-package-installation",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH",
+      "recordedAt": "2026-09-24T05:39:22.531Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "9ae7ad534e294e82755cc18006f27e5feaa79d372c4d496213814fd9e558c67b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bc5b4c8d812571a60348a69db635b9bdeb9a1a8159685767f9959596bd412bed",
+        "profiles/index.json": "54b64f48ca8f4cb6105b6447b0456c73f85209270b89ed013198b215e9f707e6",
+        "settings.json": "01ee12d55399e4f01023921a9cab99263e4eb26e133c07a6e30b1d9116f74e7f"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2
+    },
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "after-candidate-package-install",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH",
+      "recordedAt": "2026-09-24T05:39:25.602Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "9ae7ad534e294e82755cc18006f27e5feaa79d372c4d496213814fd9e558c67b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bc5b4c8d812571a60348a69db635b9bdeb9a1a8159685767f9959596bd412bed",
+        "profiles/index.json": "54b64f48ca8f4cb6105b6447b0456c73f85209270b89ed013198b215e9f707e6",
+        "settings.json": "01ee12d55399e4f01023921a9cab99263e4eb26e133c07a6e30b1d9116f74e7f"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "before-package-installation"
+    },
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "candidate-preserved-native-read",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH",
+      "recordedAt": "2026-09-24T05:39:28.019Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "9ae7ad534e294e82755cc18006f27e5feaa79d372c4d496213814fd9e558c67b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bc5b4c8d812571a60348a69db635b9bdeb9a1a8159685767f9959596bd412bed",
+        "profiles/index.json": "54b64f48ca8f4cb6105b6447b0456c73f85209270b89ed013198b215e9f707e6",
+        "settings.json": "01ee12d55399e4f01023921a9cab99263e4eb26e133c07a6e30b1d9116f74e7f"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "after-candidate-package-install"
+    },
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "candidate-closed",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH",
+      "recordedAt": "2026-09-24T05:39:28.369Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "9ae7ad534e294e82755cc18006f27e5feaa79d372c4d496213814fd9e558c67b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bc5b4c8d812571a60348a69db635b9bdeb9a1a8159685767f9959596bd412bed",
+        "profiles/index.json": "54b64f48ca8f4cb6105b6447b0456c73f85209270b89ed013198b215e9f707e6",
+        "settings.json": "01ee12d55399e4f01023921a9cab99263e4eb26e133c07a6e30b1d9116f74e7f"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "candidate-preserved-native-read"
+    },
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "candidate-native-reopen",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH",
+      "recordedAt": "2026-09-24T05:39:30.104Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "9ae7ad534e294e82755cc18006f27e5feaa79d372c4d496213814fd9e558c67b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bc5b4c8d812571a60348a69db635b9bdeb9a1a8159685767f9959596bd412bed",
+        "profiles/index.json": "54b64f48ca8f4cb6105b6447b0456c73f85209270b89ed013198b215e9f707e6",
+        "settings.json": "01ee12d55399e4f01023921a9cab99263e4eb26e133c07a6e30b1d9116f74e7f"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "candidate-closed"
+    },
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "candidate-final-exit",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH",
+      "recordedAt": "2026-09-24T05:39:30.463Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "9ae7ad534e294e82755cc18006f27e5feaa79d372c4d496213814fd9e558c67b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bc5b4c8d812571a60348a69db635b9bdeb9a1a8159685767f9959596bd412bed",
+        "profiles/index.json": "54b64f48ca8f4cb6105b6447b0456c73f85209270b89ed013198b215e9f707e6",
+        "settings.json": "01ee12d55399e4f01023921a9cab99263e4eb26e133c07a6e30b1d9116f74e7f"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "candidate-native-reopen"
+    },
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "after-owned-package-removal",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH",
+      "recordedAt": "2026-09-24T05:39:30.623Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "9ae7ad534e294e82755cc18006f27e5feaa79d372c4d496213814fd9e558c67b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bc5b4c8d812571a60348a69db635b9bdeb9a1a8159685767f9959596bd412bed",
+        "profiles/index.json": "54b64f48ca8f4cb6105b6447b0456c73f85209270b89ed013198b215e9f707e6",
+        "settings.json": "01ee12d55399e4f01023921a9cab99263e4eb26e133c07a6e30b1d9116f74e7f"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "candidate-final-exit"
+    },
+    {
+      "schema": 1,
+      "phase": "preserved",
+      "stage": "after-final-owned-process-cleanup",
+      "scratch": "/home/runner/work/_temp/execs-development-packages-sq7J6r/execs-development-package-LBF9JH",
+      "recordedAt": "2026-09-24T05:39:30.626Z",
+      "dataHashes": {
+        "profiles/blobs/sha256/ec/ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000001/manifest.json": "9ae7ad534e294e82755cc18006f27e5feaa79d372c4d496213814fd9e558c67b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/autoexec.cfg": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/cfg/overrides/execs_hud_fixture.cfg": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/info.vdf": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/files/tf/custom/fixturehud/resource/ui/layout.res": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+        "profiles/f20a0001-8d01-4000-8000-000000000002/manifest.json": "bc5b4c8d812571a60348a69db635b9bdeb9a1a8159685767f9959596bd412bed",
+        "profiles/index.json": "54b64f48ca8f4cb6105b6447b0456c73f85209270b89ed013198b215e9f707e6",
+        "settings.json": "01ee12d55399e4f01023921a9cab99263e4eb26e133c07a6e30b1d9116f74e7f"
+      },
+      "liveHashes": {
+        "tf/cfg/config.cfg": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+        "tf/cfg/config_default.cfg": "36b3be5cee7749c1685084cce12e515bc5c6044988639de5d0e1332534bba585",
+        "tf/cfg/overrides/compat.cfg": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+        "tf/custom/compat-pack.vpk": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+        "tf/custom/mastercomfig-base.vpk": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+        "tf/steam.inf": "6c563e4607741b646b21978e84ce6fe498e9a88dd0e356647ae7a8ad66e28cc1"
+      },
+      "exportHashes": {},
+      "archiveProof": null,
+      "originalProfilesPreserved": true,
+      "originalPayloadsPreserved": true,
+      "steamDirectoriesAbsent": true,
+      "activeProfileId": "f20a0001-8d01-4000-8000-000000000001",
+      "profiles": 2,
+      "exactCheckpointPreserved": true,
+      "checkpointStage": "after-owned-package-removal"
+    }
+  ],
+  "debianBundleIdentity": {
+    "buildSha256": "06bbf660ea1285acd299a0824ec3964a63abd29b5159ac7c73a45d6ceb007622",
+    "packagedSha256": "edcfcb17ddb8cd6d2904f5f1dc216bac981c2d5cc24233fd34be98b613a89bc3",
+    "markerOffset": 2086557
+  },
+  "candidate": {
+    "path": "/home/runner/work/execs/execs/apps/desktop/src-tauri/target/release/bundle/deb/execs_0.2.0_amd64.deb",
+    "kind": "deb",
+    "version": "0.2.0",
+    "sha256": "77693d604e64fb45f95132e0dfe14ff9c818f4b7f3967928c8aa7f15ea88601b",
+    "bytes": 13671718,
+    "binarySha256": "edcfcb17ddb8cd6d2904f5f1dc216bac981c2d5cc24233fd34be98b613a89bc3",
+    "packagedNotices": true
+  },
+  "transition": "Debian fresh package installation",
+  "finalization": [
+    {
+      "stage": "owned-process-cleanup",
+      "status": "passed"
+    },
+    {
+      "stage": "final-fixture-comparison",
+      "status": "passed"
+    }
+  ]
+}

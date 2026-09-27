@@ -25,7 +25,8 @@ export const sources = [
     url: "https://raw.githubusercontent.com/mastercomfig/mastercomfig/c7b52734b252bb521cd22e8243bca6f81dd3ab41/config/mastercomfig/cfg/comfig/comfig.cfg",
     revision: "c7b52734b252bb521cd22e8243bca6f81dd3ab41",
     date: "2026-09-20",
-    description: "mastercomfig alias declarations; MIT mastercomfig contributors",
+    description:
+      "mastercomfig TF2 cfg settings and alias declarations; MIT mastercomfig contributors",
   },
   {
     url: "https://raw.githubusercontent.com/mastercomfig/mastercomfig/c7b52734b252bb521cd22e8243bca6f81dd3ab41/config/mastercomfig/cfg/comfig/define_presets.cfg",
@@ -44,6 +45,12 @@ export const sources = [
     revision: "b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474",
     date: "2026-09-20",
     description: "Valve SDK MAX_FOV declaration; metadata only",
+  },
+  {
+    url: "https://raw.githubusercontent.com/mastercomfig/mastercomfig/c7b52734b252bb521cd22e8243bca6f81dd3ab41/config/cfg/addons/flat-mouse.cfg",
+    revision: "c7b52734b252bb521cd22e8243bca6f81dd3ab41",
+    date: "2026-09-20",
+    description: "mastercomfig TF2 flat-mouse addon settings; MIT mastercomfig contributors",
   },
 ];
 export default {
@@ -9536,6 +9543,11 @@ export default {
     s: [0],
     a: "Pinned Windows TF2 dump; Linux and current retail availability unverified",
   },
+  m_rawinput_onetime_reset: {
+    c: 0,
+    s: [7],
+    a: "Observed in pinned mastercomfig TF2 addon; current retail availability and flags unverified",
+  },
   m_side: {
     c: 0,
     d: "0",
@@ -16225,6 +16237,12 @@ export default {
     h: "Enable bi-cubic (high quality) lightmap sampling.",
     s: [0],
     a: "Pinned Windows TF2 dump; Linux and current retail availability unverified",
+  },
+  r_lightmap_bicubic_set: {
+    c: 0,
+    s: [3],
+    a: "Observed in pinned mastercomfig TF2 cfg; current retail availability and flags unverified",
+    h: "Marks that mastercomfig has set the bicubic lightmap option.",
   },
   r_lightstyle: {
     c: 0,

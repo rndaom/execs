@@ -1,0 +1,89 @@
+{
+  "passed": true,
+  "checkedUtc": "2026-09-22T17:23:41.9881488Z",
+  "checks": {
+    "lockedOnlyRecordedRootlessSettings": true,
+    "beforeAndFailureBytesExact": true,
+    "retryAndReopenBytesExact": true,
+    "failedPreferenceRemainedFalse": true,
+    "retriedPreferencePersistedTrue": true,
+    "allRetainedRootsEmpty": true,
+    "allRetainedMotionPreferencesSystem": true,
+    "noProfileLibrariesCreated": true,
+    "allExpectedSessionBinaries": true,
+    "allSessionProcessesUnpackaged": true,
+    "allSessionsExitedNormally": true
+  },
+  "sourceFiles": {
+    "beforeFailure": {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\settings-before-failure.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "bytes": 92,
+      "tf2Root": "",
+      "startupUpdates": false,
+      "motion": "system"
+    },
+    "afterFailure": {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\settings-after-failure.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "bytes": 92,
+      "tf2Root": "",
+      "startupUpdates": false,
+      "motion": "system"
+    },
+    "afterRetry": {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\settings-after-retry.json",
+      "sourceSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "bytes": 120,
+      "tf2Root": "",
+      "startupUpdates": true,
+      "motion": "system"
+    },
+    "afterReopenAndClose": {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130804-rootless-4ed33d3a\\roaming\\execs\\settings.json",
+      "sourceSha256": "1111A14BD2A97CDA57AFD4F66F884CAC4AD7DA73B4888C44F1F3E71AECC5A508",
+      "bytes": 120,
+      "tf2Root": "",
+      "startupUpdates": true,
+      "motion": "system"
+    },
+    "preFixAfterClose": {
+      "source": "G:\\Projects\\execs\\.artifacts\\native-isolation\\20260922-130055-rootless-2da135b3\\roaming\\execs\\settings.json",
+      "sourceSha256": "DE8265F69E31FB253021A652776040F041000BB1BA6C7F75EE66F8BD1CD08A85",
+      "bytes": 92,
+      "tf2Root": "",
+      "startupUpdates": false,
+      "motion": "system"
+    }
+  },
+  "sessions": [
+    {
+      "name": "preFix",
+      "appPid": 23100,
+      "executableSha256": "7D03B4A55499835DDEF908D228842347C60E8D2FD5803732B1DB8C0D8CBA6CA4",
+      "expectedBinaryMatched": true,
+      "unpackagedExplorerHelperAndApp": true,
+      "normalExit": true,
+      "exitedUtc": "2026-09-22T17:03:50.191539Z"
+    },
+    {
+      "name": "zoomAndRetry",
+      "appPid": 36136,
+      "executableSha256": "E09343CC38637D2B99D2FEE1843C3FA15FA73B741218B77EFC2CB0FA9DAA1A65",
+      "expectedBinaryMatched": true,
+      "unpackagedExplorerHelperAndApp": true,
+      "normalExit": true,
+      "exitedUtc": "2026-09-22T17:16:23.8538646Z"
+    },
+    {
+      "name": "reopened",
+      "appPid": 12516,
+      "executableSha256": "E09343CC38637D2B99D2FEE1843C3FA15FA73B741218B77EFC2CB0FA9DAA1A65",
+      "expectedBinaryMatched": true,
+      "unpackagedExplorerHelperAndApp": true,
+      "normalExit": true,
+      "exitedUtc": "2026-09-22T17:19:29.7346005Z"
+    }
+  ],
+  "note": "Read-only comparison of retained disposable settings snapshots and session records. Hashes identify original source bytes, before archive normalization. This does not measure a numeric WebView2 zoom factor or qualify Windows text scaling, screen-reader speech, other panes or real player data."
+}

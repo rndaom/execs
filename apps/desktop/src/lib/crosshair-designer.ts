@@ -66,6 +66,32 @@ export function defaultCrosshairDesign(): CrosshairDesign {
   };
 }
 
+/** Start a new editable design from the selected fixed shape. The original
+ * remains in Shapes when the user saves this as a named design. */
+export function designFromPreset(shape: string): CrosshairDesign {
+  const base = { ...defaultCrosshairDesign(), thickness: 1, outline: 0, gap: 0 };
+  switch (shape) {
+    case "dot":
+      return { ...base, style: "dot", size: 4, dotSize: 1 };
+    case "cross":
+      return { ...base, style: "cross", size: 24 };
+    case "plus-gap":
+      return { ...base, style: "cross", size: 24, gap: 4 };
+    case "circle":
+      return { ...base, style: "circle", size: 12, thickness: 2 };
+    case "t":
+      return { ...base, style: "t", size: 12 };
+    case "execs-chevron":
+      return { ...base, style: "chevron", size: 12, thickness: 2 };
+    case "execs-diamond":
+      return { ...base, style: "diamond", size: 12, thickness: 2 };
+    case "execs-ring-cross":
+      return { ...base, style: "ring-cross", size: 12, thickness: 2 };
+    default:
+      return defaultCrosshairDesign();
+  }
+}
+
 function clampTo(value: number, limits: { min: number; max: number }): number {
   return Math.min(
     limits.max,

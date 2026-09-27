@@ -1,0 +1,13 @@
+Command failed: pwsh -NoLogo -NoProfile -NonInteractive -File D:\a\execs\execs\scripts\windows-package-native.ps1 -Action Cleanup -Request -
+[31;1mException: [0mD:\a\execs\execs\scripts\windows-package-native.ps1:225[0m
+[31;1m[0m[36;1mLine |[0m
+[31;1m[0m[36;1m[36;1m 225 | [0m . ses.pid)) { [36;1mthrow 'Cleanup target is outside the owned app/driver/bro[0m .[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mCleanup target is outside the owned app/driver/browser tree.[0m
+
+
+[31;1mException: [0mD:\a\execs\execs\scripts\windows-package-native.ps1:225[0m
+[31;1m[0m[36;1mLine |[0m
+[31;1m[0m[36;1m[36;1m 225 | [0m . ses.pid)) { [36;1mthrow 'Cleanup target is outside the owned app/driver/bro[0m .[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mCleanup target is outside the owned app/driver/browser tree.[0m

@@ -6,11 +6,13 @@ import {
 } from "./files-limits";
 import { cfgSourceLinks } from "./files-reference";
 import { type LintBundleResult, lintBundle } from "./files-ui";
+import type { GameplayLayer } from "./gameplay-ui";
 
 export type FilesAnalysisSnapshot = {
   profile: string | null;
   files: { path: string; text: string }[];
   hudId?: string | null;
+  layer?: GameplayLayer;
   identity: string;
 };
 export type FilesAnalysis = {
@@ -94,7 +96,7 @@ export function runFilesAnalysis(snapshot: FilesAnalysisSnapshot): FilesAnalysis
   validateAnalysisSnapshot(snapshot);
   return {
     identity: snapshot.identity,
-    result: lintBundle(snapshot.files, snapshot.hudId),
+    result: lintBundle(snapshot.files, snapshot.hudId, snapshot.layer),
     links: cfgSourceLinks(snapshot.files),
   };
 }
