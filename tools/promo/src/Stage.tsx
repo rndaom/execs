@@ -418,7 +418,12 @@ export function Stage({
       ) : null}
 
       {keys
-        .filter((key) => frame >= key.at && frame < key.at + 26)
+        .filter((key) => {
+          // Like pops, a key press belongs to its shot and ends at the next cut.
+          const cut =
+            camera.find((entry) => entry.cut && entry.at > key.at)?.at ?? Number.POSITIVE_INFINITY;
+          return frame >= key.at && frame < Math.min(key.at + 26, cut);
+        })
         .map((key) => {
           const fade = 1 - ramp(frame, key.at + 18, 8);
           return (

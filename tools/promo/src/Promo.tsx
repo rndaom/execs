@@ -495,8 +495,8 @@ const CAMERA: CameraKey[] = [
   { at: on("comfig"), rect: { x: 220, y: 110, width: 1180, height: 470 }, cut: true },
   { at: on("clickHigh") + 6, rect: { x: 380, y: 0, width: 1060, height: 330 }, length: 16 },
   { at: on("binds"), rect: { x: 700, y: 395, width: 600, height: 230 }, cut: true },
-  // Shapes and the large sprite preview, below the pack notice line.
-  { at: on("crosshair"), rect: { x: 240, y: 278, width: 780, height: 380 }, cut: true },
+  // The shape tabs and grid, the sprite and the size and colour below them.
+  { at: on("crosshair"), rect: { x: 240, y: 180, width: 800, height: 520 }, cut: true },
   { at: on("viewmodels"), rect: { x: 236, y: 290, width: 720, height: 330 }, cut: true },
   { at: at(10, 1), rect: { x: 700, y: 330, width: 700, height: 300 }, length: 12 },
   // The library: its heading, the source filter and the first rows.

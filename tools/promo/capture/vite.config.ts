@@ -52,6 +52,12 @@ const EDITS: Record<string, [string, string][]> = {
     // Steam already has the profile's launch options, the usual state, so the
     // header carries no sample-data warning.
     ['const steamOptions = "-novid";', "const steamOptions = launchOptions;"],
+    // The sample crosshair pack was built by this version, so Crosshair shows
+    // no legacy-pack notice.
+    [
+      'state: crosshair ? ("unverified" as const) : ("none" as const)',
+      'state: crosshair ? ("current" as const) : ("none" as const)',
+    ],
     // Sounds starts from TF2's default hit sound, not a retired catalog sound
     // with its legacy notice.
     [
