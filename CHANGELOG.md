@@ -23,6 +23,9 @@ User-facing changes only. The release workflow publishes the matching
 - The comfig.app hit and kill sound library is back in Sounds, with favorites, a source filter
   (All, Favorites, Built into TF2, comfig.app) and a Suggested sort that lists sounds made for the
   slot you are choosing first. comfig.app sounds can be boosted again.
+- Sounds has a preview volume at the bottom of the page, in reach wherever you scroll, with mute
+  and Stop. It starts at 50%, is remembered, and only changes previews in execs, not what TF2
+  plays.
 - Consistent controls: every dropdown, fold and HUD option list uses the same caret, more-actions
   buttons look alike, and Inventory items and profiles open their actions on right-click. Repeated
   and decorative notes were trimmed across Crosshair, Sounds, Viewmodels, App settings and first run.
