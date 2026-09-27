@@ -2,8 +2,8 @@
 
 execs installs and displays content from the TF2 community. This file records
 the outside projects it uses, how it uses them, and the license or permission
-evidence identified for each. This file describes the in-development 0.2.0
-branch; the public v0.1.8 release may still offer catalogs retired here. Some
+evidence identified for each. This file describes execs 0.2.0; earlier
+releases may still offer catalogs retired here. Some
 content is shipped in this repository; other content is fetched on the
 player's machine under source-specific revision and validation rules. A source
 pin is not a rights grant.

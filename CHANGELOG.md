@@ -5,6 +5,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-27
+
 ### Added
 
 - A refreshed look across every pane: warm dark surfaces, TF2 orange for selections, clearer

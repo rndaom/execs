@@ -11,8 +11,8 @@ body:
     id: version
     attributes:
       label: execs version
-      description: Shown in the footer of the app window.
-      placeholder: "0.1.0"
+      description: Shown in App settings (in the app footer before 0.2.0).
+      placeholder: "0.2.0"
     validations:
       required: true
   - type: dropdown
@@ -30,7 +30,7 @@ body:
     id: last-good
     attributes:
       label: Last version that worked
-      description: Fill this in if it broke after an update. Shown in the footer.
+      description: Fill this in if it broke after an update.
       placeholder: "0.1.0"
   - type: dropdown
     id: os

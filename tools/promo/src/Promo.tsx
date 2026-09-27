@@ -253,7 +253,7 @@ function Beat({ title, line, detail, number }: (typeof BEATS)[number] & { number
           color: theme.inkMuted,
         }}
       >
-        Development overview · 0.2.0
+        execs 0.2.0
       </div>
     </AbsoluteFill>
   );

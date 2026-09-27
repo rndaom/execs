@@ -14,9 +14,7 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-This README describes the in-development 0.2.0 branch. The Download link installs the latest public release, v0.1.8; its controls and available catalogs differ from this branch. The animation and screenshots below show unreleased development behavior. The screenshots use browser preview data, not a packaged native session.
-
-![Text overview of execs development features](docs/media/promo.gif)
+![Text overview of execs features](docs/media/promo.gif)
 
 ## What it does
 
@@ -33,7 +31,7 @@ A profile is everything that makes your install yours: config, binds, HUD, cross
 - **Profiles.** Rename, duplicate, delete, export and import profiles; compare a profile with the current one before switching; and keep local restore points you can restore as a new profile.
 - **App settings.** Storage use with a safe Clear downloads, a read-only health check, update and motion preferences, and Uninstall.
 
-### Development preview
+### Screenshots
 
 <p align="center">
   <img src="docs/media/development-comfig.png" width="49%" alt="Comfig pane with presets and official addons over the dot-field backdrop, in browser preview data">
@@ -74,7 +72,7 @@ If the game looks wrong afterwards, verify game files in Steam.
 
 ## Bugs
 
-[Open an issue](https://github.com/rndaom/execs/issues/new/choose). The footer of the app has **Report a bug** and **Copy diagnostics**; review copied diagnostics for personal details before posting them. Questions go in [Discussions](https://github.com/rndaom/execs/discussions). A vulnerability that could write the wrong file belongs in [SECURITY.md](SECURITY.md), not a public issue.
+[Open an issue](https://github.com/rndaom/execs/issues/new/choose). **App settings** has **Report a bug** and **Copy diagnostics**; review copied diagnostics for personal details before posting them. Questions go in [Discussions](https://github.com/rndaom/execs/discussions). A vulnerability that could write the wrong file belongs in [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Credits
 

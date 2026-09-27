@@ -61,8 +61,9 @@ import again. At the 0.1.3 release, creator-profile ZIP imports and profile-scop
 preloader metadata remained on the minor track. Creator ZIP import is included
 in the owner-assigned 0.1.6 scope; profile-scoped preloaders remain on 0.2.0.
 See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and implementation evidence.
-Next planned minor: **0.2.0**. The first-Thursday cadence is the default;
-the combined 0.2.0 release has no fixed date while qualification remains open.
+Next minor: **0.2.0**. PR #60 merged the combined work into `main` on
+September 27, 2026; the release PR dates its changelog section, and the tag
+waits for the owner's go-ahead. The first-Thursday cadence remains the default.
 
 ## Branch names and release history
 
