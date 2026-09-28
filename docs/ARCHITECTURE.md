@@ -4,7 +4,7 @@ execs is a Windows + Linux desktop companion for Team Fortress 2 (Tauri 2, Rust 
 
 ## Repo
 
-The current 0.2.0 qualification checkpoint is recorded in [release-0.2.0-readiness.md](release-0.2.0-readiness.md). On September 27, 2026 the owner decided that Inventory ships in 0.2.0; a refreshed signed candidate must still include it.
+The 0.2.0 qualification record is [release-0.2.0-readiness.md](release-0.2.0-readiness.md). On September 27, 2026 the owner decided that Inventory ships in 0.2.0, and it was published in v0.2.0 that day.
 
 ```
 apps/desktop/            Tauri app (the product)
@@ -136,7 +136,7 @@ Runtime sources and packaged exceptions are credited in the UI and `THIRD_PARTY.
 
 Playbook: `docs/RELEASE.md`. Users install published GitHub Releases only. `main`, Linear, and draft / `workflow_dispatch` builds are private development. No nightlies, no public prereleases, no "try this build."
 
-The current 0.2.0 release scope and qualification status live in [release-0.2.0-readiness.md](release-0.2.0-readiness.md). Inventory is in the 0.2.0 scope by the owner's September 27, 2026 decision; the refreshed release candidate must include it. Design concepts and qualification evidence live in [the overhaul record](design/2026-09-22-overhaul/README.md).
+The 0.2.0 release scope and qualification record live in [release-0.2.0-readiness.md](release-0.2.0-readiness.md). Inventory shipped in v0.2.0 by the owner's September 27, 2026 decision. Design concepts and qualification evidence live in [the overhaul record](design/2026-09-22-overhaul/README.md).
 
 In-app updater (Tauri updater plugin) against `https://github.com/rndaom/execs/releases/latest/download/latest.json`; check on launch and from App settings (or the first-run footer), install only on click, no telemetry. Windows NSIS per-user with `installMode: passive`, static MSVC CRT, `longPathAware` manifest; Linux AppImage (GStreamer bundled, self-updates) and `.deb` (first install only; the publish job strips it from `latest.json`). Signing: updater minisign key in CI secrets; installers are not Authenticode-signed; on September 26, 2026 the owner decided 0.2.0 ships unsigned and moved Authenticode (RND-191) out of the release. App settings has Report a bug (issue forms) and Copy diagnostics (`get_diagnostics`); first-run screens link there from their footer.
 
