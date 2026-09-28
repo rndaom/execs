@@ -246,7 +246,9 @@ When you do ship:
 
 1. Freeze the milestone. Anything over the three-feature budget moves to
    the next minor. Do not add "one more thing" on release day.
-2. Run the compatibility list.
+2. Run the compatibility list, then `node scripts/pinned-sources.mjs`. New comfig.app uploads and
+   HUD schema fixes reach players only when a release bumps these pins, and a HUD from the live
+   catalog must not ship with a schema known to be outdated.
 3. Move `CHANGELOG.md` `[Unreleased]` into `## [0.Y.0] - YYYY-MM-DD`
    and leave a fresh empty `[Unreleased]`.
 4. Bump the four version files. Commit. Tag `v0.Y.0` and push the tag.
@@ -291,6 +293,9 @@ unchecked until the owner authorizes the release and the publish succeeds.
 
 - [ ] Milestone frozen; leftover issues moved off it
 - [ ] Compatibility list walked
+- [ ] Pinned sources current: `node scripts/pinned-sources.mjs` reports no change to comfig.app's
+      hit sound list or TF2HUD.Editor's schemas since `COMFIG_INDEX_COMMIT` and `SCHEMA_COMMIT`;
+      otherwise review the change, bump the pin and rerun the tests
 - [ ] `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section
 - [ ] Four version files equal `X.Y.Z`
 - [ ] Tag is `vX.Y.Z` on that commit
