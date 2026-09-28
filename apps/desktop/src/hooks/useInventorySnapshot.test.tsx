@@ -164,3 +164,22 @@ it("refreshes after the game closes with a reconnect cooldown and stops after un
   await advance(LONG_WAIT_MS);
   expect(getInventory).toHaveBeenCalledTimes(2);
 });
+
+it("reads again when Inventory is opened again, never while it stays open", async () => {
+  await render();
+  expect(getInventory).toHaveBeenCalledTimes(1);
+  props.active = false;
+  await render();
+  await advance(LONG_WAIT_MS);
+  props.active = true;
+  await render();
+  expect(getInventory).toHaveBeenCalledTimes(2);
+  // Leaving and returning within the reconnect cooldown waits for it.
+  props.active = false;
+  await render();
+  props.active = true;
+  await render();
+  expect(getInventory).toHaveBeenCalledTimes(2);
+  await advance(30_000);
+  expect(getInventory).toHaveBeenCalledTimes(3);
+});

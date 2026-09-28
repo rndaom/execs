@@ -7,8 +7,8 @@ const MIN_RECONNECT_MS = 30_000;
 /**
  * One bounded Steam connection at a time, only while the backpack is in use.
  * Each read runs TF2's Steam client briefly, so Steam shows the player as in
- * TF2 while it lasts. Reads happen when Inventory is first used, after TF2
- * closes and on Refresh, never on a timer; a failed read retries with backoff.
+ * TF2 while it lasts. Reads happen when Inventory is opened, after TF2 closes
+ * and on Refresh, never on a timer; a failed read retries with backoff.
  */
 export function useInventorySnapshot(api: Api, active: boolean, running: boolean, busy: boolean) {
   const [snapshot, setSnapshot] = useState<InventorySnapshot | null>(null);
@@ -24,6 +24,7 @@ export function useInventorySnapshot(api: Api, active: boolean, running: boolean
   const failures = useRef(0);
   const revision = useRef(0);
   const wasRunning = useRef(running);
+  const wasActive = useRef(active);
   const schedule = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -86,6 +87,9 @@ export function useInventorySnapshot(api: Api, active: boolean, running: boolean
   useEffect(() => {
     if (wasRunning.current && !running) nextDue.current = 0;
     wasRunning.current = running;
+    // Opening Inventory again reads again (after the reconnect cooldown).
+    if (!wasActive.current && active) nextDue.current = 0;
+    wasActive.current = active;
     let timer: ReturnType<typeof setTimeout> | undefined;
     function tick() {
       clearTimeout(timer);
