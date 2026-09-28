@@ -111,8 +111,8 @@ pub async fn run_automatic_tidy_up(
         ) else {
             return Ok(None);
         };
-        execs_core::tidy_up::record_automatic_tidy(&data_dir)?;
-        execs_core::activity_log::record("tidy", &execs_core::tidy_up::summary(&report));
+        execs_core::tidy_up::record_automatic_tidy(&data_dir, report.skipped.is_empty())?;
+        crate::activity::record("tidy", &execs_core::tidy_up::summary(&report));
         Ok((report.changed() || report.valve_cfgs_missing > 0).then_some(report))
     })
     .await
@@ -131,7 +131,7 @@ pub async fn tidy_up_again(
             &root,
             &execs_core::process_lock::live_process_names(),
         )?;
-        execs_core::activity_log::record("tidy", &execs_core::tidy_up::summary(&report));
+        crate::activity::record("tidy", &execs_core::tidy_up::summary(&report));
         Ok(report)
     })
     .await;

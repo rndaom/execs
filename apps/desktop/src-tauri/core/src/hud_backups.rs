@@ -432,12 +432,28 @@ pub fn move_live_hud_backup_to_data(
         }
     }
     let destination = parent.join(name);
-    if fs::symlink_metadata(&destination).is_ok() {
-        return Err(io("A moved copy of this HUD backup already exists."));
-    }
+    let already_moved = match fs::symlink_metadata(&destination) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        // An earlier move published this exact copy but could not remove the
+        // TF2 copy; finish that move instead of refusing forever.
+        Ok(_)
+            if snapshot(&data_dir, &destination)
+                .is_ok_and(|moved| moved.revision() == data.revision()) =>
+        {
+            true
+        }
+        _ => {
+            return Err(io(
+                "A different moved copy of this HUD backup already exists.",
+            ))
+        }
+    };
     let staged = parent.join(format!(".moving-{}", random_token()));
-    fs::create_dir(&staged).map_err(io)?;
     let copied = (|| {
+        if already_moved {
+            return Ok(());
+        }
+        fs::create_dir(&staged).map_err(io)?;
         for directory in &data.directories {
             fs::create_dir(staged.join(directory)).map_err(io)?;
         }

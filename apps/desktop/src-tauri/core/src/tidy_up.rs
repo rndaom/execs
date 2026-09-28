@@ -40,10 +40,17 @@ use crate::profile::{
 pub const TIDY_VERSION: u32 = 1;
 const MARKER: &str = "tidy-up.json";
 
+/// Automatic runs that left a step undone before giving up until the next
+/// version (Storage's Tidy up again still runs any time).
+const MAX_INCOMPLETE_RUNS: u32 = 3;
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Marker {
     version: u32,
+    /// Automatic runs of this version that skipped a step; 0 when complete.
+    #[serde(default)]
+    incomplete_runs: u32,
 }
 
 /// One profile and how many of its entries a step changed.
@@ -102,20 +109,38 @@ fn marker_path(data_dir: &Path) -> std::path::PathBuf {
     data_dir.join("maintenance").join(MARKER)
 }
 
-/// True until the automatic tidy-up for this version has completed.
-pub fn automatic_tidy_due(data_dir: &Path) -> bool {
+fn read_marker(data_dir: &Path) -> Option<Marker> {
     crate::hash::read_small_file_bounded(&marker_path(data_dir), 4096)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Marker>(&bytes).ok())
-        .is_none_or(|marker| marker.version < TIDY_VERSION)
 }
 
-pub fn record_automatic_tidy(data_dir: &Path) -> Result<(), ProfileError> {
+/// True until this version's automatic tidy-up has completed, or has skipped
+/// a step on [`MAX_INCOMPLETE_RUNS`] starts in a row.
+pub fn automatic_tidy_due(data_dir: &Path) -> bool {
+    read_marker(data_dir).is_none_or(|marker| {
+        marker.version < TIDY_VERSION
+            || (marker.incomplete_runs > 0 && marker.incomplete_runs < MAX_INCOMPLETE_RUNS)
+    })
+}
+
+/// Record an automatic run. One that skipped a step (`complete` false) is
+/// retried on the next start.
+pub fn record_automatic_tidy(data_dir: &Path, complete: bool) -> Result<(), ProfileError> {
     let path = marker_path(data_dir);
     crate::hash::create_dir_all_within(data_dir, path.parent().unwrap_or(data_dir))
         .map_err(|error| ProfileError::Io(error.to_string()))?;
+    let incomplete_runs = if complete {
+        0
+    } else {
+        read_marker(data_dir)
+            .filter(|marker| marker.version == TIDY_VERSION)
+            .map_or(0, |marker| marker.incomplete_runs)
+            + 1
+    };
     let bytes = serde_json::to_vec(&Marker {
         version: TIDY_VERSION,
+        incomplete_runs,
     })
     .map_err(|error| ProfileError::Io(error.to_string()))?;
     crate::hash::write_atomic_within(data_dir, &path, &bytes)
@@ -717,10 +742,43 @@ mod tests {
     }
 
     #[test]
+    fn a_move_that_published_its_copy_but_kept_the_original_finishes() {
+        let dir = crate::test_temp_dir();
+        let (data, root, _id) = older_setup(&dir);
+        // The copy was published, then removing the TF2 copy failed.
+        write(
+            &data
+                .join(crate::hud_backups::DATA_BACKUP_DIR)
+                .join(TOKEN)
+                .join("oldhud/resource/a.res"),
+            "only here",
+        );
+        let report = tidy_up_to(&data, &root, &running()).unwrap();
+        assert_eq!(report.hud_backups_moved, ["oldhud"]);
+        assert!(!root
+            .join("tf/custom")
+            .join(crate::surface::HUD_BACKUP_CONTAINER)
+            .exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn the_automatic_run_is_recorded_once_per_version() {
         let dir = crate::test_temp_dir();
         assert!(automatic_tidy_due(&dir));
-        record_automatic_tidy(&dir).unwrap();
+        record_automatic_tidy(&dir, true).unwrap();
+        assert!(!automatic_tidy_due(&dir));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_run_that_skipped_a_step_is_retried_a_few_times() {
+        let dir = crate::test_temp_dir();
+        for _ in 1..MAX_INCOMPLETE_RUNS {
+            record_automatic_tidy(&dir, false).unwrap();
+            assert!(automatic_tidy_due(&dir));
+        }
+        record_automatic_tidy(&dir, false).unwrap();
         assert!(!automatic_tidy_due(&dir));
         let _ = fs::remove_dir_all(&dir);
     }
