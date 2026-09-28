@@ -58,6 +58,10 @@ User-facing changes only. The release workflow publishes the matching
   Apply also refuses incompatible profile sources before changing game files.
 - Removing a VPK pack also cleans its leftover sound cache. Caches for surviving packs,
   external edits and linked paths are preserved.
+- Binds records `;` `'` `,` `.` `/` `\` `-` and `=` with the key names TF2 uses. Binds recorded
+  on these keys by earlier versions never worked in game and are read as the intended key.
+  Right Shift, Right Ctrl and Right Alt no longer rebind the left keys, and Pause, Scroll Lock,
+  Num Lock, the Windows keys and the Menu key can be bound.
 - Settings load again after you close TF2 for a profile where you have not saved any binds in
   execs. When TF2 had changed `config.cfg`, every settings pane stopped with "The Binds source
   identity is unavailable", and Retry only helped until the next refresh.
