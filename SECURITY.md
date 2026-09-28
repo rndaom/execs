@@ -12,7 +12,7 @@ install, write outside the documented surface (`tf/custom/`,
 Use [Report a vulnerability](https://github.com/rndaom/execs/security/advisories/new)
 on this repository to send the report privately to the maintainers.
 
-Please include the execs version (footer of the app), the OS, and
+Please include the execs version (App settings, or the footer before 0.2.0), the OS, and
 whether you have a crash log
 (`%AppData%\execs\logs\panic.log` or `~/.local/share/execs/logs/panic.log`).
 

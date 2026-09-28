@@ -18,20 +18,26 @@ without reopening unrelated Done issues or claiming new platform acceptance.
   the repository's updater public key. `release-commit.json` confirms the exact
   prior revision and run above; these artifacts do not include later changes.
 
-## Current integration and hosted checks
+## Audit starting point and hosted checks
+
+The failures below describe the code tested at the start of the audit. The
+audit fixes are now included in this release branch: the storage regression,
+regenerated release-specific notices, dependency patches and Profiles keyboard
+fix. Fresh results must come from [PR #136's checks](https://github.com/rndaom/execs/pull/136/checks)
+on the updated revision; the earlier failed runs remain part of the record.
 
 - [Inventory PR #137](https://github.com/rndaom/execs/pull/137) merged into `main`
   at `7353b7260b89ab0375679f5a919172226297b916`.
-- [Release PR #136](https://github.com/rndaom/execs/pull/136) is open at
+- At the start of the audit, [Release PR #136](https://github.com/rndaom/execs/pull/136) was at
   `0ab52ed0a17487dedd438863f30a5e802984b2f9`, which incorporates that merge.
-  Its earlier green head `27adf931` is historical evidence. The current PR is
+  Its earlier green head `27adf931` is historical evidence. That revision was
   not green: [main CI](https://github.com/rndaom/execs/actions/runs/36331656478)
   and [release CI](https://github.com/rndaom/execs/actions/runs/36331793659)
   fail the Linux storage symlink fixture's stale Downloads byte expectation
   (1,380 expected; 1,400 observed after the comfig.app cache was restored).
 - [Linux package checks](https://github.com/rndaom/execs/actions/runs/36331793662)
   stop at packaged credits verification: `CREDITS.txt` does not match
-  `THIRD_PARTY.md`. Local repairs need fresh hosted checks before either failure
+  `THIRD_PARTY.md`. The repairs need fresh hosted checks before either failure
   can be marked resolved in the release evidence.
 - Commit `c9169a76` restores the production comfig.app sound library and changes
   shared controls. This is an additional production delta requiring refreshed
@@ -121,17 +127,17 @@ the previous `main.rs`, both printed nothing. No Steam session was opened.
 Inventory is enabled in release builds in source, but no signed release
 candidate has contained it yet.
 
-1. Integrate the Inventory release enablement into the release branch.
+1. Integrate the Inventory release enablement into the release branch (done:
+   `main` with #141 is merged into this branch).
 2. Build the refreshed candidate in item 3 from a revision that includes it; the
    earlier candidate hid Inventory and cannot attest to it.
-3. Integrate audit repairs, obtain green hosted Windows/Linux checks, and refresh
+3. Obtain green hosted Windows/Linux checks for the audit repairs, and refresh
    the private signed candidate on the resulting revision. Verify the production
    Sounds and shared-control delta, package notices, and the signed upgrade from
    public v0.1.8. The previous successful candidate cannot attest to later code.
 4. Keep PR #136's description and release notes aligned with the final code and
    test results. The September 27 follow-up corrected the PR and Linear
-   descriptions: they now show the merged changes, failing hosted checks and
-   still-local audit fixes. Recheck them when those fixes are integrated. Keep
+   descriptions. Recheck them against the new PR revision and its results. Keep
    development-only features clearly distinguished from what the release offers.
 5. Keep publication waiting for a separate explicit owner request. Updating
    readiness or committing this work does not authorize tagging or publishing.

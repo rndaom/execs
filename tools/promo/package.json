@@ -4,10 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "studio": "remotion studio",
-    "render": "remotion render Promo out/execs-promo.mp4",
-    "render:gif": "remotion render PromoGif out/execs-promo.gif --codec=gif --every-nth-frame=1 --scale=0.4167",
-    "still": "remotion still Promo out/poster.png --frame=90"
+    "capture": "node capture/capture.mjs && node capture/capture.mjs --set=tiles && node capture/capture.mjs --set=readme",
+    "emblems": "node capture/emblems.mjs",
+    "music": "node music/compose.mjs",
+    "studio": "node capture/emblems.mjs && node music/compose.mjs && remotion studio",
+    "render": "node capture/emblems.mjs && node music/compose.mjs && remotion render Promo out/execs-promo.mp4 --codec=h264 --crf=18 --x264-preset=slow --audio-bitrate=192k",
+    "gif": "node capture/emblems.mjs && node gif.mjs",
+    "announcement": "remotion still Announcement out/release-0.2.0-x.png"
   },
   "dependencies": {
     "@remotion/cli": "4.0.520",
@@ -18,6 +21,7 @@
   "devDependencies": {
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "puppeteer-core": "24",
     "typescript": "^5.9.0"
   }
 }

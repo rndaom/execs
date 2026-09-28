@@ -1,12 +1,6 @@
 # 0.2.0 combined release plan
 
-**September 27 current readiness:** the earlier overhaul and profile work is
-merged and its release candidate qualified. The owner subsequently requested
-the Inventory manager and reported positive development-app test feedback.
-See [the current readiness record](../../release-0.2.0-readiness.md) for the
-Inventory implementation, production gate and revised-candidate delta. The
-sections below retain dated planning history; they do not reopen completed
-acceptance. Publication is explicitly not authorized by this readiness update.
+**Status, September 27, 2026:** The dated checkpoints below are history. The selected scope merged into `main` through PR #60; the owner's release decisions (Viewmodels builder sign-off, the D7 containment, the itemtest preload hook and Authenticode moving out of 0.2.0) are recorded in AGENTS.md, and the release workflow's signed installer and updater checks qualify the tagged build. PR #137 then added the development-only Inventory manager, a control consistency sweep and the owner-restored comfig.app sound library; see [the current readiness record](../../release-0.2.0-readiness.md). Where this plan and AGENTS.md differ, AGENTS.md is authoritative. Publication is not authorized by this record.
 
 **Design direction revised — September 23, 2026. Implementation underway; no release authorized.** The owner requested dark neutral surfaces with a restrained warm-brown cast and warm off-white text, retaining TF2 orange for selections and necessary highlights. Important warnings use orange/red and success uses green; yellow warnings are removed. The current work is called the overhaul. Decorative or redundant helper text is removed. The earlier Foundry exploration and its captures remain dated design history, not the active visual specification. The combined scope remains all 14 selected existing issues plus the whole-app overhaul. Do not bump product versions, tag or publish. See the [implementation plan](foundry-implementation-plan.md) and [planning status](planning-status.json) for the original acceptance and open native/platform checks; the revised direction takes precedence over their historical color and naming references.
 

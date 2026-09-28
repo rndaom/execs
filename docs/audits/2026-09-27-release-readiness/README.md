@@ -157,6 +157,21 @@ Profiles' two-stage Escape and focus return passed. Screenshots and step notes
 are kept in the ignored local visual report. Artwork, audio, native operations,
 screen readers and full accessibility were not qualified by those fixtures.
 
+## Follow-up after the owner reported failed GitHub checks
+
+The first audit left fixes on the local computer. Updating descriptions did not
+change the code GitHub tested, so PR #136 still showed the original failures.
+The follow-up reviewed both failed logs again, committed the audit fixes, and
+integrated them into the release branch. Credits were regenerated from the
+release branch's own third-party text, preserving its additional promo credits.
+The public architecture document retains the release media descriptions;
+AGENTS.md remains local and ignored.
+
+The combined release tree passes its local notice/version checks, lint, tests
+and frontend build. Hosted Windows/Linux results must be read from the updated
+[PR checks](https://github.com/rndaom/execs/pull/136/checks), not inferred from
+those local passes. This step does not publish the release or enable Inventory.
+
 ## Required before publication
 
 1. Integrate these repairs and refresh hosted Windows/Linux checks and package

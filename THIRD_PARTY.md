@@ -2,8 +2,8 @@
 
 execs installs and displays content from the TF2 community. This file records
 the outside projects it uses, how it uses them, and the license or permission
-evidence identified for each. This file describes the in-development 0.2.0
-branch; the public v0.1.8 release may still offer catalogs retired here. Some
+evidence identified for each. This file describes execs 0.2.0; earlier
+releases may still offer catalogs retired here. Some
 content is shipped in this repository; other content is fetched on the
 player's machine under source-specific revision and validation rules. A source
 pin is not a rights grant.
@@ -77,8 +77,12 @@ item images and descriptions for the player's public Steam inventory, fetched
 from Steam Community on use and cached locally; they are never packaged,
 exported or shared. The [D7 register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md)
 tracks unresolved rights questions, including the proposed use of stock models
-in a replacement Viewmodels builder. execs is a fan project and is not
-affiliated with Valve.
+in a replacement Viewmodels builder. The promo GIF and README screenshots in
+`docs/media` show the TF2 emblem, TF2's class emblems and, in the Inventory
+scenes, Valve's item images and descriptions for a real backpack, as the app
+displays them. Those images come from a local install and a local Inventory art
+cache when the media is rendered; they are not stored in the repository as
+separate files. execs is a fan project and is not affiliated with Valve.
 
 ## Packaged notices
 
