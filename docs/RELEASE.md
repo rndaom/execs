@@ -3,7 +3,21 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; [ARCHITECTURE.md](ARCHITECTURE.md) keeps the durable rules.
 
-Current public version: **0.2.0** (`v0.2.0`), published September 28, 2026 at
+Current public version: **0.2.1** (`v0.2.1`), published September 28, 2026 at
+23:37:58 UTC (7:37 PM America/New_York) after the owner's go-ahead. The patch
+carries the three owner-assigned 0.2.1 issue lists.
+[Release PR #147](https://github.com/rndaom/execs/pull/147) was merged into `main`
+as `ebb2d507635f314675a481a0c8b5d683fb4502cf`, which immutable `v0.2.1` points to;
+its tree is the one the final private candidate
+[36491333342](https://github.com/rndaom/execs/actions/runs/36491333342) tested. Tagged workflow
+[36495684486](https://github.com/rndaom/execs/actions/runs/36495684486) passed every gate, including signed
+upgrades from public v0.2.0 on Windows and Linux with the profile library
+preserved, and published the release. Anonymous public endpoints return 0.2.1 in
+`latest.json` for all four updater platforms, downloadable installer URLs, and a
+`release-commit.json` naming that commit and run. [0.2.1 release](release-0.2.1.md)
+records the scope, compatibility walk and the checks left to hands-on use.
+
+Previous public version: **0.2.0** (`v0.2.0`), published September 28, 2026 at
 01:03:28 UTC (9:03 PM America/New_York, September 27) after the owner's go-ahead.
 [Release PR #136](https://github.com/rndaom/execs/pull/136) was squash-merged into
 `main` as `486070f6e60bbcb5879acb5ae527d659d9d60ac1`, which immutable `v0.2.0`
@@ -18,7 +32,7 @@ preserved, and published the release. Anonymous public endpoints return 0.2.0 in
 baseline for the next minor. [0.2.0 readiness](release-0.2.0-readiness.md) records
 the owner's decisions and the qualification limits.
 
-Previous public version: **0.1.8** (`v0.1.8`), published September 21, 2026 at
+Earlier public version: **0.1.8** (`v0.1.8`), published September 21, 2026 at
 02:26:18 UTC. [Release PR #59](https://github.com/rndaom/execs/pull/59) merged the
 Mods discovery and removal-integrity update into maintenance. Immutable
 `v0.1.8` points to `85aaf6bc0dd28f43351d4cb5cdb62502737688d5`.
