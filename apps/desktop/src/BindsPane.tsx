@@ -1,6 +1,7 @@
 import { type CfgFile, parseCommands } from "@execs/cfglint";
 import { MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { CopySettings, type CopySettingsSource } from "./components/CopySettings";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
@@ -35,6 +36,7 @@ import {
   validateCustomBind,
 } from "./lib/binds-ui";
 import { mapsFromFiles } from "./lib/cfg-state";
+import { copySettingsBlocked } from "./lib/settings-ui";
 
 export type BindsPaneProps = {
   /** The profile this draft belongs to; a switch must never reuse it. */
@@ -50,6 +52,8 @@ export type BindsPaneProps = {
   blocked?: boolean;
   /** Resolves when the managed cfg write settles. */
   onSave: (bindsText: string) => Promise<unknown>;
+  /** Copy the saved binds to other profiles; offered only when provided. */
+  copySettings?: CopySettingsSource;
 };
 
 export function BindsPane({
@@ -63,6 +67,7 @@ export function BindsPane({
   managedText,
   blocked,
   onSave,
+  copySettings,
 }: BindsPaneProps) {
   const active = useContext(AutosaveActivity);
   const { running, busy } = useAppStatus();
@@ -399,25 +404,34 @@ export function BindsPane({
       <PaneHeader
         title="Binds"
         actions={
-          <label className="field relative flex w-64 items-center" data-bind-navigation>
-            <MagnifyingGlass
-              size={15}
-              aria-hidden="true"
-              className="pointer-events-none absolute left-3 text-ink-faint"
-            />
-            <span className="sr-only">Search actions or keys</span>
-            <input
-              type="search"
-              data-testid="bind-search"
-              value={query}
-              onChange={(event) => {
-                cancelCapture();
-                setQuery(event.target.value);
-              }}
-              placeholder="Search actions or keys"
-              className="w-full bg-transparent py-2 pr-3 pl-9 text-sm text-ink outline-none placeholder:text-ink-faint"
-            />
-          </label>
+          <>
+            {copySettings ? (
+              <CopySettings
+                scope="binds"
+                source={copySettings}
+                blockedReason={copySettingsBlocked(running, busy, dirty)}
+              />
+            ) : null}
+            <label className="field relative flex w-64 items-center" data-bind-navigation>
+              <MagnifyingGlass
+                size={15}
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 text-ink-faint"
+              />
+              <span className="sr-only">Search actions or keys</span>
+              <input
+                type="search"
+                data-testid="bind-search"
+                value={query}
+                onChange={(event) => {
+                  cancelCapture();
+                  setQuery(event.target.value);
+                }}
+                placeholder="Search actions or keys"
+                className="w-full bg-transparent py-2 pr-3 pl-9 text-sm text-ink outline-none placeholder:text-ink-faint"
+              />
+            </label>
+          </>
         }
       />
 

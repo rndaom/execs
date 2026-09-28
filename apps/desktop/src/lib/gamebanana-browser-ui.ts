@@ -235,9 +235,21 @@ export function gameBananaVariantFacts(
     facts.push(`Added ${dates.format(new Date(variant.addedAt * 1000))}`);
   }
   if (variant.splitPart) facts.push("Part of a split download");
+  else if (gameBananaVariantOversized(variant)) facts.push("Over execs' 512 MB mod limit");
   else if (!variant.supported) facts.push("Not supported for Mods");
   return facts.join(" · ");
 }
+
+/** Mods over this size install only by hand; matches the native `MAX_MOD_BYTES`. */
+export const MOD_MAX_BYTES = 512 * 1024 * 1024;
+
+export function gameBananaVariantOversized(variant: GameBananaDownloadVariant): boolean {
+  return variant.sizeBytes !== null && variant.sizeBytes > MOD_MAX_BYTES;
+}
+
+/** The manual route for a mod too large for execs to install. */
+export const OVERSIZED_MOD_ROUTE =
+  "To use a larger file, close TF2, extract the mod into tf/custom yourself, then choose Update profile when execs asks.";
 
 /**
  * The only installable file is chosen up front. Next to split parts, the one

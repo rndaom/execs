@@ -26,7 +26,7 @@ pin is not a rights grant.
 | [mastercomfig cvar reference](https://github.com/mastercomfig/mastercomfig/tree/release/docs/tf2) | `packages/cfglint/src/cvars.gen.ts` contains pinned Windows/hidden command dumps and alias metadata from comfig configuration. Source revisions and applicability accompany the offline catalog. | MIT |
 | [Valve Source SDK](https://github.com/ValveSoftware/source-sdk-2013) | Independently described command argument and bound facts with source provenance supplement the offline catalog; no SDK implementation is copied or vendored. | Source SDK license (upstream); metadata only. See `packages/cfglint/CATALOG.md`. |
 | ICE cipher by Matthew Kwan | `core/src/ice.rs` is a port of the reference implementation, used to read weapon scripts from the user's own game files. | Public domain |
-| [unrar-ng-sys](https://github.com/ttys3/unrar.rs) and [UnRAR](https://www.rarlab.com/rar_add.htm) by Alexander Roshal | Pinned `unrar-ng-sys` 0.7.7 bundles UnRAR 7.21 beta 1 for RAR extraction only. It never creates RAR archives. | The Rust binding is MIT OR Apache-2.0; the native decoder uses the separate, non-OSI UnRAR license, including its restriction on recreating RAR compression. The owner approved extraction use on September 27, 2026. The full vendored license is hash-verified into packaged `DEPENDENCIES.txt`; this dependency is not relicensed as MIT. |
+| [unrar-ng-sys](https://github.com/ttys3/unrar.rs) and [UnRAR](https://www.rarlab.com/rar_add.htm) by Alexander Roshal | Pinned `unrar-ng-sys` 0.7.7, used as a local copy with RARLAB's stable UnRAR 7.23 in place of its bundled beta (`apps/desktop/src-tauri/vendor/unrar-ng-sys/EXECS-VENDOR.md`), for RAR extraction only. It never creates RAR archives. | The Rust binding is MIT OR Apache-2.0; the native decoder uses the separate, non-OSI UnRAR license, including its restriction on recreating RAR compression. The owner approved extraction use on September 27, 2026. The full vendored license is hash-verified into packaged `DEPENDENCIES.txt`; this dependency is not relicensed as MIT. |
 
 The [D7 asset-rights register](docs/audits/2026-09-23-program-audit/d7-asset-rights.md) records the owner's September 25, 2026 containment decision, the pinned files, and historical and current local uses of CompVMInstaller, Venom Crosshairs, TF2Hitsounds, comfig.app hosted sounds and cueki's default mod library. It does not treat repository visibility or attribution as a grant.
 
@@ -60,6 +60,9 @@ development probe and its protocol references are documented in
   handles HTTPS downloads with destination-bound connections. Windows uses
   Schannel; Linux uses OpenSSL. Their licenses and exact locked versions are
   included in the packaged dependency inventory.
+- [Symphonia](https://github.com/pdeljanov/Symphonia) decodes MP3 and Ogg Vorbis
+  clips chosen in Sounds before they are prepared as hit or kill sound WAVs.
+  MPL-2.0, used unmodified; its notices are in the dependency inventory.
 
 Runtime dependencies are listed in `apps/desktop/package.json` and
 `apps/desktop/src-tauri/Cargo.toml`. The Rust and JavaScript dependency inventory records permissive licenses

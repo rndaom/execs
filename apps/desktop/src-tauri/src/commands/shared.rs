@@ -216,6 +216,15 @@ pub async fn with_root<T: Send + 'static>(
     blocking(move || work(confirmed_root()?)).await
 }
 
+/// Record a finished operation for Copy diagnostics and pass the result on.
+/// Failures are already recorded by `CommandError::new`.
+pub fn logged<T>(what: &str, result: Result<T, CommandError>) -> Result<T, CommandError> {
+    if result.is_ok() {
+        crate::activity::record("done", what);
+    }
+    result
+}
+
 /// Run `work` off the main thread with the confirmed root and active profile.
 pub async fn with_profile<T: Send + 'static>(
     work: impl FnOnce(PathBuf, String) -> Result<T, CommandError> + Send + 'static,

@@ -357,3 +357,23 @@ it("closes Steam replacement review when the pane hides or the profile changes",
   expect(document.body.textContent).not.toContain("Replace Steam launch options?");
   expect(writeSteam).not.toHaveBeenCalled();
 });
+
+it("offers only a fresh check while Steam is open, because execs never writes then", async () => {
+  reviewedActions = true;
+  sync = {
+    profileOptions: saved,
+    steamOptions: "-console",
+    inSync: false,
+    steamRunning: true,
+    reviewToken: "review-a",
+  };
+  await render();
+  expect(element('[data-testid="launch-steam-retry"]').textContent).toBe("Check Steam again");
+  await click('[data-testid="launch-steam-retry"]');
+  expect(document.body.textContent).not.toContain("Replace Steam launch options?");
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(writeSteam).not.toHaveBeenCalled();
+  sync = { ...sync, steamRunning: false };
+  await render();
+  expect(element('[data-testid="launch-steam-retry"]').textContent).toBe("Write to Steam");
+});

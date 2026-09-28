@@ -735,8 +735,8 @@ pub fn download_file(id: u64, file_id: u64) -> Result<DownloadPick, String> {
 }
 
 /// hud-db's GameBanana entries have no file-choice UI. Only a single listed
-/// ZIP or 7z is safe to choose automatically; any alternatives require the
-/// author page and an explicit manual HUD import.
+/// ZIP, 7z or RAR is safe to choose automatically; any alternatives require
+/// the author page and an explicit manual HUD import.
 pub fn download_url_for_page(page_url: &str) -> Result<String, String> {
     let id = mod_id_from_url(page_url).ok_or("That GameBanana link has no mod id.")?;
     pick_hud_archive(download_files(id)?)
@@ -752,11 +752,11 @@ fn pick_file_by_id(files: Vec<DownloadFile>, file_id: u64) -> Result<DownloadPic
     if is_split_part(chosen) {
         return Err(SPLIT_PART_REFUSAL.into());
     }
+    if chosen.size_bytes.is_some_and(|size| size > MOD_MAX_BYTES) {
+        return Err(execs_core::mods::oversized_mod_message(chosen.size_bytes));
+    }
     if !mod_file_is_supported(chosen) {
-        return Err(
-            "That GameBanana file is not a supported VPK, ZIP, 7z or RAR within the size limit."
-                .into(),
-        );
+        return Err("That GameBanana file is not a VPK, ZIP, 7z or RAR.".into());
     }
     Ok(DownloadPick {
         url: validated_download_url(chosen).expect("validated above"),
@@ -773,9 +773,12 @@ fn pick_hud_archive(files: Vec<DownloadFile>) -> Result<String, String> {
         );
     }
     let only = &files[0];
-    if !is_archive_file(&only.file) || only.size_bytes.is_some_and(|size| size > MOD_MAX_BYTES) {
+    if !is_archive_file(&only.file)
+        || is_split_part(only)
+        || only.size_bytes.is_some_and(|size| size > MOD_MAX_BYTES)
+    {
         return Err(
-            "That HUD has no supported ZIP or 7z. Open the author's page and import a compatible HUD archive."
+            "That HUD has no supported ZIP, 7z or RAR. Open the author's page and import a compatible HUD archive."
                 .into(),
         );
     }
@@ -798,7 +801,7 @@ fn validated_download_url(file: &DownloadFile) -> Option<String> {
 
 fn is_archive_file(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    lower.ends_with(".zip") || lower.ends_with(".7z")
+    lower.ends_with(".zip") || lower.ends_with(".7z") || lower.ends_with(".rar")
 }
 
 const SPLIT_PART_REFUSAL: &str = "That file is one part of a split download. execs can't combine parts; follow the author's instructions, then use Import mod.";
@@ -844,14 +847,15 @@ fn download_failure(file_name: &str, status: reqwest::StatusCode) -> String {
             "GameBanana no longer has {file_name}. Choose another file, or check the author's page."
         )
     } else {
-        format!("Could not download {file_name} from GameBanana ({status}).")
+        format!(
+            "Could not download {file_name}. {}",
+            crate::net::status_failure(file_name, RemoteSource::GameBananaDownload, status)
+        )
     }
 }
 
 fn mod_file_is_supported(file: &DownloadFile) -> bool {
-    (is_archive_file(&file.file)
-        || file.file.to_ascii_lowercase().ends_with(".vpk")
-        || file.file.to_ascii_lowercase().ends_with(".rar"))
+    (is_archive_file(&file.file) || file.file.to_ascii_lowercase().ends_with(".vpk"))
         && file.size_bytes.is_none_or(|size| size <= MOD_MAX_BYTES)
 }
 
@@ -1392,8 +1396,9 @@ mod tests {
         let gone = download_failure("mod.zip", reqwest::StatusCode::NOT_FOUND);
         assert!(gone.contains("no longer has mod.zip"));
         assert_eq!(download_failure("mod.zip", reqwest::StatusCode::GONE), gone);
-        assert!(
-            download_failure("mod.zip", reqwest::StatusCode::SERVICE_UNAVAILABLE).contains("503")
+        assert_eq!(
+            download_failure("mod.zip", reqwest::StatusCode::SERVICE_UNAVAILABLE),
+            "Could not download mod.zip. GameBanana is having problems right now. Try again later."
         );
     }
 
@@ -1421,7 +1426,20 @@ mod tests {
             .contains("multiple files"));
         assert!(pick_hud_archive(files.into_iter().take(1).collect())
             .unwrap_err()
-            .contains("no supported ZIP or 7z"));
+            .contains("no supported ZIP, 7z or RAR"));
+        let rar: DownloadFile = serde_json::from_value(serde_json::json!({
+            "_idRow": 4, "_sFile": "hud.rar", "_sDownloadUrl": "https://gamebanana.com/dl/4"
+        }))
+        .unwrap();
+        assert_eq!(
+            pick_hud_archive(vec![rar]).unwrap(),
+            "https://gamebanana.com/dl/4"
+        );
+        let part: DownloadFile = serde_json::from_value(serde_json::json!({
+            "_idRow": 5, "_sFile": "hud.part2.rar", "_sDownloadUrl": "https://gamebanana.com/dl/5"
+        }))
+        .unwrap();
+        assert!(pick_hud_archive(vec![part]).is_err());
     }
 
     #[test]

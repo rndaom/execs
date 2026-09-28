@@ -76,6 +76,68 @@ pub async fn clear_download_caches(
     .await
 }
 
+/// The once-per-version tidy-up after an update. `None` when it already ran,
+/// TF2 is running, another write holds the gate or a recovery is unfinished;
+/// the app asks again later and the run is recorded only once it completes.
+#[tauri::command]
+pub async fn run_automatic_tidy_up(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<Option<execs_core::tidy_up::TidyReport>, CommandError> {
+    let data_dir = execs_core::try_execs_data_dir().map_err(CommandError::unknown)?;
+    if !execs_core::tidy_up::automatic_tidy_due(&data_dir) {
+        return Ok(None);
+    }
+    let Ok(_guard) = gate.lock_for_write().await else {
+        return Ok(None);
+    };
+    blocking(move || {
+        let Some(root) = execs_core::remembered_tf2_root() else {
+            return Ok(None);
+        };
+        if execs_core::is_tf2_running() {
+            return Ok(None);
+        }
+        // Profile steps need the library that belongs to this install; a
+        // moved install waits until its profiles are moved, then runs.
+        let usable = execs_core::load_library(Some(&root))
+            .is_ok_and(|library| library.usable && !library.root_mismatch);
+        if !usable {
+            return Ok(None);
+        }
+        let Ok(report) = execs_core::tidy_up::tidy_up_to(
+            &data_dir,
+            &root,
+            &execs_core::process_lock::live_process_names(),
+        ) else {
+            return Ok(None);
+        };
+        execs_core::tidy_up::record_automatic_tidy(&data_dir, report.skipped.is_empty())?;
+        crate::activity::record("tidy", &execs_core::tidy_up::summary(&report));
+        Ok((report.changed() || report.valve_cfgs_missing > 0).then_some(report))
+    })
+    .await
+}
+
+/// App settings → Storage: run the same checks again on request.
+#[tauri::command]
+pub async fn tidy_up_again(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<execs_core::tidy_up::TidyReport, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    let result = with_root(|root| {
+        let data_dir = execs_core::try_execs_data_dir().map_err(CommandError::unknown)?;
+        let report = execs_core::tidy_up::tidy_up_to(
+            &data_dir,
+            &root,
+            &execs_core::process_lock::live_process_names(),
+        )?;
+        crate::activity::record("tidy", &execs_core::tidy_up::summary(&report));
+        Ok(report)
+    })
+    .await;
+    super::shared::logged("Tidied up leftovers from earlier versions", result)
+}
+
 #[tauri::command]
 pub async fn get_hud_backups() -> Result<execs_core::hud_backups::HudBackupReport, CommandError> {
     with_root(|root| {

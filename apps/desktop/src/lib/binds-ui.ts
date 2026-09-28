@@ -273,14 +273,16 @@ const KEY_LABELS: Record<string, string> = {
   downarrow: "Down",
   leftarrow: "Left",
   rightarrow: "Right",
-  semicolin: ";",
-  apostrophe: "'",
-  comma: ",",
-  period: ".",
-  slash: "/",
-  backslash: "\\",
-  minus: "-",
-  equal: "=",
+  rshift: "Right Shift",
+  rctrl: "Right Ctrl",
+  ralt: "Right Alt",
+  pause: "Pause",
+  scrolllock: "Scroll Lock",
+  numlock: "Num Lock",
+  lwin: "Left Windows",
+  rwin: "Right Windows",
+  app: "Menu",
+  semicolon: ";",
   mwheelup: "Wheel up",
   mwheeldown: "Wheel down",
   kp_ins: "Num 0",
@@ -303,7 +305,7 @@ const KEY_LABELS: Record<string, string> = {
 
 /** A Source key name as players read it on a keyboard: `kp_end` is "Num 1". */
 export function bindKeyLabel(key: string): string {
-  const lower = key.toLowerCase();
+  const lower = canonicalBindKey(key);
   if (KEY_LABELS[lower]) return KEY_LABELS[lower];
   const mouse = /^mouse([1-5])$/.exec(lower);
   if (mouse) return `Mouse ${mouse[1]}`;
@@ -350,27 +352,132 @@ const COMMAND_TO_ACTION = new Map<string, BindAction>(
   BIND_ACTIONS.map((action) => [normalizeBindCommand(action.command), action]),
 );
 
+/**
+ * TF2's own key names (lowercase), from the table in `bin/x64/inputsystem.dll`
+ * that Valve's `config_default.cfg` also uses. The engine refuses any other
+ * name with "isn't a valid key", so the recorder writes only these.
+ */
+export const TF2_KEY_NAMES: ReadonlySet<string> = new Set([
+  ..."0123456789abcdefghijklmnopqrstuvwxyz",
+  "kp_ins",
+  "kp_end",
+  "kp_downarrow",
+  "kp_pgdn",
+  "kp_leftarrow",
+  "kp_5",
+  "kp_rightarrow",
+  "kp_home",
+  "kp_uparrow",
+  "kp_pgup",
+  "kp_slash",
+  "kp_multiply",
+  "kp_minus",
+  "kp_plus",
+  "kp_enter",
+  "kp_del",
+  "[",
+  "]",
+  "semicolon",
+  "'",
+  "`",
+  ",",
+  ".",
+  "/",
+  "\\",
+  "-",
+  "=",
+  "enter",
+  "space",
+  "backspace",
+  "tab",
+  "capslock",
+  "numlock",
+  "escape",
+  "scrolllock",
+  "ins",
+  "del",
+  "home",
+  "end",
+  "pgup",
+  "pgdn",
+  "pause",
+  "shift",
+  "rshift",
+  "alt",
+  "ralt",
+  "ctrl",
+  "rctrl",
+  "lwin",
+  "rwin",
+  "app",
+  "uparrow",
+  "leftarrow",
+  "downarrow",
+  "rightarrow",
+  ...Array.from({ length: 12 }, (_, index) => `f${index + 1}`),
+  "capslocktoggle",
+  "numlocktoggle",
+  "scrolllocktoggle",
+  "mouse1",
+  "mouse2",
+  "mouse3",
+  "mouse4",
+  "mouse5",
+  "mwheelup",
+  "mwheeldown",
+]);
+
+/**
+ * Spellings execs 0.2.0 and earlier recorded for punctuation keys. TF2 has no
+ * such keys, so these binds never worked; they are read as the key the player
+ * pressed and written back with TF2's name.
+ */
+const LEGACY_KEY_NAMES: Readonly<Record<string, string>> = {
+  semicolin: "semicolon",
+  apostrophe: "'",
+  comma: ",",
+  period: ".",
+  slash: "/",
+  backslash: "\\",
+  minus: "-",
+  equal: "=",
+};
+
+/** A bind key as TF2 names it: lowercase, with older execs spellings repaired. */
+export function canonicalBindKey(key: string): string {
+  const lower = key.trim().toLowerCase();
+  return LEGACY_KEY_NAMES[lower] ?? lower;
+}
+
 const CODE_TO_SOURCE: Record<string, string> = {
   Space: "space",
   ShiftLeft: "shift",
-  ShiftRight: "shift",
+  ShiftRight: "rshift",
   ControlLeft: "ctrl",
-  ControlRight: "ctrl",
+  ControlRight: "rctrl",
   AltLeft: "alt",
-  AltRight: "alt",
+  AltRight: "ralt",
+  MetaLeft: "lwin",
+  MetaRight: "rwin",
+  OSLeft: "lwin",
+  OSRight: "rwin",
+  ContextMenu: "app",
+  Pause: "pause",
+  ScrollLock: "scrolllock",
+  NumLock: "numlock",
   Tab: "tab",
   Enter: "enter",
   NumpadEnter: "kp_enter",
   Escape: "escape",
   Backspace: "backspace",
-  Semicolon: "semicolin",
-  Comma: "comma",
-  Period: "period",
-  Slash: "slash",
-  Backslash: "backslash",
-  Quote: "apostrophe",
-  Minus: "minus",
-  Equal: "equal",
+  Semicolon: "semicolon",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Backslash: "\\",
+  Quote: "'",
+  Minus: "-",
+  Equal: "=",
   BracketLeft: "[",
   BracketRight: "]",
   Backquote: "`",
@@ -438,22 +545,22 @@ const NUMPAD_KEY_TO_SOURCE: Record<string, string> = {
 };
 
 const PUNCTUATION_KEY_TO_SOURCE: Record<string, string> = {
-  ";": "semicolin",
-  ":": "semicolin",
-  ",": "comma",
-  "<": "comma",
-  ".": "period",
-  ">": "period",
-  "/": "slash",
-  "?": "slash",
-  "\\": "backslash",
-  "|": "backslash",
-  "'": "apostrophe",
-  '"': "apostrophe",
-  "-": "minus",
-  _: "minus",
-  "=": "equal",
-  "+": "equal",
+  ";": "semicolon",
+  ":": "semicolon",
+  ",": ",",
+  "<": ",",
+  ".": ".",
+  ">": ".",
+  "/": "/",
+  "?": "/",
+  "\\": "\\",
+  "|": "\\",
+  "'": "'",
+  '"': "'",
+  "-": "-",
+  _: "-",
+  "=": "=",
+  "+": "=",
   "[": "[",
   "{": "[",
   "]": "]",
@@ -462,6 +569,7 @@ const PUNCTUATION_KEY_TO_SOURCE: Record<string, string> = {
   "~": "`",
 };
 
+const DOM_KEY_LOCATION_RIGHT = 2;
 const DOM_KEY_LOCATION_NUMPAD = 3;
 // DOM orders the middle and right buttons as 1 and 2, while Source names
 // right-click mouse2 and middle-click mouse3.
@@ -565,12 +673,20 @@ export function sourceKeyFromKey(key: string, location = 0): string | null {
   if (location === DOM_KEY_LOCATION_NUMPAD && NUMPAD_KEY_TO_SOURCE[key]) {
     return NUMPAD_KEY_TO_SOURCE[key];
   }
+  const right = location === DOM_KEY_LOCATION_RIGHT;
   const named: Record<string, string> = {
     " ": "space",
     Spacebar: "space",
-    Shift: "shift",
-    Control: "ctrl",
-    Alt: "alt",
+    Shift: right ? "rshift" : "shift",
+    Control: right ? "rctrl" : "ctrl",
+    Alt: right ? "ralt" : "alt",
+    AltGraph: "ralt",
+    Meta: right ? "rwin" : "lwin",
+    OS: right ? "rwin" : "lwin",
+    ContextMenu: "app",
+    Pause: "pause",
+    ScrollLock: "scrolllock",
+    NumLock: "numlock",
     Tab: "tab",
     Enter: "enter",
     Escape: "escape",
@@ -642,8 +758,8 @@ export function actionBindings(
   );
   return bindEntries(binds).flatMap(([key, command]) => {
     if (normalizeBindCommand(command) !== wanted) return [];
-    const normalizedKey = key.toLowerCase();
-    const source = sources[normalizedKey] ?? null;
+    const normalizedKey = canonicalBindKey(key);
+    const source = sources[normalizedKey] ?? sources[key.toLowerCase()] ?? null;
     const owned =
       ownedKeys.has(normalizedKey) &&
       (source === null || source.file.toLowerCase() === managedPath.toLowerCase());
@@ -670,7 +786,7 @@ function ownedBindLine(raw: string): { actionId: BindActionId; key: string } | n
     return null;
   }
   const action = COMMAND_TO_ACTION.get(normalizeBindCommand(command.args.slice(1).join(" ")));
-  return action ? { actionId: action.id, key: command.args[0].toLowerCase() } : null;
+  return action ? { actionId: action.id, key: canonicalBindKey(command.args[0]) } : null;
 }
 
 export const CUSTOM_BIND_MARKER = "// execs:custom-bind";
@@ -686,7 +802,7 @@ function ownedCustomBindLine(raw: string): { key: string; command: string } | nu
     raw.slice(command.to).trim() !== CUSTOM_BIND_MARKER
   )
     return null;
-  return { key: command.args[0].toLowerCase(), command: command.args[1] };
+  return { key: canonicalBindKey(command.args[0]), command: command.args[1] };
 }
 
 export function ownedCustomBinds(text: string): Array<{ key: string; command: string }> {
@@ -715,7 +831,7 @@ export function validateCustomBind(
     };
   if (parseCommands(command, "custom.cfg").length === 0)
     return { problem: "Enter a command, not just a comment.", findings: [] };
-  const result = lint([{ path: "autoexec.cfg", text: `bind ${quoteCfgToken(key)} "${command}"` }], {
+  const result = lint([{ path: "autoexec.cfg", text: `bind ${quoteBindKey(key)} "${command}"` }], {
     trust: "self",
   });
   const problem = !result.safetyComplete
@@ -725,11 +841,11 @@ export function validateCustomBind(
 }
 
 export function applyCustomBind(text: string, key: string, command: string): string {
-  const wanted = key.trim().toLowerCase();
+  const wanted = canonicalBindKey(key);
   if (
     !wanted ||
     wanted === "escape" ||
-    !/^[a-z0-9_`[\]]+$/.test(wanted) ||
+    !TF2_KEY_NAMES.has(wanted) ||
     validateCustomBind(command, wanted).problem
   )
     return text;
@@ -742,13 +858,13 @@ export function applyCustomBind(text: string, key: string, command: string): str
     )
     .join("");
   return appendManagedLines(kept, [
-    `bind ${quoteCfgToken(wanted)} "${command.trim()}" ${CUSTOM_BIND_MARKER}`,
+    `bind ${quoteBindKey(wanted)} "${command.trim()}" ${CUSTOM_BIND_MARKER}`,
   ]);
 }
 
 export function removeOwnedCustomBind(text: string, key: string): string {
   return fileLines(text)
-    .filter((line) => ownedCustomBindLine(line)?.key !== key.toLowerCase())
+    .filter((line) => ownedCustomBindLine(line)?.key !== canonicalBindKey(key))
     .join("");
 }
 
@@ -765,7 +881,7 @@ function ownedUnbindLine(raw: string): string | null {
   ) {
     return null;
   }
-  return command.args[0].toLowerCase();
+  return canonicalBindKey(command.args[0]);
 }
 
 /** Keys the pane cleared with its own standalone `unbind` lines. */
@@ -814,7 +930,7 @@ export function removeOwnedManagedBind(text: string, actionId: BindActionId, key
   return fileLines(text)
     .filter((line) => {
       const owned = ownedBindLine(line);
-      return owned?.actionId !== actionId || owned.key !== key.toLowerCase();
+      return owned?.actionId !== actionId || owned.key !== canonicalBindKey(key);
     })
     .join("");
 }
@@ -825,7 +941,7 @@ export function removeOwnedManagedBind(text: string, actionId: BindActionId, key
  * inherited binding instead of letting it return. Never `unbindall`.
  */
 export function clearManagedKey(text: string, key: string): string {
-  const wanted = key.trim().toLowerCase();
+  const wanted = canonicalBindKey(key);
   if (!wanted) return text;
   const kept = fileLines(text)
     .filter(
@@ -835,23 +951,32 @@ export function clearManagedKey(text: string, key: string): string {
         ownedCustomBindLine(line)?.key !== wanted,
     )
     .join("");
-  return appendManagedLines(kept, [`unbind ${quoteCfgToken(wanted)}`]);
+  return appendManagedLines(kept, [`unbind ${quoteBindKey(wanted)}`]);
 }
 
 function quoteCfgToken(value: string): string {
   return /[\s"]/.test(value) ? `"${value}"` : value;
 }
 
+/**
+ * Punctuation keys are quoted the way TF2's own config.cfg writes them: an
+ * unquoted `'` splits the console line.
+ */
+export function quoteBindKey(key: string): string {
+  return /^[a-z0-9_]+$/i.test(key) ? key : `"${key}"`;
+}
+
 export function serializeManagedBinds(actionKeys: Partial<Record<BindActionId, string>>): string {
   const lines = [MANAGED_BINDS_HEADER];
   const usedKeys = new Set<string>();
   for (const action of BIND_ACTIONS) {
-    const key = actionKeys[action.id]?.trim().toLowerCase();
+    const raw = actionKeys[action.id];
+    const key = raw ? canonicalBindKey(raw) : "";
     if (!key || usedKeys.has(key)) {
       continue;
     }
     usedKeys.add(key);
-    lines.push(`bind ${quoteCfgToken(key)} ${quoteCfgToken(action.command)}`);
+    lines.push(`bind ${quoteBindKey(key)} ${quoteCfgToken(action.command)}`);
   }
   return `${lines.join("\n")}\n`;
 }
@@ -864,7 +989,7 @@ export function applyRecordedBind(
   if (!isBindActionId(actionId)) {
     return currentFile;
   }
-  const key = sourceKey.trim().toLowerCase();
+  const key = canonicalBindKey(sourceKey);
   if (!key || key === "escape") {
     return currentFile;
   }
@@ -884,7 +1009,7 @@ export function applyRecordedBind(
   const action = bindActionById(actionId);
   return action
     ? appendManagedLines(withoutClaim, [
-        `bind ${quoteCfgToken(key)} ${quoteCfgToken(action.command)}`,
+        `bind ${quoteBindKey(key)} ${quoteCfgToken(action.command)}`,
       ])
     : currentFile;
 }
@@ -903,7 +1028,7 @@ export function syncTrackedBindsFromConfig(
 ): string {
   const changed = new Map(
     (changes instanceof Map ? [...changes.entries()] : Object.entries(changes)).map(
-      ([key, command]) => [key.toLowerCase(), command] as const,
+      ([key, command]) => [canonicalBindKey(key), command] as const,
     ),
   );
   // A menu rebind/removal retires our explicit custom override. Unmarked
@@ -936,7 +1061,7 @@ export function syncTrackedBindsFromConfig(
   const ordered = BIND_ACTIONS.flatMap((action) =>
     next
       .filter((bind) => bind.actionId === action.id)
-      .map((bind) => `bind ${quoteCfgToken(bind.key)} ${quoteCfgToken(action.command)}`),
+      .map((bind) => `bind ${quoteBindKey(bind.key)} ${quoteCfgToken(action.command)}`),
   );
   return replaceOwnedLines(kept, ordered);
 }

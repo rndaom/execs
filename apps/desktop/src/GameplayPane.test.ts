@@ -90,7 +90,8 @@ describe("GameplayPane weapon controls", () => {
     status.running = true;
     const onOpenViewmodels = vi.fn();
     await act(async () => render({ onOpenViewmodels }));
-    expect(control("gameplay-tracers")?.disabled).toBe(false);
+    expect(control("gameplay-tracers-fp")?.disabled).toBe(false);
+    expect(control("gameplay-tracers")).toBeNull();
     expect(control("gameplay-flip")).toBeNull();
     expect(control("gameplay-transparent-viewmodels")).toBeNull();
     expect(control("gameplay-draw-viewmodel")).toBeNull();

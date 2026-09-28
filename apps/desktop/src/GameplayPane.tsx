@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { CopySettings, type CopySettingsSource } from "./components/CopySettings";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
@@ -8,7 +9,6 @@ import { useAppStatus } from "./hooks/useAppStatus";
 import { useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import {
-  ALL_TRACERS_NOTE,
   clampGameplay,
   clampInt,
   FOV_MAX,
@@ -22,6 +22,7 @@ import {
   serializeGameplay,
   serializeGameplayScope,
 } from "./lib/gameplay-ui";
+import { copySettingsBlocked } from "./lib/settings-ui";
 
 export type GameplayPaneProps = {
   /** The profile this draft belongs to; a switch discards it. */
@@ -33,6 +34,8 @@ export type GameplayPaneProps = {
   onOpenViewmodels?: () => void;
   /** Resolves when the write settles; the toast reports it. */
   onSave: (gameplayText: string) => Promise<unknown>;
+  /** Copy the saved Gameplay settings to other profiles; offered only when provided. */
+  copySettings?: CopySettingsSource;
 };
 
 export function GameplayPane({
@@ -42,8 +45,9 @@ export function GameplayPane({
   managedText,
   onOpenViewmodels,
   onSave,
+  copySettings,
 }: GameplayPaneProps) {
-  const { running } = useAppStatus();
+  const { running, busy } = useAppStatus();
   const seeded = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
   const [draft, setDraft] = useSeededDraft(
     seeded,
@@ -65,7 +69,18 @@ export function GameplayPane({
     <section data-testid="settings-gameplay" className="min-w-0 text-left">
       <div className="hero-row gameplay-workspace">
         <div>
-          <PaneHeader title="Gameplay" />
+          <PaneHeader
+            title="Gameplay"
+            actions={
+              copySettings ? (
+                <CopySettings
+                  scope="gameplay"
+                  source={copySettings}
+                  blockedReason={copySettingsBlocked(running, busy, dirty)}
+                />
+              ) : undefined
+            }
+          />
           <div className="grid gap-6">
             <SliderRow
               id="gameplay-fov"
@@ -211,8 +226,8 @@ export function GameplayPane({
         </PaneSection>
 
         <section className="min-w-0">
-          {/* The engine refuses r_drawtracers on any live server, so it is not an
-            "obvious toggle" — it and its neighbours live behind a disclosure. */}
+          {/* Tracer visibility is a less common choice, so it lives behind a disclosure.
+            TF2 refuses the cheat-only r_drawtracers from startup cfgs, so it has no control. */}
           <Disclosure
             profileId={profileId}
             storageKey="gameplay-advanced"
@@ -228,14 +243,6 @@ export function GameplayPane({
                 label="First-person tracers"
                 checked={draft.r_drawtracers_firstperson === 1}
                 onChange={(next) => patch({ r_drawtracers_firstperson: next ? 1 : 0 })}
-              />
-              <SwitchRow
-                id="gameplay-tracers"
-                testId="gameplay-tracers"
-                label="All tracers"
-                checked={draft.r_drawtracers === 1}
-                note={ALL_TRACERS_NOTE}
-                onChange={(next) => patch({ r_drawtracers: next ? 1 : 0 })}
               />
             </fieldset>
           </Disclosure>

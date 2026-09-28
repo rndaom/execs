@@ -22,7 +22,21 @@ const CENTERED =
 const stacks = new WeakMap<Document, ModalEntry[]>();
 let nextOrder = 0;
 
+/**
+ * A pane's scroll area is its own stacking layer beneath the app header, so a
+ * dialog opened inside it would leave the header undimmed and lose the top of
+ * a tall sheet under it. While any dialog is open the body is marked and the
+ * pane layer rises above the header (see `index.css`).
+ */
+function markOpenDialogs(doc: Document, stack: ModalEntry[]) {
+  if (!doc.body) return;
+  if (stack.length > 0) doc.body.dataset.modalOpen = "true";
+  else delete doc.body.dataset.modalOpen;
+}
+
 function updateStack(stack: ModalEntry[]) {
+  const doc = stack[0]?.node.ownerDocument;
+  if (doc) markOpenDialogs(doc, stack);
   stack.forEach((entry, index) => {
     const top = index === stack.length - 1;
     // Each new scrim covers the previous dialog, regardless of JSX order.
@@ -175,6 +189,7 @@ export function Modal({
       doc.removeEventListener("keydown", onKeyDown, true);
       const wasTop = stack.at(-1) === entry;
       stack.splice(stack.indexOf(entry), 1);
+      markOpenDialogs(doc, stack);
       // If a lower dialog disappears, preserve its opener for eventual restore
       // without stealing focus from the dialog the user is answering now.
       for (const remaining of stack) {

@@ -189,6 +189,19 @@ describe("Onboarding", () => {
     expect(button("Create and switch").disabled).toBe(false);
   });
 
+  it("creates another profile without switching when asked", async () => {
+    const onCreateOnly = vi.fn(async () => true);
+    const props = wizardProps({ creating: true, startFrom: "current", onCreateOnly });
+    await act(async () => root.render(<SetupWizard {...props} />));
+    expect(host.textContent).toContain("Create adds the profile and keeps TF2 as it is.");
+    await act(async () => button("Create").click());
+    expect(onCreateOnly).toHaveBeenCalledOnce();
+    expect(props.onApply).not.toHaveBeenCalled();
+    // First run has nothing to stay on, so it only creates and applies.
+    await act(async () => root.render(<SetupWizard {...wizardProps()} />));
+    expect(host.querySelector('[data-testid="wizard-create-only"]')).toBeNull();
+  });
+
   it("keeps setup choices live during TF2, but requires an unlocked, named profile to apply", async () => {
     const props = wizardProps();
     status.running = true;

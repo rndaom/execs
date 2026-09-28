@@ -1,4 +1,4 @@
-import { CheckCircle } from "@phosphor-icons/react";
+import { CheckCircle, WarningCircle } from "@phosphor-icons/react";
 import type { Tf2Install } from "../lib/bridge";
 import { formatInstallLabel } from "../lib/finder-ui";
 import { OnboardingFrame } from "./OnboardingFrame";
@@ -22,6 +22,8 @@ export function FinderPanel({
   onConfirm,
   confirmed = false,
   waitingFor = null,
+  missing = null,
+  onRetryMissing,
 }: {
   scanning: boolean;
   installs: Tf2Install[];
@@ -37,6 +39,9 @@ export function FinderPanel({
   confirmed?: boolean;
   /** The read setup is still waiting for once that beat has passed. */
   waitingFor?: string | null;
+  /** The saved TF2 folder when it no longer holds TF2, such as a disconnected drive. */
+  missing?: string | null;
+  onRetryMissing?: () => void;
 }) {
   return (
     <OnboardingFrame
@@ -51,6 +56,28 @@ export function FinderPanel({
         { label: "Set up profile", state: confirmed ? "current" : "upcoming" },
       ]}
     >
+      {missing && !confirmed ? (
+        <div
+          data-testid="finder-missing"
+          className="surface mb-4 flex flex-wrap items-start justify-between gap-3 px-5 py-4"
+        >
+          <p className="t-body flex min-w-0 flex-1 items-start gap-2 text-ink-muted">
+            <WarningCircle
+              aria-hidden="true"
+              size={16}
+              weight="fill"
+              className="mt-1 shrink-0 text-warn"
+            />
+            <span className="min-w-0">
+              execs can't find TF2 at <span className="break-all text-ink">{missing}</span>. Connect
+              the drive and retry, or choose where TF2 is now.
+            </span>
+          </p>
+          <button type="button" onClick={onRetryMissing} disabled={busy} className="btn btn-ghost">
+            Retry
+          </button>
+        </div>
+      ) : null}
       <div className="surface px-5">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-edge py-4">
           <h2 className="t-section">TF2 location</h2>

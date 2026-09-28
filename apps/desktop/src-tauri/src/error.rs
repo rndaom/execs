@@ -20,11 +20,21 @@ pub struct CommandError {
 }
 
 impl CommandError {
+    /// Every command failure passes through here, so each one is recorded
+    /// for Copy diagnostics (code and message only).
     pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
-        Self {
+        let mut error = Self {
             code: code.into(),
             message: message.into(),
+        };
+        // The log keeps the original wording, including the path involved.
+        crate::activity::record("error", &format!("{}: {}", error.code, error.message));
+        // The operating system's out-of-space error reads the same everywhere.
+        if execs_core::disk_space::is_disk_full_error(&error.message) {
+            error.code = "DiskFull".into();
+            error.message = execs_core::disk_space::disk_full_message(&error.message);
         }
+        error
     }
 
     /// For failures with no richer classification available (a fetch error, a
@@ -105,6 +115,36 @@ mod tests {
         // so the UI can branch on one string no matter which layer refused.
         let running: CommandError = ProfileError::GameRunning.into();
         assert_eq!(running.code, WriteLockError::GameRunning.code());
+    }
+
+    #[test]
+    fn a_full_disk_reads_the_same_on_every_platform() {
+        for raw in [
+            "Could not write tf/custom/pack.vpk: There is not enough space on the disk. (os error 112)",
+            "No space left on device (os error 28)",
+        ] {
+            let err: CommandError = ProfileError::Io(raw.into()).into();
+            assert_eq!(err.code, "DiskFull");
+            assert_eq!(err.message, execs_core::disk_space::DISK_FULL_MESSAGE);
+        }
+    }
+
+    #[test]
+    fn a_full_disk_after_a_switch_removed_files_still_says_to_re_apply() {
+        let raw = format!(
+            "Could not write tf/cfg/config.cfg: There is not enough space on the disk. (os error 112) {}",
+            execs_core::switch::MID_SWITCH_GUIDANCE
+        );
+        let err: CommandError = ProfileError::Io(raw).into();
+        assert_eq!(err.code, "DiskFull");
+        assert_eq!(
+            err.message,
+            format!(
+                "{} {}",
+                execs_core::disk_space::DISK_FULL_MESSAGE,
+                execs_core::switch::MID_SWITCH_GUIDANCE
+            )
+        );
     }
 
     #[test]

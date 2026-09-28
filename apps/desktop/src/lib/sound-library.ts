@@ -155,12 +155,30 @@ export function stockEntries(): SoundLibraryEntry[] {
   }));
 }
 
+/** Clips longer than this get a note: a hit sound plays on every hit. */
+export const LONG_CLIP_MS = 1000;
+
+/** What the player should know about a file they added: conversion and length. */
+export function ownEntryMeta(picked: PickedHitsound): string | undefined {
+  const { info } = picked;
+  const facts = [];
+  if (picked.converted) {
+    facts.push(`Converted to ${info.bitsPerSample}-bit ${info.sampleRate / 1000} kHz`);
+  }
+  if (info.durationMs > LONG_CLIP_MS) {
+    facts.push(
+      `${(info.durationMs / 1000).toFixed(1)} s long; hit sounds usually last under a second`,
+    );
+  }
+  return facts.length ? facts.join(" · ") : undefined;
+}
+
 export function ownEntry(picked: PickedHitsound): SoundLibraryEntry {
   return {
     id: `own:${picked.token}`,
     label: picked.name,
     source: "own",
-    meta: picked.converted ? "Converted to 16-bit 44.1 kHz" : undefined,
+    meta: ownEntryMeta(picked),
     choiceFor: () => ({ kind: "file", picked }),
     pickFor: () => ({ kind: "file", token: picked.token, name: picked.name }),
   };

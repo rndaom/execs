@@ -7,6 +7,23 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- After this update, execs tidies up once what earlier versions left behind: sound caches for
+  packs that are gone, HUD backups in TF2's custom folder (duplicates are deleted, the rest move
+  to execs data and stay in App settings → Storage), Valve's own cfgs saved into profiles, the old
+  Casual preload hook, the cheat-only tracer line, bind keys with names TF2 rejects, and unused
+  downloads from retired features. Packs, your own files and hand edits are not touched. One quiet
+  notice says what changed, with Details, and Storage offers Tidy up again.
+- Sounds accepts MP3 and Ogg Vorbis clips as well as WAV, and notes when a clip is longer than a
+  second. Clips are converted to a WAV TF2 plays, up to 30 seconds.
+- execs reopens where you left it: the same window size and position (including maximized, and on
+  the same monitor when it is still connected) and the pane you last used.
+- Copy diagnostics includes a short Health summary and the most recent operations and errors, so a
+  bug report shows what execs was doing. The activity log keeps no file contents and hides
+  password values.
+- New profile has a Create button that adds the profile without switching TF2 to it, next to
+  Create and switch.
+- Copy binds, Gameplay settings (including mouse sensitivity) or hit and kill sounds to other
+  profiles from the Binds, Gameplay and Sounds panes, with a list of which profiles would change.
 - Turn custom packs off and on without losing their files, copy saved packs to another profile,
   and check GameBanana for newer updates.
 - Bind custom commands, Engineer build/destroy actions, Spy disguises and the remaining voice
@@ -21,12 +38,44 @@ User-facing changes only. The release workflow publishes the matching
 - Import single-volume RAR4 and RAR5 mods, including solid archives, with the same bounded
   extraction rules as other formats. Encrypted, split and unsupported archive features explain
   how to import an extracted folder instead.
-- Custom packs show content-based Casual restrictions, overlapping files, expected custom-pack
-  winners and mixed model components. Incomplete checks stay visible; these notes do not claim
-  a pack has been verified in a retail Casual match.
+- Custom packs say what each pack can do on Valve's Casual servers, which packs share a file and
+  which one TF2 uses, and when a model's parts come from different packs. Files that could not be
+  checked are named, and no pack is described as working on Casual before a real match confirms it.
 
 ### Fixed
 
+- Switching profiles, imports and large installs check free space first and refuse before changing
+  anything, naming the drive, the space needed and the space free. A full disk during any other
+  write now says the drive is full instead of showing the raw system error.
+- Download failures read as plain sentences with a next step, such as "GitHub is limiting requests
+  from your network. Try again in about an hour." instead of the raw address and HTTP status. The
+  full address stays in Copy diagnostics.
+- Mods over the 512 MB limit say how large they are and explain the manual route: extract the mod
+  into `tf/custom` with TF2 closed, then choose Update profile when execs asks.
+- While Steam is open, the Launch pane offers "Check Steam again" instead of a "Write to Steam"
+  button that could only fail; execs writes Steam's options only while Steam is closed.
+- The Launch pane says when resolution, display-mode or console options stay in effect after you
+  remove them or switch profiles, because TF2 saves them in its own settings.
+- Inventory no longer re-reads your backpack every two minutes, which kept making Steam show you
+  as playing TF2. It reads when you open it, after TF2 closes and when you press the new Refresh
+  button, and explains the brief Steam status.
+- Switching to a profile saved by an older version installs the current Casual preload hook, which
+  keeps TF2's console and its engine errors instead of clearing them and running a menu-music
+  script. Only an unchanged execs hook is replaced; edited hooks stay as you left them.
+- Gameplay no longer writes the cheat-only `r_drawtracers` setting, which TF2 refuses from startup
+  cfgs and reported as an error on every launch. The "All tracers" switch is removed because TF2
+  never applied it; First-person tracers stays.
+- HUDs install from RAR archives too: Import HUD, single-file GameBanana HUD pages, and Dropbox
+  or teamfortress.tv links accept RAR alongside ZIP and 7z.
+- A mod with a single VPK or content folder installs in one click again; the file chooser opens
+  only when an archive has real choices. Choices are labelled by name with sizes in KB or MB,
+  the chooser no longer shows "Installing mod…" or holds other saves while it is open, and it
+  finds author notes named like `Installation.txt` or `How to install.txt`.
+- After Steam moves TF2 to another drive or library, execs offers to move your profiles to the
+  new folder instead of hiding them. Only the recorded folder changes; profile files and TF2 are
+  left alone.
+- If the saved TF2 folder is missing when execs starts, for example because its drive is not
+  connected, execs names the folder and offers Retry instead of starting over as a first run.
 - Crosshair and Viewmodels saves no longer fail on the `sound/sound.cache` file TF2 writes into
   every custom folder; execs removes it and TF2 rebuilds it.
 - Binds recorded in execs are no longer replaced by older keys from TF2's `config.cfg`. After a
@@ -58,6 +107,14 @@ User-facing changes only. The release workflow publishes the matching
   Apply also refuses incompatible profile sources before changing game files.
 - Removing a VPK pack also cleans its leftover sound cache. Caches for surviving packs,
   external edits and linked paths are preserved.
+- Binds records `;` `'` `,` `.` `/` `\` `-` and `=` with the key names TF2 uses. Binds recorded
+  on these keys by earlier versions never worked in game and are read as the intended key.
+  Right Shift, Right Ctrl and Right Alt no longer rebind the left keys, and Pause, Scroll Lock,
+  Num Lock, the Windows keys and the Menu key can be bound.
+- Linux launch wrappers such as `gamemoderun %command%`, `mangohud %command%`,
+  `gamescope -- %command%` and environment variables like `LD_PRELOAD="" %command%` are kept
+  exactly as written. execs used to drop `%command%` and pass the wrapper to TF2 as arguments,
+  and could write that broken string back into Steam.
 - Settings load again after you close TF2 for a profile where you have not saved any binds in
   execs. When TF2 had changed `config.cfg`, every settings pane stopped with "The Binds source
   identity is unavailable", and Retry only helped until the next refresh.

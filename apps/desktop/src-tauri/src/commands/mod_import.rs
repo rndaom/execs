@@ -297,14 +297,15 @@ pub async fn confirm_mod_import(
 ) -> Result<ProfileDetail, CommandError> {
     let prepared = take_review(&mut *pending.0.lock().await, &token)?;
     let _guard = gate.lock_for_write().await?;
-    with_profile(move |root, id| {
+    let result = with_profile(move |root, id| {
         execs_core::refuse_if_running()?;
         ensure_review_current(&prepared, &root, &id, &revision(&id)?)?;
         let source = prepared.source.clone();
         let packs = selected_packs(prepared, &choices)?;
         Ok(execs_core::mods::install_mods(&root, &id, packs, source)?)
     })
-    .await
+    .await;
+    super::shared::logged("Installed mod packs", result)
 }
 
 #[tauri::command]

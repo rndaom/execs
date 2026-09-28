@@ -191,6 +191,8 @@ describe("GameBanana file chooser facts", () => {
     expect(gameBananaVariantFacts(file({ supported: false }), utc)).toContain(
       "Not supported for Mods",
     );
+    const large = file({ supported: false, sizeBytes: 1.4 * 1024 ** 3, addedAt: null });
+    expect(gameBananaVariantFacts(large, utc)).toBe("1.4 GB · Over execs' 512 MB mod limit");
   });
 
   it("preselects only a lone installable file with no split parts beside it", () => {

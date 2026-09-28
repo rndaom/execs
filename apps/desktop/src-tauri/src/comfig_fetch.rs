@@ -140,13 +140,7 @@ fn validate_asset_url(asset: &PublishedAsset) -> Result<(), String> {
 }
 
 fn fetch_latest_release() -> Result<PublishedRelease, String> {
-    net::get_json_for(&net::api_client()?, RELEASE_URL, RemoteSource::GitHubApi).map_err(|err| {
-        if err.starts_with("Could not read") {
-            "Could not read the official mastercomfig release.".to_string()
-        } else {
-            err
-        }
-    })
+    net::get_json_for(&net::api_client()?, RELEASE_URL, RemoteSource::GitHubApi)
 }
 
 pub fn fetch_wizard_assets(spec: &WizardSpec) -> Result<DownloadedRelease, String> {

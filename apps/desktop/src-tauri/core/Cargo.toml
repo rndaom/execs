@@ -23,9 +23,19 @@ sevenz-rust2 = { version = "0.22.2", default-features = false }
 # Extraction only; the bundled UnRAR terms are included in packaged notices.
 unrar-ng-sys = "=0.7.7"
 tempfile = "3"
+# Pure Rust MP3 and Ogg Vorbis decoding for hit and kill sounds; the decoded
+# samples go through the existing WAV preparation. ID3v2 tags start most MP3s.
+symphonia = { version = "0.6", default-features = false, features = ["mp3", "ogg", "vorbis", "id3v2"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
+# Free space of one volume (`GetDiskFreeSpaceExW`); the same windows release
+# sysinfo already builds, so no new crate enters the graph.
+windows = { version = "0.57", features = ["Win32_Storage_FileSystem"] }
+
+[target.'cfg(unix)'.dependencies]
+# `statvfs` for the free space of one mount; already in the graph via sysinfo.
+libc = "0.2"
 
 [features]
 # The `examples/` probes are read-only field tools pointed at a real TF2

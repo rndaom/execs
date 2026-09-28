@@ -34,6 +34,7 @@ import { useLifecycleStatus } from "./hooks/useLifecycleStatus";
 import { useOperationErrors } from "./hooks/useOperationErrors";
 import { useProfileLibrary } from "./hooks/useProfileLibrary";
 import { useReleaseNotes } from "./hooks/useReleaseNotes";
+import { useStartupTidy } from "./hooks/useStartupTidy";
 import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
@@ -45,7 +46,7 @@ import {
   CONFIRM_HOLD_MS,
   CONFIRM_MAX_MS,
 } from "./lib/boot-ui";
-import { invokeErrorMessage, type LaunchSyncStatus } from "./lib/bridge";
+import { invokeErrorMessage, isTauri, type LaunchSyncStatus } from "./lib/bridge";
 import { motionHold, revealPane, revealScreen } from "./lib/entrance";
 import { createFilesDraftStore } from "./lib/files-drafts";
 import { confirmEnabled } from "./lib/finder-ui";
@@ -59,7 +60,14 @@ import {
   previewUpdateProgress,
 } from "./lib/preview";
 import { createSettingsDraftStore } from "./lib/settings-drafts";
-import { SETTINGS_TAB_LABELS, type SettingsTab, showSettingsChrome } from "./lib/settings-ui";
+import {
+  browserStorage,
+  readLastPane,
+  SETTINGS_TAB_LABELS,
+  type SettingsTab,
+  showSettingsChrome,
+  writeLastPane,
+} from "./lib/settings-ui";
 import { SettingsHost } from "./SettingsHost";
 import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard } from "./SetupWizard";
@@ -97,6 +105,7 @@ export function App({
   const [hudReviewId, setHudReviewId] = useState<string | null>(null);
   const [hudReviewBusy, setHudReviewBusy] = useState(false);
   const [hudReviewRevision, setHudReviewRevision] = useState(0);
+  const [tidyRevision, setTidyRevision] = useState(0);
   const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
@@ -107,8 +116,15 @@ export function App({
   const profileSettings = useRef<HTMLDivElement>(null);
   const [settingsReviewRequest, setSettingsReviewRequest] = useState(0);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
-    () => previewSettingsTab(preview) ?? "comfig",
+    // Fixture previews choose their own pane; the installed app reopens the last one.
+    () =>
+      previewSettingsTab(preview) ??
+      (isTauri() ? readLastPane(browserStorage()) : null) ??
+      "comfig",
   );
+  useEffect(() => {
+    if (isTauri()) writeLastPane(browserStorage(), settingsTab);
+  }, [settingsTab]);
   const navigateSettings = useCallback((tab: SettingsTab) => {
     setAppSettingsOpen(false);
     setSettingsTab(tab);
@@ -312,10 +328,59 @@ export function App({
     }
   }, [profiles, firstRun, draftName]);
 
+  const tidy = useStartupTidy(
+    api,
+    {
+      ready:
+        install.screen === "ready" &&
+        install.confirmed !== null &&
+        profiles.library?.usable === true &&
+        !profiles.library.rootMismatch,
+      running: lock.running,
+      busy: busy || progress.state.active,
+    },
+    () => {
+      setTidyRevision((revision) => revision + 1);
+      void api
+        .getProfileLibrary()
+        .then(profiles.setLibrary)
+        .catch(() => {});
+    },
+  );
+  const verifyAfterTidy = useCallback(() => {
+    void api
+      .repairGameFiles()
+      .then(() => {
+        setError(null, "tidy:verify");
+        navigateSettings("mods");
+        return lifecycle.refresh();
+      })
+      .catch((err) => setError(invokeErrorMessage(err), "tidy:verify"));
+  }, [api, setError, navigateSettings, lifecycle]);
+  const reviewLibraryMove = useCallback(() => api.reviewLibraryMove(), [api]);
+  const { setLibrary } = profiles;
+  const moveLibrary = useCallback(async () => {
+    setBusy(true);
+    try {
+      setLibrary(await api.moveLibraryToInstall());
+      setError(null, "profiles:move");
+    } catch (err) {
+      setError(invokeErrorMessage(err), "profiles:move");
+    } finally {
+      setBusy(false);
+    }
+  }, [api, setLibrary, setError]);
+
   const onApplyWizard = useCallback(async () => {
     if (await firstRun.applyWizard(draftName)) {
       setDraftName("");
     }
+  }, [firstRun, draftName]);
+
+  const onCreateOnly = useCallback(async () => {
+    const created = await firstRun.applyWizard(draftName, false);
+    if (created) setDraftName("");
+    return created;
   }, [firstRun, draftName]);
 
   const surface = firstRunSurface(profiles.library, firstRun.kind);
@@ -514,6 +579,7 @@ export function App({
             onToggleAddon={firstRun.toggleAddon}
             onStartFrom={firstRun.setStartFrom}
             onApply={() => void onApplyWizard()}
+            onCreateOnly={isCreate ? onCreateOnly : undefined}
             onCancel={isCreate ? firstRun.cancelCreate : undefined}
           />
           <SwitchProgressList
@@ -616,6 +682,11 @@ export function App({
             .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
         }}
         onReviewFiles={() => navigateSettings("files")}
+        onReviewLibraryMove={reviewLibraryMove}
+        tidyReport={tidy.report}
+        onDismissTidy={tidy.dismiss}
+        onVerifyTidy={verifyAfterTidy}
+        onMoveLibrary={moveLibrary}
         onInspectExport={(id) => api.inspectProfileExport(id)}
         onCompareSwitch={(id) => api.compareProfileSwitch(id)}
         restoreApi={api}
@@ -666,7 +737,7 @@ export function App({
                     recoveryTargetId !== null ||
                     lifecycleBusy
                   }
-                  refreshKey={`${profiles.refreshKey}:${hudReviewRevision}`}
+                  refreshKey={`${profiles.refreshKey}:${hudReviewRevision}:${tidyRevision}`}
                   bindSyncRequest={profiles.bindSyncRequest}
                   bindSyncChanges={profiles.bindSyncChanges}
                   onBindSyncHandled={profiles.onBindSyncHandled}
@@ -882,6 +953,8 @@ export function App({
                   onConfirm={() => void install.confirm()}
                   confirmed={handoffSince !== null}
                   waitingFor={handoffSettled ? null : handoff.status}
+                  missing={install.missing}
+                  onRetryMissing={() => void install.retryMissing()}
                 />
               )}
 

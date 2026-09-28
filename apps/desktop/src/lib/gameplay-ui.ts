@@ -14,10 +14,6 @@ export const GAMEPLAY_HEADER = "// execs gameplay — managed, do not edit by ha
 
 export const FLIP_VIEWMODELS_NOTE = "Not while connected to a server.";
 
-/// r_drawtracers is FCVAR_CHEAT: the engine refuses it on any server without
-/// sv_cheats, logging "Can't use cheat cvar r_drawtracers in multiplayer".
-export const ALL_TRACERS_NOTE = "Ignored on live servers; needs sv_cheats.";
-
 export const FOV_MIN = 75;
 export const FOV_MAX = 90;
 /** TF2's viewmodel ConVar limits are independent of world FOV and menu limits. */
@@ -78,7 +74,6 @@ export type GameplaySettings = {
   tf_use_min_viewmodels: GameplayToggle;
   r_drawviewmodel: GameplayToggle;
   r_drawtracers_firstperson: GameplayToggle;
-  r_drawtracers: GameplayToggle;
   cl_flipviewmodels: GameplayToggle;
   cl_autoreload: GameplayToggle;
   /** Preserve controller/custom modes until the player explicitly changes this control. */
@@ -154,7 +149,6 @@ export function defaultGameplay(): GameplaySettings {
     tf_use_min_viewmodels: corpusToggle("tf_use_min_viewmodels", 0),
     r_drawviewmodel: corpusToggle("r_drawviewmodel", 1),
     r_drawtracers_firstperson: corpusToggle("r_drawtracers_firstperson", 1),
-    r_drawtracers: corpusToggle("r_drawtracers", 1),
     cl_flipviewmodels: corpusToggle("cl_flipviewmodels", 0),
     cl_autoreload: corpusToggle("cl_autoreload", 1),
     hud_fastswitch: corpusNumber("hud_fastswitch", 0),
@@ -210,7 +204,6 @@ export function clampGameplay(settings: GameplaySettings): GameplaySettings {
     tf_use_min_viewmodels: settings.tf_use_min_viewmodels ? 1 : 0,
     r_drawviewmodel: settings.r_drawviewmodel ? 1 : 0,
     r_drawtracers_firstperson: settings.r_drawtracers_firstperson ? 1 : 0,
-    r_drawtracers: settings.r_drawtracers ? 1 : 0,
     cl_flipviewmodels: settings.cl_flipviewmodels ? 1 : 0,
     cl_autoreload: settings.cl_autoreload ? 1 : 0,
     hud_fastswitch: Number.isFinite(settings.hud_fastswitch) ? settings.hud_fastswitch : 0,
@@ -297,7 +290,6 @@ export function serializeGameplay(settings: GameplaySettings): string {
     `tf_use_min_viewmodels ${next.tf_use_min_viewmodels}`,
     `r_drawviewmodel ${next.r_drawviewmodel}`,
     `r_drawtracers_firstperson ${next.r_drawtracers_firstperson}`,
-    `r_drawtracers ${next.r_drawtracers}`,
     `cl_flipviewmodels ${next.cl_flipviewmodels}`,
     `cl_autoreload ${next.cl_autoreload}`,
     `hud_fastswitch ${next.hud_fastswitch}`,
@@ -333,7 +325,12 @@ export function gameplayDirty(draft: GameplaySettings, saved: GameplaySettings):
 
 export type ManagedCfgScope = "gameplay" | "crosshair" | "sounds" | "viewmodels";
 
-/** Everything the Gameplay pane owns in the shared managed cfg. */
+/**
+ * Everything the Gameplay pane owns in the shared managed cfg. `r_drawtracers`
+ * is a cheat cvar the engine refuses from any startup cfg ("Can't use cheat
+ * cvar r_drawtracers in multiplayer"), so the pane never writes it; owning the
+ * name lets a save remove the line older versions wrote.
+ */
 export const GAMEPLAY_SCOPE_CVARS: ReadonlySet<string> = new Set([
   "fov_desired",
   "r_drawtracers_firstperson",
@@ -395,10 +392,6 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
   const tracersFp = read("r_drawtracers_firstperson");
   if (tracersFp !== undefined) {
     next.r_drawtracers_firstperson = parseToggle(tracersFp, next.r_drawtracers_firstperson);
-  }
-  const tracers = read("r_drawtracers");
-  if (tracers !== undefined) {
-    next.r_drawtracers = parseToggle(tracers, next.r_drawtracers);
   }
   const flip = read("cl_flipviewmodels");
   if (flip !== undefined) {

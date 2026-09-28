@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { emptyLibrary, previewSavedLibrary } from "./library-ui";
 import {
   canWriteSettings,
+  readLastPane,
   SETTINGS_TAB_LABELS,
   SETTINGS_TABS,
   showSettingsChrome,
+  writeLastPane,
 } from "./settings-ui";
 
 describe("settings chrome", () => {
@@ -53,5 +55,30 @@ describe("settings chrome", () => {
     expect(canWriteSettings(false, false)).toBe(true);
     expect(canWriteSettings(true, false)).toBe(false);
     expect(canWriteSettings(false, true)).toBe(false);
+  });
+});
+
+describe("the last pane", () => {
+  it("reopens a known pane and forgets anything else or a blocked store", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+    };
+    expect(readLastPane(storage)).toBeNull();
+    writeLastPane(storage, "mods");
+    expect(readLastPane(storage)).toBe("mods");
+    store.set("execs:last-pane", "not-a-pane");
+    expect(readLastPane(storage)).toBeNull();
+    const blocked = {
+      getItem: () => {
+        throw new Error("blocked");
+      },
+      setItem: () => {
+        throw new Error("blocked");
+      },
+    };
+    expect(readLastPane(blocked)).toBeNull();
+    expect(() => writeLastPane(blocked, "hud")).not.toThrow();
   });
 });

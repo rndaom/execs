@@ -212,6 +212,42 @@ export type ProfileLibrary = {
   profiles: ProfileSummary[];
 };
 
+/** What the tidy-up after an update changed; see `execs-core` `tidy_up.rs`. */
+export type TidyReport = {
+  soundCachesRemoved: string[];
+  hudBackupsDeleted: string[];
+  hudBackupsMoved: string[];
+  hudBackupsKept: number;
+  valveCfgsDropped: { profile: string; count: number }[];
+  valveCfgsMissing: number;
+  managedFilesUpgraded: {
+    profile: string;
+    kind: "preloadHook" | "bindKeyNames" | "cheatTracers";
+  }[];
+  downloadsRemoved: string[];
+  freedBytes: number;
+  movedBytes: number;
+  skipped: string[];
+};
+
+/** The once-per-version tidy-up; null when it already ran or has to wait. */
+export async function runAutomaticTidyUp(): Promise<TidyReport | null> {
+  return call<TidyReport | null>("run_automatic_tidy_up");
+}
+
+/** App settings → Storage: run the tidy-up checks again. */
+export async function tidyUpAgain(): Promise<TidyReport> {
+  return call<TidyReport>("tidy_up_again");
+}
+
+/** Saved profiles that belong to another TF2 folder, and whether they can move here. */
+export type LibraryMoveReview = {
+  libraryRoot: string;
+  profileCount: number;
+  /** Why the move is refused, in words for the player; null when it can run. */
+  blockedReason: string | null;
+};
+
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -291,6 +327,11 @@ export async function getTf2Root(): Promise<Tf2Install | null> {
   return call<Tf2Install | null>("get_tf2_root");
 }
 
+/** The saved TF2 folder when it no longer holds TF2, such as a disconnected drive. */
+export async function getMissingTf2Root(): Promise<string | null> {
+  return call<string | null>("get_missing_tf2_root");
+}
+
 export async function getTf2WriteLock(): Promise<WriteLock> {
   return call<WriteLock>("tf2_write_lock");
 }
@@ -316,6 +357,39 @@ export async function getProfileLibrary(): Promise<ProfileLibrary> {
 
 export async function initProfileLibrary(): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("init_profile_library");
+}
+
+/** Personal settings that can be copied from the active profile to others. */
+export type SettingsCopyScope = "binds" | "gameplay" | "sounds";
+
+export type SettingsCopyTarget = {
+  id: string;
+  name: string;
+  /** False when the profile already has exactly these settings. */
+  changes: boolean;
+  /** Why this profile cannot take the copy, such as an unreadable file. */
+  problem?: string | null;
+};
+
+export async function reviewSettingsCopy(scope: SettingsCopyScope): Promise<SettingsCopyTarget[]> {
+  return call<SettingsCopyTarget[]>("review_settings_copy", { scope });
+}
+
+/** Copy the active profile's saved settings for one pane; returns the changed ids. */
+export async function copySettingsToProfiles(
+  scope: SettingsCopyScope,
+  targets: string[],
+): Promise<string[]> {
+  return call<string[]>("copy_settings_to_profiles", { scope, targets });
+}
+
+export async function reviewLibraryMove(): Promise<LibraryMoveReview | null> {
+  return call<LibraryMoveReview | null>("review_library_move");
+}
+
+/** Point every saved profile at the confirmed TF2 folder after TF2 moved. */
+export async function moveLibraryToInstall(): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("move_library_to_install");
 }
 
 export async function saveCurrentAs(name: string): Promise<ProfileLibrary> {
@@ -609,11 +683,13 @@ export async function applyUnusedWizard(spec: WizardSpec): Promise<ProfileLibrar
   return call<ProfileLibrary>("apply_unused_wizard", { spec });
 }
 
+/** Create a profile; without `switchAfter` it stays inactive and TF2 is untouched. */
 export async function createFreshProfile(
   spec: WizardSpec,
   startFrom: StartFrom,
+  switchAfter = true,
 ): Promise<ProfileLibrary> {
-  return call<ProfileLibrary>("create_fresh_profile", { spec, startFrom });
+  return call<ProfileLibrary>("create_fresh_profile", { spec, startFrom, switchAfter });
 }
 
 export type CfgLayer = "comfig" | "vanilla";
@@ -1045,7 +1121,7 @@ export async function installHud(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("install_hud", { id });
 }
 
-/** Pick a zip/7z on disk and install it as this profile's HUD. Null = cancelled. */
+/** Pick a ZIP, 7z or RAR on disk and install it as this profile's HUD. Null = cancelled. */
 export async function importHudArchive(): Promise<ProfileDetail | null> {
   return call<ProfileDetail | null>("import_hud_archive");
 }

@@ -27,8 +27,10 @@ import {
   type PreloaderStatusPayload,
   type ProfileDetail,
   type ProfileLibrary,
+  type SettingsCopyScope,
   type SwitchProgress,
   type Tf2Install,
+  type TidyReport,
 } from "./bridge";
 import { PREVIEW_COMFIG_STATE } from "./comfig-ui";
 import { previewCrosshairRecord } from "./crosshair-ui";
@@ -49,6 +51,7 @@ import {
   emptyAbsorbDelta,
   emptyLibrary,
   previewPackDelta,
+  previewSavedLibrary,
   previewSavedProfile,
   profileNameProblem,
   SWITCH_STEPS,
@@ -62,6 +65,7 @@ import {
   PREVIEW_PROFILE_MODS,
 } from "./mods-ui";
 import {
+  PREVIEW_MISSING_ROOT,
   type PreviewState,
   previewConfirmed,
   previewFirstRunKind,
@@ -73,6 +77,25 @@ import {
 } from "./preview";
 import type { RestorePoint } from "./restore-points-ui";
 import { previewViewmodelRecord } from "./viewmodel-ui";
+
+/** A tidy-up like the one on a machine that used 0.1.x and 0.2.0. */
+const PREVIEW_TIDY_REPORT: TidyReport = {
+  soundCachesRemoved: Array.from({ length: 30 }, (_, index) => `pack${index}.vpk.sound.cache`),
+  hudBackupsDeleted: ["rayshud"],
+  hudBackupsMoved: ["toonhud", "budhud", "m0rehud", "flawhud", "hypnotize", "7hud"],
+  hudBackupsKept: 1,
+  valveCfgsDropped: [{ profile: "Default", count: 23 }],
+  valveCfgsMissing: 23,
+  managedFilesUpgraded: [
+    { profile: "Low", kind: "preloadHook" },
+    { profile: "Low", kind: "cheatTracers" },
+    { profile: "wacky tf2", kind: "cheatTracers" },
+  ],
+  downloadsRemoved: ["mods-v1.7.1.zip", "Retired crosshair, studio and sound catalog caches"],
+  freedBytes: 98 * 1024 * 1024,
+  movedBytes: 169 * 1024 * 1024,
+  skipped: [],
+};
 
 /** Preview-only simulation of GameBanana's global server order. Production
  * records are already ordered and must never pass through this helper. */
@@ -309,6 +332,9 @@ export function createPreviewApi(state: PreviewState): Api {
     async getTf2Root() {
       return previewConfirmed(state);
     },
+    async getMissingTf2Root() {
+      return state === "tf2-missing" ? PREVIEW_MISSING_ROOT : null;
+    },
     async getTf2WriteLock() {
       return { running: previewLocked(state) };
     },
@@ -327,6 +353,39 @@ export function createPreviewApi(state: PreviewState): Api {
     // --- library ------------------------------------------------------------
     async getProfileLibrary() {
       return library ?? emptyLibrary(BROWSED.path, true);
+    },
+    async runAutomaticTidyUp() {
+      return state === "tidy-up" ? PREVIEW_TIDY_REPORT : null;
+    },
+    async tidyUpAgain() {
+      if (previewLocked(state)) throw new BridgeError("Close TF2 first.", "GameRunning");
+      return { ...PREVIEW_TIDY_REPORT, soundCachesRemoved: [], hudBackupsMoved: [], movedBytes: 0 };
+    },
+    async reviewSettingsCopy(_scope: SettingsCopyScope) {
+      return (library?.profiles ?? [])
+        .filter((profile) => profile.id !== library?.activeProfileId)
+        .map((profile, index) => ({
+          id: profile.id,
+          name: profile.name,
+          changes: index % 2 === 0,
+        }));
+    },
+    async copySettingsToProfiles(_scope: SettingsCopyScope, targets: string[]) {
+      if (previewLocked(state)) throw new BridgeError("Close TF2 first.", "GameRunning");
+      return targets;
+    },
+    async reviewLibraryMove() {
+      if (!library?.rootMismatch) return null;
+      return {
+        libraryRoot: library.tf2Root ?? PREVIEW_MISSING_ROOT,
+        profileCount: 2,
+        blockedReason: null,
+      };
+    },
+    async moveLibraryToInstall() {
+      if (previewLocked(state)) throw new BridgeError("Close TF2 first.", "GameRunning");
+      library = previewSavedLibrary(library?.confirmedRoot ?? PREVIEW_MISSING_ROOT);
+      return library;
     },
     async initProfileLibrary() {
       library = { ...(library ?? emptyLibrary(BROWSED.path, true)), initialized: true };
@@ -723,9 +782,9 @@ export function createPreviewApi(state: PreviewState): Api {
       emitSwitchSteps();
       return addProfile(spec.name, true);
     },
-    async createFreshProfile(spec) {
-      emitSwitchSteps();
-      return addProfile(spec.name, true);
+    async createFreshProfile(spec, _startFrom, switchAfter = true) {
+      if (switchAfter) emitSwitchSteps();
+      return addProfile(spec.name, switchAfter);
     },
 
     // --- profile files ------------------------------------------------------

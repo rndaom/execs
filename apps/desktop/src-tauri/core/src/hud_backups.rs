@@ -9,9 +9,9 @@ use std::time::UNIX_EPOCH;
 use serde::Serialize;
 
 use crate::hash::{
-    copy_and_sha256_within, metadata_is_link, move_dir_no_replace_within, random_token,
-    remove_dir_within, remove_file_force_within, remove_tree_within, sha256_file_exact, sha256_hex,
-    validate_dir_within, validate_file_within,
+    copy_and_sha256_within, create_dir_all_within, metadata_is_link, move_dir_no_replace_within,
+    random_token, remove_dir_within, remove_file_force_within, remove_tree_within,
+    sha256_file_exact, sha256_hex, validate_dir_within, validate_file_within,
 };
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
@@ -150,9 +150,26 @@ fn token(value: &str) -> bool {
             .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
 }
 
+/// Where HUD backups moved out of TF2's folder live: `<data dir>/hud-backups`.
+pub const DATA_BACKUP_DIR: &str = "hud-backups";
+
+fn data_root(profiles: &Path) -> &Path {
+    profiles.parent().unwrap_or(profiles)
+}
+
 fn resolve(profiles: &Path, root: &Path, id: &str) -> Result<(PathBuf, PathBuf), ProfileError> {
     let parts: Vec<_> = id.split('/').collect();
     match parts.as_slice() {
+        ["data", generation, name] if token(generation) && normalize_rel_path(name)? == *name => {
+            if name.is_empty() || name.contains(['/', '\\']) {
+                return Err(ProfileError::InvalidPath);
+            }
+            let data = data_root(profiles);
+            Ok((
+                data.to_path_buf(),
+                data.join(DATA_BACKUP_DIR).join(generation).join(name),
+            ))
+        }
         ["live", generation, name] if token(generation) && normalize_rel_path(name)? == *name => {
             if name.is_empty() || name.contains(['/', '\\']) {
                 return Err(ProfileError::InvalidPath);
@@ -231,6 +248,28 @@ pub fn list_hud_backups_to(profiles: &Path, root: &Path) -> Result<HudBackupRepo
             }
         }
         Err(_) => result.unreadable.push("TF2 HUD backups".into()),
+    }
+    let data = data_root(profiles).join(DATA_BACKUP_DIR);
+    match directories(data_root(profiles), &data) {
+        Ok(generations) => {
+            for generation in generations.into_iter().filter(|name| token(name)) {
+                match directories(data_root(profiles), &data.join(&generation)) {
+                    Ok(names) => {
+                        for name in names.into_iter().filter(|name| !name.starts_with('.')) {
+                            candidates.push((
+                                format!("data/{generation}/{name}"),
+                                name,
+                                "execs data",
+                            ));
+                        }
+                    }
+                    Err(_) => result
+                        .unreadable
+                        .push(format!("execs data backup {generation}")),
+                }
+            }
+        }
+        Err(_) => result.unreadable.push("execs data HUD backups".into()),
     }
     for profile in directories(profiles, profiles)?
         .into_iter()
@@ -335,6 +374,114 @@ pub fn delete_hud_backup_to(
         remove_dir_within(&base, &folder.join(directory)).map_err(io)?;
     }
     remove_dir_within(&base, &folder).map_err(io)
+}
+
+/// The files one backup holds, keyed as the profile paths they came from
+/// (`tf/custom/<hud>/…`), for comparing with what profiles still own.
+/// Library backup metadata outside `files/` is not a HUD file and is skipped.
+pub(crate) fn backup_profile_paths(
+    profiles: &Path,
+    root: &Path,
+    id: &str,
+) -> Result<Vec<(String, String)>, ProfileError> {
+    let (base, folder) = resolve(profiles, root, id)?;
+    let data = snapshot(&base, &folder)?;
+    let prefix = match id.split('/').next() {
+        Some("live" | "data") => {
+            let name = id.rsplit('/').next().unwrap_or_default();
+            format!("tf/custom/{name}/")
+        }
+        _ => String::new(),
+    };
+    Ok(data
+        .files
+        .into_iter()
+        .filter_map(|file| {
+            let path = if prefix.is_empty() {
+                file.path.strip_prefix("files/")?.to_string()
+            } else {
+                format!("{prefix}{}", file.path)
+            };
+            Some((path, file.sha256))
+        })
+        .collect())
+}
+
+/// Move a backup out of TF2's `custom` folder into execs data, where TF2 never
+/// scans it, keeping every byte for Storage's Restore and Delete. The copy is
+/// verified and published before the TF2 copy is removed; the new id is returned.
+pub fn move_live_hud_backup_to_data(
+    profiles: &Path,
+    root: &Path,
+    id: &str,
+    revision: &str,
+    running: &[String],
+) -> Result<String, ProfileError> {
+    let ["live", generation, name] = id.split('/').collect::<Vec<_>>()[..] else {
+        return Err(ProfileError::InvalidPath);
+    };
+    ready(profiles, root, running)?;
+    let (base, folder, data) = reviewed(profiles, root, id, revision)?;
+    let data_dir = data_root(profiles).to_path_buf();
+    let parent = data_dir.join(DATA_BACKUP_DIR).join(generation);
+    create_dir_all_within(&data_dir, &parent).map_err(io)?;
+    // A move cut off earlier leaves only its unpublished staging folder.
+    for entry in fs::read_dir(&parent).map_err(io)?.flatten() {
+        if entry.file_name().to_string_lossy().starts_with(".moving-") {
+            let _ = remove_tree_within(&data_dir, &entry.path());
+        }
+    }
+    let destination = parent.join(name);
+    let already_moved = match fs::symlink_metadata(&destination) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        // An earlier move published this exact copy but could not remove the
+        // TF2 copy; finish that move instead of refusing forever.
+        Ok(_)
+            if snapshot(&data_dir, &destination)
+                .is_ok_and(|moved| moved.revision() == data.revision()) =>
+        {
+            true
+        }
+        _ => {
+            return Err(io(
+                "A different moved copy of this HUD backup already exists.",
+            ))
+        }
+    };
+    let staged = parent.join(format!(".moving-{}", random_token()));
+    let copied = (|| {
+        if already_moved {
+            return Ok(());
+        }
+        fs::create_dir(&staged).map_err(io)?;
+        for directory in &data.directories {
+            fs::create_dir(staged.join(directory)).map_err(io)?;
+        }
+        for file in &data.files {
+            refuse_if_running_among(live_process_names())?;
+            let source = folder.join(&file.path);
+            validate_file_within(&base, &source).map_err(io)?;
+            let hash =
+                copy_and_sha256_within(&data_dir, &source, &staged.join(&file.path)).map_err(io)?;
+            if hash != file.sha256 {
+                return Err(io(
+                    "A HUD backup file changed while it was moved; it was kept in TF2's folder.",
+                ));
+            }
+        }
+        move_dir_no_replace_within(&data_dir, &staged, &destination).map_err(io)
+    })();
+    if let Err(error) = copied {
+        let _ = remove_tree_within(&data_dir, &staged);
+        return Err(error);
+    }
+    // The verified copy is published; now the TF2 copy can go.
+    delete_hud_backup_to(profiles, root, id, revision, running)?;
+    let generation_dir = folder.parent().unwrap_or(&folder);
+    if fs::read_dir(generation_dir).is_ok_and(|mut entries| entries.next().is_none()) {
+        let _ = remove_dir_within(root, generation_dir);
+    }
+    Ok(format!("data/{generation}/{name}"))
 }
 
 /// Copy all bytes (including unknown/junk files) to a new ordinary directory.

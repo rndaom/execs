@@ -2,7 +2,7 @@ import { type ComponentProps, type ReactNode, useRef, useState } from "react";
 import { useAppStatus } from "../../hooks/useAppStatus";
 import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
-import type { ProfileExportReview } from "../../lib/bridge";
+import type { LibraryMoveReview, ProfileExportReview, TidyReport } from "../../lib/bridge";
 import { libraryStatusCopy } from "../../lib/library-ui";
 import type { ProfileComparison } from "../../lib/switch-compare-ui";
 import { ProfileDeleteDialog } from "../ProfileDeleteDialog";
@@ -10,11 +10,13 @@ import { ProfileImportDialog } from "../ProfileImportDialog";
 import { RestorePointsDialog } from "../RestorePointsDialog";
 import { SwitchCompareDialog } from "../SwitchCompareDialog";
 import { SwitchProgressList } from "../SwitchProgressList";
+import { TidyUpNotice } from "../TidyUpNotice";
 import { Modal } from "../ui/Modal";
 import { OperationError } from "../ui/OperationError";
 import { Loading } from "../ui/Spinner";
 import { SaveAlertSlot } from "../ui/Toast";
 import { FolderRepair } from "./FolderRepair";
+import { LibraryMove } from "./LibraryMove";
 import { PackPrompt } from "./PackPrompt";
 import { ProfileMenu } from "./ProfileMenu";
 import { ReadyHeader } from "./ReadyHeader";
@@ -42,6 +44,11 @@ export function ReadyPanel({
   onInspectExport,
   onCompareSwitch,
   restoreApi,
+  onReviewLibraryMove,
+  onMoveLibrary,
+  tidyReport = null,
+  onDismissTidy,
+  onVerifyTidy,
 }: {
   path: string;
   profiles: ProfileLibraryState;
@@ -66,6 +73,13 @@ export function ReadyPanel({
   onCompareSwitch?: (id: string) => Promise<ProfileComparison>;
   /** Local restore points; the menu offers them only when provided. */
   restoreApi?: ComponentProps<typeof RestorePointsDialog>["api"];
+  /** Profiles saved for another TF2 folder can move here when provided. */
+  onReviewLibraryMove?: () => Promise<LibraryMoveReview | null>;
+  onMoveLibrary?: () => Promise<void>;
+  /** What the automatic tidy-up after an update changed, shown once. */
+  tidyReport?: TidyReport | null;
+  onDismissTidy?: () => void;
+  onVerifyTidy?: () => void;
 }) {
   const { error, dismissError, busy, running } = useAppStatus();
   const [profileMenuRequest, setProfileMenuRequest] = useState(0);
@@ -165,6 +179,14 @@ export function ReadyPanel({
         }
       />
       <SaveAlertSlot />
+      {tidyReport && onDismissTidy && onVerifyTidy ? (
+        <TidyUpNotice
+          report={tidyReport}
+          running={running}
+          onVerify={onVerifyTidy}
+          onDismiss={onDismissTidy}
+        />
+      ) : null}
 
       {unsafeActive ? (
         <div
@@ -523,6 +545,14 @@ export function ReadyPanel({
                 Choose profile
               </button>
             </>
+          ) : library?.rootMismatch && onReviewLibraryMove && onMoveLibrary ? (
+            <LibraryMove
+              running={running}
+              busy={controlsBusy}
+              onReview={onReviewLibraryMove}
+              onMove={onMoveLibrary}
+              onChangeInstall={onChangeInstall}
+            />
           ) : (
             <>
               <p className="eyebrow">Profile library</p>

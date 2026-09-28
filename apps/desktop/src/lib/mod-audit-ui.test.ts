@@ -21,20 +21,20 @@ const payload: PreloaderStatusPayload = {
 describe("installed pack Casual notes", () => {
   it("exempts hit and kill sounds while identifying restricted sounds and scripts", () => {
     const note = packCasualNote({ ...pack, exemptHitSounds: true }, undefined, payload);
-    expect(note).toContain("exempt");
-    expect(note).not.toContain("Expected Casual restriction");
+    expect(note).toContain("Hit and kill sounds still work");
+    expect(note).not.toContain("won't load");
     expect(
       packCasualNote(
         { ...pack, restrictedSounds: true, soundScripts: ["scripts/game_sounds_weapons.txt"] },
         undefined,
         payload,
       ),
-    ).toContain("Expected Casual restriction: custom sounds and sound scripts");
+    ).toContain("Its custom sounds and sound scripts won't load on Valve's Casual servers");
   });
   it("does not turn enabled preloading or an incomplete scan into a works claim", () => {
     const model = { ...pack, modelsMaterials: true };
     expect(packCasualNote(model, undefined, payload)).toContain(
-      "retail Casual behavior is unverified",
+      "isn't confirmed in a real match yet",
     );
     expect(packCasualNote(model, undefined, { ...payload, profilePreload: false })).toContain(
       "need Preload",
@@ -50,7 +50,7 @@ describe("installed pack Casual notes", () => {
           incomplete: ["unreadable"],
         },
       }),
-    ).toContain("Incomplete content check");
+    ).toContain("Some files could not be checked");
     expect(packCasualNote(undefined, undefined, payload)).toContain("unavailable");
   });
   it("explains unavailable particles even when they remain selected", () => {

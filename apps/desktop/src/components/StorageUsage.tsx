@@ -8,7 +8,8 @@ import {
   type StorageReport,
   visibleStorageGroups,
 } from "../lib/app-settings-ui";
-import { invokeErrorMessage } from "../lib/bridge";
+import { invokeErrorMessage, type TidyReport } from "../lib/bridge";
+import { tidySummary } from "../lib/tidy-up-ui";
 import { type HudBackupApi, HudBackupStorage } from "./HudBackupStorage";
 import { Modal } from "./ui/Modal";
 import { Loading } from "./ui/Spinner";
@@ -19,7 +20,9 @@ export function StorageUsage({
   ready = true,
   backupsEnabled = false,
 }: {
-  api: Pick<Api, "getStorageUsage" | "clearDownloadCaches"> & Partial<HudBackupApi>;
+  api: Pick<Api, "getStorageUsage" | "clearDownloadCaches"> &
+    Partial<HudBackupApi> &
+    Partial<Pick<Api, "tidyUpAgain">>;
   /** Clearing waits for the native close listener, like other app-data writes. */
   ready?: boolean;
   backupsEnabled?: boolean;
@@ -30,6 +33,9 @@ export function StorageUsage({
   const [confirming, setConfirming] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [result, setResult] = useState<ClearReport | null>(null);
+  const [tidying, setTidying] = useState(false);
+  const [tidied, setTidied] = useState<TidyReport | null>(null);
+  const [tidyRuns, setTidyRuns] = useState(0);
   const request = useRef(0);
 
   const load = useCallback(async () => {
@@ -65,6 +71,21 @@ export function StorageUsage({
       setError(invokeErrorMessage(err));
     } finally {
       setClearing(false);
+      void load();
+    }
+  }
+
+  async function tidyUp() {
+    if (!api.tidyUpAgain) return;
+    setTidying(true);
+    try {
+      setTidied(await api.tidyUpAgain());
+      setError(null);
+    } catch (err) {
+      setError(invokeErrorMessage(err));
+    } finally {
+      setTidying(false);
+      setTidyRuns((runs) => runs + 1);
       void load();
     }
   }
@@ -129,6 +150,18 @@ export function StorageUsage({
             "Clear downloads"
           )}
         </button>
+        {backupsEnabled && api.tidyUpAgain ? (
+          <button
+            type="button"
+            className="btn btn-ghost"
+            data-testid="storage-tidy-up"
+            title="Remove or move leftovers from earlier versions of execs, as after an update."
+            disabled={!ready || tidying || clearing || loading}
+            onClick={() => void tidyUp()}
+          >
+            {tidying ? <Loading>Tidying up…</Loading> : "Tidy up again"}
+          </button>
+        ) : null}
         {error && !report ? (
           <button type="button" className="btn btn-ghost" onClick={() => void load()}>
             Retry
@@ -140,10 +173,16 @@ export function StorageUsage({
           {clearResultCopy(result)}
         </p>
       ) : null}
+      {tidied ? (
+        <p className="t-meta mt-2" aria-live="polite" data-testid="storage-tidy-result">
+          {tidySummary(tidied)}
+        </p>
+      ) : null}
       {backupsEnabled && api.getHudBackups && api.restoreHudBackup && api.deleteHudBackup ? (
         <HudBackupStorage
+          key={tidyRuns}
           api={api as HudBackupApi}
-          ready={ready && !clearing}
+          ready={ready && !clearing && !tidying}
           onChanged={() => void load()}
         />
       ) : null}

@@ -4,9 +4,22 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Api } from "../lib/api";
 import type { ModImportReview } from "../lib/bridge";
-import { useModImportReview } from "./useModImportReview";
+import { type ChosenModImport, useModImportReview } from "./useModImportReview";
 
-const review: ModImportReview = { token: "review-a", choices: [], readmes: [] };
+const choice = (id: string, disabledReason: string | null = null) => ({
+  id,
+  name: `pack${id}`,
+  path: `pack${id}.vpk`,
+  files: 1,
+  bytes: 10,
+  contentRoots: [],
+  disabledReason,
+});
+const review: ModImportReview = {
+  token: "review-a",
+  choices: [choice("0"), choice("1")],
+  readmes: [],
+};
 let root: Root;
 let box: HTMLDivElement;
 let hook: ReturnType<typeof useModImportReview>;
@@ -16,6 +29,12 @@ const confirm = vi.fn(async () => ({}));
 function Harness({ profile = "A", active = true }) {
   hook = useModImportReview(api, profile, active);
   return null;
+}
+/** The pane's order: snapshot the context, prepare natively, then choose. */
+async function prepare(request: () => Promise<ModImportReview>): Promise<ChosenModImport | null> {
+  const started = hook.begin();
+  const next = await request();
+  return hook.choose(next, started);
 }
 beforeEach(async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -34,9 +53,9 @@ afterEach(async () => {
 });
 
 it("never confirms cancellation and releases the waiting operation", async () => {
-  let result!: Promise<boolean | null>;
+  let result!: Promise<ChosenModImport | null>;
   await act(async () => {
-    result = hook.prepare(async () => review);
+    result = prepare(async () => review);
   });
   expect(hook.review).toEqual(review);
   await act(async () => hook.cancel());
@@ -46,14 +65,32 @@ it("never confirms cancellation and releases the waiting operation", async () =>
 });
 
 it("confirms only the selected IDs and awaits native success", async () => {
-  let result!: Promise<boolean | null>;
+  let result!: Promise<ChosenModImport | null>;
   await act(async () => {
-    result = hook.prepare(async () => review);
+    result = prepare(async () => review);
   });
-  await act(async () => hook.confirm(["0:2"]));
-  await expect(result).resolves.toBe(true);
-  expect(confirm).toHaveBeenCalledExactlyOnceWith(review.token, ["0:2"]);
+  await act(async () => hook.confirm(["1"]));
+  await expect(result).resolves.toEqual({ token: review.token, ids: ["1"] });
+  expect(cancel).not.toHaveBeenCalled();
   expect(hook.review).toBeNull();
+});
+
+it("installs a single available pack without opening the chooser", async () => {
+  const single = { ...review, choices: [choice("0")] };
+  let result!: Promise<ChosenModImport | null>;
+  await act(async () => {
+    result = prepare(async () => single);
+  });
+  expect(hook.review).toBeNull();
+  await expect(result).resolves.toEqual({ token: single.token, ids: ["0"] });
+});
+
+it("still asks when the only other choice cannot be installed", async () => {
+  const mixed = { ...review, choices: [choice("0"), choice("1", "Split archive volumes")] };
+  await act(async () => {
+    void prepare(async () => mixed);
+  });
+  expect(hook.review).toEqual(mixed);
 });
 
 it.each(["profile", "navigation", "unmount"])("cancels a late prepare after %s", async (change) => {
@@ -61,9 +98,9 @@ it.each(["profile", "navigation", "unmount"])("cancels a late prepare after %s",
   const request = new Promise<ModImportReview>((resolve) => {
     deliver = resolve;
   });
-  let result!: Promise<boolean | null>;
+  let result!: Promise<ChosenModImport | null>;
   await act(async () => {
-    result = hook.prepare(() => request);
+    result = prepare(() => request);
   });
   await act(async () => {
     root.render(
@@ -80,9 +117,9 @@ it.each(["profile", "navigation", "unmount"])("cancels a late prepare after %s",
 });
 
 it("releases an open review when the profile changes", async () => {
-  let result!: Promise<boolean | null>;
+  let result!: Promise<ChosenModImport | null>;
   await act(async () => {
-    result = hook.prepare(async () => review);
+    result = prepare(async () => review);
   });
   await act(async () => root.render(<Harness profile="B" />));
   await expect(result).resolves.toBeNull();

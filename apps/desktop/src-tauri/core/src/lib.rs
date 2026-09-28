@@ -1,6 +1,8 @@
 pub mod absorb;
+pub mod activity_log;
 pub mod apply;
 pub mod archive;
+pub mod audio_decode;
 pub mod blob;
 mod cfg_layer;
 pub mod cfg_script;
@@ -9,6 +11,7 @@ pub mod comfig;
 pub mod content_index;
 pub mod crosshair;
 pub mod custom_folders;
+pub mod disk_space;
 pub mod files_workspace;
 pub mod finder;
 pub mod first_run;
@@ -25,6 +28,7 @@ pub mod inventory;
 pub mod inventory_journal;
 pub mod launch;
 mod managed_cfg;
+pub mod managed_upgrade;
 pub use managed_cfg::ManagedCfgScope;
 pub mod mdl;
 pub mod mod_audit;
@@ -37,10 +41,12 @@ pub mod profile;
 pub mod profile_compare;
 pub mod restore_points;
 pub mod settings;
+pub mod settings_copy;
 pub mod steam_inf;
 pub mod storage;
 pub mod surface;
 pub mod switch;
+pub mod tidy_up;
 pub mod uninstall;
 pub mod vdf;
 pub mod viewmodel;
@@ -133,7 +139,8 @@ pub use profile::{
 };
 pub use settings::{
     execs_data_dir, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
-    remembered_tf2_root_from, settings_file, try_execs_data_dir, Settings,
+    remembered_tf2_root_from, settings_file, try_execs_data_dir, unavailable_tf2_root,
+    unavailable_tf2_root_from, Settings,
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};
