@@ -14,7 +14,7 @@ import { isDeepStrictEqual } from "node:util";
 import { assertFixtureAbsorbCache, fixtureCacheSources } from "./absorb-cache-fixture.mjs";
 
 export const publicProfileFixture = JSON.parse(
-  readFileSync(new URL("./fixtures/package-smoke-v018.json", import.meta.url), "utf8"),
+  readFileSync(new URL("./fixtures/package-smoke-v020.json", import.meta.url), "utf8"),
 );
 
 const profileIds = ["f20a0001-8d01-4000-8000-000000000001", "f20a0001-8d01-4000-8000-000000000002"];

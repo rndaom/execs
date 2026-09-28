@@ -7,7 +7,7 @@ on:
       - .github/workflows/development-windows-package-smoke.yml
       - scripts/windows-package-*
       - scripts/package-smoke-fixture.mjs
-      - scripts/fixtures/package-smoke-v018.json
+      - scripts/fixtures/package-smoke-v020.json
       - scripts/fixtures/windows-package-v020/**
       - scripts/development-package-guard.mjs
       - scripts/linux-native-*.mjs
