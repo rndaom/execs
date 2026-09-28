@@ -14,7 +14,7 @@ pub async fn absorb_owned(
     let result = with_root(|root| Ok(execs_core::absorb_owned(&root)?)).await;
     if let Ok(absorbed) = &result {
         if absorbed.config_cfg_absorbed || !absorbed.repaired.is_empty() {
-            execs_core::activity_log::record(
+            crate::activity::record(
                 "absorb",
                 &format!(
                     "Took changes from TF2 into the active profile (config.cfg: {}, repaired packs: {})",

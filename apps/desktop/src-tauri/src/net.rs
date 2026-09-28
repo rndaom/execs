@@ -855,7 +855,7 @@ fn transfer_one(
 /// A completed request that failed, in plain words with a next step. The
 /// full URL and status go to the activity log for Copy diagnostics.
 pub fn status_failure(url: &str, source: RemoteSource, status: reqwest::StatusCode) -> String {
-    execs_core::activity_log::record("network", &format!("{url} returned {status}"));
+    crate::activity::record("network", &format!("{url} returned {status}"));
     let site = source.site_name();
     match status.as_u16() {
         // GitHub answers unauthenticated clients over their hourly allowance
@@ -878,7 +878,7 @@ pub fn status_failure(url: &str, source: RemoteSource, status: reqwest::StatusCo
 
 /// A request that never completed, in plain words; the URL goes to the log.
 fn transport_failure(url: &str, source: RemoteSource, message: String) -> String {
-    execs_core::activity_log::record("network", &format!("{url}: {message}"));
+    crate::activity::record("network", &format!("{url}: {message}"));
     let site = source.site_name();
     let lower = message.to_ascii_lowercase();
     if lower.contains("timed out") {

@@ -220,7 +220,7 @@ pub async fn with_root<T: Send + 'static>(
 /// Failures are already recorded by `CommandError::new`.
 pub fn logged<T>(what: &str, result: Result<T, CommandError>) -> Result<T, CommandError> {
     if result.is_ok() {
-        execs_core::activity_log::record("done", what);
+        crate::activity::record("done", what);
     }
     result
 }

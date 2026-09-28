@@ -1,3 +1,4 @@
+mod activity;
 mod bind_mouse;
 mod comfig_fetch;
 mod commands;

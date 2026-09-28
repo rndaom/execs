@@ -28,7 +28,7 @@ impl CommandError {
             message: message.into(),
         };
         // The log keeps the original wording, including the path involved.
-        execs_core::activity_log::record("error", &format!("{}: {}", error.code, error.message));
+        crate::activity::record("error", &format!("{}: {}", error.code, error.message));
         // The operating system's out-of-space error reads the same everywhere.
         if execs_core::disk_space::is_disk_full_error(&error.message) {
             error.code = "DiskFull".into();
