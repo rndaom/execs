@@ -59,6 +59,12 @@ describe("gameplay serialize and parse", () => {
     expect(text).toContain("cl_crosshair_file crosshair3");
   });
 
+  it("never writes the cheat-only r_drawtracers TF2 refuses at startup", () => {
+    const text = serializeGameplay(seedGameplay("r_drawtracers 0\n", { r_drawtracers: "0" }));
+    expect(text).not.toMatch(/^r_drawtracers /m);
+    expect(text).toContain("r_drawtracers_firstperson ");
+  });
+
   it("round-trips parse and serialize", () => {
     const original = clampGameplay({
       ...defaultGameplay(),
@@ -67,7 +73,6 @@ describe("gameplay serialize and parse", () => {
       tf_use_min_viewmodels: 1,
       r_drawviewmodel: 0,
       r_drawtracers_firstperson: 0,
-      r_drawtracers: 1,
       cl_flipviewmodels: 1,
       cl_crosshair_file: "crosshair5",
       cl_crosshair_scale: 40,

@@ -27,6 +27,12 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Switching to a profile saved by an older version installs the current Casual preload hook, which
+  keeps TF2's console and its engine errors instead of clearing them and running a menu-music
+  script. Only an unchanged execs hook is replaced; edited hooks stay as you left them.
+- Gameplay no longer writes the cheat-only `r_drawtracers` setting, which TF2 refuses from startup
+  cfgs and reported as an error on every launch. The "All tracers" switch is removed because TF2
+  never applied it; First-person tracers stays.
 - HUDs install from RAR archives too: Import HUD, single-file GameBanana HUD pages, and Dropbox
   or teamfortress.tv links accept RAR alongside ZIP and 7z.
 - A mod with a single VPK or content folder installs in one click again; the file chooser opens

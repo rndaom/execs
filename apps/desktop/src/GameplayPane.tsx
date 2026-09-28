@@ -8,7 +8,6 @@ import { useAppStatus } from "./hooks/useAppStatus";
 import { useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import {
-  ALL_TRACERS_NOTE,
   clampGameplay,
   clampInt,
   FOV_MAX,
@@ -211,8 +210,8 @@ export function GameplayPane({
         </PaneSection>
 
         <section className="min-w-0">
-          {/* The engine refuses r_drawtracers on any live server, so it is not an
-            "obvious toggle" — it and its neighbours live behind a disclosure. */}
+          {/* Tracer visibility is a less common choice, so it lives behind a disclosure.
+            TF2 refuses the cheat-only r_drawtracers from startup cfgs, so it has no control. */}
           <Disclosure
             profileId={profileId}
             storageKey="gameplay-advanced"
@@ -228,14 +227,6 @@ export function GameplayPane({
                 label="First-person tracers"
                 checked={draft.r_drawtracers_firstperson === 1}
                 onChange={(next) => patch({ r_drawtracers_firstperson: next ? 1 : 0 })}
-              />
-              <SwitchRow
-                id="gameplay-tracers"
-                testId="gameplay-tracers"
-                label="All tracers"
-                checked={draft.r_drawtracers === 1}
-                note={ALL_TRACERS_NOTE}
-                onChange={(next) => patch({ r_drawtracers: next ? 1 : 0 })}
               />
             </fieldset>
           </Disclosure>

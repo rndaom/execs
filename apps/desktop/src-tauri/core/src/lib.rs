@@ -25,6 +25,7 @@ pub mod inventory;
 pub mod inventory_journal;
 pub mod launch;
 mod managed_cfg;
+pub mod managed_upgrade;
 pub use managed_cfg::ManagedCfgScope;
 pub mod mdl;
 pub mod mod_audit;

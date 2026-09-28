@@ -209,6 +209,18 @@ where
     if pending.is_none() {
         crate::preloader::capture_installed_selections(profiles_dir, tf2_root, &running)?;
     }
+    if pending.is_none() && library.active_profile_id.as_deref() != Some(profile_id) {
+        // A profile saved by an older execs can hold managed files TF2 now
+        // rejects or that clear the console (the old preload hook). Bring the
+        // inactive target's saved copies up to date before installing them.
+        // Best effort: a failure installs the saved bytes as before.
+        let _ = crate::managed_upgrade::upgrade_profile_managed_files_to(
+            profiles_dir,
+            tf2_root,
+            profile_id,
+            &running,
+        );
+    }
     let target = load_manifest(profiles_dir, profile_id)?;
     crate::hud::require_resolved_hud(&target)?;
     crate::hud::refuse_profile_hud_vpks(profiles_dir, &target)?;
