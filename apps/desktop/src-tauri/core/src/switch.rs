@@ -732,6 +732,19 @@ pub(crate) fn prune_removed_vpk_cache(pack: &Path, tf2_root: &Path) {
     let _ = remove_file_force_within(tf2_root, &cache);
 }
 
+/// Delete TF2's regenerable `<pack>/sound/sound.cache` from an app-owned pack
+/// before changing it. TF2 writes one into every custom folder it scans, so it
+/// is not an untracked user file and must not block saves.
+pub(crate) fn remove_pack_sound_cache(
+    tf2_root: &Path,
+    path: &Path,
+) -> Result<(), crate::profile::ProfileError> {
+    refuse_if_running_among(crate::process_lock::live_process_names())
+        .map_err(crate::profile::ProfileError::from)?;
+    remove_file_force_within(tf2_root, path)
+        .map_err(|err| crate::profile::ProfileError::Io(err.to_string()))
+}
+
 /// TF2 writes a `sound.cache` into every `tf/custom` folder it scans. It is the
 /// game's own regenerable file, so a pack whose files we removed is left as a
 /// husk that still reads as installed — that is how a swapped-away HUD keeps

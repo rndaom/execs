@@ -1226,6 +1226,10 @@ fn refuse_untracked_live_viewmodel_files(
                 .to_string_lossy()
                 .replace('\\', "/")
                 .to_ascii_lowercase();
+            if rel == format!("{prefix}sound/sound.cache") && !tracked.contains(&rel) {
+                crate::switch::remove_pack_sound_cache(tf2_root, &path)?;
+                continue;
+            }
             if !tracked.contains(&rel) && !rel.ends_with(crate::hash::PART_SUFFIX) {
                 return Err(ProfileError::Io(format!(
                     "The live viewmodel folder contains an untracked file: {rel}. Remove or save it before applying."
