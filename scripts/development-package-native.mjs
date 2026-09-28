@@ -29,6 +29,16 @@ const nativeState = `return {
   editorPath: document.querySelector('.cm-content')?.getAttribute('aria-label') ?? null
 };`;
 
+/** The candidate defers Steam changes until the player reviews both launch strings. */
+export function candidateSwitchReviewPending(state, expectedName) {
+  return (
+    state?.native === true &&
+    state.profile === expectedName &&
+    state.switchDetail ===
+      "Launch options not written to Steam; review them in Launch before updating Steam."
+  );
+}
+
 async function freePort() {
   const server = createServer();
   await new Promise((ready, reject) => {
@@ -572,14 +582,10 @@ export class DevelopmentPackageSession {
       "xpath",
     );
     const state = await waitUntil(
-      "candidate switch reports its absent-account outcome",
+      "candidate switch reports launch options pending review",
       async () => {
         const value = await this.driver.read(nativeState);
-        return (
-          value.profile === expectedName &&
-          value.switchDetail?.includes("No Steam account config was found") &&
-          value
-        );
+        return candidateSwitchReviewPending(value, expectedName) && value;
       },
       30_000,
     );
@@ -587,6 +593,7 @@ export class DevelopmentPackageSession {
       label: "candidate-switch-outcome",
       expectedProfile: expectedName,
       nativeCompletionDetail: state.switchDetail,
+      steamWriteExpected: "not_requested",
       launchSyncPendingExpected: true,
     });
     await this.capture("candidate-switch-complete");

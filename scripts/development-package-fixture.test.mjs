@@ -472,3 +472,27 @@ test("all Steam candidates, dangling discovery ancestors and linked library path
     );
   });
 });
+
+test("restart preserves pending launch review and the exact imported launch options", () => {
+  for (const target of ["pending", "options"]) {
+    withFixture((fixture) => {
+      const { checkpoint } = preparedImport(fixture);
+      modelSwitch(fixture);
+      const switched = assertDevelopmentPackageSwitched(
+        fixture,
+        checkpoint,
+        "review-pending-switch",
+      );
+      assert.equal(switched.manifest.launchSyncPending, true);
+      assertDevelopmentPackageCheckpoint(fixture, switched, "review-pending-restart");
+      editJson(join(fixture.library, importedId, "manifest.json"), (manifest) => {
+        if (target === "pending") manifest.launchSyncPending = false;
+        else manifest.launchOptions = `${manifest.launchOptions} -console`;
+      });
+      assert.throws(
+        () => assertDevelopmentPackageCheckpoint(fixture, switched, `changed-launch-${target}`),
+        /imported ownership or metadata differs/,
+      );
+    });
+  }
+});

@@ -63,6 +63,10 @@ The first hosted native/package smoke runs then exposed their old no-cache fixtu
 The [reviewed fixture correction](review.md#hosted-fixture-compatibility-follow-up) accepts only
 validated disposable hints and keeps the protected profile/live bytes exact. After that correction,
 `node --test scripts/*.test.mjs` passed 151 tests with five platform skips; Biome and diff checks passed.
+The next package run passed the cache checks and exposed an obsolete expectation that switching
+tries an automatic Steam write. The harness now requires the exact native pending-review result,
+then checks the imported UUID, complete disk projection and unchanged launch state after reopening.
+The final script suite passed 154 tests with five platform skips; 39 targeted tests passed independent review.
 Hosted checks on the pushed revision are available in [PR #145](https://github.com/rndaom/execs/pull/145/checks);
 the earlier part 1 checks do not stand in for those checks. Retail gameplay, physical mouse
 side buttons, native Linux UI and a packaged Steam round trip remain manual acceptance limits.

@@ -31,6 +31,7 @@ import {
 } from "./development-package-guard.mjs";
 
 import {
+  candidateSwitchReviewPending,
   DevelopmentPackageSession,
   ownedDialogDismissal,
   selectOwnedDialog,
@@ -659,4 +660,60 @@ test("development Linux baseline pins current public assets and refuses metadata
       assert.throws(() => selectDevelopmentPublicPackage(changed, "0.2.0", kind));
     }
   }
+});
+
+test("candidate switch requires the active profile and exact native pending-review outcome", () => {
+  const ready = {
+    native: true,
+    profile: "Package smoke - active",
+    switchDetail:
+      "Launch options not written to Steam; review them in Launch before updating Steam.",
+  };
+  assert.equal(candidateSwitchReviewPending(ready, ready.profile), true);
+  for (const state of [
+    null,
+    { ...ready, native: false },
+    { ...ready, profile: "Another profile" },
+    { ...ready, switchDetail: null },
+    { ...ready, switchDetail: "Applying profile" },
+    {
+      ...ready,
+      switchDetail: "No Steam account config was found, so the launch options were not written.",
+    },
+    { ...ready, switchDetail: "Launch options written to Steam." },
+    { ...ready, switchDetail: `${ready.switchDetail} Unexpected error` },
+  ]) {
+    assert.equal(candidateSwitchReviewPending(state, ready.profile), false);
+  }
+});
+
+test("native switch flow records deferred Steam sync before the disk checkpoint", async () => {
+  const report = { checks: [] };
+  const session = new DevelopmentPackageSession({ report });
+  const clicks = [];
+  const captures = [];
+  session.driver = {
+    click: async (...args) => clicks.push(args),
+    read: async () => ({
+      native: true,
+      profile: "Imported profile",
+      switchDetail:
+        "Launch options not written to Steam; review them in Launch before updating Steam.",
+    }),
+  };
+  session.capture = async (label) => captures.push(label);
+  await session.switchImported("Imported profile");
+  assert.equal(clicks.length, 1);
+  assert.match(clicks[0][0], /Switch to profile/);
+  assert.deepEqual(report.checks, [
+    {
+      label: "candidate-switch-outcome",
+      expectedProfile: "Imported profile",
+      nativeCompletionDetail:
+        "Launch options not written to Steam; review them in Launch before updating Steam.",
+      steamWriteExpected: "not_requested",
+      launchSyncPendingExpected: true,
+    },
+  ]);
+  assert.deepEqual(captures, ["candidate-switch-complete"]);
 });

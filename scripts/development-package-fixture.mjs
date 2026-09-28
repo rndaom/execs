@@ -514,8 +514,8 @@ export function assertDevelopmentPackageSwitched(fixture, importedCheckpoint, st
     importedCheckpoint.liveHashes,
     `${stage}: switch payload differs from imported source`,
   );
-  // Import already sets launchSyncPending:true. NoAccount leaves it true and
-  // mark_launch_sync_pending has no metadata change to commit (switch.rs:299).
+  // Import already sets launchSyncPending:true. Switching defers any Steam
+  // update for explicit Launch review, so it must preserve this manifest byte-for-byte.
   assert.deepEqual(current.index, {
     ...importedCheckpoint.index,
     activeProfileId: current.importedProfileId,
