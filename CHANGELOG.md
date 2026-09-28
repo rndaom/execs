@@ -62,6 +62,10 @@ User-facing changes only. The release workflow publishes the matching
   on these keys by earlier versions never worked in game and are read as the intended key.
   Right Shift, Right Ctrl and Right Alt no longer rebind the left keys, and Pause, Scroll Lock,
   Num Lock, the Windows keys and the Menu key can be bound.
+- Linux launch wrappers such as `gamemoderun %command%`, `mangohud %command%`,
+  `gamescope -- %command%` and environment variables like `LD_PRELOAD="" %command%` are kept
+  exactly as written. execs used to drop `%command%` and pass the wrapper to TF2 as arguments,
+  and could write that broken string back into Steam.
 - Settings load again after you close TF2 for a profile where you have not saved any binds in
   execs. When TF2 had changed `config.cfg`, every settings pane stopped with "The Binds source
   identity is unavailable", and Retry only helped until the next refresh.

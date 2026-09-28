@@ -18,6 +18,7 @@ import {
   recommendedLaunchOptions,
   removeLaunchOption,
   searchLaunchPresets,
+  steamWrapperPrefix,
   strippedLaunchNotice,
   strippedLaunchTokens,
 } from "./launch-ui";
@@ -58,7 +59,7 @@ describe("forbidden launch flags", () => {
   it("flags every banned token as you type", () => {
     expect(forbiddenLaunchTokens("-novid -autoconfig")).toEqual(["-autoconfig"]);
     expect(forbiddenLaunchTokens("-dxlevel 90 +quit")).toEqual(["-dxlevel", "+quit"]);
-    expect(forbiddenLaunchTokens("gamemoderun %command%")).toEqual(["gamemoderun", "%command%"]);
+    expect(forbiddenLaunchTokens("-novid gamemoderun")).toEqual(["gamemoderun"]);
     expect(forbiddenLaunchTokens("-DEFAULT")).toEqual(["-default"]);
   });
 
@@ -126,7 +127,29 @@ describe("launch option editing", () => {
   it("does not guess removal boundaries for quoted option-looking data or wrappers", () => {
     expect(launchOptionGroups('+echo "-not a flag" -novid')).toBeNull();
     expect(launchOptionGroups('"-novid" -console')).toBeNull();
-    expect(launchOptionGroups("env X=1 %command% -novid")).toBeNull();
+  });
+  it("keeps a Steam wrapper and edits only the TF2 options after it", () => {
+    for (const raw of [
+      "gamemoderun %command%",
+      "mangohud %command% -novid",
+      'LD_PRELOAD="" %command% -novid',
+      "gamescope -W 1920 -- %command%",
+    ]) {
+      expect(forbiddenLaunchTokens(raw), raw).toEqual([]);
+    }
+    expect(steamWrapperPrefix("env X=1 %command% -novid")).toBe("env X=1 %command%");
+    expect(steamWrapperPrefix("-novid")).toBeNull();
+    expect(forbiddenLaunchTokens("mangohud %command% -autoconfig")).toEqual(["-autoconfig"]);
+    const raw = "env X=1 %command% -novid -particles 1";
+    const groups = launchOptionGroups(raw);
+    expect(groups?.map((group) => group.text)).toEqual(["-novid", "-particles 1"]);
+    const [novid, particles] = groups as NonNullable<typeof groups>;
+    expect(removeLaunchOption(raw, novid)).toBe("env X=1 %command% -particles 1");
+    expect(removeLaunchOption(raw, particles)).toBe("env X=1 %command% -novid");
+    expect(launchOptionGroups("gamemoderun %command%")).toEqual([]);
+    expect(appendLaunchOption("gamemoderun %command%", "-novid")).toBe(
+      "gamemoderun %command% -novid",
+    );
   });
   it("appends without rewriting the existing quoted source string", () => {
     const raw = '  +exec "my config.cfg"\t';
@@ -167,10 +190,9 @@ describe("launch option editing", () => {
       "-dxlevel",
       "+quit",
     ]);
-    expect(forbiddenLaunchTokens(String.raw`-auto\"config\" %com"mand"%`)).toEqual([
-      "-autoconfig",
-      "%command%",
-    ]);
+    expect(forbiddenLaunchTokens(String.raw`-novid %command% -auto\"config\" %com"mand"%`)).toEqual(
+      ["-autoconfig", "%command%"],
+    );
   });
 });
 

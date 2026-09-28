@@ -603,11 +603,14 @@ export function LaunchPane({
           className="mt-5"
         >
           <p className="t-meta mt-2">
-            Reset and wrapper flags: <code className="text-ink-muted">-autoconfig</code>,{" "}
+            Reset flags: <code className="text-ink-muted">-autoconfig</code>,{" "}
             <code className="text-ink-muted">-default</code>,{" "}
-            <code className="text-ink-muted">-dxlevel</code>,{" "}
-            <code className="text-ink-muted">+quit</code>,{" "}
-            <code className="text-ink-muted">gamemoderun %command%</code>.
+            <code className="text-ink-muted">-dxlevel</code> and{" "}
+            <code className="text-ink-muted">+quit</code>. Anything before{" "}
+            <code className="text-ink-muted">%command%</code>, such as{" "}
+            <code className="text-ink-muted">gamemoderun</code>,{" "}
+            <code className="text-ink-muted">mangohud</code> or an environment variable, is kept
+            exactly as written.
           </p>
         </Disclosure>
       </div>

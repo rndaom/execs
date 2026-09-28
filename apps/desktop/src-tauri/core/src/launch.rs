@@ -494,18 +494,7 @@ fn apply_launch_review_with(
         let raw = status
             .steam_options
             .expect("review requires readable Steam options");
-        let normalized = split_launch_commands(&raw)
-            .iter()
-            .map(|command| {
-                tokenize_launch_options(command)
-                    .iter()
-                    .map(|token| token.raw.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .collect::<Vec<_>>()
-            .join("; ");
-        if sanitize_launch_options(&raw) != normalized {
+        if sanitize_launch_options(&raw) != normalize_launch_options(&raw) {
             return Err(ProfileError::Io("Steam options contain flags execs cannot store. Edit them in Steam or keep them for this launch only.".into()));
         }
         validate_launch_review_from(profiles, root, id, roots, token)?;
@@ -741,19 +730,86 @@ pub fn pick_steam_account_from(steam_roots: &[PathBuf]) -> Option<SteamAccount> 
         })
 }
 
+/// Remove the TF2 arguments a profile must never store. A Steam `%command%`
+/// launch string runs a program such as `gamemoderun`, `mangohud` or
+/// `gamescope --`, or sets environment variables, before TF2: everything up to
+/// and including `%command%` is kept exactly as written, and only the TF2
+/// arguments after it are checked. Dropping `%command%` while keeping its
+/// wrapper would turn the wrapper into TF2 arguments and break the launch.
 pub fn sanitize_launch_options(raw: &str) -> String {
-    split_launch_commands(raw)
+    rebuild_launch_options(raw, true)
+}
+
+/// The same layout `sanitize_launch_options` produces, without removing
+/// anything, so a caller can tell whether sanitizing would change a string.
+fn normalize_launch_options(raw: &str) -> String {
+    rebuild_launch_options(raw, false)
+}
+
+fn rebuild_launch_options(raw: &str, drop_forbidden: bool) -> String {
+    let (wrapper, arguments) = split_steam_wrapper(raw.trim());
+    let arguments = split_launch_commands(arguments)
         .into_iter()
         .filter_map(|command| {
-            let sanitized = sanitize_launch_command(&command);
+            let sanitized = sanitize_launch_command(&command, drop_forbidden);
             (!sanitized.is_empty()).then_some(sanitized)
         })
         .collect::<Vec<_>>()
-        .join("; ")
+        .join("; ");
+    match (wrapper, arguments.is_empty()) {
+        (Some(wrapper), true) => wrapper.to_string(),
+        (Some(wrapper), false) => format!("{wrapper} {arguments}"),
+        (None, _) => arguments,
+    }
 }
 
-fn sanitize_launch_command(raw: &str) -> String {
+/// Split a Steam launch string at its first `%command%` word: the wrapper
+/// (program, flags and environment variables, through `%command%`) and the
+/// TF2 arguments after it. Without `%command%`, Steam passes the whole string
+/// to TF2 as arguments.
+fn split_steam_wrapper(raw: &str) -> (Option<&str>, &str) {
+    let mut quote = None;
+    let mut escaped = false;
+    let mut start = None;
+    for (at, ch) in raw.char_indices().chain(std::iter::once((raw.len(), ' '))) {
+        if ch.is_whitespace() && quote.is_none() {
+            if let Some(from) = start.take() {
+                if raw[from..at].contains(STEAM_COMMAND_TOKEN) {
+                    return (Some(&raw[..at]), raw[at..].trim());
+                }
+            }
+            escaped = false;
+            continue;
+        }
+        start.get_or_insert(at);
+        if matches!(ch, '\'' | '"') && !escaped {
+            match quote {
+                Some(open) if open == ch => quote = None,
+                None => quote = Some(ch),
+                Some(_) => {}
+            }
+        }
+        escaped = ch == '\\' && !escaped;
+    }
+    if raw.contains(STEAM_COMMAND_TOKEN) {
+        // An unterminated quote around %command%: keep the whole string as the
+        // player wrote it rather than guess where TF2's arguments begin.
+        return (Some(raw), "");
+    }
+    (None, raw)
+}
+
+const STEAM_COMMAND_TOKEN: &str = "%command%";
+
+fn sanitize_launch_command(raw: &str, drop_forbidden: bool) -> String {
     let tokens = tokenize_launch_options(raw);
+    if !drop_forbidden {
+        return tokens
+            .iter()
+            .map(|token| token.raw.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
     let mut out = Vec::new();
     let mut i = 0;
     while i < tokens.len() {
@@ -898,10 +954,13 @@ fn normalized_launch_token(token: &str) -> String {
     normalized
 }
 
+/// TF2 arguments a profile never stores. `gamemoderun` and a second
+/// `%command%` do nothing useful as TF2 arguments; before the first
+/// `%command%` they are a wrapper and are kept (`split_steam_wrapper`).
 fn launch_token_is_forbidden(token: &str) -> bool {
     matches!(token, "-autoconfig" | "-default" | "+quit" | "gamemoderun")
         || token.starts_with("-dxlevel")
-        || token.contains("%command%")
+        || token.contains(STEAM_COMMAND_TOKEN)
 }
 
 fn prefer_most_recent(steam_roots: &[PathBuf], pool: &[SteamAccount]) -> Option<SteamAccount> {
@@ -1094,25 +1153,68 @@ mod tests {
         );
         assert_eq!(sanitize_launch_options("-dxlevel90 -novid"), "-novid");
         assert_eq!(sanitize_launch_options(""), "");
-        // docs/ARCHITECTURE.md RND-158 names `gamemoderun %command%` alongside the rest.
-        assert_eq!(
-            sanitize_launch_options("gamemoderun %command% -novid"),
-            "-novid"
-        );
-        assert_eq!(
-            sanitize_launch_options("mangohud %command% -nojoy"),
-            "mangohud -nojoy"
-        );
+        // Without %command%, Steam passes every word to TF2; a bare wrapper
+        // name there is a meaningless TF2 argument.
         assert_eq!(sanitize_launch_options("GAMEMODERUN -novid"), "-novid");
+    }
+
+    #[test]
+    fn keeps_steam_wrappers_and_environment_exactly() {
+        for kept in [
+            "gamemoderun %command%",
+            "gamemoderun %command% -novid",
+            "mangohud %command% -novid",
+            r#"LD_PRELOAD="" %command%"#,
+            "SDL_VIDEODRIVER=x11 DXVK_ASYNC=1 %command% -novid -nojoy",
+            "gamescope -W 1920 -H 1080 -f -- %command%",
+            "obs-gamecapture  mangohud   %command% -novid",
+            r#"env "MY VAR=a b" %command% +exec "my config.cfg""#,
+        ] {
+            assert_eq!(sanitize_launch_options(kept), kept, "{kept}");
+            assert_eq!(normalize_launch_options(kept), kept, "{kept}");
+        }
+        // Only the TF2 arguments after %command% are checked.
+        assert_eq!(
+            sanitize_launch_options("mangohud %command% -novid -autoconfig +quit -dxlevel 90"),
+            "mangohud %command% -novid"
+        );
+        assert_eq!(
+            sanitize_launch_options("gamemoderun %command% -novid %command%"),
+            "gamemoderun %command% -novid"
+        );
+        assert_ne!(
+            sanitize_launch_options("mangohud %command% -default"),
+            normalize_launch_options("mangohud %command% -default")
+        );
+    }
+
+    #[test]
+    fn keeps_wrapper_through_the_steam_localconfig_round_trip() {
+        let dir = crate::test_temp_dir();
+        let steam = dir.join("Steam");
+        write_account(&steam, "111", "-novid");
+        let options = r#"LD_PRELOAD="" gamescope -W 1920 -- %command% -novid"#;
+        write_launch_options_to_localconfig_from(
+            std::slice::from_ref(&steam),
+            options,
+            None::<&str>,
+        )
+        .unwrap();
+        assert_eq!(read_launch_options_from(&[steam]), options);
+        cleanup(&dir);
     }
 
     #[test]
     fn strips_quoted_fragmented_and_nested_banned_launch_tokens() {
         assert_eq!(
             sanitize_launch_options(
-                r#""-autoconfig" -auto"config" "-dxlevel" "90" "+quit" "gamemoderun" "%command%" -novid"#,
+                r#""-autoconfig" -auto"config" "-dxlevel" "90" "+quit" "gamemoderun" -novid"#,
             ),
             "-novid"
+        );
+        assert_eq!(
+            sanitize_launch_options(r#"mangohud "%command%" "-autoconfig" -auto"config" -novid"#),
+            r#"mangohud "%command%" -novid"#
         );
         assert_eq!(
             sanitize_launch_options(r#"+exec "my config.cfg" -console"#),
@@ -1133,7 +1235,7 @@ mod tests {
             "-novid; -console"
         );
         assert_eq!(
-            sanitize_launch_options("gamemoderun;%command%;-novid"),
+            sanitize_launch_options("gamemoderun;-autoconfig;-novid"),
             "-novid"
         );
         assert_eq!(
