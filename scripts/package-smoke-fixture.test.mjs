@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
+import { fixtureCacheSources } from "./absorb-cache-fixture.mjs";
 import {
   assertNoSteamDirectories,
   assertPackageFixturePreserved,
@@ -37,6 +38,58 @@ function withFixture(callback, windows = process.platform === "win32") {
 
 const activeId = "f20a0001-8d01-4000-8000-000000000001";
 const savedId = "f20a0001-8d01-4000-8000-000000000002";
+
+function modelCache(fixture) {
+  const files = fixture.metadata[`${activeId}/manifest.json`].files;
+  const stamps = fixtureCacheSources(fixture.tf2Root, files);
+  return {
+    entries: Object.fromEntries(
+      files
+        .filter((file) => Object.hasOwn(stamps, join(fixture.tf2Root, file.path)))
+        .map((file) => [
+          join(fixture.tf2Root, file.path),
+          { stamp: stamps[join(fixture.tf2Root, file.path)], sha256: file.sha256 },
+        ]),
+    ),
+  };
+}
+
+test("package snapshots allow only bounded exact active-profile absorb observations", () => {
+  withFixture((fixture) => {
+    const path = join(fixture.library, activeId, "absorb-cache.json");
+    const cache = modelCache(fixture);
+    writeFileSync(path, JSON.stringify(cache));
+    assertPackageFixturePreserved(fixture, "valid-cache");
+    for (const mutate of [
+      (value) => {
+        value.unexpected = true;
+      },
+      (value) => {
+        Object.values(value.entries)[0].sha256 = "0".repeat(64);
+      },
+      (value) => {
+        Object.values(value.entries)[0].stamp.len += 1;
+      },
+      (value) => {
+        Object.values(value.entries)[0].stamp.modified.nanos_since_epoch = 1_000_000_000;
+      },
+      (value) => {
+        value.entries["outside-fixture"] = Object.values(value.entries)[0];
+      },
+    ]) {
+      const changed = structuredClone(cache);
+      mutate(changed);
+      writeFileSync(path, JSON.stringify(changed));
+      assert.throws(() => assertPackageFixturePreserved(fixture, "invalid-cache"));
+    }
+    writeFileSync(path, JSON.stringify(cache));
+    writeFileSync(join(fixture.library, savedId, "absorb-cache.json"), '{"entries":{}}');
+    assert.throws(
+      () => assertPackageFixturePreserved(fixture, "inactive-cache"),
+      /files were added/,
+    );
+  });
+});
 function editJson(path, change) {
   const value = JSON.parse(readFileSync(path, "utf8"));
   change(value);

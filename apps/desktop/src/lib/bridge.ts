@@ -184,6 +184,7 @@ export type WriteLock = {
 };
 
 export type LifecycleStatus = {
+  launchWaitExpired?: boolean;
   launchingTf2: boolean;
   steamVerification: boolean;
   installingUpdate: boolean;
@@ -209,6 +210,42 @@ export type ProfileLibrary = {
   /** Durable target awaiting a retry after an interrupted live switch. */
   pendingSwitchProfileId?: string | null;
   profiles: ProfileSummary[];
+};
+
+/** What the tidy-up after an update changed; see `execs-core` `tidy_up.rs`. */
+export type TidyReport = {
+  soundCachesRemoved: string[];
+  hudBackupsDeleted: string[];
+  hudBackupsMoved: string[];
+  hudBackupsKept: number;
+  valveCfgsDropped: { profile: string; count: number }[];
+  valveCfgsMissing: number;
+  managedFilesUpgraded: {
+    profile: string;
+    kind: "preloadHook" | "bindKeyNames" | "cheatTracers";
+  }[];
+  downloadsRemoved: string[];
+  freedBytes: number;
+  movedBytes: number;
+  skipped: string[];
+};
+
+/** The once-per-version tidy-up; null when it already ran or has to wait. */
+export async function runAutomaticTidyUp(): Promise<TidyReport | null> {
+  return call<TidyReport | null>("run_automatic_tidy_up");
+}
+
+/** App settings → Storage: run the tidy-up checks again. */
+export async function tidyUpAgain(): Promise<TidyReport> {
+  return call<TidyReport>("tidy_up_again");
+}
+
+/** Saved profiles that belong to another TF2 folder, and whether they can move here. */
+export type LibraryMoveReview = {
+  libraryRoot: string;
+  profileCount: number;
+  /** Why the move is refused, in words for the player; null when it can run. */
+  blockedReason: string | null;
 };
 
 export function isTauri(): boolean {
@@ -270,6 +307,10 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   }
 }
 
+export async function setBindMouseCapture(enabled: boolean, sequence: number): Promise<void> {
+  return call<void>("set_bind_mouse_capture", { enabled, sequence });
+}
+
 export async function scanTf2Installs(): Promise<Tf2Install[]> {
   return call<Tf2Install[]>("scan_tf2_installs");
 }
@@ -284,6 +325,11 @@ export async function confirmTf2Root(path: string): Promise<Tf2Install> {
 
 export async function getTf2Root(): Promise<Tf2Install | null> {
   return call<Tf2Install | null>("get_tf2_root");
+}
+
+/** The saved TF2 folder when it no longer holds TF2, such as a disconnected drive. */
+export async function getMissingTf2Root(): Promise<string | null> {
+  return call<string | null>("get_missing_tf2_root");
 }
 
 export async function getTf2WriteLock(): Promise<WriteLock> {
@@ -311,6 +357,39 @@ export async function getProfileLibrary(): Promise<ProfileLibrary> {
 
 export async function initProfileLibrary(): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("init_profile_library");
+}
+
+/** Personal settings that can be copied from the active profile to others. */
+export type SettingsCopyScope = "binds" | "gameplay" | "sounds";
+
+export type SettingsCopyTarget = {
+  id: string;
+  name: string;
+  /** False when the profile already has exactly these settings. */
+  changes: boolean;
+  /** Why this profile cannot take the copy, such as an unreadable file. */
+  problem?: string | null;
+};
+
+export async function reviewSettingsCopy(scope: SettingsCopyScope): Promise<SettingsCopyTarget[]> {
+  return call<SettingsCopyTarget[]>("review_settings_copy", { scope });
+}
+
+/** Copy the active profile's saved settings for one pane; returns the changed ids. */
+export async function copySettingsToProfiles(
+  scope: SettingsCopyScope,
+  targets: string[],
+): Promise<string[]> {
+  return call<string[]>("copy_settings_to_profiles", { scope, targets });
+}
+
+export async function reviewLibraryMove(): Promise<LibraryMoveReview | null> {
+  return call<LibraryMoveReview | null>("review_library_move");
+}
+
+/** Point every saved profile at the confirmed TF2 folder after TF2 moved. */
+export async function moveLibraryToInstall(): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("move_library_to_install");
 }
 
 export async function saveCurrentAs(name: string): Promise<ProfileLibrary> {
@@ -383,6 +462,30 @@ export function clearDownloadCaches(): Promise<ClearReport> {
   return call("clear_download_caches");
 }
 
+export type HudBackup = {
+  id: string;
+  name: string;
+  location: string;
+  modifiedAt: number | null;
+  bytes: number;
+  files: number;
+  revision: string;
+};
+
+export type HudBackupReport = { backups: HudBackup[]; unreadable: string[] };
+
+export function getHudBackups(): Promise<HudBackupReport> {
+  return call("get_hud_backups");
+}
+
+export function restoreHudBackup(id: string, revision: string): Promise<string | null> {
+  return call("restore_hud_backup", { id, revision });
+}
+
+export function deleteHudBackup(id: string, revision: string): Promise<void> {
+  return call("delete_hud_backup", { id, revision });
+}
+
 export type AbsorbDelta = {
   ownedChanged: string[];
   ownedMissing: string[];
@@ -392,9 +495,12 @@ export type AbsorbDelta = {
 };
 
 export type AbsorbOwnedResult = {
+  packReview?: string;
   library: ProfileLibrary;
   delta: AbsorbDelta;
   configCfgAbsorbed: boolean;
+  /** Keys whose bind TF2 changed in config.cfg; `null` means it removed the bind. */
+  configBindChanges?: Record<string, string | null>;
   /** Packs rewritten from the library after an interrupted write. */
   repaired?: string[];
 };
@@ -409,6 +515,18 @@ export async function absorbOwned(): Promise<AbsorbOwnedResult> {
 
 export async function absorbPacks(choice: PackChoice): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("absorb_packs", { choice });
+}
+
+export type PackAction = "add" | "remove" | "restore" | "keep";
+export type PackDecision = { pack: string; choice: PackAction };
+export type PackReviewRequest = {
+  profileId: string;
+  fingerprint: string;
+  decisions: PackDecision[];
+};
+
+export async function resolvePackChanges(request: PackReviewRequest): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("resolve_pack_changes", { request });
 }
 
 export type SwitchStep = "closed" | "pack" | "remove" | "write" | "cloud" | "done";
@@ -565,11 +683,13 @@ export async function applyUnusedWizard(spec: WizardSpec): Promise<ProfileLibrar
   return call<ProfileLibrary>("apply_unused_wizard", { spec });
 }
 
+/** Create a profile; without `switchAfter` it stays inactive and TF2 is untouched. */
 export async function createFreshProfile(
   spec: WizardSpec,
   startFrom: StartFrom,
+  switchAfter = true,
 ): Promise<ProfileLibrary> {
-  return call<ProfileLibrary>("create_fresh_profile", { spec, startFrom });
+  return call<ProfileLibrary>("create_fresh_profile", { spec, startFrom, switchAfter });
 }
 
 export type CfgLayer = "comfig" | "vanilla";
@@ -629,6 +749,8 @@ export type ModRecord = {
   bytes: number;
   /** ISO timestamp of the install. */
   installedAt: string;
+  /** Original mounted name when this pack is stored outside TF2's content roots. */
+  inactivePack?: string;
 };
 
 export type ViewmodelSource = "compiled" | "imported" | "stockBuilt";
@@ -852,7 +974,19 @@ export type ComfigState = {
   addons: OfficialAddon[];
   hasBaseVpk: boolean;
   hasComfigCustom: boolean;
+  supportedLoader: boolean;
+  release: ComfigRelease | null;
+  packageHashes: Record<string, string>;
 };
+
+export type ComfigRelease = {
+  version: string;
+  packages: Record<string, string>;
+};
+
+export async function checkComfigRelease(expectedProfileId: string): Promise<string> {
+  return call<string>("check_comfig_release", { expectedProfileId });
+}
 
 export async function getComfigState(id?: string): Promise<ComfigState | null> {
   return call<ComfigState | null>("get_comfig_state", { id: id ?? null });
@@ -884,7 +1018,12 @@ export async function importComfigCustom(id?: string): Promise<ProfileDetail | n
   return call<ProfileDetail | null>("import_comfig_custom", { id: id ?? null });
 }
 
-export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
+export type SteamWriteStatus =
+  | "written"
+  | "steam_open"
+  | "no_account"
+  | "write_failed"
+  | "not_requested";
 
 export type SetLaunchResult = {
   launchOptions: string;
@@ -898,6 +1037,7 @@ export type LaunchSyncStatus = {
   steamOptions: string | null;
   inSync: boolean;
   steamRunning: boolean;
+  reviewToken?: string | null;
 };
 
 export async function getLaunchSyncStatus(): Promise<LaunchSyncStatus> {
@@ -915,8 +1055,15 @@ export async function getProfileLaunchOptions(id?: string): Promise<string> {
 export async function setProfileLaunchOptions(
   options: string,
   id?: string,
+  reviewToken?: string,
+  adoptSteam = false,
 ): Promise<SetLaunchResult> {
-  return call<SetLaunchResult>("set_profile_launch_options", { options, id: id ?? null });
+  return call<SetLaunchResult>("set_profile_launch_options", {
+    options,
+    id: id ?? null,
+    reviewToken,
+    adoptSteam,
+  });
 }
 
 export type HudCatalogPayload = { entries: HudCatalogEntry[]; warning: string | null };
@@ -974,7 +1121,7 @@ export async function installHud(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("install_hud", { id });
 }
 
-/** Pick a zip/7z on disk and install it as this profile's HUD. Null = cancelled. */
+/** Pick a ZIP, 7z or RAR on disk and install it as this profile's HUD. Null = cancelled. */
 export async function importHudArchive(): Promise<ProfileDetail | null> {
   return call<ProfileDetail | null>("import_hud_archive");
 }
@@ -1342,6 +1489,40 @@ export type GameBananaDownloadVariant = {
 export type GameBananaSort = "new" | "updated" | "downloads" | "likes" | "views";
 
 /** Pick an archive or vpk and install it into the active profile. Null = cancelled. */
+export type ModImportReview = {
+  token: string;
+  choices: {
+    id: string;
+    name: string;
+    path: string;
+    files: number;
+    bytes: number;
+    contentRoots: string[];
+    disabledReason: string | null;
+  }[];
+  readmes: { path: string; text: string; truncated: boolean }[];
+};
+
+export async function prepareImportModArchive(): Promise<ModImportReview | null> {
+  return call("prepare_import_mod_archive");
+}
+
+export async function prepareImportModFolder(): Promise<ModImportReview | null> {
+  return call("prepare_import_mod_folder");
+}
+
+export async function prepareGameBananaMod(id: number, fileId: number): Promise<ModImportReview> {
+  return call("prepare_gamebanana_mod", { id, fileId });
+}
+
+export async function confirmModImport(token: string, choices: string[]): Promise<ProfileDetail> {
+  return call("confirm_mod_import", { token, choices });
+}
+
+export async function cancelModImport(token: string): Promise<void> {
+  return call("cancel_mod_import", { token });
+}
+
 export async function importModArchive(): Promise<ProfileDetail | null> {
   return call<ProfileDetail | null>("import_mod_archive");
 }
@@ -1353,6 +1534,25 @@ export async function importModFolder(): Promise<ProfileDetail | null> {
 
 export async function removeMod(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_mod", { id });
+}
+
+export type ModUpdateStatus = {
+  id: string;
+  updatedAt: number | null;
+  updateAvailable: boolean;
+  error: string | null;
+};
+
+export function setModEnabled(id: string, enabled: boolean): Promise<ProfileDetail> {
+  return call("set_mod_enabled", { id, enabled });
+}
+
+export function copyModToProfile(id: string, targetProfileId: string): Promise<ProfileDetail> {
+  return call("copy_mod_to_profile", { id, targetProfileId });
+}
+
+export function checkModUpdates(): Promise<ModUpdateStatus[]> {
+  return call("check_mod_updates");
 }
 
 /**
@@ -1404,6 +1604,7 @@ export type PreloaderSkipNotice = {
 export type PreloaderStatus = {
   gameinfoFound: boolean;
   gameinfoBypassed: boolean;
+  gameinfoBypassWanted?: boolean;
   patchedFiles: string[];
   addons: string[];
   particleMods: string[];
@@ -1421,9 +1622,13 @@ export type ParticleSource = {
   modId: string;
   name: string;
   pcfFiles: string[];
+  /** Current-install planning refusal; saved selections can still be removed. */
+  unavailableReason?: string;
 };
 
 export type PreloaderStatusPayload = {
+  /** Read-only installed-file expectations; not a retail Casual test. */
+  contentAudit?: ModContentAudit;
   status: PreloaderStatus;
   modsCached: boolean;
   modsSizeBytes: number;
@@ -1437,6 +1642,25 @@ export type PreloaderStatusPayload = {
   profilePreload: boolean;
   /** Particle sources found in the profile's own mods. Absent on older payloads. */
   profileParticleSources?: ParticleSource[];
+};
+
+export type PackContent = {
+  pack: string;
+  files: number;
+  restrictedSounds: boolean;
+  soundScripts: string[];
+  exemptHitSounds: boolean;
+  modelsMaterials: boolean;
+  particles: boolean;
+  other: boolean;
+};
+export type ContentOverlap = { path: string; winner: string | null; packs: string[] };
+export type ModContentAudit = {
+  packs: PackContent[];
+  overlaps: ContentOverlap[];
+  splitModels: { model: string; components: ContentOverlap[] }[];
+  incomplete: string[];
+  omittedDetails: number;
 };
 
 export type CatalogAddon = {
@@ -1545,8 +1769,12 @@ export async function cancelGameFileRepair(): Promise<boolean> {
  * player agreed to close Steam first so the profile's launch options can be
  * written; the launch then starts Steam again.
  */
-export async function launchTf2(syncSteam = false): Promise<void> {
-  return call<void>("launch_tf2", { syncSteam });
+export async function launchTf2(
+  syncSteam = false,
+  reviewToken?: string,
+  adoptSteam = false,
+): Promise<void> {
+  return call<void>("launch_tf2", { syncSteam, reviewToken, adoptSteam });
 }
 
 /** Release a pending launch after the user has cancelled it in Steam. */

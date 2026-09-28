@@ -78,7 +78,7 @@ fn is_credential(name: &str) -> bool {
     CREDENTIAL_NAMES.contains(&name.to_ascii_lowercase().as_str())
 }
 
-fn tokens(line: &str) -> Vec<String> {
+pub(crate) fn tokens(line: &str) -> Vec<String> {
     let line = match line.find("//") {
         Some(at) if line[..at].matches('"').count().is_multiple_of(2) => &line[..at],
         _ => line,

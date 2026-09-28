@@ -67,7 +67,16 @@ const HITSOUND_ENTRY = shape<HitsoundEntry>(
 );
 const HITSOUND = shape<HitsoundRecord>({ sourceChanged: true, hit: true, kill: true }, {});
 const MOD = shape<ModRecord>(
-  { id: true, name: true, source: true, pack: true, files: true, bytes: true, installedAt: true },
+  {
+    id: true,
+    name: true,
+    source: true,
+    pack: true,
+    files: true,
+    bytes: true,
+    installedAt: true,
+    inactivePack: true,
+  },
   { id: true, name: true, source: true, pack: true, files: true, bytes: true, installedAt: true },
 );
 const DETAIL = shape<ProfileDetail>(

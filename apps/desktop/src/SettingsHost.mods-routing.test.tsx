@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "./components/ui/Toast";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
-import { BridgeError, type GameBananaPage } from "./lib/bridge";
+import { BridgeError, type GameBananaPage, type ModImportReview } from "./lib/bridge";
 import {
   DIRECT_BURNING_OVERLAY_ID,
   DIRECT_DEVELOPER_TEXTURES_ID,
@@ -99,9 +99,11 @@ function makeApi() {
         supported: true,
       },
     ]),
-    importModArchive: vi.fn(async (): Promise<{ id: string } | null> => ({ id: profileId })),
-    importModFolder: vi.fn(async (): Promise<{ id: string } | null> => ({ id: profileId })),
-    installGameBananaMod: vi.fn(async () => ({ id: profileId })),
+    prepareImportModArchive: vi.fn(async (): Promise<ModImportReview | null> => null),
+    prepareImportModFolder: vi.fn(async (): Promise<ModImportReview | null> => null),
+    prepareGameBananaMod: vi.fn(async (): Promise<ModImportReview | null> => null),
+    cancelModImport: vi.fn(async () => {}),
+    confirmModImport: vi.fn(async () => ({ id: profileId })),
   };
 }
 async function render() {
@@ -194,24 +196,24 @@ describe("Mods HUD recovery through the real settings host", () => {
   it.each(["archive", "folder"] as const)(
     "routes a rejected %s import to one actionable HUD review without success feedback",
     async (kind) => {
-      api[kind === "archive" ? "importModArchive" : "importModFolder"].mockRejectedValueOnce(
-        new BridgeError(hudMessage, "HudImportRequired"),
-      );
+      api[
+        kind === "archive" ? "prepareImportModArchive" : "prepareImportModFolder"
+      ].mockRejectedValueOnce(new BridgeError(hudMessage, "HudImportRequired"));
       await render();
       await importMod(kind);
       expectOnlyHudRecovery();
       await act(async () => button("Review in HUD").click());
       expect(onNavigate).toHaveBeenCalledExactlyOnceWith("hud");
       expect(onHudReviewRequired).not.toHaveBeenCalled();
-      expect(api.importModArchive).toHaveBeenCalledTimes(kind === "archive" ? 1 : 0);
-      expect(api.importModFolder).toHaveBeenCalledTimes(kind === "folder" ? 1 : 0);
+      expect(api.prepareImportModArchive).toHaveBeenCalledTimes(kind === "archive" ? 1 : 0);
+      expect(api.prepareImportModFolder).toHaveBeenCalledTimes(kind === "folder" ? 1 : 0);
     },
   );
 
   it("keeps a GameBanana HUD redirect actionable without a misleading retry alert", async () => {
     vi.useFakeTimers();
-    const install = deferred<Awaited<ReturnType<typeof api.installGameBananaMod>>>();
-    api.installGameBananaMod.mockReturnValueOnce(install.promise);
+    const install = deferred<Awaited<ReturnType<typeof api.prepareGameBananaMod>>>();
+    api.prepareGameBananaMod.mockReturnValueOnce(install.promise);
     await render();
     await chooseGameBananaFile();
     expect(element("mods-gb-install-700000").textContent).toBe("Installing…");
@@ -228,27 +230,31 @@ describe("Mods HUD recovery through the real settings host", () => {
   it.each(["archive", "folder", "gamebanana"] as const)(
     "clears a previous HUD import warning when a new %s attempt starts",
     async (kind) => {
-      api.importModArchive.mockRejectedValueOnce(new BridgeError(hudMessage, "HudImportRequired"));
+      api.prepareImportModArchive.mockRejectedValueOnce(
+        new BridgeError(hudMessage, "HudImportRequired"),
+      );
       await render();
       await importMod("archive");
       expectOnlyHudRecovery();
-      const next = deferred<Awaited<ReturnType<typeof api.importModArchive>>>();
+      const next = deferred<Awaited<ReturnType<typeof api.prepareImportModArchive>>>();
       if (kind === "gamebanana") {
-        api.installGameBananaMod.mockReturnValueOnce(next.promise as Promise<{ id: string }>);
+        api.prepareGameBananaMod.mockReturnValueOnce(next.promise);
         await chooseGameBananaFile();
       } else {
-        api[kind === "archive" ? "importModArchive" : "importModFolder"].mockReturnValueOnce(
-          next.promise,
-        );
+        api[
+          kind === "archive" ? "prepareImportModArchive" : "prepareImportModFolder"
+        ].mockReturnValueOnce(next.promise);
         await importMod(kind);
       }
       expect(box.querySelector('[data-testid="mods-hud-import-required"]')).toBeNull();
-      await act(async () => next.resolve(kind === "gamebanana" ? { id: profileId } : null));
+      await act(async () => next.resolve(null));
     },
   );
 
   it("clears HUD import recovery when the active profile identity changes", async () => {
-    api.importModArchive.mockRejectedValueOnce(new BridgeError(hudMessage, "HudImportRequired"));
+    api.prepareImportModArchive.mockRejectedValueOnce(
+      new BridgeError(hudMessage, "HudImportRequired"),
+    );
     await render();
     await importMod("archive");
     expectOnlyHudRecovery();
@@ -262,8 +268,8 @@ describe("Mods HUD recovery through the real settings host", () => {
   it.each(["HudImportRequired", "HudReviewRequired", "HudLiveReviewRequired"])(
     "does not publish a late %s failure into another profile",
     async (code) => {
-      const previous = deferred<Awaited<ReturnType<typeof api.importModArchive>>>();
-      api.importModArchive.mockReturnValueOnce(previous.promise);
+      const previous = deferred<Awaited<ReturnType<typeof api.prepareImportModArchive>>>();
+      api.prepareImportModArchive.mockReturnValueOnce(previous.promise);
       await render();
       await importMod("archive");
       profileId = "B";
@@ -279,7 +285,7 @@ describe("Mods HUD recovery through the real settings host", () => {
   it.each(["HudReviewRequired", "HudLiveReviewRequired"])(
     "routes %s to the profile ownership review once without a second failure surface",
     async (code) => {
-      api.importModArchive.mockRejectedValueOnce(
+      api.prepareImportModArchive.mockRejectedValueOnce(
         new BridgeError("Review this profile's HUDs.", code),
       );
       await render();
@@ -293,8 +299,8 @@ describe("Mods HUD recovery through the real settings host", () => {
   );
 
   it("does not leave a failed GameBanana card behind after a profile changes", async () => {
-    const previous = deferred<Awaited<ReturnType<typeof api.installGameBananaMod>>>();
-    api.installGameBananaMod.mockReturnValueOnce(previous.promise);
+    const previous = deferred<Awaited<ReturnType<typeof api.prepareGameBananaMod>>>();
+    api.prepareGameBananaMod.mockReturnValueOnce(previous.promise);
     await render();
     await chooseGameBananaFile();
     profileId = "B";
@@ -310,8 +316,19 @@ describe("Mods HUD recovery through the real settings host", () => {
     );
   });
 
+  it("keeps a cancelled GameBanana review quiet", async () => {
+    api.prepareGameBananaMod.mockResolvedValueOnce(null);
+    await render();
+    await chooseGameBananaFile();
+    expect(box.textContent).not.toContain("Retry this mod");
+    expect(box.textContent).not.toContain("Preview mod 01 installed.");
+    expect(box.querySelector('[role="alert"]')).toBeNull();
+  });
+
   it("keeps an ordinary failed import on the existing error toast", async () => {
-    api.importModArchive.mockRejectedValueOnce(new BridgeError("Archive could not be read.", "Io"));
+    api.prepareImportModArchive.mockRejectedValueOnce(
+      new BridgeError("Archive could not be read.", "Io"),
+    );
     await render();
     await importMod("archive");
     expect(element("toast").getAttribute("data-kind")).toBe("error");

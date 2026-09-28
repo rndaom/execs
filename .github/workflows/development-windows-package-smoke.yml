@@ -1,4 +1,4 @@
-name: Windows package capability (previous public only)
+name: Windows package capability (current public only)
 
 on:
   workflow_dispatch:
@@ -8,6 +8,7 @@ on:
       - scripts/windows-package-*
       - scripts/package-smoke-fixture.mjs
       - scripts/fixtures/package-smoke-v018.json
+      - scripts/fixtures/windows-package-v020/**
       - scripts/development-package-guard.mjs
       - scripts/linux-native-*.mjs
       - scripts/release-version.mjs
@@ -24,7 +25,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  previous-public-capability:
+  current-public-capability:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: windows-2022
     timeout-minutes: 20
@@ -40,7 +41,7 @@ jobs:
           python-version: '3.12'
       - name: Test containment, authentic archive and failure boundaries
         run: node --test scripts/windows-package-*.test.mjs
-      - name: Authentic old NSIS, production WebView2, native export and normal close
+      - name: Authentic public NSIS, production WebView2, native export and normal close
         timeout-minutes: 12
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,7 +50,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: windows-previous-public-capability-${{ github.sha }}
+          name: windows-current-public-capability-${{ github.sha }}
           path: ${{ runner.temp }}/execs-windows-package-*/evidence/
           if-no-files-found: warn
           retention-days: 7

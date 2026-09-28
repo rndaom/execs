@@ -16,6 +16,7 @@ pub mod inventory;
 pub mod launch;
 pub mod library;
 pub mod lifecycle;
+pub mod mod_import;
 pub mod mods;
 pub mod preloader;
 pub mod restore_points;

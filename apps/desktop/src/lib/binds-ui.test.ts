@@ -9,9 +9,9 @@ import {
   bindActionForCommand,
   bindKeyLabel,
   bindsFilePath,
+  canonicalBindKey,
   canRecordBinds,
   clearManagedKey,
-  configBindsFromFiles,
   ensureAutoexecExecLine,
   MANAGED_BINDS_HEADER,
   normalizeBindCommand,
@@ -27,6 +27,7 @@ import {
   sourceKeyFromKeyboardEvent,
   sourceKeyFromMouseButton,
   syncTrackedBindsFromConfig,
+  TF2_KEY_NAMES,
   UNBINDABLE_KEY_MESSAGE,
 } from "./binds-ui";
 
@@ -57,7 +58,7 @@ describe("source key mapping", () => {
     expect(sourceKeyFromMouseButton(4)).toBe("mouse5");
     expect(sourceKeyFromMouseButton(-1)).toBeNull();
     expect(sourceKeyFromMouseButton(5)).toBeNull();
-    expect(sourceKeyFromCode("Semicolon")).toBe("semicolin");
+    expect(sourceKeyFromCode("Semicolon")).toBe("semicolon");
     expect(sourceKeyFromCode("Numpad0")).toBe("kp_ins");
   });
 
@@ -78,10 +79,10 @@ describe("source key mapping", () => {
   });
 
   it("maps punctuation and shifted punctuation when code is unavailable", () => {
-    expect(sourceKeyFromKeyboardEvent({ code: "", key: ";" })).toBe("semicolin");
-    expect(sourceKeyFromKeyboardEvent({ code: "Unidentified", key: ":" })).toBe("semicolin");
-    expect(sourceKeyFromKey("?")).toBe("slash");
-    expect(sourceKeyFromKey("+")).toBe("equal");
+    expect(sourceKeyFromKeyboardEvent({ code: "", key: ";" })).toBe("semicolon");
+    expect(sourceKeyFromKeyboardEvent({ code: "Unidentified", key: ":" })).toBe("semicolon");
+    expect(sourceKeyFromKey("?")).toBe("/");
+    expect(sourceKeyFromKey("+")).toBe("=");
     expect(sourceKeyFromKey("{")).toBe("[");
   });
 
@@ -92,6 +93,139 @@ describe("source key mapping", () => {
     );
     expect(sourceKeyFromKeyboardEvent({ code: "", key: "+", location: 3 })).toBe("kp_plus");
     expect(sourceKeyFromKeyboardEvent({ code: "", key: "Delete", location: 3 })).toBe("kp_del");
+  });
+});
+
+describe("TF2 key names", () => {
+  // Every KeyboardEvent.code a standard 104/105-key keyboard produces.
+  const STANDARD_CODES = [
+    ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((letter) => `Key${letter}`),
+    ..."0123456789".split("").map((digit) => `Digit${digit}`),
+    ...Array.from({ length: 12 }, (_, index) => `F${index + 1}`),
+    ...Array.from({ length: 10 }, (_, index) => `Numpad${index}`),
+    "NumpadDecimal",
+    "NumpadDivide",
+    "NumpadMultiply",
+    "NumpadSubtract",
+    "NumpadAdd",
+    "NumpadEnter",
+    "Backquote",
+    "Minus",
+    "Equal",
+    "BracketLeft",
+    "BracketRight",
+    "Backslash",
+    "Semicolon",
+    "Quote",
+    "Comma",
+    "Period",
+    "Slash",
+    "Space",
+    "Tab",
+    "Enter",
+    "Backspace",
+    "CapsLock",
+    "ShiftLeft",
+    "ShiftRight",
+    "ControlLeft",
+    "ControlRight",
+    "AltLeft",
+    "AltRight",
+    "MetaLeft",
+    "MetaRight",
+    "ContextMenu",
+    "Insert",
+    "Delete",
+    "Home",
+    "End",
+    "PageUp",
+    "PageDown",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+    "Pause",
+    "ScrollLock",
+    "NumLock",
+  ];
+
+  it("records every standard key with a name from TF2's key table", () => {
+    for (const code of STANDARD_CODES) {
+      const key = sourceKeyFromCode(code);
+      expect(key, code).not.toBeNull();
+      expect(TF2_KEY_NAMES.has(key as string), `${code} -> ${key}`).toBe(true);
+    }
+    for (const button of [0, 1, 2, 3, 4]) {
+      expect(TF2_KEY_NAMES.has(sourceKeyFromMouseButton(button) as string)).toBe(true);
+    }
+  });
+
+  it("uses TF2's names for punctuation, right-hand modifiers and lock keys", () => {
+    expect(
+      ["Semicolon", "Quote", "Comma", "Period", "Slash", "Backslash", "Minus", "Equal"].map(
+        sourceKeyFromCode,
+      ),
+    ).toEqual(["semicolon", "'", ",", ".", "/", "\\", "-", "="]);
+    expect(["ShiftRight", "ControlRight", "AltRight"].map(sourceKeyFromCode)).toEqual([
+      "rshift",
+      "rctrl",
+      "ralt",
+    ]);
+    expect(
+      ["Pause", "ScrollLock", "NumLock", "MetaLeft", "MetaRight", "ContextMenu"].map(
+        sourceKeyFromCode,
+      ),
+    ).toEqual(["pause", "scrolllock", "numlock", "lwin", "rwin", "app"]);
+    // Without a code, the DOM location still tells the right-hand keys apart.
+    expect(sourceKeyFromKeyboardEvent({ code: "", key: "Shift", location: 2 })).toBe("rshift");
+    expect(sourceKeyFromKeyboardEvent({ code: "", key: "Control", location: 1 })).toBe("ctrl");
+    expect(sourceKeyFromKeyboardEvent({ code: "", key: "Pause" })).toBe("pause");
+  });
+
+  it("reads older execs spellings as the key the player pressed", () => {
+    expect(
+      ["semicolin", "APOSTROPHE", "comma", "period", "slash", "backslash", "minus", "equal"].map(
+        canonicalBindKey,
+      ),
+    ).toEqual(["semicolon", "'", ",", ".", "/", "\\", "-", "="]);
+    expect(canonicalBindKey("W")).toBe("w");
+    expect(bindKeyLabel("rshift")).toBe("Right Shift");
+    expect(bindKeyLabel("PAUSE")).toBe("Pause");
+  });
+
+  it("writes punctuation keys quoted, as TF2's config.cfg does", () => {
+    const text = applyRecordedBind(MANAGED_BINDS_HEADER, "jump", "'");
+    expect(text).toContain(`bind "'" +jump`);
+    expect(applyRecordedBind(MANAGED_BINDS_HEADER, "jump", "semicolon")).toContain(
+      "bind semicolon +jump",
+    );
+    expect(ownedManagedBindKeys(text)).toEqual([{ actionId: "jump", key: "'" }]);
+  });
+
+  it("replaces a bind recorded with an older spelling instead of adding a second line", () => {
+    const legacy = `${MANAGED_BINDS_HEADER}\nbind comma +jump\nbind semicolin +duck\n`;
+    expect(ownedManagedBindKeys(legacy)).toEqual([
+      { actionId: "jump", key: "," },
+      { actionId: "duck", key: "semicolon" },
+    ]);
+    const next = applyRecordedBind(legacy, "voice", ",");
+    expect(next).not.toContain("bind comma");
+    expect(next).toContain(`bind "," +voicerecord`);
+    expect(removeOwnedManagedBind(legacy, "duck", "semicolon")).not.toContain("semicolin");
+    expect(clearManagedKey(legacy, "semicolon")).toContain("unbind semicolon");
+  });
+
+  it("keeps the player's punctuation binds through the after-game sync", () => {
+    const text = applyRecordedBind(MANAGED_BINDS_HEADER, "jump", ",");
+    // TF2 saves the working bind into config.cfg with its own spelling.
+    expect(syncTrackedBindsFromConfig(text, { ",": "+jump" })).toBe(text);
+    expect(syncTrackedBindsFromConfig(text, {})).toBe(text);
+    const legacy = `${MANAGED_BINDS_HEADER}
+bind comma +jump
+`;
+    expect(ownedManagedBindKeys(syncTrackedBindsFromConfig(legacy, { ",": "+duck" }))).toEqual([
+      { actionId: "duck", key: "," },
+    ]);
   });
 });
 
@@ -242,7 +376,7 @@ describe("syncTrackedBindsFromConfig", () => {
   it("updates the medic key when config.cfg moved it", () => {
     const current = serializeManagedBinds({ medic: "e", forward: "w" });
     const next = syncTrackedBindsFromConfig(current, {
-      w: "+forward",
+      e: null,
       h: "voicemenu 0 0",
     });
     expect(managedKeysByAction(next)).toEqual({ medic: ["h"], forward: ["w"] });
@@ -250,18 +384,18 @@ describe("syncTrackedBindsFromConfig", () => {
     const fromMap = syncTrackedBindsFromConfig(
       current,
       new Map([
-        ["w", "+forward"],
+        ["e", null],
         ["mouse3", "voicemenu 0 0"],
       ]),
     );
     expect(managedKeysByAction(fromMap).medic).toEqual(["mouse3"]);
   });
 
-  it("removes managed assignments that are absent from the complete config map", () => {
+  it("removes managed assignments only for keys TF2 unbound", () => {
     const current = serializeManagedBinds({ forward: "w", medic: "e", voice: "v" });
     const next = syncTrackedBindsFromConfig(current, {
-      w: "+forward",
       e: "+use",
+      v: null,
       mouse1: "+attack",
     });
 
@@ -272,10 +406,24 @@ describe("syncTrackedBindsFromConfig", () => {
     });
   });
 
-  it("clears every tracked assignment when the complete config map is empty", () => {
+  it("leaves every assignment alone when TF2 changed no binds", () => {
     const current = serializeManagedBinds({ forward: "w", medic: "e" });
 
-    expect(syncTrackedBindsFromConfig(current, {})).toBe(`${MANAGED_BINDS_HEADER}\n`);
+    expect(syncTrackedBindsFromConfig(current, {})).toBe(current);
+  });
+
+  it("keeps binds recorded in execs when config.cfg still holds older keys", () => {
+    // Keys recorded in Binds after TF2 last wrote config.cfg. That config.cfg
+    // still binds space to +jump and r to +reload, but TF2 did not change them
+    // in this session, so they are not synced back over the new keys.
+    const recorded = applyRecordedBind(
+      applyRecordedBind(serializeManagedBinds({ forward: "w" }), "jump", "mouse4"),
+      "reload",
+      "f",
+    );
+    const next = syncTrackedBindsFromConfig(recorded, { f10: "quit prompt" });
+    expect(next).toBe(recorded);
+    expect(managedKeysByAction(next)).toMatchObject({ jump: ["mouse4"], reload: ["f"] });
   });
 
   it("handles moves, reassignments, swaps, and multiple keys in one sync", () => {
@@ -318,24 +466,6 @@ describe("syncTrackedBindsFromConfig", () => {
         e: "voicemenu 0 0",
       }),
     ).toBe(current);
-  });
-
-  it("reads config.cfg binds and ignores the managed overlay file", () => {
-    expect(
-      configBindsFromFiles([
-        {
-          path: "tf/cfg/overrides/execs_binds.cfg",
-          text: 'bind e "voicemenu 0 0"\nbind w +forward\n',
-        },
-        {
-          path: "tf/cfg/config.cfg",
-          text: 'bind h "voicemenu 0 0"\nbind w +forward\n',
-        },
-      ]),
-    ).toEqual({
-      h: "voicemenu 0 0",
-      w: "+forward",
-    });
   });
 
   it("is requested only after verified config drift and never while TF2 runs", () => {

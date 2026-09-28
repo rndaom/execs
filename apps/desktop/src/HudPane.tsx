@@ -141,7 +141,7 @@ export function HudPane({
   onMatch: (id: string) => void;
   /** Resolves when the write settles; the toast reports it. */
   onApplyOptions: (options: Record<string, string>) => Promise<unknown>;
-  /** Install a HUD from a zip/7z or a folder on this computer. */
+  /** Install a HUD from a ZIP, 7z or RAR, or a folder on this computer. */
   onImportArchive: () => HudMutationResult;
   onImportFolder: () => HudMutationResult;
 }) {
@@ -1285,7 +1285,7 @@ export function HudPane({
             >
               <UploadSimple size={20} />
               <span>
-                <span className="block">Choose ZIP or 7z…</span>
+                <span className="block">Choose ZIP, 7z or RAR…</span>
                 <span className="t-meta mt-1 block">Downloaded archive. No need to unzip it.</span>
               </span>
             </button>

@@ -154,6 +154,7 @@ it("checks a newly started native write before the next React render", async () 
 it.each([
   ["mods", "Mods"],
   ["crosshair", "Crosshair"],
+  ["viewmodels", "Viewmodels"],
 ] as const)(
   "keeps explicit %s drafts reviewable without offering an impossible save",
   async (tab, label) => {

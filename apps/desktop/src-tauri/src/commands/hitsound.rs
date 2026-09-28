@@ -157,7 +157,7 @@ pub struct PickedHitsound {
     pub converted: bool,
 }
 
-/// Let the user choose a WAV, prepare it for the engine, and stash it for
+/// Let the user choose a WAV, MP3 or Ogg Vorbis clip, prepare it for the engine, and stash it for
 /// auditioning and a later Apply. Cancelling the dialog returns `None`.
 #[tauri::command]
 pub async fn pick_hitsound_file(
@@ -167,8 +167,8 @@ pub async fn pick_hitsound_file(
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
-            .set_title("Choose a WAV sound")
-            .add_filter("WAV audio", &["wav"])
+            .set_title("Choose a sound")
+            .add_filter("Sound files", &["wav", "mp3", "ogg", "oga"])
             .blocking_pick_file()
     })
     .await
@@ -187,7 +187,15 @@ pub async fn pick_hitsound_file(
         // Refused by its size on disk before it is read whole; the same
         // sentence guards the bytes below for a file that grew in between.
         let raw = read_bounded_file(&path, HITSOUND_MAX_BYTES as u64, HITSOUND_TOO_LARGE)?;
-        let (wav, info) = execs_core::prepare_hitsound_wav(&raw)?;
+        // MP3 and Ogg Vorbis clips become WAVs first; everything after that
+        // is the same preparation a WAV gets.
+        let source = if execs_core::audio_decode::is_decoded_extension(&name) {
+            let extension = name.rsplit_once('.').map_or("", |(_, extension)| extension);
+            execs_core::audio_decode::decode_to_wav(&raw, extension)?
+        } else {
+            raw.clone()
+        };
+        let (wav, info) = execs_core::prepare_hitsound_wav(&source)?;
         let converted = wav != raw;
         Ok((name, wav, info, converted))
     })

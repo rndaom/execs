@@ -153,6 +153,21 @@ describe("stacked modals", () => {
     expect(document.activeElement).toBe(element("opener"));
   });
 
+  it("marks the page while any dialog is open so pane dialogs cover the header", async () => {
+    await render({ pane: false });
+    expect(document.body.dataset.modalOpen).toBeUndefined();
+    await render();
+    expect(document.body.dataset.modalOpen).toBe("true");
+    await render({ exit: true });
+    await render({ exit: true, pane: false });
+    expect(document.body.dataset.modalOpen).toBe("true");
+    await render({ pane: false });
+    expect(document.body.dataset.modalOpen).toBeUndefined();
+    // A hidden pane releases its dialog, and the mark with it.
+    await render({ paneActive: false });
+    expect(document.body.dataset.modalOpen).toBeUndefined();
+  });
+
   it("allows only the upper scrim to dismiss a dialog", async () => {
     await render();
     await render({ exit: true });

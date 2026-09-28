@@ -283,7 +283,12 @@ export function AppSettingsPane({
               </span>
             </button>
           </div>
-          <StorageUsage api={api} ready={ready} />
+          <StorageUsage
+            key={confirmedRoot}
+            api={api}
+            ready={ready}
+            backupsEnabled={Boolean(confirmedRoot)}
+          />
         </SettingsSection>
 
         <SettingsSection

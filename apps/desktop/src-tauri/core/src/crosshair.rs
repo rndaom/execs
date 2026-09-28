@@ -932,6 +932,10 @@ fn refuse_untracked_live_pack_files(
                 .to_string_lossy()
                 .replace('\\', "/")
                 .to_ascii_lowercase();
+            if rel == format!("{prefix}sound/sound.cache") && !tracked.contains(&rel) {
+                crate::switch::remove_pack_sound_cache(tf2_root, &path)?;
+                continue;
+            }
             if !tracked.contains(&rel) && !rel.ends_with(crate::hash::PART_SUFFIX) {
                 return Err(ProfileError::Io(format!(
                     "The live crosshair pack contains an untracked file: {rel}. Remove or save it before applying."
@@ -2977,6 +2981,33 @@ cl_crosshair_blue 56
         assert!(err.message().contains("untracked"), "{err:?}");
         assert_eq!(load_manifest(&root.join("profiles"), &id).unwrap(), before);
         assert_eq!(std::fs::read(stray).unwrap(), b"quit\n");
+        cleanup(&root);
+    }
+
+    #[test]
+    fn apply_removes_the_sound_cache_tf2_writes_into_the_pack() {
+        let (root, tf2, id) = setup();
+        let cache = tf2.join("tf/custom/execs-crosshairs/sound/sound.cache");
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::write(&cache, b"cache").unwrap();
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+
+        apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            "dot",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        assert!(!cache.exists());
         cleanup(&root);
     }
 

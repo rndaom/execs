@@ -1,0 +1,57 @@
+[
+  {
+    "file": "rar5-normal.rar",
+    "source": "https://raw.githubusercontent.com/libarchive/libarchive/9dc6678ca2ab57fac75889451cd8db1e45e40120/libarchive/test/test_read_format_rar5_compressed.rar.uu",
+    "sha256": "68f9d7e2662cd5bc5607ba9c6bf1edbf121cf3b08011a7d8643091791750a7c8"
+  },
+  {
+    "file": "rar5-solid.rar",
+    "source": "https://raw.githubusercontent.com/libarchive/libarchive/9dc6678ca2ab57fac75889451cd8db1e45e40120/libarchive/test/test_read_format_rar5_multiple_files_solid.rar.uu",
+    "sha256": "0aa2c652c06304dedd93019663c1d52d5e85055d5fdb8045bfcc4345b90b4a0f"
+  },
+  {
+    "file": "rar4-encrypted.rar",
+    "source": "https://raw.githubusercontent.com/libarchive/libarchive/9dc6678ca2ab57fac75889451cd8db1e45e40120/libarchive/test/test_read_format_rar4_encrypted.rar.uu",
+    "sha256": "c30dc6d10e59aaab1c863afa469d188c644a22d67d6e50ac7ca887e520f5fc8b"
+  },
+  {
+    "file": "rar5-encrypted.rar",
+    "source": "https://raw.githubusercontent.com/libarchive/libarchive/9dc6678ca2ab57fac75889451cd8db1e45e40120/libarchive/test/test_read_format_rar5_encrypted.rar.uu",
+    "sha256": "72b69a1d5f5757511e683a9207166c60e91ce0846ae446b8b332b085f9e0ba48"
+  },
+  {
+    "file": "rar4-encrypted-names.rar",
+    "source": "https://raw.githubusercontent.com/libarchive/libarchive/9dc6678ca2ab57fac75889451cd8db1e45e40120/libarchive/test/test_read_format_rar4_encrypted_filenames.rar.uu",
+    "sha256": "0201a8cd86c15c117c7541d841c36c0dbabb4824396f19889db5f7d5364e7ef9"
+  },
+  {
+    "file": "rar5-encrypted-names.rar",
+    "source": "https://raw.githubusercontent.com/libarchive/libarchive/9dc6678ca2ab57fac75889451cd8db1e45e40120/libarchive/test/test_read_format_rar5_encrypted_filenames.rar.uu",
+    "sha256": "b2b98004c9cbf4f2a4000380ad47a16dea99f2d50835b1602c40d724eb82c300"
+  },
+  {
+    "file": "rar4-volume.rar",
+    "source": "https://raw.githubusercontent.com/libarchive/libarchive/9dc6678ca2ab57fac75889451cd8db1e45e40120/libarchive/test/test_rar_multivolume_multiple_files.part1.rar.uu",
+    "sha256": "ca95fb03d0544f1a9e872feea91cc501c8cf89e7ae7e9edb921fba1046f731a3"
+  },
+  {
+    "file": "rar5-volume.rar",
+    "source": "https://raw.githubusercontent.com/libarchive/libarchive/9dc6678ca2ab57fac75889451cd8db1e45e40120/libarchive/test/test_read_format_rar5_multiarchive.part01.rar.uu",
+    "sha256": "2f3894dc4b8a1bba90830ef1f89f457b0295b6f9030c70febd57283721bc2ce3"
+  },
+  {
+    "file": "rar4-solid.rar",
+    "source": "https://raw.githubusercontent.com/markokr/rarfile/d2f7df6fc843dae356fd6b0a85971dc36fd6e757/test/files/rar3-solid.rar",
+    "sha256": "0944932546b994f282cdb3ac724112c312d406b4c1aecfe1eaf9e734e8f96aa2"
+  },
+  {
+    "file": "rar5-quickopen.rar",
+    "source": "https://raw.githubusercontent.com/markokr/rarfile/d2f7df6fc843dae356fd6b0a85971dc36fd6e757/test/files/rar5-solid-qo.rar",
+    "sha256": "203dba697c144a7651b8f537545647bd74489de141fb02adaff5d9547904d8ee"
+  },
+  {
+    "file": "rar4-normal.rar",
+    "source": "https://crates.io/api/v1/crates/unrar/0.5.8/download (data/version.rar)",
+    "sha256": "2c595ee9aaea2c837bd0e11a659b9b62b46251f18ab7b6675748da0fadd34460"
+  }
+]

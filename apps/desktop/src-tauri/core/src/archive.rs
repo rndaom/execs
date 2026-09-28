@@ -1,6 +1,6 @@
 //! Reading a user's archive or folder into `(relative path, bytes)` pairs.
 //!
-//! HUDs and mods both arrive as a zip, a 7z or a folder the user points at, and
+//! HUDs and mods arrive as a zip, 7z, RAR or a folder the user points at, and
 //! both need the same three things: a ceiling on how much the app will unpack,
 //! a path sanitizer that refuses anything escaping the destination, and the
 //! junk filter that leaves `.git`, `sound.cache` and OS droppings behind. Those
@@ -17,6 +17,9 @@ use zip::ZipArchive;
 
 use crate::hash::metadata_is_link;
 use crate::profile::{portable_path_key, ProfileError};
+
+#[path = "archive_rar.rs"]
+mod rar;
 
 const SEVEN_ZIP_MAGIC: [u8; 6] = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
 
@@ -93,8 +96,7 @@ impl ArchiveLimits {
 }
 
 /// One archive of whatever kind the host handed back, sniffed by magic rather
-/// than by the URL's extension. RAR is named in the error so the user knows why
-/// it stopped.
+/// than by the URL's extension. Unsupported RAR features have specific errors.
 pub fn extract_archive(
     bytes: &[u8],
     limits: ArchiveLimits,
@@ -106,9 +108,7 @@ pub fn extract_archive(
         return extract_7z(bytes, limits);
     }
     if bytes.starts_with(b"Rar!") {
-        return Err(ProfileError::Io(
-            "That is a RAR archive, which this app cannot unpack. Open the author's page to install it by hand.".into(),
-        ));
+        return rar::extract(bytes, limits);
     }
     if bytes.starts_with(b"<") || bytes.starts_with(b"{") {
         return Err(ProfileError::Io(
@@ -116,7 +116,7 @@ pub fn extract_archive(
         ));
     }
     Err(ProfileError::Io(
-        "The download is not a zip or 7z archive.".into(),
+        "The download is not a ZIP, 7z or RAR archive.".into(),
     ))
 }
 
@@ -1626,7 +1626,7 @@ mod tests {
         assert!(err.message().contains("web page"), "{}", err.message());
         let err = extract_archive(b"garbage", limits()).unwrap_err();
         assert!(
-            err.message().contains("not a zip or 7z"),
+            err.message().contains("not a ZIP, 7z or RAR"),
             "{}",
             err.message()
         );

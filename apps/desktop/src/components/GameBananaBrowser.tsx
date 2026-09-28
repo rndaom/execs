@@ -12,6 +12,8 @@ import {
   gameBananaPageScopeNote,
   gameBananaTotalLabel,
   gameBananaVariantFacts,
+  gameBananaVariantOversized,
+  OVERSIZED_MOD_ROUTE,
 } from "../lib/gamebanana-browser-ui";
 import {
   foldCategories,
@@ -483,6 +485,11 @@ export function GameBananaBrowser({
               instructions, then use Import mod.
             </Alert>
           ) : null}
+          {chooser.variants.some(gameBananaVariantOversized) ? (
+            <Alert tone="info" testId="mods-gb-oversized-notice" className="mt-4 py-2">
+              execs installs mods up to 512 MB. {OVERSIZED_MOD_ROUTE}
+            </Alert>
+          ) : null}
           <div
             role="radiogroup"
             aria-label="Files"
@@ -534,7 +541,7 @@ export function GameBananaBrowser({
                 }
               }}
             >
-              Download and install
+              Download and review
             </button>
           </div>
         </Modal>

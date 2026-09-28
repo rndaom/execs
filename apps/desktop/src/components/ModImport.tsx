@@ -54,7 +54,7 @@ export function ModImport({
             <UploadSimple size={20} />
             <span>
               <span className="block">Choose archive or VPK</span>
-              <span className="t-meta mt-0.5 block font-normal">VPK, ZIP or 7z</span>
+              <span className="t-meta mt-0.5 block font-normal">VPK, ZIP, 7z or RAR</span>
             </span>
           </button>
           <button
@@ -77,8 +77,8 @@ export function ModImport({
           </button>
         </div>
         <p className="t-meta mt-4">
-          Packs with several variants need the author’s installation instructions. RAR and
-          multi-part VPKs are not supported.
+          Review the files inside an archive and choose the variants you want. Split archives and
+          multi-part VPKs must be extracted first.
         </p>
         <div className="mt-5 flex justify-end border-t border-edge pt-4">
           <button

@@ -456,6 +456,7 @@ mod tests {
                 files: 1,
                 bytes: 16,
                 installed_at: "2026-09-14T00:00:00Z".into(),
+                inactive_pack: None,
             });
         }
         let selection = crate::preloader::PreloaderSelection {
@@ -570,6 +571,8 @@ mod tests {
     #[test]
     fn existing_profiles_diagnose_and_repair_outer_names_with_backups_and_metadata() {
         let (area, profiles, root, id) = fixture();
+        let vpk_cache = root.join("tf/custom/materials.vpk.sound.cache");
+        fs::write(&vpk_cache, b"surviving VPK cache").unwrap();
         let mut manifest = load_manifest(&profiles, &id).unwrap();
         manifest.mods.push(crate::mods::ModRecord {
             id: "materials".into(),
@@ -579,6 +582,7 @@ mod tests {
             files: 1,
             bytes: 16,
             installed_at: "2026-09-14T00:00:00Z".into(),
+            inactive_pack: None,
         });
         manifest.ignored_packs.push("materials".into());
         save_manifest(&profiles, &root, &manifest, Vec::<String>::new()).unwrap();
@@ -604,6 +608,7 @@ mod tests {
             repair_custom_folders_to(&profiles, &root, &id, &plan, Vec::<String>::new()).unwrap();
         assert_eq!(repaired.active_profile_id.as_deref(), Some(id.as_str()));
         assert!(repaired.profiles[0].unsafe_custom_folders.is_empty());
+        assert_eq!(fs::read(&vpk_cache).unwrap(), b"surviving VPK cache");
         let manifest = load_manifest(&profiles, &id).unwrap();
         assert_eq!(manifest.mods[0].pack, "custom-materials-2");
         assert_eq!(manifest.mods[0].id, "custom-materials-2");

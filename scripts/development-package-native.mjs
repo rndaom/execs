@@ -29,6 +29,16 @@ const nativeState = `return {
   editorPath: document.querySelector('.cm-content')?.getAttribute('aria-label') ?? null
 };`;
 
+/** The candidate defers Steam changes until the player reviews both launch strings. */
+export function candidateSwitchReviewPending(state, expectedName) {
+  return (
+    state?.native === true &&
+    state.profile === expectedName &&
+    state.switchDetail ===
+      "Launch options not written to Steam; review them in Launch before updating Steam."
+  );
+}
+
 async function freePort() {
   const server = createServer();
   await new Promise((ready, reject) => {
@@ -506,7 +516,32 @@ export class DevelopmentPackageSession {
 
   async exportPrevious(path, profileName) {
     await this.openMenu();
-    await this.driver.click(`[data-testid="profile-export"][aria-label="Export ${profileName}"]`);
+    await this.driver.click(
+      `[data-testid="profile-actions"][aria-label="Actions for ${profileName}"]`,
+    );
+    await this.driver.click(
+      '//*[@role="menu" and @aria-label="Profile actions"]//*[@role="menuitem" and normalize-space(.)="Export profile"]',
+      "xpath",
+    );
+    const review = await waitUntil("current public export review is ready", async () => {
+      const state =
+        await this.driver.read(`const dialog = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')]
+        .find(d => document.getElementById(d.getAttribute('aria-labelledby'))?.textContent === 'Export profile');
+        if (!dialog) return null;
+        const buttons = [...dialog.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Export ZIP\u2026');
+        return {text: dialog.innerText, ready: buttons.length === 1 && !buttons[0].disabled};`);
+      return state?.ready && state;
+    });
+    assert.match(review.text, /Custom packs in this ZIP: 2/);
+    assert.ok(
+      review.text.includes("compat-pack.vpk") && review.text.includes("mastercomfig-base.vpk"),
+    );
+    this.report.checks.push({ label: "public-export-review", review });
+    await this.capture("public-export-review");
+    await this.driver.click(
+      '//*[@role="dialog" and @aria-modal="true"]//button[normalize-space(.)="Export ZIP\u2026"]',
+      "xpath",
+    );
     await this.chooseFile("Export profile", path, "previous-export");
     await waitUntil("previous installed app writes the requested export", () =>
       regularFile(path, 4 * 1024 * 1024),
@@ -547,14 +582,10 @@ export class DevelopmentPackageSession {
       "xpath",
     );
     const state = await waitUntil(
-      "candidate switch reports its absent-account outcome",
+      "candidate switch reports launch options pending review",
       async () => {
         const value = await this.driver.read(nativeState);
-        return (
-          value.profile === expectedName &&
-          value.switchDetail?.includes("No Steam account config was found") &&
-          value
-        );
+        return candidateSwitchReviewPending(value, expectedName) && value;
       },
       30_000,
     );
@@ -562,6 +593,7 @@ export class DevelopmentPackageSession {
       label: "candidate-switch-outcome",
       expectedProfile: expectedName,
       nativeCompletionDetail: state.switchDetail,
+      steamWriteExpected: "not_requested",
       launchSyncPendingExpected: true,
     });
     await this.capture("candidate-switch-complete");

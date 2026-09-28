@@ -3,8 +3,7 @@
 use std::path::Path;
 
 use execs_core::{
-    materialize_wizard_profile, FirstRunClass, ProfileLibrary, StartFrom, SwitchProgress,
-    WizardAsset, WizardSpec,
+    FirstRunClass, ProfileLibrary, StartFrom, SwitchProgress, WizardAsset, WizardSpec,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -24,7 +23,7 @@ pub async fn apply_unused_wizard(
     app: AppHandle,
     spec: WizardSpec,
 ) -> Result<ProfileLibrary, CommandError> {
-    run_wizard(&gate, app, spec, StartFrom::Fresh).await
+    run_wizard(&gate, app, spec, StartFrom::Fresh, true).await
 }
 
 #[tauri::command]
@@ -33,8 +32,9 @@ pub async fn create_fresh_profile(
     app: AppHandle,
     spec: WizardSpec,
     start_from: StartFrom,
+    switch_after: Option<bool>,
 ) -> Result<ProfileLibrary, CommandError> {
-    run_wizard(&gate, app, spec, start_from).await
+    run_wizard(&gate, app, spec, start_from, switch_after.unwrap_or(true)).await
 }
 
 /// The wizard's preset and addon VPKs are downloaded before the write gate
@@ -46,6 +46,7 @@ async fn run_wizard(
     app: AppHandle,
     spec: WizardSpec,
     start_from: StartFrom,
+    switch_after: bool,
 ) -> Result<ProfileLibrary, CommandError> {
     let for_fetch = spec.clone();
     let (context, owned) = with_root(move |root| {
@@ -59,7 +60,7 @@ async fn run_wizard(
     let _guard = gate.lock_for_write().await?;
     with_root(move |root| {
         context.ensure_current(&root)?;
-        apply_wizard_and_switch(&app, &root, spec, start_from, &owned)
+        apply_wizard_and_switch(&app, &root, spec, start_from, &owned, switch_after)
     })
     .await
 }
@@ -69,13 +70,31 @@ pub(crate) fn apply_wizard_and_switch(
     root: &Path,
     spec: WizardSpec,
     start_from: StartFrom,
-    owned: &[(String, Vec<u8>)],
+    owned: &crate::comfig_fetch::DownloadedRelease,
+    switch_after: bool,
 ) -> Result<ProfileLibrary, CommandError> {
     let assets: Vec<WizardAsset<'_>> = owned
+        .files
         .iter()
         .map(|(path, bytes)| WizardAsset { path, bytes })
         .collect();
-    let result = materialize_wizard_profile(root, &spec, start_from, &assets)?;
+    let result = execs_core::wizard::materialize_wizard_profile_to(
+        &execs_core::profile::profiles_dir(),
+        root,
+        &spec,
+        start_from,
+        &assets,
+        execs_core::process_lock::live_process_names(),
+        execs_core::wizard::WizardOptions {
+            launch_options: None,
+            comfig_release: Some(&owned.identity),
+        },
+    )?;
+    // Create alone leaves TF2 and the active profile as they are; the new
+    // profile waits in the list like a duplicate or import.
+    if !switch_after {
+        return Ok(result.library);
+    }
     Ok(execs_core::switch_profile_with_progress(
         root,
         &result.profile_id,

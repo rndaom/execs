@@ -1,13 +1,16 @@
 import { type CfgFile, parseCommands } from "@execs/cfglint";
 import { MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { CopySettings, type CopySettingsSource } from "./components/CopySettings";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity, useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
+import { createBindMouseReleaseGuard, setNativeBindMouseCapture } from "./lib/bind-mouse-capture";
 import {
   actionBindings,
+  applyCustomBind,
   applyRecordedBind,
   autoexecFilePath,
   BIND_GROUPS,
@@ -21,15 +24,19 @@ import {
   clearManagedKey,
   ensureAutoexecExecLine,
   normalizeBindCommand,
+  ownedCustomBinds,
   recorderOutcomeForKey,
+  removeOwnedCustomBind,
   removeOwnedManagedBind,
   searchBindActions,
   sourceKeyFromKeyboardEvent,
   sourceKeyFromMouseButton,
   sourceKeyFromWheelDelta,
   UNBINDABLE_KEY_NOTICE_MS,
+  validateCustomBind,
 } from "./lib/binds-ui";
 import { mapsFromFiles } from "./lib/cfg-state";
+import { copySettingsBlocked } from "./lib/settings-ui";
 
 export type BindsPaneProps = {
   /** The profile this draft belongs to; a switch must never reuse it. */
@@ -45,6 +52,8 @@ export type BindsPaneProps = {
   blocked?: boolean;
   /** Resolves when the managed cfg write settles. */
   onSave: (bindsText: string) => Promise<unknown>;
+  /** Copy the saved binds to other profiles; offered only when provided. */
+  copySettings?: CopySettingsSource;
 };
 
 export function BindsPane({
@@ -58,20 +67,25 @@ export function BindsPane({
   managedText,
   blocked,
   onSave,
+  copySettings,
 }: BindsPaneProps) {
   const active = useContext(AutosaveActivity);
   const { running, busy } = useAppStatus();
-  const [recordingId, setRecordingId] = useState<BindActionId | null>(null);
+  const [recordingId, setRecordingId] = useState<BindActionId | "custom" | null>(null);
   const [recorderNotice, setRecorderNotice] = useState<string | null>(null);
+  const mouseReleaseGuard = useRef<ReturnType<typeof createBindMouseReleaseGuard> | null>(null);
   const [pendingKey, setPendingKey] = useState<{
-    actionId: BindActionId;
+    actionId: BindActionId | "custom";
+    targetCommand: string;
     key: string;
     command: string;
     source: string;
   } | null>(null);
-  const [keyNotice, setKeyNotice] = useState<{ actionId: BindActionId; text: string } | null>(null);
+  const [keyNotice, setKeyNotice] = useState<{ actionId: string; text: string } | null>(null);
   const [groupSelection, setGroupSelection] = useState({ id: "all", phase: 0 });
   const [query, setQuery] = useState("");
+  const [customCommand, setCustomCommand] = useState("");
+  const customValidation = useMemo(() => validateCustomBind(customCommand), [customCommand]);
   const searching = query.trim().length > 0;
   const activeGroupId = searching ? "all" : groupSelection.id;
   const path = bindsFilePath(layer);
@@ -86,12 +100,21 @@ export function BindsPane({
   // The draft changes immediately, even while its previous save is in flight.
   // SettingsHost still blocks profile operations and incomplete loads.
   const canRecord = active && !(blocked ?? busy);
+  useEffect(() => {
+    const guard = createBindMouseReleaseGuard(window);
+    mouseReleaseGuard.current = guard;
+    return () => {
+      guard.dispose();
+      mouseReleaseGuard.current = null;
+    };
+  }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: A profile or layer change invalidates an unfinished key review.
   useEffect(() => {
     setRecordingId(null);
     setRecorderNotice(null);
     setPendingKey(null);
     setKeyNotice(null);
+    setCustomCommand("");
   }, [profileId, path]);
   // What TF2 would bind at startup if the managed file held `text`.
   const previewFor = useCallback(
@@ -155,8 +178,20 @@ export function BindsPane({
     const armTimer = window.setTimeout(() => {
       armed = true;
     }, 0);
+    let cancelled = false;
+    void setNativeBindMouseCapture(true).catch(() => {
+      if (!cancelled) {
+        setKeyNotice({
+          actionId: recordingId,
+          text: "Mouse capture could not start. Try recording again.",
+        });
+        setRecordingId(null);
+      }
+    });
 
+    let finished = false;
     function finish(key: string | null) {
+      if (finished) return;
       const outcome = recorderOutcomeForKey(key);
       if (outcome.kind === "unbindable") {
         // Keep listening: the recorder must not sit open with no explanation
@@ -164,12 +199,26 @@ export function BindsPane({
         setRecorderNotice(outcome.message);
         return;
       }
+      finished = true;
       if (outcome.kind === "cancel" || !recordingId) {
         setRecordingId(null);
         return;
       }
+      if (recordingId === "custom") {
+        const problem = validateCustomBind(customCommand, outcome.key).problem;
+        if (problem) {
+          setKeyNotice({ actionId: "custom", text: problem });
+          setRecordingId(null);
+          return;
+        }
+      }
       const currentCommand = preview.binds[outcome.key];
-      const action = bindActionById(recordingId);
+      const action =
+        recordingId === "custom" ? { command: customCommand.trim() } : bindActionById(recordingId);
+      if (!action || (recordingId === "custom" && validateCustomBind(action.command).problem)) {
+        setRecordingId(null);
+        return;
+      }
       if (
         currentCommand &&
         action &&
@@ -178,6 +227,7 @@ export function BindsPane({
         const origin = preview.sources[outcome.key];
         setPendingKey({
           actionId: recordingId,
+          targetCommand: action.command,
           key: outcome.key,
           command: currentCommand,
           source: origin ? `${origin.file}:${origin.line}` : "another startup CFG",
@@ -185,7 +235,10 @@ export function BindsPane({
         setRecordingId(null);
         return;
       }
-      const next = applyRecordedBind(draft, recordingId, outcome.key);
+      const next =
+        recordingId === "custom"
+          ? applyCustomBind(draft, outcome.key, action.command)
+          : applyRecordedBind(draft, recordingId, outcome.key);
       setRecordingId(null);
       if (next !== draft) {
         setDraft(next);
@@ -206,14 +259,34 @@ export function BindsPane({
         return;
       }
       // Category navigation ends capture; its click must not become mouse1.
-      if (event.target instanceof HTMLElement && event.target.closest("[data-bind-navigation]")) {
+      if (
+        event.button === 0 &&
+        event.target instanceof HTMLElement &&
+        event.target.closest("[data-bind-navigation]")
+      ) {
         setRecordingId(null);
         setRecorderNotice(null);
         return;
       }
       event.preventDefault();
       event.stopPropagation();
+      mouseReleaseGuard.current?.capture(event.button);
       finish(sourceKeyFromMouseButton(event.button));
+    }
+
+    function onMouseUp(event: MouseEvent) {
+      // Some hosts deliver the side-button release without a DOM press.
+      if (!armed || event.defaultPrevented || event.button < 3) return;
+      event.preventDefault();
+      event.stopPropagation();
+      mouseReleaseGuard.current?.capture(event.button);
+      mouseReleaseGuard.current?.release(event);
+      finish(sourceKeyFromMouseButton(event.button));
+    }
+
+    function onBlur() {
+      setRecordingId(null);
+      setRecorderNotice(null);
     }
 
     function onWheel(event: WheelEvent) {
@@ -227,14 +300,20 @@ export function BindsPane({
 
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("mousedown", onMouseDown, true);
+    window.addEventListener("mouseup", onMouseUp, true);
+    window.addEventListener("blur", onBlur);
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
+      cancelled = true;
+      void setNativeBindMouseCapture(false).catch(() => {});
       window.clearTimeout(armTimer);
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("mousedown", onMouseDown, true);
+      window.removeEventListener("mouseup", onMouseUp, true);
+      window.removeEventListener("blur", onBlur);
       window.removeEventListener("wheel", onWheel, true);
     };
-  }, [recordingId, canRecord, draft, setDraft, preview]);
+  }, [recordingId, canRecord, draft, setDraft, preview, customCommand]);
 
   useEffect(() => {
     if (!canRecord) {
@@ -252,7 +331,7 @@ export function BindsPane({
     return () => window.clearTimeout(timer);
   }, [recorderNotice]);
 
-  function onRow(actionId: BindActionId) {
+  function onRow(actionId: BindActionId | "custom") {
     if (!canRecord) {
       return;
     }
@@ -267,8 +346,13 @@ export function BindsPane({
    * line is enough only when nothing earlier binds the key; otherwise an
    * `unbind` keeps an inherited binding from coming back.
    */
-  function removeKey(actionId: BindActionId, key: string, owned: boolean) {
-    const withoutLine = owned ? removeOwnedManagedBind(draft, actionId, key) : draft;
+  function removeKey(actionId: string, key: string, owned: boolean) {
+    const known = bindActionById(actionId);
+    const withoutLine = owned
+      ? known
+        ? removeOwnedManagedBind(draft, known.id, key)
+        : removeOwnedCustomBind(draft, key)
+      : draft;
     const next =
       previewFor(withoutLine).binds[key] === undefined ? withoutLine : clearManagedKey(draft, key);
     const after = previewFor(next);
@@ -294,6 +378,18 @@ export function BindsPane({
 
   const bindingsFor = (id: BindActionId) =>
     actionBindings(preview.binds, preview.sources, draft, path, id);
+  const customOwned = new Set(ownedCustomBinds(draft).map((bind) => bind.key));
+  const customRows = Object.entries(preview.binds).filter(
+    ([key, command]) =>
+      (!bindActionForCommand(command) || customOwned.has(key)) &&
+      (!searching ||
+        `${key} ${bindKeyLabel(key)} ${command}`
+          .toLowerCase()
+          .includes(query.trim().toLowerCase())),
+  );
+  const showCustom =
+    (activeGroupId === "all" || activeGroupId === "custom") &&
+    (!searching || customRows.length > 0);
   const matches = searching
     ? searchBindActions(query, (id) => bindingsFor(id).map((binding) => binding.key))
     : null;
@@ -308,25 +404,34 @@ export function BindsPane({
       <PaneHeader
         title="Binds"
         actions={
-          <label className="field relative flex w-64 items-center" data-bind-navigation>
-            <MagnifyingGlass
-              size={15}
-              aria-hidden="true"
-              className="pointer-events-none absolute left-3 text-ink-faint"
-            />
-            <span className="sr-only">Search actions or keys</span>
-            <input
-              type="search"
-              data-testid="bind-search"
-              value={query}
-              onChange={(event) => {
-                cancelCapture();
-                setQuery(event.target.value);
-              }}
-              placeholder="Search actions or keys"
-              className="w-full bg-transparent py-2 pr-3 pl-9 text-sm text-ink outline-none placeholder:text-ink-faint"
-            />
-          </label>
+          <>
+            {copySettings ? (
+              <CopySettings
+                scope="binds"
+                source={copySettings}
+                blockedReason={copySettingsBlocked(running, busy, dirty)}
+              />
+            ) : null}
+            <label className="field relative flex w-64 items-center" data-bind-navigation>
+              <MagnifyingGlass
+                size={15}
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 text-ink-faint"
+              />
+              <span className="sr-only">Search actions or keys</span>
+              <input
+                type="search"
+                data-testid="bind-search"
+                value={query}
+                onChange={(event) => {
+                  cancelCapture();
+                  setQuery(event.target.value);
+                }}
+                placeholder="Search actions or keys"
+                className="w-full bg-transparent py-2 pr-3 pl-9 text-sm text-ink outline-none placeholder:text-ink-faint"
+              />
+            </label>
+          </>
         }
       />
 
@@ -334,6 +439,7 @@ export function BindsPane({
         <ClassTabs
           tabs={[
             { id: "all", label: "All" },
+            { id: "custom", label: "Custom" },
             ...BIND_GROUPS.map((group) => ({ id: group.id, label: group.title })),
           ]}
           selected={activeGroupId}
@@ -359,7 +465,7 @@ export function BindsPane({
           groupSelection.phase === 0 ? undefined : groupSelection.phase % 2 === 1 ? "odd" : "even"
         }
       >
-        {visibleGroups.length === 0 ? (
+        {visibleGroups.length === 0 && (!showCustom || customRows.length === 0) && searching ? (
           <p data-testid="bind-search-empty" className="t-meta py-8">
             No actions match “{query.trim()}”.
           </p>
@@ -398,7 +504,11 @@ export function BindsPane({
                         ? {
                             ...pending,
                             onAssign: () => {
-                              setDraft(applyRecordedBind(draft, pending.actionId, pending.key));
+                              setDraft(
+                                pending.actionId === "custom"
+                                  ? applyCustomBind(draft, pending.key, pending.targetCommand)
+                                  : applyRecordedBind(draft, pending.actionId, pending.key),
+                              );
                               setPendingKey(null);
                             },
                             onKeep: () => setPendingKey(null),
@@ -411,6 +521,104 @@ export function BindsPane({
             </ul>
           </section>
         ))}
+        {showCustom ? (
+          <section className="mt-6" aria-labelledby="bind-group-custom">
+            <h2 id="bind-group-custom" className="eyebrow mb-3 px-2">
+              Custom commands
+            </h2>
+            <div className="px-2" data-bind-navigation>
+              <label htmlFor="bind-custom-command" className="t-row">
+                Command
+              </label>
+              <input
+                id="bind-custom-command"
+                data-testid="bind-custom-command"
+                className="field mt-2 block w-full px-3 py-2"
+                value={customCommand}
+                maxLength={1024}
+                placeholder="say gg"
+                aria-describedby="bind-custom-feedback"
+                aria-invalid={customCommand.length > 0 && customValidation.problem !== null}
+                onChange={(event) => {
+                  cancelCapture();
+                  setCustomCommand(event.target.value);
+                }}
+              />
+              <div id="bind-custom-feedback" className="t-meta mt-2" aria-live="polite">
+                {customCommand && customValidation.problem ? (
+                  <p className="text-warn">{customValidation.problem}</p>
+                ) : (
+                  <p>
+                    Enter the command, then record a key. Separate multiple commands with a
+                    semicolon.
+                  </p>
+                )}
+                {customValidation.findings
+                  .filter((finding) => finding.tier !== "block")
+                  .slice(0, 5)
+                  .map((finding) => (
+                    <p
+                      key={`${finding.ruleId}-${finding.from}-${finding.to}`}
+                      className="mt-1 text-ink-muted"
+                    >
+                      {finding.message}
+                    </p>
+                  ))}
+              </div>
+            </div>
+            <ul className="mt-3">
+              <BindRow
+                id="custom"
+                label="Custom command"
+                keys={[]}
+                listening={recordingId === "custom"}
+                notice={recordingId === "custom" ? recorderNotice : null}
+                canRecord={canRecord && !customValidation.problem}
+                onRecord={() => onRow("custom")}
+                onRemove={() => {}}
+                keyNotice={keyNotice?.actionId === "custom" ? keyNotice.text : null}
+                conflict={
+                  pendingKey?.actionId === "custom"
+                    ? {
+                        ...pendingKey,
+                        onAssign: () => {
+                          setDraft(
+                            applyCustomBind(draft, pendingKey.key, pendingKey.targetCommand),
+                          );
+                          setPendingKey(null);
+                        },
+                        onKeep: () => setPendingKey(null),
+                      }
+                    : null
+                }
+              />
+              {customRows.map(([key, command]) => (
+                <BindRow
+                  key={key}
+                  id={`custom-${key}`}
+                  label={command}
+                  keys={[
+                    {
+                      key,
+                      source: preview.sources[key] ?? null,
+                      owned: customOwned.has(key) && preview.sources[key]?.file === path,
+                    },
+                  ]}
+                  listening={false}
+                  notice={null}
+                  canRecord={canRecord}
+                  onRecord={() => {
+                    setCustomCommand(command);
+                    if (!validateCustomBind(command).problem) onRow("custom");
+                  }}
+                  onRemove={(binding) => removeKey(`custom-${key}`, key, binding.owned)}
+                  keyNotice={keyNotice?.actionId === `custom-${key}` ? keyNotice.text : null}
+                  conflict={null}
+                />
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
 
       <p className="t-meta mt-8 px-2 text-ink-faint">
@@ -437,7 +645,7 @@ function BindRow({
   keyNotice,
   conflict,
 }: {
-  id: BindActionId;
+  id: string;
   label: string;
   keys: RowBinding[];
   listening: boolean;
@@ -562,7 +770,7 @@ function KeyCap({
   canRemove,
   onRemove,
 }: {
-  actionId: BindActionId;
+  actionId: string;
   actionLabel: string;
   binding: RowBinding;
   canRemove: boolean;

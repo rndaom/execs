@@ -185,6 +185,9 @@ export function toggleName(list: string[], name: string): string[] {
 }
 
 export function formatModBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
   if (bytes >= 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
@@ -643,6 +646,22 @@ export const PREVIEW_PARTICLE_SOURCES: ParticleSource[] = [
 ];
 
 export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
+  contentAudit: {
+    packs: PREVIEW_PROFILE_MODS.map((mod) => ({
+      pack: mod.pack,
+      files: mod.files,
+      restrictedSounds: false,
+      soundScripts: [],
+      exemptHitSounds: false,
+      modelsMaterials: true,
+      particles: mod.id === "gb-618734",
+      other: false,
+    })),
+    overlaps: [],
+    splitModels: [],
+    incomplete: [],
+    omittedDetails: 0,
+  },
   status: {
     gameinfoFound: true,
     gameinfoBypassed: true,

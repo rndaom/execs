@@ -52,6 +52,12 @@ export const sources = [
     date: "2026-09-20",
     description: "mastercomfig TF2 flat-mouse addon settings; MIT mastercomfig contributors",
   },
+  {
+    url: "https://raw.githubusercontent.com/ValveSoftware/source-sdk-2013/b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474/src/game/server/tf/tf_player.cpp",
+    revision: "b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474",
+    date: "2026-09-28",
+    description: "Valve SDK Engineer build/destroy ClientCommand handlers; metadata only",
+  },
 ];
 export default {
   "+alt1": {
@@ -2243,6 +2249,13 @@ export default {
     h: "Upload attachments asynchronously",
     s: [0],
     a: "Pinned Windows TF2 dump; Linux and current retail availability unverified",
+  },
+  build: {
+    c: 1,
+    s: [8],
+    a: "TF2 Source SDK player command handler; class and server state apply; current retail availability unverified",
+    syntax: "build <building> <mode>",
+    h: "Select an Engineer building to place.",
   },
   buildcubemaps: {
     c: 1,
@@ -5527,6 +5540,13 @@ export default {
     k: "alias",
     s: [3],
     a: "Requires the pinned mastercomfig configuration; not a built-in engine command",
+  },
+  destroy: {
+    c: 1,
+    s: [8],
+    a: "TF2 Source SDK player command handler; class and server state apply; current retail availability unverified",
+    syntax: "destroy <building> <mode>",
+    h: "Destroy one of your Engineer buildings.",
   },
   detail_props_full: {
     c: 1,

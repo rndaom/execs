@@ -3,6 +3,8 @@ import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { CfgOverridesAlert, CfgSourcesDetails } from "./components/CfgSourcesPanel";
+import type { CopySettingsSource } from "./components/CopySettings";
+import { ModImportDialog } from "./components/ModImportDialog";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
 import { Disclosure } from "./components/ui/Disclosure";
 import { Loading, LoadingState } from "./components/ui/Spinner";
@@ -14,6 +16,7 @@ import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity } from "./hooks/useAutosave";
 import { useHudResources } from "./hooks/useHudResources";
 import { useInventoryDraftGuard } from "./hooks/useInventoryDraftGuard";
+import { useModImportReview } from "./hooks/useModImportReview";
 import type { SetOperationError } from "./hooks/useOperationErrors";
 import { InventoryPane } from "./InventoryPane";
 import { LaunchPane } from "./LaunchPane";
@@ -26,11 +29,13 @@ import {
   type FilesSource,
   isTauri,
   type LaunchSyncStatus,
+  type ModImportReview,
   type ModsCatalog,
   type PreloaderReport,
   type PreloaderStatusPayload,
   type ProfileDetail,
   parseInvokeError,
+  type SettingsCopyScope,
   type SteamWriteStatus,
   type StockCrosshairSprite,
 } from "./lib/bridge";
@@ -83,6 +88,7 @@ export function SettingsHost({
   externalBusy,
   refreshKey,
   bindSyncRequest,
+  bindSyncChanges,
   onBindSyncHandled,
   onBusyChange,
   onWriteBusyChange,
@@ -110,6 +116,8 @@ export function SettingsHost({
   externalBusy: boolean;
   refreshKey: string | number;
   bindSyncRequest: number | null;
+  /** Binds TF2 changed in config.cfg; only these keys follow it. */
+  bindSyncChanges?: Readonly<Record<string, string | null>>;
   onBindSyncHandled: (request: number) => void;
   onBusyChange: (busy: boolean) => void;
   onWriteBusyChange?: (busy: boolean) => void;
@@ -175,6 +183,7 @@ export function SettingsHost({
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [modsHudImportRequired, setModsHudImportRequired] = useState<string | null>(null);
+  const modImport = useModImportReview(api, activeProfileId, visible && tab === "mods");
   const [settingsBusyQueue] = useState(() => new SettingsBusyQueue(setQueueBusy));
   /** Rejects obsolete profile snapshots. */
   const loadRequest = useRef(0);
@@ -316,7 +325,10 @@ export function SettingsHost({
   const cfgReason = useRef(maps.reason);
   cfgReason.current = cfgReadProblem ?? maps.reason;
 
-  async function reload(opts?: { syncBinds?: boolean }) {
+  async function reload(opts?: {
+    syncBinds?: boolean;
+    bindChanges?: Readonly<Record<string, string | null>>;
+  }) {
     // Every profile file is a separate IPC round trip, so a switch can easily
     // start a second reload that finishes first. Without this token the slower
     // (older) load writes the previous profile's files into state — and the
@@ -330,6 +342,7 @@ export function SettingsHost({
       const snapshot = await readSettingsSnapshot(api, {
         isStale: stale,
         syncBinds: opts?.syncBinds === true && !running,
+        bindChanges: opts?.bindChanges ?? {},
       });
       if (!snapshot) return;
       const {
@@ -382,7 +395,13 @@ export function SettingsHost({
       setCopyCfgPathStatus("idle");
       setComfig(
         state
-          ? { preset: state.preset, modules: state.modules, addons: state.addons }
+          ? {
+              preset: state.preset,
+              modules: state.modules,
+              addons: state.addons,
+              supportedLoader: state.supportedLoader,
+              release: state.release,
+            }
           : defaultComfigState(),
       );
       setLaunchSeed(nextLaunch);
@@ -418,7 +437,7 @@ export function SettingsHost({
             return;
           }
           // The load's completeness decides whether the sync request is handled.
-          return reload({ syncBinds: true });
+          return reload({ syncBinds: true, bindChanges: bindSyncChanges });
         })
       : reload();
     operation
@@ -790,6 +809,49 @@ export function SettingsHost({
     // This closure belongs to the originating retained pane, even after the
     // user navigates elsewhere while its save is queued or in flight.
     const label = tab === "hud" ? "HUD options" : SETTINGS_TAB_LABELS[tab];
+    /**
+     * Prepare a mod review as one write, let the player choose outside the
+     * settings queue, then install the choice as a second write. `true` when
+     * installed; a handled reason or `false` otherwise.
+     */
+    async function installReviewedMod(
+      request: () => Promise<ModImportReview | null>,
+      copy: { success: string; failure: string; pending: string },
+      options?: { picker?: boolean },
+    ): Promise<boolean | "review-required" | "superseded"> {
+      let handled: "review-required" | "superseded" | null = null;
+      const prepared: { review: ModImportReview | null; done: boolean } = {
+        review: null,
+        done: false,
+      };
+      const started = modImport.begin();
+      await write(
+        async () => {
+          prepared.review = await request();
+          prepared.done = true;
+          // Nothing is installed yet: skip the reload and completion notice.
+          return null;
+        },
+        // The same copy keeps one feedback source for both steps, so a later
+        // successful install clears an earlier failure.
+        copy,
+        {
+          picker: options?.picker,
+          onHandledFailure: (reason) => {
+            handled = reason;
+          },
+        },
+      );
+      // A cancelled picker or superseded download stays quiet; failures were reported.
+      if (!prepared.review) return handled ?? (prepared.done ? "superseded" : false);
+      const chosen = await modImport.choose(prepared.review, started);
+      if (!chosen) return "superseded";
+      return write(async () => {
+        await api.confirmModImport(chosen.token, chosen.ids);
+        await refreshModsStatus().catch(() => {});
+      }, copy);
+    }
+
     function write(
       // biome-ignore lint/suspicious/noConfusingVoidType: null preserves native picker cancellation through the pane wrapper.
       work: () => Promise<void | null>,
@@ -820,11 +882,31 @@ export function SettingsHost({
         options,
       );
     }
+    /** Copy this pane's saved settings to other profiles through the settings queue. */
+    function copySettingsSource(scope: SettingsCopyScope): CopySettingsSource {
+      return {
+        review: () => api.reviewSettingsCopy(scope),
+        copy: (targets) =>
+          write(
+            async () => {
+              await api.copySettingsToProfiles(scope, targets);
+            },
+            {
+              success:
+                targets.length === 1
+                  ? `${label} copied to 1 profile`
+                  : `${label} copied to ${targets.length} profiles`,
+              failure: `Could not copy ${label}`,
+            },
+          ),
+      };
+    }
     if (tab === "comfig") {
       return (
         <ComfigPane
           detail={detail}
           state={comfig}
+          onCheckRelease={api.checkComfigRelease}
           onApplyPreset={(preset) => {
             return write(async () => {
               await api.setComfigPreset(preset);
@@ -866,6 +948,7 @@ export function SettingsHost({
       const path = bindsFilePath(layer);
       return (
         <BindsPane
+          copySettings={copySettingsSource("binds")}
           profileId={profileId}
           layer={layer}
           effectiveBinds={maps.binds}
@@ -892,6 +975,7 @@ export function SettingsHost({
       const path = gameplayPath(layer);
       return (
         <GameplayPane
+          copySettings={copySettingsSource("gameplay")}
           profileId={profileId}
           layer={layer}
           effective={maps.effective}
@@ -1133,6 +1217,7 @@ export function SettingsHost({
       const path = gameplayPath(layer);
       return (
         <SoundsPane
+          copySettings={copySettingsSource("sounds")}
           api={api}
           profileId={profileId}
           record={detail?.hitsound ?? null}
@@ -1320,26 +1405,24 @@ export function SettingsHost({
           onOpenRepo={() => {
             void api.openExternal(PRELOADER_REPO_URL);
           }}
-          onImportArchive={() => {
+          onImportArchive={async () => {
             setModsHudImportRequired(null);
-            return write(
-              async () => {
-                if ((await api.importModArchive()) === null) return null;
-                await refreshModsStatus().catch(() => {});
-              },
-              { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
-              { picker: true },
+            return (
+              (await installReviewedMod(
+                () => api.prepareImportModArchive(),
+                { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
+                { picker: true },
+              )) === true
             );
           }}
-          onImportFolder={() => {
+          onImportFolder={async () => {
             setModsHudImportRequired(null);
-            return write(
-              async () => {
-                if ((await api.importModFolder()) === null) return null;
-                await refreshModsStatus().catch(() => {});
-              },
-              { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
-              { picker: true },
+            return (
+              (await installReviewedMod(
+                () => api.prepareImportModFolder(),
+                { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
+                { picker: true },
+              )) === true
             );
           }}
           onRemoveMod={(id) => {
@@ -1352,28 +1435,35 @@ export function SettingsHost({
               { success: "Mod removed", failure: "Could not remove", pending: "Removing mod…" },
             );
           }}
-          // Awaited by the card, so "Installing…" lasts exactly as long as the
-          // install and the profile reload behind it.
-          onInstallGameBananaMod={async (id, fileId) => {
-            setModsHudImportRequired(null);
-            let handled: "review-required" | "superseded" | null = null;
-            const applied = await write(
+          onSetModEnabled={(id, enabled) => {
+            void write(
               async () => {
-                await api.installGameBananaMod(id, fileId);
+                await api.setModEnabled(id, enabled);
                 await refreshModsStatus().catch(() => {});
               },
               {
-                success: "Mod installed",
-                failure: "Could not install",
-                pending: "Installing mod…",
-              },
-              {
-                onHandledFailure: (reason) => {
-                  handled = reason;
-                },
+                success: enabled ? "Pack turned on" : "Pack turned off",
+                failure: "Could not change pack",
               },
             );
-            return handled ?? applied;
+          }}
+          onCopyMod={(id, targetProfileId) =>
+            write(
+              async () => {
+                await api.copyModToProfile(id, targetProfileId);
+              },
+              { success: "Pack added to profile", failure: "Could not copy pack" },
+            )
+          }
+          // Awaited by the card, so "Installing…" lasts exactly as long as the
+          // install and the profile reload behind it.
+          onInstallGameBananaMod={(id, fileId) => {
+            setModsHudImportRequired(null);
+            return installReviewedMod(() => api.prepareGameBananaMod(id, fileId), {
+              success: "Mod installed",
+              failure: "Could not install",
+              pending: "Installing mod…",
+            });
           }}
         />
       );
@@ -1418,11 +1508,44 @@ export function SettingsHost({
     return (
       <LaunchPane
         profileId={profileId}
+        active={paneActive}
         value={launch}
         saved={launchSeed}
         steamWrite={steamWrite}
         steamSync={launchSync}
         lastSave={launchSaved}
+        onAdoptSteam={(reviewToken) =>
+          write(async () => {
+            const sent = launchSeed;
+            const result = await api.setProfileLaunchOptions(
+              sent,
+              profileId ?? undefined,
+              reviewToken,
+              true,
+            );
+            if (detailRef.current?.id !== profileId) return;
+            if (launchRef.current === sent) {
+              launchRef.current = result.launchOptions;
+              setLaunch(result.launchOptions);
+            }
+            launchSeedRef.current = result.launchOptions;
+            setLaunchSeed(result.launchOptions);
+            setLaunchSaved(null);
+            setSteamWrite(result.steamWrite);
+            onLaunchOptionsSaved?.();
+          })
+        }
+        onWriteSteam={(reviewToken) =>
+          write(async () => {
+            const result = await api.setProfileLaunchOptions(
+              launchSeed,
+              profileId ?? undefined,
+              reviewToken,
+            );
+            setSteamWrite(result.steamWrite);
+            onLaunchOptionsSaved?.();
+          })
+        }
         onChange={(next) => {
           launchRef.current = next;
           setLaunch(next);
@@ -1469,6 +1592,14 @@ export function SettingsHost({
           (!queueBusy && (loading || (filesLimited && usesCfgState(tab)) || loadError !== null)),
       }}
     >
+      {modImport.review ? (
+        <ModImportDialog
+          key={modImport.review.token}
+          review={modImport.review}
+          onClose={modImport.cancel}
+          onConfirm={modImport.confirm}
+        />
+      ) : null}
       {shownLoadError ? (
         <div role="alert" className="mb-4 text-warn">
           <p>

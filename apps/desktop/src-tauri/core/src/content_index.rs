@@ -14,6 +14,8 @@ const MAX_DEPTH: usize = 16;
 const MAX_VPK_PACKS: usize = 256;
 const MAX_MATCHES_PER_VPK: usize = 1024;
 const MAX_ISSUES: usize = 32;
+const MAX_INDEXED_SOURCES: usize = 50_000;
+const MAX_INDEXED_PATH_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -81,11 +83,62 @@ pub fn scan_custom_paths(
     targets: &[&str],
     excluded_pack: Option<&str>,
 ) -> ContentIndex {
-    let mut index = ContentIndex::default();
     let targets: BTreeSet<String> = targets.iter().map(|path| normalize(path)).collect();
     if targets.is_empty() {
-        return index;
+        return ContentIndex::default();
     }
+    scan_custom_filtered(
+        tf2_root,
+        &|path| targets.contains(&normalize(path)),
+        excluded_pack,
+        MAX_MATCHES_PER_VPK,
+    )
+}
+
+/// Bounded read-only inventory for diagnostics. This never reads payload bytes.
+pub fn scan_all_custom_paths(tf2_root: &Path) -> ContentIndex {
+    scan_custom_filtered(tf2_root, &|_| true, None, MAX_INDEXED_SOURCES)
+}
+
+#[derive(Default)]
+struct IndexBudget {
+    sources: usize,
+    bytes: usize,
+    exhausted: bool,
+}
+
+impl IndexBudget {
+    fn hit(&mut self, index: &mut ContentIndex, source: ContentSource) -> bool {
+        let key = normalize(&source.member);
+        let bytes = key
+            .len()
+            .saturating_add(source.member.len())
+            .saturating_add(source.pack.len());
+        if self.sources >= MAX_INDEXED_SOURCES
+            || self.bytes.saturating_add(bytes) > MAX_INDEXED_PATH_BYTES
+        {
+            self.exhausted = true;
+            index.issue(
+                "Custom content exceeds the inspection budget; some files were not inspected."
+                    .into(),
+            );
+            return false;
+        }
+        self.sources += 1;
+        self.bytes += bytes;
+        index.hit(key, source);
+        true
+    }
+}
+
+fn scan_custom_filtered(
+    tf2_root: &Path,
+    keep: &dyn Fn(&str) -> bool,
+    excluded_pack: Option<&str>,
+    max_vpk_matches: usize,
+) -> ContentIndex {
+    let mut index = ContentIndex::default();
+    let mut budget = IndexBudget::default();
     let custom = tf2_root.join("tf/custom");
     let metadata = match fs::symlink_metadata(&custom) {
         Ok(metadata) => metadata,
@@ -107,8 +160,8 @@ pub fn scan_custom_paths(
         }
     };
     let mut packs = Vec::new();
-    for entry in entries {
-        if packs.len() >= MAX_TOP_LEVEL {
+    for (count, entry) in entries.enumerate() {
+        if count >= MAX_TOP_LEVEL {
             index.issue(format!(
                 "tf/custom has more than {MAX_TOP_LEVEL} top-level entries."
             ));
@@ -126,7 +179,7 @@ pub fn scan_custom_paths(
         .collect();
     let mut loose_entries = 0usize;
     let mut vpk_packs = 0usize;
-    for entry in packs {
+    'packs: for entry in packs {
         let name = match entry.file_name().to_str() {
             Some(name) => name.to_string(),
             None => {
@@ -138,8 +191,16 @@ pub fn scan_custom_paths(
             || name.eq_ignore_ascii_case("workshop")
             || name.eq_ignore_ascii_case("readme.txt")
             || name.to_ascii_lowercase().ends_with(".execs-part")
+            || name.starts_with('.')
+            || name.eq_ignore_ascii_case(crate::surface::HUD_BACKUP_CONTAINER)
         {
             continue;
+        }
+        if matches!(
+            name.to_ascii_lowercase().as_str(),
+            "materials" | "maps" | "resource" | "scripts" | "sound" | "models"
+        ) {
+            index.issue(format!("{name} is not a valid outer custom pack name; TF2 may refuse to mount custom content."));
         }
         let metadata = match fs::symlink_metadata(entry.path()) {
             Ok(metadata) => metadata,
@@ -157,11 +218,14 @@ pub fn scan_custom_paths(
                 &entry.path(),
                 &name,
                 "",
-                0,
-                &targets,
+                keep,
                 &mut loose_entries,
+                &mut budget,
                 &mut index,
             );
+            if budget.exhausted {
+                break;
+            }
         } else if metadata.is_file() && name.to_ascii_lowercase().ends_with(".vpk") {
             // Numbered archive shards have no tree of their own. The sibling
             // `_dir.vpk` is the mount root and contains their virtual paths.
@@ -177,19 +241,21 @@ pub fn scan_custom_paths(
             vpk_packs += 1;
             match list_vpk_member_paths_filtered(
                 &entry.path(),
-                &|path| targets.contains(&normalize(path)),
-                MAX_MATCHES_PER_VPK,
+                keep,
+                max_vpk_matches.min(MAX_INDEXED_SOURCES - budget.sources),
             ) {
                 Ok(members) => {
                     for member in members {
-                        index.hit(
-                            normalize(&member),
+                        if !budget.hit(
+                            &mut index,
                             ContentSource {
                                 pack: name.clone(),
                                 member,
                                 kind: ContentSourceKind::Vpk,
                             },
-                        );
+                        ) {
+                            break 'packs;
+                        }
                     }
                 }
                 Err(err) => index.issue(format!("Could not inspect {name}: {}", err.message())),
@@ -206,11 +272,16 @@ fn scan_loose_pack(
     directory: &Path,
     pack: &str,
     parent: &str,
-    depth: usize,
-    targets: &BTreeSet<String>,
+    keep: &dyn Fn(&str) -> bool,
     entries_seen: &mut usize,
+    budget: &mut IndexBudget,
     index: &mut ContentIndex,
 ) {
+    let depth = if parent.is_empty() {
+        0
+    } else {
+        parent.bytes().filter(|byte| *byte == b'/').count() + 1
+    };
     if depth >= MAX_DEPTH {
         index.issue(format!(
             "{pack} has content deeper than {MAX_DEPTH} directories."
@@ -225,6 +296,9 @@ fn scan_loose_pack(
         }
     };
     for entry in entries {
+        if budget.exhausted {
+            return;
+        }
         if *entries_seen >= MAX_LOOSE_ENTRIES {
             index.issue(format!(
                 "Custom loose content exceeds {MAX_LOOSE_ENTRIES} entries."
@@ -267,20 +341,23 @@ fn scan_loose_pack(
                 &entry.path(),
                 pack,
                 &member,
-                depth + 1,
-                targets,
+                keep,
                 entries_seen,
+                budget,
                 index,
             );
-        } else if metadata.is_file() && targets.contains(&normalize(&member)) {
-            index.hit(
-                normalize(&member),
+        } else if metadata.is_file()
+            && keep(&member)
+            && !budget.hit(
+                index,
                 ContentSource {
                     pack: pack.to_string(),
                     member,
                     kind: ContentSourceKind::Loose,
                 },
-            );
+            )
+        {
+            return;
         }
     }
 }
@@ -289,6 +366,64 @@ fn scan_loose_pack(
 mod tests {
     use super::*;
     use crate::test_temp_dir;
+
+    #[test]
+    fn shared_budget_counts_duplicate_sources_and_path_bytes() {
+        let mut index = ContentIndex::default();
+        let source = ContentSource {
+            pack: "pack".into(),
+            member: "sound/a.wav".into(),
+            kind: ContentSourceKind::Loose,
+        };
+        let mut budget = IndexBudget {
+            sources: MAX_INDEXED_SOURCES - 1,
+            ..Default::default()
+        };
+        assert!(budget.hit(&mut index, source.clone()));
+        assert!(!budget.hit(&mut index, source.clone()));
+        assert!(budget.exhausted);
+        assert_eq!(index.hits["sound/a.wav"].len(), 1);
+        assert!(!index.incomplete.is_empty());
+        let mut budget = IndexBudget {
+            bytes: MAX_INDEXED_PATH_BYTES - 1,
+            ..Default::default()
+        };
+        assert!(!budget.hit(&mut index, source));
+    }
+
+    #[test]
+    fn full_scan_excludes_unmounted_hidden_packs_and_hud_backups() {
+        let root = test_temp_dir();
+        for pack in [".hidden", crate::surface::HUD_BACKUP_CONTAINER, "visible"] {
+            let directory = root.join("tf/custom").join(pack).join("sound");
+            fs::create_dir_all(&directory).unwrap();
+            fs::write(directory.join("test.wav"), b"sound").unwrap();
+        }
+        let index = scan_all_custom_paths(&root);
+        assert!(index.incomplete.is_empty());
+        assert_eq!(index.hits["sound/test.wav"].len(), 1);
+        assert_eq!(index.hits["sound/test.wav"][0].pack, "visible");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn all_vpks_share_one_source_budget_even_for_duplicate_paths() {
+        let root = test_temp_dir();
+        let custom = root.join("tf/custom");
+        fs::create_dir_all(&custom).unwrap();
+        let files = (0..18_000)
+            .map(|number| (format!("materials/{number:05}.vmt"), vec![]))
+            .collect();
+        let bytes = crate::vpk::write_vpk_v1(&files);
+        for name in ["a.vpk", "b.vpk", "c.vpk"] {
+            fs::write(custom.join(name), &bytes).unwrap();
+        }
+        let index = scan_all_custom_paths(&root);
+        let sources: usize = index.hits.values().map(Vec::len).sum();
+        assert_eq!(sources, 36_000);
+        assert!(!index.incomplete.is_empty());
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn indexes_case_insensitive_loose_and_vpk_members_without_reading_payloads() {

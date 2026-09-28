@@ -292,6 +292,67 @@ pub fn set_gameinfo_bypass(
     )
 }
 
+/// Explicit user choice: keep the preference and official-file edit in the
+/// existing recoverable transaction. Internal selection changes use the
+/// low-level writer and publish their intent with their own final state.
+pub fn set_gameinfo_bypass_choice_with_sampler(
+    tf2_root: &Path,
+    data_dir: &Path,
+    enabled: bool,
+    running_names: &[String],
+    process_sampler: &dyn Fn() -> Vec<String>,
+) -> Result<bool, String> {
+    refuse_if_running_among(running_names).map_err(|e| e.message().to_string())?;
+    super::transaction::recover_preloader_transaction(
+        tf2_root,
+        data_dir,
+        running_names,
+        process_sampler,
+    )?;
+    preflight_gameinfo_bypass(tf2_root, data_dir, enabled)?;
+    let mut state = super::state::load_state(data_dir)?;
+    super::state::set_bypass_intent(&mut state, tf2_root, enabled)?;
+    refuse_if_running_among(process_sampler()).map_err(|e| e.message().to_string())?;
+    let mut transaction = super::transaction::PreloaderTransaction::begin(
+        tf2_root,
+        data_dir,
+        &Default::default(),
+        &Default::default(),
+    )?;
+    let result = (|| {
+        let changed = set_gameinfo_bypass_with_sampler(
+            tf2_root,
+            data_dir,
+            enabled,
+            running_names,
+            process_sampler,
+        )?;
+        refuse_if_running_among(process_sampler()).map_err(|e| e.message().to_string())?;
+        super::state::save_state(data_dir, &state)?;
+        Ok(changed)
+    })();
+    match result {
+        Ok(changed) => match transaction.commit() {
+            Ok(()) => Ok(changed),
+            Err(e) if e.rollback_safe => {
+                transaction
+                    .rollback(running_names, process_sampler)
+                    .map_err(|rollback| {
+                        format!("{}; recovery remains pending: {rollback}", e.message())
+                    })?;
+                Err(e.message().to_string())
+            }
+            Err(e) => Err(e.message().to_string()),
+        },
+        Err(e) => {
+            transaction
+                .rollback(running_names, process_sampler)
+                .map_err(|rollback| format!("{e}; recovery remains pending: {rollback}"))?;
+            Err(e)
+        }
+    }
+}
+
 /// Read every byte and validate the backup relationship without changing
 /// either file. Selection preparation uses this before it restores the
 /// currently installed particle set, so a malformed gameinfo/backup cannot

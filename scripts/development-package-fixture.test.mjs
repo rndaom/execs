@@ -8,11 +8,13 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
+import { fixtureCacheSources } from "./absorb-cache-fixture.mjs";
 import {
   assertDevelopmentPackageCheckpoint,
   assertDevelopmentPackageImported,
@@ -22,7 +24,8 @@ import {
   inspectDevelopmentPackageExport,
   seedDevelopmentPackageFixture,
 } from "./development-package-fixture.mjs";
-import { linuxSteamCandidates, publicProfileFixture } from "./package-smoke-fixture.mjs";
+import { developmentPublicFixture } from "./development-package-guard.mjs";
+import { linuxSteamCandidates } from "./package-smoke-fixture.mjs";
 
 const python =
   process.env.EXECS_TEST_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
@@ -30,10 +33,25 @@ const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const importedId = "f20d0001-0000-4000-8000-000000000001";
 const putJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 
+function modelAbsorbCache(fixture, profileId) {
+  const files = fixture.portableManifest.files;
+  const stamps = fixtureCacheSources(fixture.tf2Root, files);
+  putJson(join(fixture.library, profileId, "absorb-cache.json"), {
+    entries: Object.fromEntries(
+      files
+        .filter((file) => Object.hasOwn(stamps, join(fixture.tf2Root, file.path)))
+        .map((file) => [
+          join(fixture.tf2Root, file.path),
+          { stamp: stamps[join(fixture.tf2Root, file.path)], sha256: file.sha256 },
+        ]),
+    ),
+  });
+}
+
 function withFixture(callback) {
   const parent = realpathSync(mkdtempSync(join(tmpdir(), "execs-development-package-test-")));
   try {
-    callback(seedDevelopmentPackageFixture(parent, "0.1.8"), parent);
+    callback(seedDevelopmentPackageFixture(parent, "0.2.0"), parent);
   } finally {
     assert.equal(dirname(parent), realpathSync(tmpdir()));
     assert.ok(basename(parent).startsWith("execs-development-package-test-"));
@@ -61,7 +79,7 @@ function modelExport(fixture, edit = () => {}) {
   for (const file of fixture.portableManifest.files)
     entries.push({
       name: file.storage === "shared" ? `blobs/${file.sha256}` : `files/${file.path}`,
-      base64: publicProfileFixture.payloads[file.sha256],
+      base64: developmentPublicFixture.payloads[file.sha256],
     });
   edit(entries);
   const result = spawnSync(
@@ -118,7 +136,10 @@ function modelImported(fixture) {
   for (const file of portable.files.filter((file) => file.storage === "exclusive")) {
     const destination = join(path, "files", file.path);
     mkdirSync(dirname(destination), { recursive: true });
-    writeFileSync(destination, Buffer.from(publicProfileFixture.payloads[file.sha256], "base64"));
+    writeFileSync(
+      destination,
+      Buffer.from(developmentPublicFixture.payloads[file.sha256], "base64"),
+    );
   }
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   editJson(join(fixture.library, "index.json"), (index) => {
@@ -151,7 +172,7 @@ test("development fixture retains tagged payloads and adds a fully private Linux
       fixture.expectedConfigText,
       "unbindall\nbind w +forward\nsensitivity 2.5\ncon_enable 1\n",
     );
-    assert.equal(fixture.provenance.exporterRevision, "85aaf6bc0dd28f43351d4cb5cdb62502737688d5");
+    assert.equal(fixture.provenance.exporterRevision, "486070f6e60bbcb5879acb5ae527d659d9d60ac1");
     assert.equal(fixture.settings.preferences.checkForUpdatesOnStartup, false);
     const checkpoint = assertDevelopmentPackagePreserved(fixture, "original");
     assert.equal(
@@ -172,7 +193,7 @@ test("development fixture retains tagged payloads and adds a fully private Linux
     assert.equal(env.DISPLAY, ":99");
     for (const key of ["GH_TOKEN", "LD_PRELOAD", "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS"])
       assert.equal(Object.hasOwn(env, key), false);
-    assert.throws(() => seedDevelopmentPackageFixture("relative", "0.1.8"), /absolute/);
+    assert.throws(() => seedDevelopmentPackageFixture("relative", "0.2.0"), /absolute/);
     assert.throws(() => seedDevelopmentPackageFixture(parent, "0.1.9"), /previous public/);
   });
   assert.equal(process.env.HOME, home);
@@ -197,16 +218,16 @@ test("export proof validates the exact portable metadata and all four bounded pa
   });
 });
 
-test("inspector reads the unchanged actual v0.1.8 exporter archive", () => {
+test("inspector reads the unchanged actual v0.2.0 exporter archive", () => {
   withFixture((fixture) => {
-    const archive = new URL(
-      "../docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/no-hud/exported-by-v0.1.8.zip",
-      import.meta.url,
+    const archive = new URL("./fixtures/windows-package-v020/no-hud.zip", import.meta.url);
+    const expectedHash = "306ae6236a8b79465c6aca6fea64dbdd56c06f447f789e28c8c6d62e8dcdcde1";
+    const source = developmentPublicFixture.sources.find((entry) => entry.case === "no-hud");
+    assert.equal(developmentPublicFixture.exporterTag, "v0.2.0");
+    assert.equal(
+      developmentPublicFixture.exporterRevision,
+      "486070f6e60bbcb5879acb5ae527d659d9d60ac1",
     );
-    const expectedHash = "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38";
-    const source = publicProfileFixture.sources.find((entry) => entry.case === "no-hud");
-    assert.equal(publicProfileFixture.exporterTag, "v0.1.8");
-    assert.equal(publicProfileFixture.exporterRevision, "85aaf6bc0dd28f43351d4cb5cdb62502737688d5");
     assert.equal(source.archiveSha256, expectedHash);
     const bytes = readFileSync(archive);
     assert.equal(digest(bytes), expectedHash);
@@ -247,6 +268,73 @@ test("modeled import remains inactive, switch selects its UUID, restart preserve
     assertDevelopmentPackageCheckpoint(fixture, switched, "normal-restart-modeled");
     assert.throws(() =>
       assertDevelopmentPackageCheckpoint(fixture, checkpoint, "old-active-checkpoint"),
+    );
+  });
+});
+
+test("disposable caches preserve exact package checkpoints before and after a profile switch", () => {
+  withFixture((fixture) => {
+    modelAbsorbCache(fixture, fixture.activeProfileId);
+    assertDevelopmentPackagePreserved(fixture, "cached-original");
+    modelExport(fixture);
+    const proof = inspectDevelopmentPackageExport(fixture, { python });
+    modelImported(fixture);
+    const imported = assertDevelopmentPackageImported(fixture, proof, "cached-import");
+    modelAbsorbCache(fixture, importedId);
+    assert.throws(() => assertDevelopmentPackageImported(fixture, proof, "inactive-import-cache"));
+    rmSync(join(fixture.library, importedId, "absorb-cache.json"));
+    modelSwitch(fixture);
+    // Model the different mtimes left by switch's atomic live replacement.
+    for (const path of Object.keys(fixture.cacheSourceStamps))
+      utimesSync(path, new Date(), new Date(Date.now() - 2000));
+    modelAbsorbCache(fixture, importedId);
+    const switched = assertDevelopmentPackageSwitched(fixture, imported, "cached-switch");
+    assertDevelopmentPackageCheckpoint(fixture, switched, "cached-restart");
+    assert.ok(imported.originalPayloadsPreserved);
+    writeFileSync(join(fixture.library, importedId, "files/tf/cfg/config.cfg"), "unexpected");
+    assert.throws(() =>
+      assertDevelopmentPackageSwitched(fixture, imported, "cache-cannot-hide-payload"),
+    );
+  });
+});
+
+test("execs' own activity log and tidy-up record never hide other data-folder changes", () => {
+  withFixture((fixture) => {
+    mkdirSync(join(fixture.data, "logs"));
+    mkdirSync(join(fixture.data, "maintenance"));
+    writeFileSync(
+      join(fixture.data, "logs", "activity.log"),
+      "2026-09-28T13:40:22Z tidy: Tidy-up: 0 sound caches removed\n",
+    );
+    writeFileSync(
+      join(fixture.data, "maintenance", "tidy-up.json"),
+      '{"version":1,"incompleteRuns":0}',
+    );
+    assertDevelopmentPackagePreserved(fixture, "startup-output");
+    writeFileSync(join(fixture.data, "maintenance", "other.json"), "{}");
+    assert.throws(
+      () => assertDevelopmentPackagePreserved(fixture, "extra-maintenance"),
+      /original product bytes or directories changed/,
+    );
+    rmSync(join(fixture.data, "maintenance", "other.json"));
+    writeFileSync(join(fixture.data, "maintenance", "tidy-up.json"), '{"version":0}');
+    assert.throws(
+      () => assertDevelopmentPackagePreserved(fixture, "bad-marker"),
+      /invalid tidy-up record/,
+    );
+  });
+});
+
+test("closing may save the window placement but no other setting", () => {
+  withFixture((fixture) => {
+    const window = { x: 0, y: 0, width: 1200, height: 800, maximized: true };
+    const settingsPath = join(fixture.data, "settings.json");
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window }));
+    assertDevelopmentPackagePreserved(fixture, "closed");
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window, schema: 2 }));
+    assert.throws(
+      () => assertDevelopmentPackagePreserved(fixture, "other-setting"),
+      /settings changed beyond the window placement/,
     );
   });
 });
@@ -386,7 +474,7 @@ test("archive replacement, alternate Save destination and proof from another cas
       Buffer.concat([readFileSync(fixture.exportPath), Buffer.from("extra")]),
     );
     assert.throws(() => assertDevelopmentPackagePreserved(fixture, "changed-export", proof));
-    const other = seedDevelopmentPackageFixture(parent, "0.1.8");
+    const other = seedDevelopmentPackageFixture(parent, "0.2.0");
     assert.throws(
       () => assertDevelopmentPackagePreserved(other, "foreign-proof", proof),
       /another case/,
@@ -424,4 +512,28 @@ test("all Steam candidates, dangling discovery ancestors and linked library path
       /Linked fixture path/,
     );
   });
+});
+
+test("restart preserves pending launch review and the exact imported launch options", () => {
+  for (const target of ["pending", "options"]) {
+    withFixture((fixture) => {
+      const { checkpoint } = preparedImport(fixture);
+      modelSwitch(fixture);
+      const switched = assertDevelopmentPackageSwitched(
+        fixture,
+        checkpoint,
+        "review-pending-switch",
+      );
+      assert.equal(switched.manifest.launchSyncPending, true);
+      assertDevelopmentPackageCheckpoint(fixture, switched, "review-pending-restart");
+      editJson(join(fixture.library, importedId, "manifest.json"), (manifest) => {
+        if (target === "pending") manifest.launchSyncPending = false;
+        else manifest.launchOptions = `${manifest.launchOptions} -console`;
+      });
+      assert.throws(
+        () => assertDevelopmentPackageCheckpoint(fixture, switched, `changed-launch-${target}`),
+        /imported ownership or metadata differs/,
+      );
+    });
+  }
 });

@@ -16,7 +16,7 @@ import { createServer } from "node:net";
 import { join, resolve, win32 } from "node:path";
 import { finished } from "node:stream/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { developmentVersions, regularFile } from "./development-package-guard.mjs";
+import { regularFile } from "./development-package-guard.mjs";
 import { activeCaptureSettled } from "./linux-native-active-runtime.mjs";
 import { classifyClickTrace, NativeWebDriver, waitUntil } from "./linux-native-webdriver.mjs";
 import {
@@ -27,10 +27,11 @@ import {
   containedPath,
   inspectWindowsExport,
   seedWindowsFixture,
-  selectPreviousNsis,
+  selectCurrentPublicNsis,
   sha256,
   verifyPublicPackage,
   windowsAppEnvironment,
+  windowsPublicFixture,
 } from "./windows-package-contract.mjs";
 
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
@@ -432,8 +433,6 @@ export async function main() {
   let failure;
   try {
     report.host = assertHostObservation(native("Host"));
-    report.versions = developmentVersions(process.cwd(), root);
-    const previous = report.versions.previousVersion;
     const viewRelease = (tag) =>
       JSON.parse(
         execFileSync(
@@ -450,19 +449,15 @@ export async function main() {
           { encoding: "utf8", timeout: 60000 },
         ),
       );
-    assert.equal(
-      viewRelease([]).tagName,
-      `v${previous}`,
-      "Public latest advanced; refresh fixtures before running",
-    );
-    const release = viewRelease([`v${previous}`]);
-    const selected = selectPreviousNsis(release, previous);
+    const release = viewRelease([]);
+    const { version: publicVersion, selected } = selectCurrentPublicNsis(release);
+    report.versions = { publicVersion, exporterRevision: windowsPublicFixture.exporterRevision };
     execFileSync(
       "gh",
       [
         "release",
         "download",
-        `v${previous}`,
+        `v${publicVersion}`,
         "--repo",
         "rndaom/execs",
         "--dir",
@@ -479,8 +474,13 @@ export async function main() {
       ...verifyPublicPackage(downloads, selected, config.plugins.updater.pubkey),
       release,
     };
+    assert.equal(report.publicPackage.sha256, windowsPublicFixture.release.artifact.sha256);
+    assert.equal(
+      sha256(regularFile(join(downloads, selected.signature.name), 16384)),
+      windowsPublicFixture.release.signature.sha256,
+    );
     mkdirSync(join(root, "fixture"));
-    fixture = seedWindowsFixture(join(root, "fixture"), previous);
+    fixture = seedWindowsFixture(join(root, "fixture"), publicVersion);
     report.fixture = {
       provenance: fixture.provenance,
       childEnv: fixture.childEnv,
@@ -506,12 +506,12 @@ export async function main() {
     const installer = track(
       report.publicPackage.path,
       ["/S", `/D=${install}`],
-      "previous-installer",
+      "public-installer",
       env,
       { windowsVerbatimArguments: true },
     );
     await waitUntil(
-      "previous NSIS completes",
+      "public NSIS completes",
       () => {
         assert.ifError(installer.error);
         return installer.exit;
@@ -543,7 +543,7 @@ export async function main() {
       userData: fixture.webview,
       port: debugPort,
     });
-    app = track(application, [], "previous-app", env);
+    app = track(application, [], "public-app", env);
     const observed = await waitUntil(
       "installed WebView2 starts",
       () => {
@@ -555,7 +555,10 @@ export async function main() {
       30000,
     );
     appIdentity = observed.process;
-    assert.match(observed.version, new RegExp(`^${previous.replaceAll(".", "\\.")}(?:\\.0)?$`));
+    assert.match(
+      observed.version,
+      new RegExp(`^${publicVersion.replaceAll(".", "\\.")}(?:\\.0)?$`),
+    );
     const debugging = await waitUntil("owned private loopback debug listener", () => {
       const value = inspect(app);
       return value.listeners.some((row) => row.port === debugPort) && value;
@@ -601,7 +604,7 @@ export async function main() {
     await attachWebView(driver, debugPort);
     report.capabilities = driver.capabilities;
     const page = await waitUntil(
-      "actual installed production UI",
+      "actual installed public production UI",
       async () => {
         const value = await driver.read(nativeState);
         return value.profile && value.profiles.length === 2 && value;
@@ -611,7 +614,7 @@ export async function main() {
     assertNativePage(page, fixture.activeProfileName);
     if (await driver.read("return Boolean(document.querySelector('[data-testid=release-notes]'));"))
       await driver.key("\uE00C");
-    await capture("01-installed-old-app");
+    await capture("01-installed-public-app");
     const summary = '[data-testid="profile-library"] summary';
     const click = await driver.observeClick(summary);
     const webviewInput = { phase: "genuine-webview-input", click };
@@ -627,13 +630,40 @@ export async function main() {
     save();
     assert.equal(focus.inside, true);
     assert.equal(focus.summary, false);
-    await capture("02-old-profile-menu");
-    const exportClick = await driver.observeClick(
-      `[data-testid="profile-export"][aria-label="Export ${fixture.activeProfileName}"]`,
+    await capture("02-public-profile-menu");
+    const actionsClick = await driver.observeClick(
+      `[data-testid="profile-actions"][aria-label="Actions for ${fixture.activeProfileName}"]`,
     );
-    report.checks.push({ phase: "export-click", trace: exportClick });
-    save();
+    assert.equal(classifyClickTrace(actionsClick), "on-target");
+    const exportClick = await driver.observeClick(
+      '//*[@role="menu" and @aria-label="Profile actions"]//*[@role="menuitem" and normalize-space(.)="Export profile"]',
+      "xpath",
+    );
     assert.equal(classifyClickTrace(exportClick), "on-target");
+    const review = await waitUntil(
+      "public export review names both owned fixture packs",
+      async () => {
+        const state =
+          await driver.read(`const dialogs = [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')];
+        const dialog = dialogs.find(d => document.getElementById(d.getAttribute('aria-labelledby'))?.textContent === 'Export profile');
+        if (!dialog) return null;
+        const buttons = [...dialog.querySelectorAll('button')].filter(b => b.textContent.trim() === 'Export ZIP\u2026');
+        return { text: dialog.innerText, ready: buttons.length === 1 && !buttons[0].disabled };`);
+        return state?.ready && state;
+      },
+    );
+    assert.match(review.text, /Custom packs in this ZIP: 2/);
+    assert.ok(
+      review.text.includes("compat-pack.vpk") && review.text.includes("mastercomfig-base.vpk"),
+    );
+    await capture("03-public-export-review");
+    const confirmClick = await driver.observeClick(
+      '//*[@role="dialog" and @aria-modal="true"]//button[normalize-space(.)="Export ZIP\u2026"]',
+      "xpath",
+    );
+    assert.equal(classifyClickTrace(confirmClick), "on-target");
+    report.checks.push({ phase: "export-review", actionsClick, exportClick, review, confirmClick });
+    save();
     report.nativeSave = native("Save", {
       process: appIdentity,
       destination: fixture.exportPath,
@@ -664,7 +694,7 @@ export async function main() {
       throw exportError;
     }
     proof = inspectWindowsExport(fixture);
-    copyFileSync(fixture.exportPath, join(evidence, "previous-ui-export.zip"));
+    copyFileSync(fixture.exportPath, join(evidence, "public-ui-export.zip"));
     report.archive = proof;
     await driver.key("\uE00C");
     await capture("04-export-complete");

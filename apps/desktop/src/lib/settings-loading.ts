@@ -1,5 +1,5 @@
 import type { Api } from "./api";
-import { bindsFilePath, configBindsFromFiles, syncTrackedBindsFromConfig } from "./binds-ui";
+import { bindsFilePath, syncTrackedBindsFromConfig } from "./binds-ui";
 import type { FilesContext, FilesSource, ProfileDetail } from "./bridge";
 import { addEditorTextToBudget, editorCfgCandidates } from "./files-limits";
 import { gameplayPath, syncGameOptionsFromConfig } from "./gameplay-ui";
@@ -21,7 +21,16 @@ type SettingsLoadSnapshot = {
 /** Read and verify one profile snapshot before the host publishes any pane seeds. */
 export async function readSettingsSnapshot(
   api: Api,
-  { isStale, syncBinds }: { isStale: () => boolean; syncBinds: boolean },
+  {
+    isStale,
+    syncBinds,
+    bindChanges = {},
+  }: {
+    isStale: () => boolean;
+    syncBinds: boolean;
+    /** Keys whose bind TF2 changed in config.cfg during the absorbed session. */
+    bindChanges?: Readonly<Record<string, string | null>>;
+  },
 ): Promise<SettingsLoadSnapshot | undefined> {
   const detail = await api.getActiveProfileDetail();
   if (isStale()) return;
@@ -83,14 +92,13 @@ export async function readSettingsSnapshot(
     throw new Error("The active profile changed. Retry loading settings.");
 
   let files = inspectedFiles;
-  // Only binds execs already manages follow TF2's config.cfg. A profile without
-  // the managed binds file has none, so config.cfg stays in charge of every key.
+  // Only binds execs already manages follow TF2's config.cfg, and only for keys
+  // TF2 changed. A profile without the managed binds file has none, so
+  // config.cfg stays in charge of every key.
   if (syncBinds && !incomplete) {
     const bindsPath = bindsFilePath(detail?.layer ?? "comfig");
     const managed = files.find((file) => file.path === bindsPath);
-    const synced = managed
-      ? syncTrackedBindsFromConfig(managed.text, configBindsFromFiles(files))
-      : null;
+    const synced = managed ? syncTrackedBindsFromConfig(managed.text, bindChanges) : null;
     if (managed && synced !== null && synced !== managed.text) {
       if (!managed.source)
         throw new Error("The Binds source identity is unavailable. Retry loading settings.");

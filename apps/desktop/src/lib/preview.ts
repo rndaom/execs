@@ -45,6 +45,9 @@ export const PREVIEW_STATES = [
   "update-available",
   "update-installing",
   "release-notes",
+  "tf2-missing",
+  "library-move",
+  "tidy-up",
 ] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
@@ -92,6 +95,8 @@ const READY: PreviewState[] = [
   "update-available",
   "update-installing",
   "release-notes",
+  "library-move",
+  "tidy-up",
 ];
 
 export function previewStateFromSearch(search: string): PreviewState | null {
@@ -101,11 +106,14 @@ export function previewStateFromSearch(search: string): PreviewState | null {
   return PREVIEW_STATES.find((state) => state === value) ?? null;
 }
 
+/** A TF2 folder saved on a drive that is not connected in the missing-drive preview. */
+export const PREVIEW_MISSING_ROOT = "/mnt/games/SteamLibrary/steamapps/common/Team Fortress 2";
+
 export function previewInstalls(state: PreviewState): Tf2Install[] {
   if (state === "many") {
     return MANY;
   }
-  if (state === "one" || READY.includes(state)) {
+  if (state === "one" || state === "tf2-missing" || READY.includes(state)) {
     return [ONE];
   }
   return [];
@@ -142,6 +150,14 @@ export function previewFirstRunReasons(state: PreviewState): string[] {
 }
 
 export function previewLibrary(state: PreviewState): ProfileLibrary | null {
+  if (state === "library-move") {
+    return {
+      ...emptyLibrary(ONE.path, true),
+      usable: false,
+      rootMismatch: true,
+      tf2Root: PREVIEW_MISSING_ROOT,
+    };
+  }
   if (state === "inactive-library") {
     return { ...previewImportedLibrary(ONE.path), activeProfileId: null };
   }
@@ -162,6 +178,7 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   }
   if (
     state === "saved" ||
+    state === "tidy-up" ||
     state === "profile-import-huds" ||
     state === "absorb" ||
     state === "create" ||

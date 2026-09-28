@@ -13,6 +13,7 @@ import {
   UploadSimple,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CopySettings, type CopySettingsSource } from "./components/CopySettings";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
@@ -60,6 +61,7 @@ import {
   slotChange,
   soundsToCvars,
 } from "./lib/hitsound-ui";
+import { copySettingsBlocked } from "./lib/settings-ui";
 import {
   comfigEntries,
   filterSoundLibrary,
@@ -112,6 +114,7 @@ export function SoundsPane({
   sourceRefreshKey,
   onSave,
   onRemove,
+  copySettings,
 }: {
   api: Api;
   /** The profile this draft belongs to; a switch discards it. */
@@ -132,6 +135,8 @@ export function SoundsPane({
     pack: { hit: HitsoundSlotChange; kill: HitsoundSlotChange } | null,
   ) => Promise<unknown>;
   onRemove: () => void;
+  /** Copy the saved sounds to other profiles; offered only when provided. */
+  copySettings?: CopySettingsSource;
 }) {
   const { running, busy } = useAppStatus();
   // Picking a sound is a draft; only removing the installed files waits on the
@@ -374,7 +379,18 @@ export function SoundsPane({
 
   return (
     <section data-testid="settings-sounds" className="min-w-0 text-left">
-      <PaneHeader title="Sounds" />
+      <PaneHeader
+        title="Sounds"
+        actions={
+          copySettings ? (
+            <CopySettings
+              scope="sounds"
+              source={copySettings}
+              blockedReason={copySettingsBlocked(running, busy, dirty)}
+            />
+          ) : undefined
+        }
+      />
 
       <div className="pane-split gap-y-6">
         {(["hit", "kill"] as const).map((kind) => (
@@ -400,7 +416,7 @@ export function SoundsPane({
         <section data-testid="sounds-saved-inactive" className="pane-note mt-4">
           <p>
             Saved custom sound files stay in this profile while built-in effects play. Assigning
-            your own WAV replaces one; Remove sound files deletes both saved files.
+            your own sound file replaces one; Remove sound files deletes both saved files.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {dormantSounds.map(({ kind, entry, effect }) => (
@@ -574,12 +590,14 @@ export function SoundsPane({
               type="button"
               data-testid="sounds-choose-file"
               disabled={picking || !canAudition}
-              title={canAudition ? undefined : "Needs the desktop app."}
+              title={
+                canAudition ? "WAV, MP3 or Ogg Vorbis, up to 30 seconds." : "Needs the desktop app."
+              }
               onClick={() => void chooseFile()}
               className="btn btn-ghost"
             >
               {picking ? <Spinner size={14} /> : <UploadSimple size={14} />}
-              {picking ? "Reading…" : "Add a WAV…"}
+              {picking ? "Reading…" : "Add a sound file…"}
             </button>
             {record ? (
               <button
@@ -1046,7 +1064,7 @@ function SoundSlot({
           <p className="t-row">Boost</p>
           <p className="t-meta">
             {slot.choice.kind === "stock"
-              ? "Choose your own WAV to boost it."
+              ? "Choose your own sound file to boost it."
               : retiredBoost
                 ? "Saved catalog sounds keep their boost."
                 : "Makes the custom file itself louder."}

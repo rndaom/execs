@@ -1,6 +1,8 @@
 pub mod absorb;
+pub mod activity_log;
 pub mod apply;
 pub mod archive;
+pub mod audio_decode;
 pub mod blob;
 mod cfg_layer;
 pub mod cfg_script;
@@ -9,6 +11,7 @@ pub mod comfig;
 pub mod content_index;
 pub mod crosshair;
 pub mod custom_folders;
+pub mod disk_space;
 pub mod files_workspace;
 pub mod finder;
 pub mod first_run;
@@ -17,6 +20,7 @@ pub mod health;
 pub mod hitsound;
 pub mod hud;
 pub mod hud_apply;
+pub mod hud_backups;
 pub mod hud_schema_compat;
 mod hud_text_edit;
 pub mod ice;
@@ -24,8 +28,11 @@ pub mod inventory;
 pub mod inventory_journal;
 pub mod launch;
 mod managed_cfg;
+pub mod managed_upgrade;
 pub use managed_cfg::ManagedCfgScope;
 pub mod mdl;
+pub mod mod_audit;
+pub mod mod_import;
 pub mod mods;
 pub mod pcf;
 pub mod preloader;
@@ -34,10 +41,12 @@ pub mod profile;
 pub mod profile_compare;
 pub mod restore_points;
 pub mod settings;
+pub mod settings_copy;
 pub mod steam_inf;
 pub mod storage;
 pub mod surface;
 pub mod switch;
+pub mod tidy_up;
 pub mod uninstall;
 pub mod vdf;
 pub mod viewmodel;
@@ -65,7 +74,8 @@ pub mod wizard;
 pub mod zip;
 
 pub use absorb::{
-    absorb_owned, absorb_packs, write_config_cfg_dual, AbsorbDelta, AbsorbOwnedResult, PackChoice,
+    absorb_owned, absorb_packs, resolve_pack_changes, write_config_cfg_dual, AbsorbDelta,
+    AbsorbOwnedResult, PackChoice, PackReviewRequest,
 };
 pub use apply::{
     get_active_profile_detail, profile_file_bytes_from, read_profile_file, write_managed_cfg,
@@ -109,8 +119,7 @@ pub use hud_apply::{
 };
 pub use launch::{
     get_profile_launch_options, launch_sync_status, recommended_launch_options,
-    set_profile_launch_options, sync_profile_launch_options, LaunchSyncStatus, LaunchWriteReason,
-    SetLaunchResult,
+    set_profile_launch_options, LaunchSyncStatus, LaunchWriteReason, SetLaunchResult,
 };
 pub use mods::{
     install_mod, mod_content_from_archive, mod_content_from_dir, mod_content_from_vpk_file,
@@ -130,7 +139,8 @@ pub use profile::{
 };
 pub use settings::{
     execs_data_dir, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
-    remembered_tf2_root_from, settings_file, try_execs_data_dir, Settings,
+    remembered_tf2_root_from, settings_file, try_execs_data_dir, unavailable_tf2_root,
+    unavailable_tf2_root_from, Settings,
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};

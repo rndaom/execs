@@ -1,4 +1,9 @@
-export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
+export type SteamWriteStatus =
+  | "written"
+  | "steam_open"
+  | "no_account"
+  | "write_failed"
+  | "not_requested";
 
 /**
  * TF2-relevant options documented by comfig, Steam Support, and the Valve
@@ -169,6 +174,31 @@ export type LaunchPresetValues = {
 
 export const LAUNCH_PRESET_PAGE_SIZE = 8;
 
+/**
+ * Options TF2 saves into its own settings (the video mode in the registry or
+ * `videoconfig`, `con_enable` in config.cfg), so they keep applying after the
+ * option is removed or a profile without it is installed.
+ */
+export const REMEMBERED_LAUNCH_PRESETS: Partial<Record<LaunchPresetId, string>> = {
+  resolution:
+    "TF2 remembers this resolution after you remove the option or switch profiles. Change it back in TF2's Video settings.",
+  windowed:
+    "TF2 remembers this display mode after you remove the option or switch profiles. Change it back in TF2's Video settings.",
+  fullscreen:
+    "TF2 remembers this display mode after you remove the option or switch profiles. Change it back in TF2's Video settings.",
+  noborder:
+    "TF2 remembers this display mode after you remove the option or switch profiles. Change it back in TF2's Video settings.",
+  console:
+    "TF2 keeps the console enabled after you remove the option or switch profiles. Turn it off in TF2's Advanced options.",
+};
+
+/** Labels of options in `raw` whose effect TF2 keeps after they are removed. */
+export function rememberedLaunchOptions(raw: string): string[] {
+  return LAUNCH_PRESETS.filter(
+    (preset) => REMEMBERED_LAUNCH_PRESETS[preset.id] && launchPresetPresent(raw, preset),
+  ).map((preset) => preset.label);
+}
+
 export function searchLaunchPresets(query: string): LaunchPreset[] {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   return LAUNCH_PRESETS.filter((preset) => {
@@ -240,9 +270,10 @@ export function recommendedLaunchOptions(): string {
 }
 
 /**
- * Flags a profile must never store (docs/ARCHITECTURE.md). The backend strips
- * these on save; the pane flags them as you type so the textarea never changes
- * under the user without an explanation.
+ * TF2 arguments a profile must never store (docs/ARCHITECTURE.md). The backend
+ * strips these on save; the pane flags them as you type so the textarea never
+ * changes under the user without an explanation. Before `%command%`, words are
+ * a wrapper (`gamemoderun`, `mangohud`, environment variables) and are kept.
  */
 export const FORBIDDEN_LAUNCH_TOKENS = [
   "-autoconfig",
@@ -293,22 +324,37 @@ function launchWords(raw: string): { words: LaunchWord[]; simple: boolean } {
   return { words, simple: simple && !quote };
 }
 
+/**
+ * The Steam wrapper at the start of a launch string: everything through the
+ * first `%command%` word, such as `gamemoderun %command%` or
+ * `LD_PRELOAD="" %command%`. Steam passes only the words after it to TF2.
+ * `null` when there is no `%command%`, so the whole string is TF2 arguments.
+ */
+export function steamWrapperPrefix(raw: string): string | null {
+  const { words } = launchWords(raw);
+  const wrapper = words.find((word) => raw.slice(word.start, word.end).includes("%command%"));
+  if (wrapper) return raw.slice(0, wrapper.end);
+  return raw.includes("%command%") ? raw : null;
+}
+
 export type LaunchOptionGroup = { start: number; end: number; text: string };
 
 /** Removing one option also removes its values, while preserving every other byte. */
 export function launchOptionGroups(raw: string): LaunchOptionGroup[] | null {
-  const { words, simple } = launchWords(raw);
+  // A wrapper is not a TF2 option; only the arguments after it form groups.
+  const offset = steamWrapperPrefix(raw)?.length ?? 0;
+  const { words, simple } = launchWords(raw.slice(offset));
   if (!simple) return null;
   const groups: LaunchOptionGroup[] = [];
   for (const word of words) {
     const option = /^[-+][a-z_]/i.test(word.value);
     // A quoted option-looking word can be either a flag or argument data.
     // Keep that ambiguity in the raw editor rather than guessing a removal span.
-    if (option && !/^[-+]/.test(raw.slice(word.start, word.end))) return null;
+    if (option && !/^[-+]/.test(raw.slice(offset + word.start, offset + word.end))) return null;
     if (groups.length === 0 && !option) return null;
     if (option) {
-      groups.push({ start: word.start, end: word.end, text: "" });
-    } else groups[groups.length - 1].end = word.end;
+      groups.push({ start: offset + word.start, end: offset + word.end, text: "" });
+    } else groups[groups.length - 1].end = offset + word.end;
   }
   return groups.map((group) => ({ ...group, text: raw.slice(group.start, group.end) }));
 }
@@ -334,7 +380,7 @@ export function removeLaunchOption(raw: string, group: LaunchOptionGroup): strin
  * because Steam's own launch strings are.
  */
 export function forbiddenLaunchTokens(options: string): ForbiddenLaunchToken[] {
-  const lowered = options.toLowerCase();
+  const lowered = options.slice(steamWrapperPrefix(options)?.length ?? 0).toLowerCase();
   const words = launchWords(lowered).words.flatMap((word) =>
     word.value
       .replace(/\\(?=["'])/g, "")
@@ -375,6 +421,7 @@ export type LaunchSync = {
   steamOptions: string | null;
   inSync: boolean;
   steamRunning: boolean;
+  reviewToken?: string | null;
 };
 
 /**
@@ -387,12 +434,12 @@ export function launchSyncAction(sync: LaunchSync | null): LaunchSyncAction {
   if (!sync || sync.inSync || sync.steamOptions === null) {
     return "launch";
   }
-  return sync.steamRunning ? "ask" : "write-then-launch";
+  return "ask";
 }
 
 /** Header flag for a profile whose launch options are not in Steam yet. */
 export function launchSyncWarning(sync: LaunchSync | null): string | null {
-  return launchSyncAction(sync) === "launch" ? null : "Launch options not in Steam";
+  return launchSyncAction(sync) === "launch" ? null : "Steam has different launch options";
 }
 
 /**
@@ -450,12 +497,12 @@ export function launchSteamCopy(state: LaunchSteamState, running: boolean): stri
     case "steam-open":
       return "Saved to this profile. Steam is open with different options. Copy them in, or Launch TF2 can restart Steam to write them.";
     case "steam-closed":
-      return "Saved to this profile. Steam has different options. Write them now, or Launch TF2 writes them first.";
+      return "Saved to this profile. Steam has different options. Review them before writing, or choose which options to use when launching.";
     case "write-failed":
       return "Saved to this profile. Steam could not be updated. Retry, or copy them into Steam.";
     case "no-account":
       return "Saved to this profile. No Steam account found, so copy them into Steam yourself.";
     case "unknown":
-      return "Saved to this profile. Steam updates only while it is closed.";
+      return "Saved to this profile. Review Steam’s options before updating them.";
   }
 }

@@ -82,4 +82,36 @@ describe("app data storage", () => {
       true,
     );
   });
+
+  it("runs the tidy-up again and reports it", async () => {
+    const getStorageUsage = vi.fn(async () => report(0, 0));
+    const tidyUpAgain = vi.fn(async () => ({
+      soundCachesRemoved: ["gone.vpk.sound.cache"],
+      hudBackupsDeleted: [],
+      hudBackupsMoved: [],
+      hudBackupsKept: 0,
+      valveCfgsDropped: [],
+      valveCfgsMissing: 0,
+      managedFilesUpgraded: [],
+      downloadsRemoved: [],
+      freedBytes: 0,
+      movedBytes: 0,
+      skipped: [],
+    }));
+    await act(async () =>
+      root.render(
+        <StorageUsage
+          api={{ getStorageUsage, clearDownloadCaches: vi.fn(), tidyUpAgain }}
+          backupsEnabled
+        />,
+      ),
+    );
+    await act(async () =>
+      node.querySelector<HTMLButtonElement>('[data-testid="storage-tidy-up"]')?.click(),
+    );
+    expect(tidyUpAgain).toHaveBeenCalledOnce();
+    expect(node.querySelector('[data-testid="storage-tidy-result"]')?.textContent).toBe(
+      "execs tidied up after the update: removed 1 unused sound cache.",
+    );
+  });
 });

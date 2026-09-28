@@ -155,15 +155,17 @@ fn profile_detail() -> ProfileDetail {
                 files: 1,
                 bytes: 2048,
                 installed_at: "2026-09-26T12:00:00Z".into(),
+                inactive_pack: None,
             },
             ModRecord {
                 id: "local-pack".into(),
                 name: "Local pack".into(),
                 source: ModSource::Local,
-                pack: "local-pack".into(),
+                pack: "execs-inactive-local-pack".into(),
                 files: 3,
                 bytes: 4096,
                 installed_at: "2026-09-26T12:00:00Z".into(),
+                inactive_pack: Some("local-pack".into()),
             },
             ModRecord {
                 id: "found".into(),
@@ -173,6 +175,7 @@ fn profile_detail() -> ProfileDetail {
                 files: 2,
                 bytes: 10,
                 installed_at: "2026-09-26T12:00:00Z".into(),
+                inactive_pack: None,
             },
         ],
     }

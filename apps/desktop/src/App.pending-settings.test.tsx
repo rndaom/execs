@@ -311,10 +311,11 @@ it("asks before restarting Steam to write a profile's missing launch options", a
     steamOptions: "",
     inSync: false,
     steamRunning: true,
+    reviewToken: "review",
   });
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(element('[data-testid="launch-sync-warning"]').textContent).toContain(
-    "Launch options not in Steam",
+    "Steam has different launch options",
   );
   await click("Launch TF2");
   expect(api.launchTf2).not.toHaveBeenCalled();
@@ -322,17 +323,33 @@ it("asks before restarting Steam to write a profile's missing launch options", a
     "+exec overrides/execs_preload",
   );
   await click("Restart Steam and launch");
-  expect(api.launchTf2).toHaveBeenCalledExactlyOnceWith(true);
+  expect(api.launchTf2).toHaveBeenCalledExactlyOnceWith(true, "review", false);
 });
 
-it("writes missing launch options without asking when Steam is closed", async () => {
+it("reviews missing launch options when Steam is closed", async () => {
   vi.mocked(api.getLaunchSyncStatus).mockResolvedValue({
     profileOptions: "-novid",
     steamOptions: "",
     inSync: false,
     steamRunning: false,
+    reviewToken: "closed-review",
   });
   await click("Launch TF2");
-  expect(box.querySelector('[data-testid="launch-sync-review"]')).toBeNull();
-  expect(api.launchTf2).toHaveBeenCalledExactlyOnceWith(true);
+  expect(box.querySelector('[data-testid="launch-sync-review"]')).not.toBeNull();
+  expect(api.launchTf2).not.toHaveBeenCalled();
+  await click("Use profile options and launch");
+  expect(api.launchTf2).toHaveBeenCalledExactlyOnceWith(true, "closed-review", false);
+});
+
+it("can keep or adopt Steam options without replacing them", async () => {
+  vi.mocked(api.getLaunchSyncStatus).mockResolvedValue({
+    profileOptions: "-novid",
+    steamOptions: "-console",
+    inSync: false,
+    steamRunning: true,
+    reviewToken: "adopt-review",
+  });
+  await click("Launch TF2");
+  await click("Save Steam options to profile and launch");
+  expect(api.launchTf2).toHaveBeenCalledExactlyOnceWith(false, "adopt-review", true);
 });

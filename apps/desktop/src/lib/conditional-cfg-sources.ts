@@ -8,7 +8,6 @@ export type ConditionalCfgSource =
 export const GAMEPLAY_CVARS = new Set([
   "fov_desired",
   "r_drawtracers_firstperson",
-  "r_drawtracers",
   "cl_autoreload",
   "hud_fastswitch",
   "sensitivity",

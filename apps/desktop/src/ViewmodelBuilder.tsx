@@ -12,6 +12,8 @@ import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { Segmented } from "./components/ui/Segmented";
 import { Loading, Spinner } from "./components/ui/Spinner";
+import { useExplicitDraft } from "./hooks/useExplicitDraft";
+import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type {
   ViewmodelBuildRecipe,
   ViewmodelBuildRequest,
@@ -57,15 +59,32 @@ type CatalogState = {
   catalog: ViewmodelSourceCatalog | null;
   phase: "idle" | "loading" | "checking" | "ready" | "stale";
   error: string | null;
-  changed: boolean;
+  replacement: ViewmodelSourceCatalog | null;
 };
 
 const INITIAL_CATALOG: CatalogState = {
   catalog: null,
   phase: "idle",
   error: null,
-  changed: false,
+  replacement: null,
 };
+
+/** Never rebase unbuilt choices onto different installed animation sources. */
+function acceptCatalog(
+  current: CatalogState,
+  catalog: ViewmodelSourceCatalog,
+  pending: boolean,
+): CatalogState {
+  const changed =
+    current.catalog !== null &&
+    viewmodelCatalogRevision(current.catalog) !== viewmodelCatalogRevision(catalog);
+  return {
+    catalog: changed && pending ? current.catalog : catalog,
+    phase: "ready",
+    error: null,
+    replacement: changed && pending ? catalog : null,
+  };
+}
 
 const MODE_OPTIONS: { id: "shown" | ViewmodelHideMode; label: string; title: string }[] = [
   { id: "shown", label: "Shown", title: "Keep the normal viewmodel" },
@@ -126,13 +145,17 @@ export function ViewmodelBuilder({
   const refreshRef = useRef<() => void>(() => {});
   const loadRef = useRef(loadCatalog);
   loadRef.current = loadCatalog;
+  const draftPending = useRef(false);
+  const reportDraft = useCallback((pending: boolean) => {
+    draftPending.current = pending;
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
     // The startup read can finish after this pane mounts; show it without another read.
     const stop = subscribeViewmodelCatalog((catalog) =>
       setState((current) =>
-        current.catalog ? current : { catalog, phase: "ready", error: null, changed: false },
+        current.catalog ? current : { catalog, phase: "ready", error: null, replacement: null },
       ),
     );
     return () => {
@@ -161,16 +184,7 @@ export function ViewmodelBuilder({
         setState((current) =>
           current.catalog === catalog && current.phase === "ready"
             ? current
-            : {
-                catalog,
-                phase: "ready",
-                error: null,
-                changed:
-                  current.changed ||
-                  (current.catalog !== null &&
-                    viewmodelCatalogRevision(current.catalog) !==
-                      viewmodelCatalogRevision(catalog)),
-              },
+            : acceptCatalog(current, catalog, draftPending.current),
         );
         return;
       }
@@ -184,15 +198,7 @@ export function ViewmodelBuilder({
     void loadViewmodelCatalog(loadRef.current)
       .then((catalog) => {
         if (!mounted.current) return;
-        setState((current) => ({
-          catalog,
-          phase: "ready",
-          error: null,
-          changed:
-            current.changed ||
-            (current.catalog !== null &&
-              viewmodelCatalogRevision(current.catalog) !== viewmodelCatalogRevision(catalog)),
-        }));
+        setState((current) => acceptCatalog(current, catalog, draftPending.current));
       })
       .catch((error: unknown) => {
         if (!mounted.current) return;
@@ -239,7 +245,10 @@ export function ViewmodelBuilder({
   const catalog = state.catalog;
   // A background recheck keeps the current choices usable until it finishes.
   const editable =
-    active && catalog !== null && (state.phase === "ready" || state.phase === "checking");
+    active &&
+    catalog !== null &&
+    state.replacement === null &&
+    (state.phase === "ready" || state.phase === "checking");
   const busy = state.phase === "loading" || state.phase === "checking";
   return (
     <section data-testid="viewmodel-builder" className="mb-8">
@@ -265,10 +274,27 @@ export function ViewmodelBuilder({
           </button>
         </div>
       ) : null}
-      {state.changed ? (
-        <p role="note" data-testid="viewmodel-catalog-changed" className="t-meta mb-4 text-warn">
-          TF2 was updated, so your unsaved choices were cleared.
-        </p>
+      {state.replacement ? (
+        <div role="note" data-testid="viewmodel-catalog-changed" className="pane-note mb-4">
+          <p>
+            TF2's files changed. Your unbuilt choices are kept below, but cannot be built against
+            the updated files. Discard them to load the new weapon choices.
+          </p>
+          <button
+            type="button"
+            data-testid="viewmodel-discard-reload"
+            className="btn btn-ghost mt-3"
+            disabled={locked || busy}
+            onClick={() => {
+              draftPending.current = false;
+              setState((current) =>
+                current.replacement ? acceptCatalog(current, current.replacement, false) : current,
+              );
+            }}
+          >
+            Discard choices and reload
+          </button>
+        </div>
       ) : null}
 
       {catalog ? (
@@ -284,6 +310,7 @@ export function ViewmodelBuilder({
           locked={locked}
           onBuild={onBuild}
           onRefresh={() => refreshCatalog()}
+          onPendingChange={reportDraft}
         />
       ) : null}
     </section>
@@ -311,6 +338,10 @@ function sameChoices(left: ViewmodelDraftChoices, right: ViewmodelDraftChoices):
   );
 }
 
+function serializeChoices(choices: ViewmodelDraftChoices): string {
+  return JSON.stringify(selectedViewmodelChoices(choices));
+}
+
 function ViewmodelCatalogChoices({
   catalog,
   profileId,
@@ -322,6 +353,7 @@ function ViewmodelCatalogChoices({
   locked,
   onBuild,
   onRefresh,
+  onPendingChange,
 }: {
   catalog: ViewmodelSourceCatalog;
   profileId: string | null;
@@ -333,11 +365,23 @@ function ViewmodelCatalogChoices({
   locked: boolean;
   onBuild: (request: ViewmodelBuildRequest) => Promise<boolean>;
   onRefresh: () => void;
+  onPendingChange: (pending: boolean) => void;
 }) {
   const classes = viewmodelClasses(catalog);
   const [selectedClass, setSelectedClass] = useState(classes[0] ?? "");
-  const [saved] = useState(() => savedChoices(catalog, savedRecipe));
-  const [choices, setChoices] = useState<ViewmodelDraftChoices>(saved);
+  const incoming = savedChoices(catalog, savedRecipe);
+  const incomingKey = serializeChoices(incoming);
+  const [baseline, setBaseline] = useState(() => ({ key: incomingKey, choices: incoming }));
+  let saved = baseline.choices;
+  if (baseline.key !== incomingKey) {
+    saved = incoming;
+    setBaseline({ key: incomingKey, choices: incoming });
+  }
+  const [choices, setChoices] = useSeededDraft(
+    saved,
+    serializeChoices,
+    draftRecordKey(profileId, "viewmodel-builder"),
+  );
   const [reviewOpen, setReviewOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
   const [preset, setPreset] = useState<ViewmodelPreset>("keep-melee");
@@ -352,6 +396,11 @@ function ViewmodelCatalogChoices({
   const selected = reviewRequest?.choices ?? selectedViewmodelChoices(choices);
   const conflicts = conflictingViewmodelGroupIds(catalog, choices);
   const changed = !sameChoices(choices, saved);
+  useExplicitDraft(changed || building);
+  useEffect(() => {
+    onPendingChange(changed || building);
+    return () => onPendingChange(false);
+  }, [changed, building, onPendingChange]);
   const canBuild =
     editable &&
     !locked &&
@@ -385,9 +434,15 @@ function ViewmodelCatalogChoices({
 
   async function build() {
     if (!reviewRequest || !canBuild) return;
+    const sent = choices;
     setBuilding(true);
     try {
-      if (await onBuild(reviewRequest)) setReviewOpen(false);
+      if (await onBuild(reviewRequest)) {
+        setBaseline((current) => ({ ...current, choices: sent }));
+        setReviewOpen(false);
+      }
+    } catch {
+      // The host reports failures. Keep the exact draft available for retry.
     } finally {
       setBuilding(false);
     }
@@ -497,6 +552,28 @@ function ViewmodelCatalogChoices({
               Review and build
             </button>
           </div>
+
+          {changed ? (
+            <div className="pane-note mb-4" data-testid="viewmodel-draft-notice">
+              <p>
+                {selected.length === 0 && Object.keys(saved).length > 0
+                  ? "To show every weapon, remove the saved pack below. These choices have not been applied."
+                  : "These choices have not been built. Review and build to apply them; leaving this pane keeps your draft."}
+              </p>
+              <button
+                type="button"
+                data-testid="viewmodel-discard-draft"
+                className="btn btn-ghost mt-2"
+                disabled={building || locked}
+                onClick={() => {
+                  setChoices(saved);
+                  setUndo(null);
+                }}
+              >
+                Discard choices
+              </button>
+            </div>
+          ) : null}
 
           {layout ? (
             <ViewmodelClassChoices

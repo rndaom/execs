@@ -10,6 +10,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  acceptWindowPlacement,
+  setAsideAppMaintenance,
+  settingsDifferOnlyByWindow,
+} from "./app-maintenance-fixture.mjs";
 import { regularTreeHashes } from "./linux-native-fixture.mjs";
 import { linuxSteamCandidates } from "./package-smoke-fixture.mjs";
 
@@ -97,6 +102,30 @@ function protectedSnapshot(fixture, changed, stage) {
   assertSteamAbsent(fixture, stage);
   const data = ordinaryTree(fixture.data);
   const live = ordinaryTree(fixture.tf2Root);
+  // Automatic absorb may persist this disposable hint even when no bytes
+  // changed. This fixture has cfgs only, so its active cache must be empty.
+  // Keep all payloads, metadata, recovery files and the inactive profile exact.
+  const cachePath = `profiles/${fixture.profileId}/absorb-cache.json`;
+  const disposableCacheFiles = [];
+  if (Object.hasOwn(data.files, cachePath)) {
+    assert.deepEqual(
+      readJson(join(fixture.data, cachePath)),
+      { entries: {} },
+      `${stage}: unexpected active absorb cache contents`,
+    );
+    disposableCacheFiles.push(cachePath);
+    delete data.files[cachePath];
+  }
+  // The activity log and the tidy-up record are execs' own startup output.
+  setAsideAppMaintenance(fixture.data, data, fixture.dataTree.directories, stage);
+  // Closing saves the window placement into settings.json, even when cancelled.
+  acceptWindowPlacement(
+    fixture.data,
+    data,
+    fixture.settings,
+    fixture.dataTree.files["settings.json"],
+    stage,
+  );
   const emptyMutation = `profiles/${fixture.profileId}/.mutation-data`;
   const dataDirectories = data.directories.filter((path) => changed && path === emptyMutation);
   assert.ok(dataDirectories.length <= 1);
@@ -120,7 +149,7 @@ function protectedSnapshot(fixture, changed, stage) {
     Object.keys(fixture.liveTree.files).sort(),
     `${stage}: live files added or removed`,
   );
-  return { data, live };
+  return { data, live, disposableCacheFiles };
 }
 
 function put(root, path, bytes) {
@@ -257,7 +286,7 @@ export function expectedActiveText(fixture, phase) {
 export function assertLinuxNativeActiveFixture(fixture, phase, stage) {
   const text = expectedActiveText(fixture, phase);
   const changed = phase !== "original";
-  const { data, live } = protectedSnapshot(fixture, changed, stage);
+  const { data, live, disposableCacheFiles } = protectedSnapshot(fixture, changed, stage);
   const helperLibrary = `${fixture.profileId}/files/${ACTIVE_HELPER}`;
   const manifestPath = `${fixture.profileId}/manifest.json`;
   const allowed = new Set(
@@ -301,12 +330,11 @@ export function assertLinuxNativeActiveFixture(fixture, phase, stage) {
   assert.deepEqual(live.files, expectedLive, `${stage}: synthetic live files differ`);
   const settingsPath = join(fixture.data, "settings.json");
   assert.ok(lstatSync(settingsPath).isFile() && !lstatSync(settingsPath).isSymbolicLink());
-  assert.equal(
-    sha256(readFileSync(settingsPath)),
-    fixture.settingsHash,
-    `${stage}: settings bytes changed`,
-  );
-  assert.deepEqual(readJson(settingsPath), fixture.settings);
+  if (sha256(readFileSync(settingsPath)) !== fixture.settingsHash)
+    assert.ok(
+      settingsDifferOnlyByWindow(settingsPath, fixture.settings, stage),
+      `${stage}: settings bytes changed`,
+    );
   return {
     schema: 1,
     stage,
@@ -322,6 +350,7 @@ export function assertLinuxNativeActiveFixture(fixture, phase, stage) {
     settingsPreserved: true,
     steamDirectoriesAbsent: true,
     protectedFiles: Object.keys(data.files).length + Object.keys(live.files).length,
+    disposableCacheFiles,
     activeUpdatedAt: index.profiles[0].updatedAt,
     dataHashes: data.files,
     liveHashes: live.files,

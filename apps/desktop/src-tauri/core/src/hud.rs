@@ -681,8 +681,10 @@ pub fn hud_id_from_name(name: &str) -> String {
         .trim()
         .trim_end_matches(".zip")
         .trim_end_matches(".7z")
+        .trim_end_matches(".rar")
         .trim_end_matches(".ZIP")
-        .trim_end_matches(".7Z");
+        .trim_end_matches(".7Z")
+        .trim_end_matches(".RAR");
     let mut id = String::new();
     let mut last_dash = true;
     for ch in stem.chars() {
@@ -707,7 +709,7 @@ pub fn hud_id_from_name(name: &str) -> String {
 
 /// A HUD archive of whatever kind the host handed back: zip (GitHub,
 /// GameBanana), 7z (every Dropbox entry) — sniffed by magic, never by the
-/// URL's extension. RAR is named in the error so the user knows why.
+/// URL's extension. The shared reader also recognizes supported RAR bytes.
 pub fn extract_hud_archive(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
     finish_extracted(extract_archive(bytes, HUD_LIMITS)?)
 }
@@ -970,16 +972,19 @@ where
         .active_profile_id
         .as_deref()
         == Some(profile_id);
-    // Move every currently mounted HUD beneath the reserved backup container
-    // before publishing the replacement. A top-level `-name` still mounts.
-    // The renames preserve the exact old trees (including untracked files) and
-    // keep the transaction's live destinations clear, so it never merges a
-    // new HUD into a stray or differently-cased folder.
+    // Preserve unowned or changed HUD trees beneath the reserved container.
+    // Exact owned trees use the library recovery copy and transaction instead
+    // of leaving another complete copy in TF2. A top-level `-name` still mounts.
+    // Stray and differently-cased roots still rename to keep destinations clear.
     let live_renames = if active {
         plan_live_hud_renames(tf2_root, std::slice::from_ref(&id))?
     } else {
         Vec::new()
     };
+    let LiveHudReplacementPlan {
+        renames: live_renames,
+        owned: owned_live,
+    } = partition_owned_live_huds(profiles_dir, tf2_root, &manifest, live_renames, Some(&id))?;
 
     let cfg_paths: Vec<String> = batch
         .iter()
@@ -989,10 +994,11 @@ where
     ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
     ownership::preserve_library_hud_originals(profiles_dir, &manifest, &previous)?;
     let recheck = || {
-        ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
         if let Some(precommit) = precommit {
             precommit()?;
         }
+        require_owned_live_huds_unchanged(tf2_root, &owned_live)?;
+        ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
         Ok(())
     };
 
@@ -1033,9 +1039,10 @@ where
 /// the profile's HUD folders (every root of a legacy multi-HUD profile), its
 /// managed option cfgs and their autoexec exec lines leave the profile in one
 /// recoverable transaction, and the HUD record clears. On the active profile,
-/// mounted HUD folders move beneath the backup container with any untracked
-/// files, so nothing is deleted and no earlier HUD is reactivated. Other packs,
-/// cfg settings and preload selections stay as they are.
+/// exact owned HUD files leave the live surface while their library recovery
+/// copy stays. Trees with untracked or changed files move beneath the backup
+/// container intact. No earlier HUD is reactivated. Other packs, cfg settings
+/// and preload selections stay as they are.
 pub fn return_to_stock_hud_to<I, S>(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -1076,6 +1083,10 @@ where
     } else {
         Vec::new()
     };
+    let LiveHudReplacementPlan {
+        renames: live_renames,
+        owned: owned_live,
+    } = partition_owned_live_huds(profiles_dir, tf2_root, &manifest, live_renames, None)?;
     if manifest.hud.is_none()
         && previous.is_empty()
         && remove.is_empty()
@@ -1096,8 +1107,10 @@ where
         .collect();
     ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)?;
     ownership::preserve_library_hud_originals(profiles_dir, &manifest, &previous)?;
-    let recheck =
-        || ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths);
+    let recheck = || {
+        require_owned_live_huds_unchanged(tf2_root, &owned_live)?;
+        ownership::require_unchanged_live_cfgs(profiles_dir, tf2_root, &manifest, &cfg_paths)
+    };
     let manifest = mutate_profile_files_with_live_renames_checked_to(
         profiles_dir,
         tf2_root,
@@ -1893,6 +1906,54 @@ pub(crate) fn recover_legacy_hud_backups_to(
     Ok(())
 }
 
+struct LiveHudReplacementPlan {
+    renames: Vec<ProfileLiveRename>,
+    owned: Vec<(String, String)>,
+}
+
+fn partition_owned_live_huds(
+    profiles: &Path,
+    root: &Path,
+    manifest: &ProfileManifest,
+    plans: Vec<ProfileLiveRename>,
+    replacement: Option<&str>,
+) -> Result<LiveHudReplacementPlan, ProfileError> {
+    let mut preserved = Vec::new();
+    let mut owned = Vec::new();
+    for plan in plans {
+        // Case-normalizing a root still needs the directory transaction so
+        // Windows does not retain its old spelling and Linux cannot mount two.
+        let folder = plan.from.rsplit('/').next().unwrap_or_default();
+        if replacement.is_some_and(|name| folder.eq_ignore_ascii_case(name) && folder != name) {
+            preserved.push(plan);
+            continue;
+        }
+        if let Some(revision) =
+            crate::hud_backups::owned_live_tree_revision(profiles, root, manifest, &plan.from)?
+        {
+            owned.push((plan.from, revision));
+        } else {
+            preserved.push(plan);
+        }
+    }
+    Ok(LiveHudReplacementPlan {
+        renames: preserved,
+        owned,
+    })
+}
+
+fn require_owned_live_huds_unchanged(
+    root: &Path,
+    owned: &[(String, String)],
+) -> Result<(), ProfileError> {
+    for (relative, revision) in owned {
+        if crate::hud_backups::snapshot(root, &root.join(relative))?.revision() != *revision {
+            return Err(ProfileError::Io("The installed HUD changed while preparing its replacement. Its files were kept; try again.".into()));
+        }
+    }
+    Ok(())
+}
+
 fn plan_live_hud_rename(tf2_root: &Path, hud: &LiveHud) -> Result<ProfileLiveRename, ProfileError> {
     let custom = tf2_root.join("tf").join("custom");
     let enabled = custom.join(&hud.name);
@@ -2289,12 +2350,24 @@ mod tests {
         assert!(err.message().contains("web page"), "{}", err.message());
         let err = extract_hud_archive(b"garbage").unwrap_err();
         assert!(
-            err.message().contains("not a zip or 7z"),
+            err.message().contains("not a ZIP, 7z or RAR"),
             "{}",
             err.message()
         );
         // A truncated 7z is an error, not a panic.
         assert!(extract_hud_archive(&HUD_MIN_7Z[..40]).is_err());
+        // A real RAR is read through the shared extractor; this one has no HUD.
+        let err =
+            extract_hud_archive(include_bytes!("../fixtures/rar/rar5-normal.rar")).unwrap_err();
+        assert!(
+            err.message().contains("missing info.vdf"),
+            "{}",
+            err.message()
+        );
+        assert_eq!(
+            hud_id_from_name("Toon HUD.rar"),
+            hud_id_from_name("Toon HUD.zip")
+        );
     }
 
     #[test]
@@ -3375,10 +3448,81 @@ mod tests {
             fs::read(exclusive_file_path(&profiles, &id, &rel)).unwrap(),
             b"updated texture"
         );
+        assert!(!root.join("tf/custom").join(HUD_BACKUP_CONTAINER).exists());
+        let historical = fs::read_dir(profiles.join(&id).join("hud-backups"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path()
+            .join("files")
+            .join(&rel);
+        assert_eq!(fs::read(historical).unwrap(), b"original texture");
+    }
+
+    #[test]
+    fn trying_owned_huds_does_not_grow_live_or_equivalent_library_backups() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        for name in ["first", "second", "first", "second", "first"] {
+            let mut record = rays_record();
+            record.id = name.into();
+            install_hud_pack_to(&profiles, &root, &id, &rays_tree(), record, unlocked()).unwrap();
+        }
+        assert!(!root.join("tf/custom").join(HUD_BACKUP_CONTAINER).exists());
         assert_eq!(
-            fs::read(preserved_hud(&root, "rayshud").join(asset)).unwrap(),
-            b"original texture"
+            fs::read_dir(profiles.join(&id).join("hud-backups"))
+                .unwrap()
+                .count(),
+            2
         );
+        fs::create_dir_all(root.join("tf/custom/first/empty/deep")).unwrap();
+        return_to_stock_hud_to(&profiles, &root, &id, unlocked()).unwrap();
+        assert!(live_hud_names(&root).is_empty());
+        assert!(!root.join("tf/custom").join(HUD_BACKUP_CONTAINER).exists());
+        assert_eq!(
+            fs::read_dir(profiles.join(&id).join("hud-backups"))
+                .unwrap()
+                .count(),
+            2
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn owned_hud_no_backup_path_rechecks_new_unowned_files_before_commit() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        install_hud_pack_to(
+            &profiles,
+            &root,
+            &id,
+            &rays_tree(),
+            rays_record(),
+            unlocked(),
+        )
+        .unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let injected = std::rc::Rc::new(std::cell::Cell::new(false));
+        let fired = injected.clone();
+        let notes = root.join("tf/custom/rayshud/notes.txt");
+        let result = crate::profile::with_profile_process_sampler(
+            move || {
+                if !fired.replace(true) {
+                    fs::write(&notes, b"arrived during staging").unwrap();
+                }
+                Vec::new()
+            },
+            || return_to_stock_hud_to(&profiles, &root, &id, unlocked()),
+        );
+        assert!(injected.get());
+        assert!(result.unwrap_err().message().contains("changed"));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(
+            fs::read(root.join("tf/custom/rayshud/notes.txt")).unwrap(),
+            b"arrived during staging"
+        );
+        cleanup(&dir);
     }
 
     fn preserved_hud(root: &Path, name: &str) -> PathBuf {

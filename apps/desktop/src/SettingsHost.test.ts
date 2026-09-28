@@ -367,11 +367,15 @@ describe("settings snapshot integrity", () => {
       files: [{ path: "tf/cfg/config.cfg" }, { path: gameplay }],
       launchOptions: "",
     });
-    let current = "fov_desired 90\nsensitivity 3\n";
+    let current =
+      "fov_desired 90\nsensitivity 3\nviewmodel_fov 80\ncl_flipviewmodels 0\ntf_use_min_viewmodels 0\ntf_dingaling_volume 0.75\ncl_crosshair_red 255\n";
     api.readProfileFile.mockImplementation(async (path: string) =>
       path === gameplay
         ? { path, text: current, source }
-        : { path, text: 'bind "w" "+forward"\nbind "SPACE" "+jump"\nsensitivity "2.2"\n' },
+        : {
+            path,
+            text: 'bind "w" "+forward"\nbind "SPACE" "+jump"\nsensitivity "2.2"\nviewmodel_fov "64"\ncl_flipviewmodels "1"\ntf_use_min_viewmodels "1"\ntf_dingaling_volume "0.5"\ncl_crosshair_red "150"\n',
+          },
     );
     api.writeOwnedFile.mockImplementation(async (_path: string, text: string) => {
       current = text;
@@ -384,7 +388,7 @@ describe("settings snapshot integrity", () => {
     expect(api.writeOwnedFile).toHaveBeenCalledTimes(1);
     expect(api.writeOwnedFile).toHaveBeenCalledWith(
       gameplay,
-      "fov_desired 90\nsensitivity 2.2\n",
+      "fov_desired 90\nsensitivity 2.2\nviewmodel_fov 64\ncl_flipviewmodels 1\ntf_use_min_viewmodels 1\ntf_dingaling_volume 0.5\ncl_crosshair_red 150\n",
       source,
     );
     expect(onBindSyncHandled).toHaveBeenCalledWith(1);

@@ -63,11 +63,11 @@ export const STORAGE_GROUP_COPY: Record<StorageGroupId, { label: string; detail:
       "HUD catalog and options, comfig.app sounds, and Casual setup files. Downloaded again when needed.",
   },
   retired: { label: "Retired downloads", detail: "Left over from features execs no longer has." },
-  logs: { label: "Logs", detail: "Crash logs for bug reports." },
+  logs: { label: "Logs", detail: "Crash logs and recent activity for bug reports." },
   protected: {
     label: "Recovery and sources",
     detail:
-      "Recovery data, original game files, sounds you added and the saved Casual library. Always kept.",
+      "Recovery data, original game files, sounds you added and HUD backups. The old Casual library stays while a profile still uses it.",
   },
   other: { label: "Settings and other files", detail: "Kept." },
 };

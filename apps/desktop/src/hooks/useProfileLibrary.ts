@@ -3,7 +3,7 @@ import type { Api } from "../lib/api";
 import type {
   AbsorbDelta,
   CustomFolderRepair,
-  PackChoice,
+  PackDecision,
   ProfileImportReview,
   ProfileLibrary,
   ProfileSummary,
@@ -35,8 +35,11 @@ export type ProfileLibraryState = {
   /** Dismissed for now — re-offered after the next switch or TF2 session. */
   packPromptDeferred: boolean;
   deferPackPrompt: () => void;
+  refreshPackPrompt: () => void;
   /** Absorb reported `config.cfg` drift; the Binds pane re-syncs on this. */
   bindSyncRequest: number | null;
+  /** Binds TF2 changed in config.cfg since the request's profile last absorbed it. */
+  bindSyncChanges: Record<string, string | null>;
   /** Changes whenever the panes must reload (profile switch or a fresh absorb). */
   refreshKey: string;
   onBindSyncHandled: (request: number) => void;
@@ -74,10 +77,12 @@ export type ProfileLibraryState = {
   reviewFolderRepair: (id: string) => Promise<void>;
   repairFolders: () => Promise<void>;
   cancelFolderRepair: () => void;
-  answerPackPrompt: (choice: PackChoice) => Promise<void>;
+  answerPackPrompt: (decisions: PackDecision[]) => Promise<void>;
   setLibrary: (library: ProfileLibrary) => void;
   reset: () => void;
 };
+
+const NO_BIND_CHANGES: Record<string, string | null> = {};
 
 export function useProfileLibrary(
   api: Api,
@@ -112,9 +117,14 @@ export function useProfileLibrary(
   const [deleting, setDeleting] = useState(false);
   const deleteInFlight = useRef(false);
   const [folderRepair, setFolderRepair] = useState<ProfileLibraryState["folderRepair"]>(null);
+  const [packReview, setPackReview] = useState<string | null>(null);
   const [packPrompt, setPackPrompt] = useState<AbsorbDelta | null>(null);
   const [packPromptProfile, setPackPromptProfile] = useState<string | null>(null);
-  const [bindSyncRequest, setBindSyncRequest] = useState<number | null>(null);
+  const [bindSync, setBindSync] = useState<{
+    request: number;
+    changes: Record<string, string | null>;
+  } | null>(null);
+  const bindSyncRequest = bindSync?.request ?? null;
   const [packPromptDeferred, setPackPromptDeferred] = useState(false);
   const [absorbNonce, setAbsorbNonce] = useState(0);
   const [importStage, setImportStage] = useState<ProfileLibraryState["importStage"]>(null);
@@ -131,6 +141,7 @@ export function useProfileLibrary(
     inFlight: false,
     completed: null as string | null,
     configDrift: false,
+    bindChanges: {} as Record<string, string | null>,
   });
 
   // Load the library for a confirmed root.
@@ -202,6 +213,9 @@ export function useProfileLibrary(
     control.live = true;
     control.completed = null;
     control.configDrift = false;
+    control.bindChanges = {};
+    // A pending bind sync belongs to the profile whose config.cfg produced it.
+    setBindSync(null);
     return () => {
       control.generation += 1;
       control.live = false;
@@ -232,6 +246,7 @@ export function useProfileLibrary(
         // invalidates this snapshot. Keep that signal for the fresh idle pass,
         // but never replay stale library or pack data over a subsequent save.
         control.configDrift ||= result.configCfgAbsorbed;
+        Object.assign(control.bindChanges, result.configBindChanges ?? {});
         if (gate !== control.gate) return;
         control.completed = key;
         setLibrary(result.library);
@@ -239,12 +254,18 @@ export function useProfileLibrary(
         // outlive its files or be presented as a choice for a different profile.
         setPackPrompt(hasPackChanges(result.delta) ? result.delta : null);
         setPackPromptProfile(result.library.activeProfileId);
+        setPackReview(result.packReview ?? null);
         setPackPromptDeferred(false);
         setAbsorbNonce((value) => value + 1);
         if (control.configDrift) {
-          setBindSyncRequest((current) => (current ?? 0) + 1);
+          const changes = control.bindChanges;
+          setBindSync((current) => ({
+            request: (current?.request ?? 0) + 1,
+            changes: { ...current?.changes, ...changes },
+          }));
         }
         control.configDrift = false;
+        control.bindChanges = {};
         setError(null, "profiles:absorb");
       })
       .catch((err) => {
@@ -691,12 +712,20 @@ export function useProfileLibrary(
   }, []);
 
   const answerPackPrompt = useCallback(
-    async (choice: PackChoice) => {
+    async (decisions: PackDecision[]) => {
       if (!packPrompt || packPromptProfile !== activeProfileId || running || busy) return;
       setBusy(true);
       let reviewId: string | null = null;
       try {
-        setLibrary(await api.absorbPacks(choice));
+        if (!packReview || !packPromptProfile)
+          throw new Error("Refresh the custom files review before applying choices.");
+        setLibrary(
+          await api.resolvePackChanges({
+            profileId: packPromptProfile,
+            fingerprint: packReview,
+            decisions,
+          }),
+        );
         setError(null, "profiles:packs");
         setPackPrompt(null);
         setPackPromptDeferred(false);
@@ -720,6 +749,7 @@ export function useProfileLibrary(
       api,
       packPrompt,
       packPromptProfile,
+      packReview,
       activeProfileId,
       running,
       busy,
@@ -780,17 +810,18 @@ export function useProfileLibrary(
     setPackPrompt(null);
     setPackPromptProfile(null);
     setPackPromptDeferred(false);
-    setBindSyncRequest(null);
+    setBindSync(null);
     setAbsorbNonce(0);
     setImportedProfile(null);
     setImportError(null);
     absorb.current.generation += 1;
     absorb.current.completed = null;
     absorb.current.configDrift = false;
+    absorb.current.bindChanges = {};
   }, []);
 
   const onBindSyncHandled = useCallback((request: number) => {
-    setBindSyncRequest((current) => (current === request ? null : current));
+    setBindSync((current) => (current?.request === request ? null : current));
   }, []);
 
   return {
@@ -798,7 +829,13 @@ export function useProfileLibrary(
     packPrompt: packPromptProfile === activeProfileId ? packPrompt : null,
     packPromptDeferred,
     deferPackPrompt: () => setPackPromptDeferred(true),
+    refreshPackPrompt: () => {
+      if (running || busy) return;
+      absorb.current.completed = null;
+      setAbsorbRetry((value) => value + 1);
+    },
     bindSyncRequest,
+    bindSyncChanges: bindSync?.changes ?? NO_BIND_CHANGES,
     refreshKey: `${library?.activeProfileId ?? ""}:${absorbNonce}`,
     onBindSyncHandled,
     saveCurrent,

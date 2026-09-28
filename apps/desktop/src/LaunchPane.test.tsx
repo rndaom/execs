@@ -22,6 +22,9 @@ const reportPending = (id: string, value: boolean) => {
   pending.set(id, value);
 };
 const save = vi.fn<() => Promise<boolean>>();
+const adopt = vi.fn<(token: string) => Promise<boolean>>();
+const writeSteam = vi.fn<(token: string) => Promise<boolean>>();
+let reviewedActions = false;
 const clipboard = vi.fn<(text: string) => Promise<void>>();
 
 beforeEach(() => {
@@ -30,6 +33,9 @@ beforeEach(() => {
   vi.stubGlobal("navigator", { clipboard: { writeText: clipboard } });
   clipboard.mockReset().mockResolvedValue(undefined);
   save.mockReset().mockResolvedValue(true);
+  adopt.mockReset().mockResolvedValue(true);
+  writeSteam.mockReset().mockResolvedValue(true);
+  reviewedActions = false;
   draft = '-novid +exec "my config.cfg" -particles 1';
   saved = draft;
   profileId = "profile-a";
@@ -60,6 +66,9 @@ function renderPane() {
           <AutosavePending.Provider value={reportPending}>
             <LaunchPane
               profileId={profileId}
+              active={active}
+              onAdoptSteam={reviewedActions ? adopt : undefined}
+              onWriteSteam={reviewedActions ? writeSteam : undefined}
               value={draft}
               saved={saved}
               steamWrite={status}
@@ -307,4 +316,64 @@ describe("Launch workspace", () => {
       "Remove -windowed first",
     );
   });
+});
+
+it("adopts the reviewed Steam options with one action and never uses the autosave writer", async () => {
+  reviewedActions = true;
+  sync = {
+    profileOptions: saved,
+    steamOptions: "-console",
+    inSync: false,
+    steamRunning: true,
+    reviewToken: "review-a",
+  };
+  await render();
+  await click('[data-testid="launch-steam-adopt"]');
+  expect(adopt).toHaveBeenCalledExactlyOnceWith("review-a");
+  expect(save).not.toHaveBeenCalled();
+  expect(writeSteam).not.toHaveBeenCalled();
+});
+
+it("closes Steam replacement review when the pane hides or the profile changes", async () => {
+  reviewedActions = true;
+  sync = {
+    profileOptions: saved,
+    steamOptions: "-console",
+    inSync: false,
+    steamRunning: false,
+    reviewToken: "review-a",
+  };
+  await render();
+  await click('[data-testid="launch-steam-retry"]');
+  expect(document.body.textContent).toContain("Replace Steam launch options?");
+  active = false;
+  await render();
+  expect(document.body.textContent).not.toContain("Replace Steam launch options?");
+  active = true;
+  await render();
+  await click('[data-testid="launch-steam-retry"]');
+  profileId = "profile-b";
+  await render();
+  expect(document.body.textContent).not.toContain("Replace Steam launch options?");
+  expect(writeSteam).not.toHaveBeenCalled();
+});
+
+it("offers only a fresh check while Steam is open, because execs never writes then", async () => {
+  reviewedActions = true;
+  sync = {
+    profileOptions: saved,
+    steamOptions: "-console",
+    inSync: false,
+    steamRunning: true,
+    reviewToken: "review-a",
+  };
+  await render();
+  expect(element('[data-testid="launch-steam-retry"]').textContent).toBe("Check Steam again");
+  await click('[data-testid="launch-steam-retry"]');
+  expect(document.body.textContent).not.toContain("Replace Steam launch options?");
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(writeSteam).not.toHaveBeenCalled();
+  sync = { ...sync, steamRunning: false };
+  await render();
+  expect(element('[data-testid="launch-steam-retry"]').textContent).toBe("Write to Steam");
 });

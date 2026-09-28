@@ -21,9 +21,9 @@ use crate::launch::{cloud_config_path_from, find_cloud_config, find_cloud_config
 use crate::mods::{ModRecord, ModSource};
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
-    is_profile_ownable_rel_path, load_library_from, load_manifest, mutate_profile_files_to,
-    portable_path_key, profiles_dir, recover_profile_mutation_to, source_file_len, FileSource,
-    ProfileError, ProfileFile, ProfileLibrary, ProfileLiveProjection,
+    is_profile_ownable_rel_path, load_library_from, load_manifest, portable_path_key, profiles_dir,
+    recover_profile_mutation_to, source_file_len, FileSource, ProfileError, ProfileFile,
+    ProfileLibrary, ProfileLiveProjection,
 };
 use crate::surface::{
     inventory_live_surface_for_absorb, is_stock_custom_entry, is_stock_custom_pack,
@@ -31,6 +31,9 @@ use crate::surface::{
 use crate::switch::{live_candidates, live_path};
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
+
+mod drift_cache;
+use drift_cache::DriftCache;
 
 #[cfg(test)]
 type TestProcessSampler = Box<dyn FnMut() -> Vec<String>>;
@@ -128,10 +131,17 @@ pub struct AbsorbOwnedResult {
     pub delta: AbsorbDelta,
     /// True only when this absorb observed and stored a changed config.cfg.
     pub config_cfg_absorbed: bool,
+    /// Keys whose `bind` TF2 changed in the absorbed config.cfg, compared with
+    /// the profile's previous copy. `None` means TF2 removed that key's bind.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub config_bind_changes: BTreeMap<String, Option<String>>,
     /// Packs (or plain owned paths) this absorb rewrote from the library after
     /// an interrupted write. Empty on every ordinary pass.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub repaired: Vec<String>,
+    /// Exact manifest and complete custom inventory reviewed by the pack prompt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pack_review: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -203,7 +213,7 @@ pub fn scan_absorb_delta_to(
 
 pub fn absorb_owned(tf2_root: &Path) -> Result<AbsorbOwnedResult, ProfileError> {
     let cloud = find_cloud_config();
-    absorb_owned_to(
+    absorb_owned_impl(
         &profiles_dir(),
         tf2_root,
         live_process_names(),
@@ -211,6 +221,7 @@ pub fn absorb_owned(tf2_root: &Path) -> Result<AbsorbOwnedResult, ProfileError> 
             cloud_config: cloud.as_deref(),
             steam_roots: None,
         },
+        true,
     )
 }
 
@@ -224,6 +235,21 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    // Switches use this entry point and must detect drift using full hashes.
+    absorb_owned_impl(profiles_dir, tf2_root, running_names, options, false)
+}
+
+fn absorb_owned_impl<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    running_names: I,
+    options: AbsorbOptions<'_>,
+    use_cache: bool,
+) -> Result<AbsorbOwnedResult, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running = collect_running(running_names);
     refuse_if_running_among(&running)?;
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
@@ -232,16 +258,31 @@ where
             library,
             delta: AbsorbDelta::empty(),
             config_cfg_absorbed: false,
+            config_bind_changes: BTreeMap::new(),
             repaired: Vec::new(),
+            pack_review: None,
         });
     };
 
     // Before the delta is read off the live tree, put back what a killed write
     // left half-done — otherwise this pass reports the missing pack as deleted.
     let repaired = repair_interrupted_writes(profiles_dir, tf2_root, &profile_id, &running)?;
-    let classified = classify(profiles_dir, tf2_root, &profile_id, &options)?;
+    let mut cache = use_cache.then(|| DriftCache::load(profiles_dir, &profile_id));
+    let classified = classify_with_cache(
+        profiles_dir,
+        tf2_root,
+        &profile_id,
+        &options,
+        cache.as_mut(),
+    )?;
     let config_cfg_absorbed = classified.delta.config_cfg;
     let pending_cloud_sync = load_manifest(profiles_dir, &profile_id)?.cloud_sync_pending;
+    // Read before absorbing replaces the profile's copy.
+    let config_bind_changes = if config_cfg_absorbed {
+        read_config_bind_changes(profiles_dir, &profile_id, &classified)?
+    } else {
+        BTreeMap::new()
+    };
     if config_cfg_absorbed && !pending_cloud_sync {
         set_cloud_sync_pending(profiles_dir, tf2_root, &profile_id, true, &running)?;
     }
@@ -270,10 +311,27 @@ where
     remaining.owned_missing.clear();
     remaining.config_cfg = false;
 
+    let pack_review = if remaining.has_pack_changes() {
+        Some(pack_review_fingerprint(
+            profiles_dir,
+            tf2_root,
+            &profile_id,
+            &options,
+        )?)
+    } else {
+        None
+    };
+    if refuse_absorb_mutation().is_ok() {
+        if let Some(cache) = cache {
+            cache.save(profiles_dir, &profile_id);
+        }
+    }
     Ok(AbsorbOwnedResult {
+        pack_review,
         library: load_library_from(profiles_dir, Some(tf2_root))?,
         delta: remaining,
         config_cfg_absorbed,
+        config_bind_changes,
         repaired,
     })
 }
@@ -445,6 +503,190 @@ where
         &remove,
         &classified.live,
         &running,
+    )?;
+    load_library_from(profiles_dir, Some(tf2_root))
+}
+
+/// One explicit answer for one pack from a complete reviewed snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackDecision {
+    pub pack: String,
+    pub choice: PackAction,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PackAction {
+    Add,
+    Remove,
+    Restore,
+    Keep,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PackReviewRequest {
+    pub profile_id: String,
+    pub fingerprint: String,
+    pub decisions: Vec<PackDecision>,
+}
+
+fn stale_pack_review() -> ProfileError {
+    ProfileError::Io(
+        "Custom files or the profile changed. Refresh the custom files review and choose again."
+            .into(),
+    )
+}
+
+/// Never uses the absorb metadata cache: all custom bytes and the raw manifest
+/// identity participate, including currently ignored and retained library packs.
+fn pack_review_fingerprint(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    options: &AbsorbOptions<'_>,
+) -> Result<String, ProfileError> {
+    let classified = classify(profiles_dir, tf2_root, profile_id, options)?;
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let raw = sha256_file(&profiles_dir.join(profile_id).join("manifest.json"))
+        .map_err(|e| ProfileError::Io(e.to_string()))?;
+    let mut live = BTreeMap::new();
+    for (path, source) in &classified.live {
+        if pack_key(path).is_some() {
+            live.insert(
+                path.clone(),
+                sha256_file(source).map_err(|e| ProfileError::Io(e.to_string()))?,
+            );
+        }
+    }
+    let mut saved = BTreeMap::new();
+    for file in &manifest.files {
+        if pack_key(&file.path).is_some() {
+            let source = manifest_source_path(profiles_dir, profile_id, file)?;
+            saved.insert(
+                file.path.clone(),
+                sha256_file(&source).map_err(|e| ProfileError::Io(e.to_string()))?,
+            );
+        }
+    }
+    let evidence = serde_json::to_vec(&(tf2_root, profile_id, raw, classified.delta, live, saved))
+        .map_err(|e| ProfileError::Io(e.to_string()))?;
+    Ok(sha256_hex(&evidence))
+}
+
+pub fn resolve_pack_changes(
+    tf2_root: &Path,
+    request: PackReviewRequest,
+) -> Result<ProfileLibrary, ProfileError> {
+    let cloud = find_cloud_config();
+    resolve_pack_changes_to(
+        &profiles_dir(),
+        tf2_root,
+        &request,
+        live_process_names(),
+        AbsorbOptions {
+            cloud_config: cloud.as_deref(),
+            steam_roots: None,
+        },
+    )
+}
+
+pub fn resolve_pack_changes_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    request: &PackReviewRequest,
+    running_names: I,
+    options: AbsorbOptions<'_>,
+) -> Result<ProfileLibrary, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running = collect_running(running_names);
+    refuse_if_running_among(&running)?;
+    let check = || {
+        if active_profile_id(profiles_dir, tf2_root)?.as_deref()
+            != Some(request.profile_id.as_str())
+            || pack_review_fingerprint(profiles_dir, tf2_root, &request.profile_id, &options)?
+                != request.fingerprint
+        {
+            return Err(stale_pack_review());
+        }
+        refuse_absorb_mutation()?;
+        Ok(())
+    };
+    check()?;
+    let classified = classify(profiles_dir, tf2_root, &request.profile_id, &options)?;
+    let mut expected: BTreeMap<&str, bool> = classified
+        .delta
+        .packs_added
+        .iter()
+        .map(|name| (name.as_str(), true))
+        .chain(
+            classified
+                .delta
+                .packs_removed
+                .iter()
+                .map(|name| (name.as_str(), false)),
+        )
+        .collect();
+    if expected.is_empty() || request.decisions.len() != expected.len() {
+        return Err(stale_pack_review());
+    }
+    let manifest = load_manifest(profiles_dir, &request.profile_id)?;
+    let selected =
+        crate::preloader::selected_profile_particle_mod_ids(profiles_dir, &request.profile_id)?;
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    let mut restored = Vec::new();
+    let mut ignored = manifest.ignored_packs.clone();
+    for decision in &request.decisions {
+        let is_added = expected
+            .remove(decision.pack.as_str())
+            .ok_or_else(stale_pack_review)?;
+        let paths = if is_added {
+            classified.pack_live_files.get(&decision.pack)
+        } else {
+            classified.pack_manifest_files.get(&decision.pack)
+        }
+        .ok_or_else(stale_pack_review)?;
+        match decision.choice {
+            PackAction::Add if is_added => added.extend(paths.iter().cloned()),
+            PackAction::Remove if !is_added => {
+                for record in &manifest.mods {
+                    if selected.contains(&record.id)
+                        && pack_key(&format!("tf/custom/{}", record.pack)).as_ref()
+                            == Some(&decision.pack)
+                    {
+                        return Err(ProfileError::ParticleSourceSelected(record.name.clone()));
+                    }
+                }
+                removed.extend(paths.iter().cloned());
+            }
+            PackAction::Restore if !is_added => restored.extend(paths.iter().cloned()),
+            PackAction::Keep => ignored.push(decision.pack.clone()),
+            _ => return Err(stale_pack_review()),
+        }
+    }
+    if !added.is_empty() {
+        crate::hud::require_resolved_live_huds(profiles_dir, tf2_root, &request.profile_id)?;
+    }
+    ignored.sort();
+    ignored.dedup();
+    absorb_live_files_reviewed(
+        profiles_dir,
+        tf2_root,
+        &request.profile_id,
+        &added,
+        &removed,
+        &classified.live,
+        &running,
+        Some(PackResolution {
+            restore: &restored,
+            ignored: &ignored,
+            precommit: &check,
+        }),
     )?;
     load_library_from(profiles_dir, Some(tf2_root))
 }
@@ -708,6 +950,16 @@ fn classify(
     profile_id: &str,
     options: &AbsorbOptions<'_>,
 ) -> Result<Classified, ProfileError> {
+    classify_with_cache(profiles_dir, tf2_root, profile_id, options, None)
+}
+
+fn classify_with_cache(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    options: &AbsorbOptions<'_>,
+    mut cache: Option<&mut DriftCache>,
+) -> Result<Classified, ProfileError> {
     let cloud = resolve_inventory_cloud(options);
     let inventory = inventory_live_surface_for_absorb(tf2_root, cloud.as_deref())?;
     let manifest = load_manifest(profiles_dir, profile_id)?;
@@ -730,7 +982,17 @@ fn classify(
     for file in &manifest.files {
         match live.get(&file.path) {
             Some(source) => {
-                let hash = sha256_file(source).map_err(|e| ProfileError::Io(e.to_string()))?;
+                // Configs are small and safety-sensitive. Only ordinary custom
+                // payloads can use metadata hints, and only automatic absorb
+                // supplies a cache. Review/resolve/switch paths hash fully.
+                let hash = if let Some(cache) = cache.as_deref_mut().filter(|_| {
+                    pack_key(&file.path).is_some()
+                        && !file.path.to_ascii_lowercase().ends_with(".cfg")
+                }) {
+                    cache.hash(source)?
+                } else {
+                    sha256_file(source).map_err(|e| ProfileError::Io(e.to_string()))?
+                };
                 if hash != file.sha256 {
                     owned_changed.push(file.path.clone());
                     if file.path == CONFIG_CFG {
@@ -917,7 +1179,40 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let batch: Vec<(String, FileSource<'_>)> = paths
+    absorb_live_files_reviewed(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        paths,
+        remove_paths,
+        live,
+        running,
+        None,
+    )
+}
+
+struct PackResolution<'a> {
+    restore: &'a [String],
+    ignored: &'a [String],
+    precommit: &'a dyn Fn() -> Result<(), ProfileError>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn absorb_live_files_reviewed<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    paths: &[String],
+    remove_paths: &[String],
+    live: &HashMap<String, PathBuf>,
+    running: I,
+    resolution: Option<PackResolution<'_>>,
+) -> Result<(), ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let mut batch: Vec<(String, FileSource<'_>)> = paths
         .iter()
         .map(|path| {
             let source = live.get(path).ok_or(ProfileError::InvalidPath)?;
@@ -930,10 +1225,40 @@ where
             ))
         })
         .collect::<Result<_, ProfileError>>()?;
-    if batch.is_empty() && remove_paths.is_empty() {
+    if batch.is_empty() && remove_paths.is_empty() && resolution.is_none() {
         return Ok(());
     }
     let before = load_manifest(profiles_dir, profile_id)?;
+    // Restored paths keep their saved provenance. Their bytes are verified before
+    // staging and again with the complete review immediately before publication.
+    let restored_sources: Vec<(String, PathBuf)> = resolution
+        .as_ref()
+        .into_iter()
+        .flat_map(|review| review.restore.iter())
+        .map(|path| {
+            let file = before
+                .files
+                .iter()
+                .find(|file| &file.path == path)
+                .ok_or(ProfileError::InvalidPath)?;
+            let source = manifest_source_path(profiles_dir, profile_id, file)?;
+            if sha256_file(&source).map_err(|e| ProfileError::Io(e.to_string()))? != file.sha256 {
+                return Err(ProfileError::Io(format!(
+                    "Saved pack changed: {path}. Review custom files again."
+                )));
+            }
+            Ok((path.clone(), source))
+        })
+        .collect::<Result<_, ProfileError>>()?;
+    for (path, source) in &restored_sources {
+        batch.push((
+            path.clone(),
+            FileSource::PathExact {
+                path: source,
+                expected_len: source_file_len(source)?,
+            },
+        ));
+    }
     let selected_hud = crate::hud::selected_hud_pack(&before);
     let selected_was_validated = selected_hud.is_some();
     // An older explicit record may outlive invalid/opaque HUD metadata. It
@@ -1034,15 +1359,23 @@ where
             || path.eq_ignore_ascii_case(crate::hitsound::KILLSOUND_REL)
     });
     refuse_absorb_mutation()?;
-    mutate_profile_files_to(
+    crate::profile::mutate_profile_files_checked_to(
         profiles_dir,
         tf2_root,
         profile_id,
         &batch,
         remove_paths,
-        ProfileLiveProjection::LibraryOnly,
+        if resolution.is_some() {
+            ProfileLiveProjection::MirrorIfActive
+        } else {
+            ProfileLiveProjection::LibraryOnly
+        },
         running,
         |manifest| {
+            if let Some(review) = &resolution {
+                manifest.ignored_packs = review.ignored.to_vec();
+            }
+
             hud_roots.retain(|root| {
                 manifest.files.iter().any(|file| {
                     pack_key(&file.path).is_some_and(|pack| pack.eq_ignore_ascii_case(root))
@@ -1112,6 +1445,7 @@ where
                     files: files.len(),
                     bytes: pack_bytes(files)?,
                     installed_at: crate::profile::utc_rfc3339(),
+                    inactive_pack: None,
                 });
             }
             manifest.mods = records;
@@ -1144,6 +1478,7 @@ where
             }
             Ok(())
         },
+        resolution.as_ref().map(|review| review.precommit),
     )?;
     Ok(())
 }
@@ -1163,6 +1498,74 @@ fn dual_write_config(
         None => discover_steam_roots(),
     };
     write_config_cfg_dual_to(tf2_root, &bytes, &roots)
+}
+
+/// Binds TF2 changed between the profile's config.cfg and the live one it
+/// just wrote. A key is listed only when its final bind differs.
+fn read_config_bind_changes(
+    profiles_dir: &Path,
+    profile_id: &str,
+    classified: &Classified,
+) -> Result<BTreeMap<String, Option<String>>, ProfileError> {
+    let read = |path: &Path| {
+        read_small_file_bounded(path, MAX_CFG_FILE_BYTES)
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .map_err(|e| ProfileError::Io(e.to_string()))
+    };
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let previous = match manifest.files.iter().find(|file| file.path == CONFIG_CFG) {
+        Some(file) => read(&manifest_source_path(profiles_dir, profile_id, file)?)?,
+        None => String::new(),
+    };
+    let current = match classified.live.get(CONFIG_CFG) {
+        Some(path) => read(path)?,
+        None => String::new(),
+    };
+    Ok(diff_binds(
+        &config_binds(&previous),
+        &config_binds(&current),
+    ))
+}
+
+/// Final `bind` table of one config.cfg, keys lowercased.
+fn config_binds(text: &str) -> BTreeMap<String, String> {
+    let mut binds = BTreeMap::new();
+    for line in text.lines() {
+        let parts = crate::profile_compare::tokens(line);
+        match parts
+            .first()
+            .map(|name| name.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("bind") if parts.len() >= 3 => {
+                binds.insert(parts[1].to_ascii_lowercase(), parts[2..].join(" "));
+            }
+            Some("unbind") if parts.len() >= 2 => {
+                binds.remove(&parts[1].to_ascii_lowercase());
+            }
+            Some("unbindall") => binds.clear(),
+            _ => {}
+        }
+    }
+    binds
+}
+
+fn diff_binds(
+    previous: &BTreeMap<String, String>,
+    current: &BTreeMap<String, String>,
+) -> BTreeMap<String, Option<String>> {
+    let mut changes = BTreeMap::new();
+    for (key, command) in current {
+        if previous.get(key) != Some(command) {
+            changes.insert(key.clone(), Some(command.clone()));
+        }
+    }
+    for key in previous.keys() {
+        if !current.contains_key(key) {
+            changes.insert(key.clone(), None);
+        }
+    }
+    changes
 }
 
 fn retry_pending_cloud_sync(
@@ -1367,6 +1770,209 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "reads a disposable 5 GiB payload; run for the large-absorb benchmark"]
+    fn large_absorb_benchmark() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("Team Fortress 2");
+        let profiles = dir.path().join("profiles");
+        let payload = root.join("tf/custom/large/textures.bin");
+        write_file(&payload, "");
+        let id = save_main(&profiles, &root);
+        fs::File::options()
+            .write(true)
+            .open(&payload)
+            .unwrap()
+            .set_len(5 * 1024 * 1024 * 1024)
+            .unwrap();
+        for pass in 1..=2 {
+            let start = std::time::Instant::now();
+            let delta = classify(&profiles, &root, &id, &opts(None)).unwrap().delta;
+            assert_eq!(delta.owned_changed, ["tf/custom/large/textures.bin"]);
+            eprintln!("Full 5 GiB classify pass {pass}: {:?}", start.elapsed());
+        }
+        let mut cache = DriftCache::default();
+        for pass in 1..=2 {
+            let start = std::time::Instant::now();
+            let delta = classify_with_cache(&profiles, &root, &id, &opts(None), Some(&mut cache))
+                .unwrap()
+                .delta;
+            assert_eq!(delta.owned_changed, ["tf/custom/large/textures.bin"]);
+            eprintln!(
+                "Cached 5 GiB classify pass {pass}: {:?}; cumulative full hashes {}",
+                start.elapsed(),
+                cache.hashes
+            );
+        }
+        assert_eq!(cache.hashes, 1);
+        // Complete a consistent saved fixture without copying a 5 GiB buffer:
+        // both files consist of the same zero-filled extended file bytes.
+        let mut manifest = load_manifest(&profiles, &id).unwrap();
+        manifest.files[0].sha256 = cache.hash(&payload).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/large/textures.bin",
+            ))
+            .unwrap()
+            .set_len(5 * 1024 * 1024 * 1024)
+            .unwrap();
+        fs::write(
+            crate::profile::manifest_file(&profiles, &id),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        cache.save(&profiles, &id);
+        let start = std::time::Instant::now();
+        let result = absorb_owned_impl(&profiles, &root, unlocked(), opts(None), true).unwrap();
+        assert_eq!(result.delta, AbsorbDelta::empty());
+        assert!(result.repaired.is_empty());
+        eprintln!(
+            "Complete unchanged 5 GiB automatic absorb with persisted cache: {:?}",
+            start.elapsed()
+        );
+    }
+
+    #[test]
+    fn automatic_absorb_cache_never_authorizes_switch_or_cfg_drift() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("tf2");
+        let profiles = dir.path().join("profiles");
+        let payload = root.join("tf/custom/skins/texture.bin");
+        let cfg = root.join("tf/cfg/autoexec.cfg");
+        write_file(&payload, "old");
+        write_file(&cfg, "echo old\n");
+        let id = save_main(&profiles, &root);
+        let original_time = fs::metadata(&payload).unwrap().modified().unwrap();
+        absorb_owned_impl(&profiles, &root, unlocked(), opts(None), true).unwrap();
+        let mut cache = DriftCache::load(&profiles, &id);
+        cache.hash(&payload).unwrap();
+        assert_eq!(
+            cache.hashes, 0,
+            "successful automatic absorb persisted its observation"
+        );
+
+        write_file(&payload, "new");
+        fs::File::options()
+            .write(true)
+            .open(&payload)
+            .unwrap()
+            .set_times(fs::FileTimes::new().set_modified(original_time))
+            .unwrap();
+        write_file(&cfg, "echo new\n");
+        let classified =
+            classify_with_cache(&profiles, &root, &id, &opts(None), Some(&mut cache)).unwrap();
+        assert!(classified
+            .delta
+            .owned_changed
+            .contains(&"tf/cfg/autoexec.cfg".into()));
+
+        // Switch preflight always invokes the uncached entry point. Even a
+        // same-size rewrite with its original mtime must be captured first.
+        let other = crate::profile::create_profile_record_to(&profiles, &root, "Other", unlocked())
+            .unwrap()
+            .profiles
+            .last()
+            .unwrap()
+            .id
+            .clone();
+        crate::switch::switch_profile_to(&profiles, &root, &other, unlocked(), opts(None), |_| {})
+            .unwrap();
+        crate::switch::switch_profile_to(&profiles, &root, &id, unlocked(), opts(None), |_| {})
+            .unwrap();
+        assert_eq!(fs::read(&payload).unwrap(), b"new");
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/skins/texture.bin"
+            ))
+            .unwrap(),
+            b"new"
+        );
+    }
+
+    #[test]
+    fn legacy_stock_cfgs_are_not_projected_or_removed_by_absorb_and_switch() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("tf2");
+        let profiles = dir.path().join("profiles");
+        write_file(&root.join("tf/cfg/autoexec.cfg"), "echo player\n");
+        write_file(&root.join("tf/cfg/server_casual.cfg"), "Valve live\n");
+        let id = save_main(&profiles, &root);
+        let mut manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(!manifest
+            .files
+            .iter()
+            .any(|file| file.path.contains("server_casual")));
+        let rel = "tf/cfg/server_casual.cfg";
+        let library_copy = exclusive_file_path(&profiles, &id, rel);
+        write_file(&library_copy, "old snapshot\n");
+        manifest.files.push(ProfileFile {
+            path: rel.into(),
+            sha256: sha256_hex(b"old snapshot\n"),
+            storage: crate::profile::FileStorage::Exclusive,
+        });
+        fs::write(
+            crate::profile::manifest_file(&profiles, &id),
+            serde_json::to_vec(&manifest).unwrap(),
+        )
+        .unwrap();
+        let other = crate::profile::create_profile_record_to(&profiles, &root, "Other", unlocked())
+            .unwrap()
+            .profiles
+            .last()
+            .unwrap()
+            .id
+            .clone();
+        absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+        crate::switch::switch_profile_to(&profiles, &root, &other, unlocked(), opts(None), |_| {})
+            .unwrap();
+        assert_eq!(fs::read(root.join(rel)).unwrap(), b"Valve live\n");
+        crate::switch::switch_profile_to(&profiles, &root, &id, unlocked(), opts(None), |_| {})
+            .unwrap();
+        assert_eq!(fs::read(root.join(rel)).unwrap(), b"Valve live\n");
+        crate::profile::rename_profile_to(&profiles, &root, &id, "Renamed", unlocked()).unwrap();
+        let raw: serde_json::Value = serde_json::from_slice(
+            &fs::read(crate::profile::manifest_file(&profiles, &id)).unwrap(),
+        )
+        .unwrap();
+        assert!(!raw["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|file| file["path"] == rel));
+        assert_eq!(fs::read(library_copy).unwrap(), b"old snapshot\n");
+        assert_eq!(fs::read(root.join(rel)).unwrap(), b"Valve live\n");
+    }
+
+    #[test]
+    fn config_bind_changes_list_only_keys_tf2_changed() {
+        let previous = config_binds(
+            "bind \"w\" \"+forward\"
+bind \"e\" \"voicemenu 0 0\"
+bind \"q\" \"lastinv\"
+",
+        );
+        let current = config_binds(
+            "bind \"W\" \"+forward\"
+bind \"e\" \"+use\" // note
+bind \"h\" \"voicemenu 0 0\"
+",
+        );
+        assert_eq!(
+            diff_binds(&previous, &current),
+            BTreeMap::from([
+                ("e".to_string(), Some("+use".to_string())),
+                ("h".to_string(), Some("voicemenu 0 0".to_string())),
+                ("q".to_string(), None),
+            ])
+        );
+        assert!(diff_binds(&previous, &previous).is_empty());
+    }
+
+    #[test]
     fn owned_cfg_drift_absorbs_and_new_pack_waits() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
@@ -1410,6 +2016,10 @@ mod tests {
         assert!(result.delta.packs_added.contains(&"toon".into()));
         assert!(result.delta.owned_changed.is_empty());
         assert!(result.config_cfg_absorbed);
+        assert_eq!(
+            result.config_bind_changes,
+            BTreeMap::from([("w".to_string(), Some("+forward".to_string()))])
+        );
         let manifest = load_manifest(&profiles, &id).unwrap();
         let autoexec = manifest
             .files
@@ -2224,6 +2834,161 @@ mod tests {
             std::fs::metadata(&live_config).unwrap().modified().unwrap(),
             before
         );
+        cleanup(&dir);
+    }
+    fn mixed_review_fixture() -> (PathBuf, PathBuf, PathBuf, PackReviewRequest) {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        write_live(&root.join("tf/cfg/config.cfg"), "unbindall\n");
+        for pack in ["remove.vpk", "restore.vpk", "saved.vpk"] {
+            write_live(&root.join("tf/custom").join(pack), pack);
+        }
+        let id = save_main(&profiles, &root);
+        for pack in ["remove.vpk", "restore.vpk", "saved.vpk"] {
+            fs::remove_file(root.join("tf/custom").join(pack)).unwrap();
+        }
+        for pack in ["add.vpk", "leave.vpk"] {
+            write_live(&root.join("tf/custom").join(pack), pack);
+        }
+        let result = absorb_owned_to(&profiles, &root, unlocked(), opts(None)).unwrap();
+        let request = PackReviewRequest {
+            profile_id: id,
+            fingerprint: result.pack_review.unwrap(),
+            decisions: [
+                ("add.vpk", PackAction::Add),
+                ("leave.vpk", PackAction::Keep),
+                ("remove.vpk", PackAction::Remove),
+                ("restore.vpk", PackAction::Restore),
+                ("saved.vpk", PackAction::Keep),
+            ]
+            .into_iter()
+            .map(|(pack, choice)| PackDecision {
+                pack: pack.into(),
+                choice,
+            })
+            .collect(),
+        };
+        (dir, profiles, root, request)
+    }
+
+    #[test]
+    fn reviewed_mixed_pack_choices_commit_together_and_cannot_replay() {
+        let (dir, profiles, root, request) = mixed_review_fixture();
+        resolve_pack_changes_to(&profiles, &root, &request, unlocked(), opts(None)).unwrap();
+        let manifest = load_manifest(&profiles, &request.profile_id).unwrap();
+        let packs = manifest_pack_keys(&manifest.files);
+        for pack in ["add.vpk", "restore.vpk", "saved.vpk"] {
+            assert!(packs.contains(pack));
+        }
+        for pack in ["leave.vpk", "remove.vpk"] {
+            assert!(!packs.contains(pack));
+        }
+        assert_eq!(manifest.ignored_packs, vec!["leave.vpk", "saved.vpk"]);
+        assert_eq!(
+            fs::read(root.join("tf/custom/restore.vpk")).unwrap(),
+            b"restore.vpk"
+        );
+        assert!(root.join("tf/custom/leave.vpk").is_file());
+        assert!(!root.join("tf/custom/saved.vpk").exists());
+        assert!(scan_absorb_delta_to(&profiles, &root, opts(None))
+            .unwrap()
+            .packs_added
+            .is_empty());
+        assert!(
+            resolve_pack_changes_to(&profiles, &root, &request, unlocked(), opts(None)).is_err()
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn reviewed_packs_reject_changed_live_saved_and_profile_identity() {
+        for change in 0..4 {
+            let (dir, profiles, root, mut request) = mixed_review_fixture();
+            let manifest = load_manifest(&profiles, &request.profile_id).unwrap();
+            match change {
+                0 => write_live(&root.join("tf/custom/add.vpk"), "different"),
+                1 => {
+                    let file = manifest
+                        .files
+                        .iter()
+                        .find(|file| file.path == "tf/custom/restore.vpk")
+                        .unwrap();
+                    write_live(
+                        &manifest_source_path(&profiles, &request.profile_id, file).unwrap(),
+                        "different",
+                    );
+                }
+                2 => request.profile_id = "another-profile".into(),
+                _ => write_live(&root.join("tf/custom/new.vpk"), "new"),
+            }
+            assert!(
+                resolve_pack_changes_to(&profiles, &root, &request, unlocked(), opts(None))
+                    .is_err()
+            );
+            assert!(!root.join("tf/custom/restore.vpk").exists());
+            assert_eq!(load_manifest(&profiles, &manifest.id).unwrap(), manifest);
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn reviewed_packs_reject_incomplete_duplicate_invalid_and_running_choices() {
+        for change in 0..4 {
+            let (dir, profiles, root, mut request) = mixed_review_fixture();
+            let before = load_manifest(&profiles, &request.profile_id).unwrap();
+            match change {
+                0 => {
+                    request.decisions.pop();
+                }
+                1 => {
+                    request.decisions[1] = request.decisions[0].clone();
+                }
+                2 => request.decisions[0].choice = PackAction::Restore,
+                _ => {}
+            }
+            let running = if change == 3 {
+                vec![tf2_name()]
+            } else {
+                unlocked().to_vec()
+            };
+            assert!(
+                resolve_pack_changes_to(&profiles, &root, &request, running, opts(None)).is_err()
+            );
+            assert_eq!(
+                load_manifest(&profiles, &request.profile_id).unwrap(),
+                before
+            );
+            assert!(!root.join("tf/custom/restore.vpk").exists());
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn reviewed_packs_recheck_after_staging_before_any_publication() {
+        let (dir, profiles, root, request) = mixed_review_fixture();
+        let before = load_manifest(&profiles, &request.profile_id).unwrap();
+        let samples = Arc::new(AtomicUsize::new(0));
+        let calls = Arc::clone(&samples);
+        let changed = root.join("tf/custom/add.vpk");
+        let result = with_absorb_process_sampler(
+            move || {
+                // Entry check then staging boundary. Change the source after the
+                // reviewed classification; the checked transaction must refuse.
+                if calls.fetch_add(1, Ordering::SeqCst) == 1 {
+                    write_live(&changed, "changed during staging");
+                }
+                unlocked().iter().map(|name| (*name).to_string()).collect()
+            },
+            || resolve_pack_changes_to(&profiles, &root, &request, unlocked(), opts(None)),
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            load_manifest(&profiles, &request.profile_id).unwrap(),
+            before
+        );
+        assert!(!root.join("tf/custom/restore.vpk").exists());
+        assert!(root.join("tf/custom/leave.vpk").is_file());
         cleanup(&dir);
     }
 }

@@ -227,6 +227,29 @@ pub(crate) fn merge_scope(
     Ok(result)
 }
 
+/// Remove every standalone `name …` command that ends its line, the same
+/// lines a scope merge would replace. `None` when there is none.
+pub(crate) fn drop_standalone_command(existing: &[u8], name: &str) -> Option<Vec<u8>> {
+    let mut result = Vec::with_capacity(existing.len());
+    let mut dropped = false;
+    for command in (Commands {
+        remaining: existing,
+    }) {
+        let matches = (Tokens {
+            remaining: command.body,
+        })
+        .next()
+        .is_some_and(|token| token.eq_ignore_ascii_case(name.as_bytes()));
+        if matches && matches!(command.trailer, b"\n" | b"\r" | b"\r\n" | b"") {
+            dropped = true;
+            continue;
+        }
+        result.extend_from_slice(command.body);
+        result.extend_from_slice(command.trailer);
+    }
+    dropped.then_some(result)
+}
+
 pub(crate) fn validate_quotes(text: &[u8]) -> Result<(), ProfileError> {
     for command in (Commands { remaining: text }) {
         let mut quoted = false;

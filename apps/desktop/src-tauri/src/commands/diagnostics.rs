@@ -1,5 +1,6 @@
 //! One block of text for a bug report: version, OS, where TF2 is, which
-//! profile is active, and the tail of the crash log.
+//! profile is active, a Health summary, recent operations and errors, and the
+//! tail of the crash log.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -13,6 +14,8 @@ use crate::error::CommandError;
 const PANIC_LOG_TAIL_LINES: usize = 20;
 const PANIC_LOG_TAIL_BYTES: u64 = 64 * 1024;
 const PANIC_LOG_READ_MAX_BYTES: u64 = 2 * 1024 * 1024;
+/// Recent operations and errors from `logs/activity.log`.
+const ACTIVITY_LINES: usize = 30;
 
 #[tauri::command]
 pub async fn get_diagnostics(app: AppHandle) -> Result<String, CommandError> {
@@ -72,6 +75,16 @@ fn diagnostics_text(version: &str) -> String {
         }
     );
     if let Ok(dir) = execs_core::try_execs_data_dir() {
+        write_health_summary(&mut out, &dir);
+        let activity = execs_core::activity_log::recent_to(&dir, ACTIVITY_LINES);
+        if activity.is_empty() {
+            let _ = writeln!(out, "\nRecent activity: none");
+        } else {
+            let _ = writeln!(out, "\nRecent activity (last {}):", activity.len());
+            for line in activity {
+                let _ = writeln!(out, "{line}");
+            }
+        }
         let log = dir.join("logs").join("panic.log");
         match read_panic_log_tail(&dir, &log) {
             Ok(lines) => {
@@ -86,6 +99,75 @@ fn diagnostics_text(version: &str) -> String {
         }
     }
     out
+}
+
+/// The Health checks from App settings, as short lines.
+fn write_health_summary(out: &mut String, data_dir: &Path) {
+    let root = execs_core::remembered_tf2_root();
+    let account = execs_core::launch::pick_steam_account_from(&execs_core::discover_steam_roots());
+    let report = execs_core::health::inspect_health(
+        &data_dir.join("profiles"),
+        data_dir,
+        root.as_deref(),
+        account.as_ref(),
+    );
+    let _ = writeln!(out, "\nHealth:");
+    let _ = writeln!(
+        out,
+        "  Library usable: {}{}",
+        yes_no(report.library_usable),
+        if report.root_mismatch {
+            " (saved for another TF2 folder)"
+        } else {
+            ""
+        }
+    );
+    let _ = writeln!(
+        out,
+        "  Cfg loader: {}",
+        match report.active_layer {
+            Some(execs_core::CfgLayer::Comfig) => "mastercomfig",
+            Some(execs_core::CfgLayer::Vanilla) => "vanilla",
+            None => "unknown",
+        }
+    );
+    let recovery = &report.recovery;
+    let _ = writeln!(
+        out,
+        "  Pending recovery: switch {}, profile update {}, Casual {}{}",
+        recovery.pending_switch.as_deref().unwrap_or("none"),
+        yes_no(recovery.profile_update),
+        yes_no(recovery.casual),
+        if recovery.unknown {
+            " (some state unreadable)"
+        } else {
+            ""
+        }
+    );
+    for profile in &report.profiles {
+        if profile.missing_files > 0 || !profile.uncached_downloads.is_empty() {
+            let _ = writeln!(
+                out,
+                "  Profile {}: {} missing library files, {} uncached Casual downloads",
+                profile.name,
+                profile.missing_files,
+                profile.uncached_downloads.len()
+            );
+        }
+    }
+    let _ = writeln!(
+        out,
+        "  Steam account found: {}",
+        yes_no(report.steam_account_found)
+    );
+}
+
+fn yes_no(value: bool) -> &'static str {
+    if value {
+        "yes"
+    } else {
+        "no"
+    }
 }
 
 fn read_panic_log_tail(root: &Path, path: &Path) -> Result<Vec<String>, String> {

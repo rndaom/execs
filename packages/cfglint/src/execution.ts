@@ -14,7 +14,12 @@ type ExecutionContext = {
   takeExec: (at: Command) => boolean;
   incomplete: (rule: string, message: string, at: Command) => void;
   allowMalformedBinds: boolean;
+  /** Source's own settings snapshot (`host_writeconfig` output). */
+  isEngineManagedFile: (file: string) => boolean;
 };
+
+// host_writeconfig serializes each archived cvar as `name "value"`.
+const ARCHIVED_CVAR_NAME = /^[a-z_][a-z0-9_]*$/i;
 
 /**
  * Derive only the supported startup execution path. This has no access to the
@@ -172,6 +177,16 @@ export function evaluateStartup(ctx: ExecutionContext): {
           ...aliasStack,
           name,
         ]);
+      } else if (
+        aliasStack.length === 0 &&
+        args.length === 1 &&
+        ARCHIVED_CVAR_NAME.test(name) &&
+        ctx.isEngineManagedFile(cmd.file)
+      ) {
+        // TF2 writes every archived cvar it knows into config.cfg, including
+        // ones newer than the pinned dump (for example `tf_armory_page_skip`).
+        // Such a line only sets that one setting.
+        effective.set(name, { value: args[0], file: cmd.file, line: cmd.line });
       } else {
         stop(
           "execution-incomplete",

@@ -202,10 +202,8 @@ export function CrosshairPane({
   const [customScale, setCustomScale] = useState(
     record?.scale ?? controls.draft.cl_crosshair_scale,
   );
-  // Custom edits count only while Custom is showing: In-game mode has no Build
-  // pack action, so a shape picked before switching back must not leave the
-  // pane waiting on a change the player cannot see or apply.
-  const pendingPack = mode !== activeMode || (mode === "custom" && (dirty || designerDirty));
+  // Changing the visible mode does not discard unbuilt assets or designer edits.
+  const pendingPack = mode !== activeMode || dirty || designerDirty;
   useExplicitDraft(pendingPack);
   function discardPack() {
     setDesignerOpen(false);
@@ -310,6 +308,26 @@ export function CrosshairPane({
           {activeMode === "custom" ? "Custom is installed" : "In-game is active"} · mode change not
           applied
         </p>
+      ) : null}
+      {mode === "stock" && (dirty || designerDirty) ? (
+        <div className="pane-note mb-4" data-testid="crosshair-hidden-draft">
+          <p>
+            Your custom edits have not been built. They are kept until you build or discard them.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() => chooseMode("custom")}
+            >
+              Resume custom edits
+            </button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={discardPack}>
+              Discard custom edits
+            </button>
+          </div>
+        </div>
       ) : null}
       {record?.sourceChanged ? (
         <div className="pane-note mb-4" data-testid="crosshair-source-changed">

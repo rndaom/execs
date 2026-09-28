@@ -73,6 +73,17 @@ describe("offline command catalog", () => {
     expect(lookupCvar("__proto__")).toBeUndefined();
     expect(lookupCvar("constructor")).toBeUndefined();
   });
+  it("describes Engineer commands from a pinned handler without rejecting legacy forms", () => {
+    for (const name of ["build", "destroy"]) {
+      const entry = lookupCommand(name);
+      expect(entry?.kind).toBe("command");
+      expect(entry?.syntax).toBe(`${name} <building> <mode>`);
+      expect(entry?.arguments).toBeUndefined();
+      expect(entry?.sources[0]?.url).toContain(
+        "b8cfb12c0e083a2ef5b2f9f9b50f3902fa034474/src/game/server/tf/tf_player.cpp",
+      );
+    }
+  });
   it("keeps colon-containing string defaults and discloses conflicting defaults", () => {
     expect(lookupCommand("cl_streams_image_sfurl")?.defaultValue).toBe("img://loadjpeg:(320x200):");
     expect(lookupCommand("sv_backspeed")?.defaultValue).toBeUndefined();

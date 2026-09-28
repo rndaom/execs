@@ -22,11 +22,11 @@ use crate::launch::LaunchWriteReason;
 use crate::process_lock::refuse_if_running_among;
 use crate::profile::profile_live_process_names as live_process_names;
 use crate::profile::{
-    begin_switch_to, clear_launch_sync_pending_if_matches, exclusive_file_path,
-    is_profile_ownable_rel_path, is_shared_rel_path, load_library_from, load_manifest,
-    mark_launch_sync_pending, pending_live_handoff_to, pending_switch_to, portable_path_key,
-    profiles_dir, recover_profile_mutation_to, set_active_profile_to, FileStorage, ProfileError,
-    ProfileFile, ProfileLibrary, ProfileManifest, SwitchCleanupFile,
+    begin_switch_to, exclusive_file_path, is_profile_ownable_rel_path, is_shared_rel_path,
+    load_library_from, load_manifest, mark_launch_sync_pending, pending_live_handoff_to,
+    pending_switch_to, portable_path_key, profiles_dir, recover_profile_mutation_to,
+    set_active_profile_to, FileStorage, ProfileError, ProfileFile, ProfileLibrary, ProfileManifest,
+    SwitchCleanupFile,
 };
 use crate::surface::is_stock_custom_entry;
 use crate::vpk::list_vpk_member_paths_filtered;
@@ -209,6 +209,18 @@ where
     if pending.is_none() {
         crate::preloader::capture_installed_selections(profiles_dir, tf2_root, &running)?;
     }
+    if pending.is_none() && library.active_profile_id.as_deref() != Some(profile_id) {
+        // A profile saved by an older execs can hold managed files TF2 now
+        // rejects or that clear the console (the old preload hook). Bring the
+        // inactive target's saved copies up to date before installing them.
+        // Best effort: a failure installs the saved bytes as before.
+        let _ = crate::managed_upgrade::upgrade_profile_managed_files_to(
+            profiles_dir,
+            tf2_root,
+            profile_id,
+            &running,
+        );
+    }
     let target = load_manifest(profiles_dir, profile_id)?;
     crate::hud::require_resolved_hud(&target)?;
     crate::hud::refuse_profile_hud_vpks(profiles_dir, &target)?;
@@ -223,22 +235,8 @@ where
             progress(SwitchProgress::new(SwitchStep::Write));
             preloader.apply(tf2_root, &running)?;
         }
-        let (steam_write, steam_write_error) = if target.launch_sync_pending {
-            let steam_roots = match options.steam_roots {
-                Some(roots) => roots.to_vec(),
-                None => crate::finder::discover_steam_roots(),
-            };
-            sync_switch_launch_options(
-                profiles_dir,
-                tf2_root,
-                profile_id,
-                &target.launch_options,
-                &steam_roots,
-                &running,
-            )
-        } else {
-            (Some(LaunchWriteReason::Written), None)
-        };
+        // Switching files never authorizes replacing Steam's independently edited options.
+        let (steam_write, steam_write_error) = (Some(LaunchWriteReason::NotRequested), None);
         let library = load_library_from(profiles_dir, Some(tf2_root))?;
         progress(SwitchProgress::new(SwitchStep::Done));
         return Ok(SwitchOutcome {
@@ -298,6 +296,14 @@ where
     cleanup_profile_ids.sort();
     cleanup_profile_ids.dedup();
 
+    // A switch that runs out of space after its Remove step leaves TF2 half
+    // set up. Refuse before removing anything when the drive cannot hold the
+    // difference between the target and the files the switch removes.
+    crate::disk_space::ensure_space(
+        tf2_root,
+        switch_bytes_needed(profiles_dir, &target, previous.as_deref())?,
+    )?;
+
     // This is the transaction boundary: after it succeeds, boot-time absorb
     // sees no active profile and every possible partial source/target remains
     // recorded for a deterministic retry.
@@ -309,7 +315,7 @@ where
         live_process_names(),
     )?;
 
-    let mut result = remove_unmodified_live(tf2_root, &journal.cleanup_files);
+    let mut result = remove_unmodified_live(tf2_root, &journal.cleanup_files, &target.files);
     if result.is_ok() {
         result = preserve_live_huds_for_switch(tf2_root, &live_hud_folders);
     }
@@ -341,18 +347,8 @@ where
     refuse_if_running_among(live_process_names())?;
     set_active_profile_to(profiles_dir, tf2_root, profile_id, &running)
         .map_err(|err| mid_switch_error(&err))?;
-    let steam_roots = match options.steam_roots {
-        Some(roots) => roots.to_vec(),
-        None => crate::finder::discover_steam_roots(),
-    };
-    let (steam_write, steam_write_error) = sync_switch_launch_options(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        &target.launch_options,
-        &steam_roots,
-        &running,
-    );
+    let steam_write = Some(LaunchWriteReason::NotRequested);
+    let steam_write_error: Option<String> = None;
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
     progress(SwitchProgress::with_detail(
         SwitchStep::Done,
@@ -363,6 +359,36 @@ where
         steam_write,
         steam_write_error,
     })
+}
+
+/// Extra bytes the live drive needs to switch: the target's files minus the
+/// previous profile's (removed first), plus the largest target file, which
+/// briefly exists twice while its part file is renamed into place.
+fn switch_bytes_needed(
+    profiles_dir: &Path,
+    target: &ProfileManifest,
+    previous: Option<&str>,
+) -> Result<u64, ProfileError> {
+    let sizes = |manifest: &ProfileManifest| -> Vec<u64> {
+        manifest
+            .files
+            .iter()
+            .map(|file| {
+                crate::apply::manifest_source_path(profiles_dir, &manifest.id, file)
+                    .ok()
+                    .and_then(|path| std::fs::metadata(path).ok())
+                    .map_or(0, |meta| meta.len())
+            })
+            .collect()
+    };
+    let target_sizes = sizes(target);
+    let incoming: u64 = target_sizes.iter().sum();
+    let largest = target_sizes.iter().copied().max().unwrap_or(0);
+    let outgoing: u64 = match previous {
+        Some(id) if id != target.id => sizes(&load_manifest(profiles_dir, id)?).iter().sum(),
+        _ => 0,
+    };
+    Ok(incoming.saturating_sub(outgoing).saturating_add(largest))
 }
 
 /// A Keep answer applies while the current profile remains installed. Once
@@ -412,61 +438,6 @@ fn refuse_kept_live_packs(
     }
 }
 
-fn sync_switch_launch_options(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    launch_options: &str,
-    steam_roots: &[PathBuf],
-    running_names: &[String],
-) -> (Option<LaunchWriteReason>, Option<String>) {
-    match write_switch_launch_options(steam_roots, launch_options, running_names) {
-        Ok(result) => {
-            if result.reason == LaunchWriteReason::Written
-                && !matches!(
-                    clear_launch_sync_pending_if_matches(
-                        profiles_dir,
-                        tf2_root,
-                        profile_id,
-                        launch_options,
-                        running_names,
-                    ),
-                    Ok(true)
-                )
-            {
-                // Steam already has the correct value. Retain the durable
-                // pending marker and retry idempotently rather than making
-                // the completed profile switch look rolled back.
-                return (Some(LaunchWriteReason::WriteFailed), None);
-            }
-            (Some(result.reason), None)
-        }
-        Err(_) => (Some(LaunchWriteReason::WriteFailed), None),
-    }
-}
-
-#[cfg(not(test))]
-fn write_switch_launch_options(
-    steam_roots: &[PathBuf],
-    launch_options: &str,
-    _test_running: &[String],
-) -> Result<crate::launch::LaunchWriteResult, ProfileError> {
-    crate::launch::write_launch_options_to_localconfig(steam_roots, launch_options)
-}
-
-#[cfg(test)]
-fn write_switch_launch_options(
-    steam_roots: &[PathBuf],
-    launch_options: &str,
-    test_running: &[String],
-) -> Result<crate::launch::LaunchWriteResult, ProfileError> {
-    crate::launch::write_launch_options_to_localconfig_from(
-        steam_roots,
-        launch_options,
-        test_running,
-    )
-}
-
 fn launch_write_detail(reason: Option<LaunchWriteReason>, error: Option<&str>) -> String {
     if let Some(error) = error {
         return error.to_string();
@@ -480,6 +451,7 @@ fn launch_write_detail(reason: Option<LaunchWriteReason>, error: Option<&str>) -
         Some(LaunchWriteReason::NoAccount) => {
             "No Steam account config was found, so the launch options were not written.".into()
         }
+        Some(LaunchWriteReason::NotRequested) => "Launch options not written to Steam; review them in Launch before updating Steam.".into(),
         Some(LaunchWriteReason::WriteFailed) => {
             "Launch options are saved to the profile, but Steam sync is still pending.".into()
         }
@@ -487,11 +459,12 @@ fn launch_write_detail(reason: Option<LaunchWriteReason>, error: Option<&str>) -
     }
 }
 
+/// The recovery step every error after a switch's Remove step ends with.
+pub const MID_SWITCH_GUIDANCE: &str =
+    "The live folder is mid-switch and no profile is active — re-apply a profile to finish.";
+
 fn mid_switch_error(err: &ProfileError) -> ProfileError {
-    ProfileError::Io(format!(
-        "{} The live folder is mid-switch and no profile is active — re-apply a profile to finish.",
-        err.message()
-    ))
+    ProfileError::Io(format!("{} {MID_SWITCH_GUIDANCE}", err.message()))
 }
 
 /// Read-only preflight for commands that must prepare other install-global
@@ -682,7 +655,12 @@ fn clone_options<'a>(options: &'a AbsorbOptions<'a>) -> AbsorbOptions<'a> {
 fn remove_unmodified_live(
     tf2_root: &Path,
     files: &[SwitchCleanupFile],
+    target_files: &[ProfileFile],
 ) -> Result<(), ProfileError> {
+    let retained: BTreeSet<_> = target_files
+        .iter()
+        .map(|file| portable_path_key(&file.path))
+        .collect::<Result<_, _>>()?;
     for file in files {
         if !is_profile_ownable_rel_path(&file.path) {
             return Err(ProfileError::ForbiddenPath(file.path.clone()));
@@ -701,6 +679,9 @@ fn remove_unmodified_live(
                 refuse_if_running_among(live_process_names())?;
                 remove_file_force_within(tf2_root, &candidate)
                     .map_err(|e| ProfileError::Io(e.to_string()))?;
+                if !retained.contains(&portable_path_key(&file.path)?) {
+                    prune_removed_vpk_cache(&candidate, tf2_root);
+                }
                 prune_empty_parents(&candidate, tf2_root);
             }
         }
@@ -776,6 +757,43 @@ pub(crate) fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
         path.push(part);
     }
     path
+}
+
+/// A removed top-level VPK leaves one regenerable sibling cache. Only callers
+/// that removed this pack may prune it; this is not an orphan-cache sweep.
+/// Like directory pruning, optional cleanup never changes a committed result.
+pub(crate) fn prune_removed_vpk_cache(pack: &Path, tf2_root: &Path) {
+    if pack.parent() != Some(tf2_root.join("tf/custom").as_path())
+        || !pack
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("vpk"))
+        || !matches!(fs::symlink_metadata(pack), Err(err) if err.kind() == std::io::ErrorKind::NotFound)
+    {
+        return;
+    }
+    let mut cache_name = pack.as_os_str().to_os_string();
+    cache_name.push(".sound.cache");
+    let cache = PathBuf::from(cache_name);
+    if validate_file_within(tf2_root, &cache).is_err()
+        || refuse_if_running_among(live_process_names()).is_err()
+    {
+        return;
+    }
+    let _ = remove_file_force_within(tf2_root, &cache);
+}
+
+/// Delete TF2's regenerable `<pack>/sound/sound.cache` from an app-owned pack
+/// before changing it. TF2 writes one into every custom folder it scans, so it
+/// is not an untracked user file and must not block saves.
+pub(crate) fn remove_pack_sound_cache(
+    tf2_root: &Path,
+    path: &Path,
+) -> Result<(), crate::profile::ProfileError> {
+    refuse_if_running_among(crate::process_lock::live_process_names())
+        .map_err(crate::profile::ProfileError::from)?;
+    remove_file_force_within(tf2_root, path)
+        .map_err(|err| crate::profile::ProfileError::Io(err.to_string()))
 }
 
 /// TF2 writes a `sound.cache` into every `tf/custom` folder it scans. It is the
@@ -910,6 +928,100 @@ mod tests {
         SaveCurrentOptions,
     };
     use std::io::Write;
+
+    #[test]
+    fn removed_vpk_cache_cleanup_is_exact_and_preserves_retained_or_changed_packs() {
+        let dir = crate::test_temp_dir();
+        let tf2 = dir.join("tf2");
+        let custom = tf2.join("tf/custom");
+        fs::create_dir_all(&custom).unwrap();
+        let mut files = Vec::new();
+        for name in ["gone.VPK", "retained.vpk", "changed.vpk"] {
+            fs::write(custom.join(name), b"owned").unwrap();
+            fs::write(custom.join(format!("{name}.sound.cache")), b"cache").unwrap();
+            files.push(SwitchCleanupFile {
+                path: format!("tf/custom/{name}"),
+                sha256: crate::hash::sha256_hex(b"owned"),
+            });
+        }
+        fs::write(custom.join("changed.vpk"), b"external edit").unwrap();
+        fs::write(custom.join("gone.sound.cache"), b"unrelated").unwrap();
+        fs::write(custom.join("orphan.vpk.sound.cache"), b"unrelated").unwrap();
+        let target = ProfileFile {
+            path: "tf/custom/retained.vpk".into(),
+            sha256: crate::hash::sha256_hex(b"owned"),
+            storage: FileStorage::Exclusive,
+        };
+        remove_unmodified_live(&tf2, &files, &[target]).unwrap();
+        assert!(!custom.join("gone.VPK").exists());
+        assert!(!custom.join("gone.VPK.sound.cache").exists());
+        for name in [
+            "retained.vpk.sound.cache",
+            "changed.vpk",
+            "changed.vpk.sound.cache",
+            "gone.sound.cache",
+            "orphan.vpk.sound.cache",
+        ] {
+            assert!(custom.join(name).is_file(), "must preserve {name}");
+        }
+    }
+
+    #[test]
+    fn vpk_cache_cleanup_preserves_survivors_nonfiles_and_the_game_lock() {
+        let dir = crate::test_temp_dir();
+        let tf2 = dir.join("tf2");
+        let custom = tf2.join("tf/custom");
+        fs::create_dir_all(&custom).unwrap();
+        let pack = custom.join("keep.vpk");
+        let cache = custom.join("keep.vpk.sound.cache");
+        fs::write(&pack, b"survives").unwrap();
+        fs::write(&cache, b"cache").unwrap();
+        prune_removed_vpk_cache(&pack, &tf2);
+        assert!(cache.is_file());
+        fs::remove_file(&pack).unwrap();
+        crate::profile::with_profile_process_sampler(
+            || vec![tf2_name().into()],
+            || prune_removed_vpk_cache(&pack, &tf2),
+        );
+        assert!(cache.is_file());
+        fs::remove_file(&cache).unwrap();
+        fs::create_dir(&cache).unwrap();
+        prune_removed_vpk_cache(&pack, &tf2);
+        assert!(cache.is_dir());
+    }
+
+    #[test]
+    fn vpk_cache_cleanup_never_follows_links() {
+        let dir = crate::test_temp_dir();
+        let tf2 = dir.join("tf2");
+        let custom = tf2.join("tf/custom");
+        fs::create_dir_all(&custom).unwrap();
+        let outside = dir.join("outside.cache");
+        fs::write(&outside, b"keep").unwrap();
+        let cache = custom.join("gone.vpk.sound.cache");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, &cache).unwrap();
+        #[cfg(windows)]
+        if std::os::windows::fs::symlink_file(&outside, &cache).is_err() {
+            return; // Creating symlinks needs Windows Developer Mode or elevation.
+        }
+        prune_removed_vpk_cache(&custom.join("gone.vpk"), &tf2);
+        assert!(fs::symlink_metadata(&cache)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read(&outside).unwrap(), b"keep");
+        fs::remove_file(&cache).unwrap();
+
+        let linked_root = dir.join("linked-tf2");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&tf2, &linked_root).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&tf2, &linked_root).unwrap();
+        fs::write(&cache, b"cache").unwrap();
+        prune_removed_vpk_cache(&linked_root.join("tf/custom/gone.vpk"), &linked_root);
+        assert_eq!(fs::read(&cache).unwrap(), b"cache");
+    }
 
     #[test]
     fn pruning_clears_a_husk_left_by_the_game_sound_cache() {
@@ -1089,7 +1201,7 @@ mod tests {
 
         // No Steam account exists under this root, so the write is skipped —
         // reported, not swallowed.
-        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::NoAccount));
+        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::NotRequested));
         assert_eq!(outcome.steam_write_error, None);
         let done = steps.last().unwrap();
         assert_eq!(done.step, SwitchStep::Done);
@@ -1101,7 +1213,7 @@ mod tests {
     }
 
     #[test]
-    fn same_active_switch_retries_and_clears_pending_launch_sync() {
+    fn same_active_switch_preserves_external_steam_options_pending_review() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -1139,18 +1251,18 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::Written));
+        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::NotRequested));
         assert_eq!(steps_of(&steps), vec![SwitchStep::Closed, SwitchStep::Done]);
         assert_eq!(
             crate::launch::read_launch_options_from(std::slice::from_ref(&steam)),
-            "-novid -console"
+            "-old"
         );
-        assert!(!load_manifest(&profiles, &a).unwrap().launch_sync_pending);
+        assert!(load_manifest(&profiles, &a).unwrap().launch_sync_pending);
         cleanup(&dir);
     }
 
     #[test]
-    fn full_switch_keeps_launch_sync_pending_until_same_active_retry() {
+    fn full_switch_and_retry_keep_launch_sync_pending_until_review() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -1184,7 +1296,7 @@ mod tests {
             |_| {},
         )
         .unwrap();
-        assert_eq!(switched.steam_write, Some(LaunchWriteReason::NoAccount));
+        assert_eq!(switched.steam_write, Some(LaunchWriteReason::NotRequested));
         assert_eq!(
             switched.library.active_profile_id.as_deref(),
             Some(b.as_str())
@@ -1212,12 +1324,12 @@ mod tests {
             |_| {},
         )
         .unwrap();
-        assert_eq!(retried.steam_write, Some(LaunchWriteReason::Written));
+        assert_eq!(retried.steam_write, Some(LaunchWriteReason::NotRequested));
         assert_eq!(
             crate::launch::read_launch_options_from(std::slice::from_ref(&steam)),
-            "-console"
+            "-old"
         );
-        assert!(!load_manifest(&profiles, &b).unwrap().launch_sync_pending);
+        assert!(load_manifest(&profiles, &b).unwrap().launch_sync_pending);
         cleanup(&dir);
     }
 
@@ -1311,7 +1423,7 @@ mod tests {
                 sha256: file.sha256,
             })
             .collect();
-        remove_unmodified_live(&root, &files).unwrap();
+        remove_unmodified_live(&root, &files, &[]).unwrap();
         assert_eq!(
             fs::read(root.join("tf/custom/pack/a.txt")).unwrap(),
             b"user-changed\n"

@@ -50,11 +50,6 @@ fn packs_from_file(path: &Path) -> Result<Vec<(String, ModContent)>, CommandErro
         return Ok(vec![(name, content)]);
     }
     let bytes = read_bounded_file(path, MAX_MOD_BYTES, archive_too_large(MAX_MOD_BYTES))?;
-    if bytes.starts_with(b"Rar!") {
-        return Err(CommandError::unknown(
-            "RAR archives cannot be unpacked here. Extract it with 7-Zip, then use Add folder.",
-        ));
-    }
     Ok(execs_core::mods::mod_content_from_archive(&name, &bytes)?)
 }
 
@@ -71,8 +66,8 @@ pub async fn import_mod_archive(
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
-            .set_title("Add mods (.vpk, .zip or .7z)")
-            .add_filter("Mods", &["vpk", "zip", "7z"])
+            .set_title("Add mods (.vpk, .zip, .7z or .rar)")
+            .add_filter("Mods", &["vpk", "zip", "7z", "rar"])
             .blocking_pick_files()
     })
     .await
@@ -169,6 +164,103 @@ pub async fn remove_mod(
     let _guard = gate.lock_for_write().await?;
     with_profile(move |root, profile_id| Ok(execs_core::mods::remove_mod(&root, &profile_id, &id)?))
         .await
+}
+
+#[tauri::command]
+pub async fn set_mod_enabled(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+    enabled: bool,
+) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        Ok(execs_core::mods::set_mod_enabled(
+            &root,
+            &profile_id,
+            &id,
+            enabled,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn copy_mod_to_profile(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+    target_profile_id: String,
+) -> Result<ProfileDetail, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        Ok(execs_core::mods::copy_mod_to_profile(
+            &root,
+            &profile_id,
+            &id,
+            &target_profile_id,
+        )?)
+    })
+    .await
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModUpdateStatus {
+    id: String,
+    updated_at: Option<i64>,
+    update_available: bool,
+    error: Option<String>,
+}
+
+#[tauri::command]
+pub async fn check_mod_updates() -> Result<Vec<ModUpdateStatus>, CommandError> {
+    with_profile(move |_root, profile_id| {
+        let manifest =
+            execs_core::profile::load_manifest(&execs_core::profiles_dir(), &profile_id)?;
+        let records: Vec<_> = manifest
+            .mods
+            .iter()
+            .filter(|r| matches!(r.source, ModSource::Gamebanana { .. }))
+            .collect();
+        if records.len() > 128 {
+            return Err(CommandError::unknown(
+                "Check updates supports up to 128 GameBanana packs at once.",
+            ));
+        }
+        let mut checked = std::collections::BTreeMap::new();
+        Ok(records
+            .into_iter()
+            .map(|record| {
+                let ModSource::Gamebanana { id, .. } = record.source else {
+                    unreachable!()
+                };
+                let result = checked
+                    .entry(id)
+                    .or_insert_with(|| gamebanana::mod_profile(id));
+                match result {
+                    Ok(profile) => {
+                        let available = profile.updated_at.and_then(|date| {
+                            execs_core::mods::mod_update_available(&record.installed_at, date)
+                        });
+                        ModUpdateStatus {
+                            id: record.id.clone(),
+                            updated_at: profile.updated_at,
+                            update_available: available.unwrap_or(false),
+                            error: available.is_none().then(|| {
+                                "The installed or author update date is unavailable.".into()
+                            }),
+                        }
+                    }
+                    Err(error) => ModUpdateStatus {
+                        id: record.id.clone(),
+                        updated_at: None,
+                        update_available: false,
+                        error: Some(error.clone()),
+                    },
+                }
+            })
+            .collect())
+    })
+    .await
 }
 
 /// One page of TF2 mods from GameBanana.

@@ -46,6 +46,12 @@ export const SOURCES = [
     "config/cfg/addons/flat-mouse.cfg",
     "mastercomfig TF2 flat-mouse addon settings; MIT mastercomfig contributors",
   ),
+  {
+    url: `https://raw.githubusercontent.com/ValveSoftware/source-sdk-2013/${SDK_REF}/src/game/server/tf/tf_player.cpp`,
+    revision: SDK_REF,
+    date: "2026-09-28",
+    description: "Valve SDK Engineer build/destroy ClientCommand handlers; metadata only",
+  },
 ];
 const LINE_RE = /^([+-]?[A-Za-z_][\w-]*)\s+:\s(.*?)\s+:\s*(.*?)\s*:\s?(.*)$/;
 export function parseDump(text, minimum) {
@@ -145,6 +151,27 @@ export function buildCorpus(texts) {
     ],
     h: "Request a voice menu item. Menu and item availability depends on game data.",
   });
+  for (const name of ["build", "destroy"]) {
+    if (
+      !texts[8].includes(`FStrEq( pcmd, "${name}" )`) ||
+      !texts[8].includes(`Usage: ${name} <building> <mode>`) ||
+      !texts[8].includes("iBuilding = atoi( args[ 1 ] )") ||
+      !texts[8].includes("iMode = atoi( args[ 2 ] )")
+    )
+      throw new Error(`Missing verified ${name} handler`);
+    mergeEntry(corpus, name, {
+      c: 1,
+      s: [8],
+      a: "TF2 Source SDK player command handler; class and server state apply; current retail availability unverified",
+      syntax: `${name} <building> <mode>`,
+      h:
+        name === "build"
+          ? "Select an Engineer building to place."
+          : "Destroy one of your Engineer buildings.",
+      // One-argument legacy binds are also handled. Syntax is the modern form;
+      // omit strict arity metadata so existing legacy binds remain valid.
+    });
+  }
   for (let source = 3; source < 5; source++) {
     const names = [...texts[source].matchAll(/^alias\s+([+-]?[A-Za-z_][\w=-]*)(?=["\s])/gm)].map(
       (m) => m[1].toLowerCase(),

@@ -55,3 +55,44 @@ export function showSettingsChrome(library: ProfileLibrary | null): boolean {
 export function canWriteSettings(running: boolean, busy: boolean): boolean {
   return canWrite(running, busy);
 }
+
+/** Why a pane's saved settings cannot be copied to other profiles right now. */
+export function copySettingsBlocked(
+  running: boolean,
+  busy: boolean,
+  dirty: boolean,
+): string | null {
+  if (running) return "Close TF2 to copy settings to other profiles.";
+  if (dirty) return "Wait for your changes to save, then copy them.";
+  if (busy) return "Wait for the current change to finish.";
+  return null;
+}
+
+const LAST_PANE_KEY = "execs:last-pane";
+
+/** The pane execs showed when it last closed; a blocked store forgets it. */
+export function readLastPane(storage: Pick<Storage, "getItem"> | null): SettingsTab | null {
+  try {
+    const stored = storage?.getItem(LAST_PANE_KEY);
+    return SETTINGS_TABS.find((tab) => tab === stored) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeLastPane(storage: Pick<Storage, "setItem"> | null, tab: SettingsTab): void {
+  try {
+    storage?.setItem(LAST_PANE_KEY, tab);
+  } catch {
+    // Remembering the pane is a convenience; opening on Comfig is fine.
+  }
+}
+
+/** `window.localStorage`, or null where it is unavailable. */
+export function browserStorage(): Storage | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}

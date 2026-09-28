@@ -175,6 +175,7 @@ fn refuse_repair_cancel_unless_stably_closed(
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreloaderStatusPayload {
+    pub content_audit: execs_core::mod_audit::ModContentAudit,
     pub status: PreloaderStatus,
     pub mods_cached: bool,
     pub mods_size_bytes: u64,
@@ -210,12 +211,27 @@ fn preloader_status_payload(
         .transpose()?
         .map(|manifest| execs_core::profile_has_preload(&manifest))
         .unwrap_or(false);
-    let profile_particle_sources = active
+    let mut profile_particle_sources = active
         .as_deref()
         .map(|id| execs_core::mods::profile_particle_sources_from(&execs_core::profiles_dir(), id))
         .transpose()?
         .unwrap_or_default();
+    if let Some(id) = active.as_deref() {
+        if let Err(reason) = execs_core::preloader::qualify_profile_particle_sources(
+            root,
+            &execs_core::execs_data_dir(),
+            &execs_core::profiles_dir(),
+            id,
+            &mut profile_particle_sources,
+        ) {
+            for source in &mut profile_particle_sources {
+                source.unavailable_reason =
+                    Some(format!("Could not check Casual support: {reason}"));
+            }
+        }
+    }
     Ok(PreloaderStatusPayload {
+        content_audit: execs_core::mod_audit::audit_custom_content(root),
         status: execs_core::preloader::preloader_status(root, &execs_core::execs_data_dir())?,
         mods_cached: crate::mods_fetch::is_cached(),
         mods_size_bytes: crate::mods_fetch::MODS_SIZE_BYTES,
@@ -504,7 +520,7 @@ pub async fn set_gameinfo_bypass(
             &execs_core::process_lock::live_process_names,
         )
         .map_err(CommandError::preloader)?;
-        execs_core::preloader::set_gameinfo_bypass_with_sampler(
+        execs_core::preloader::set_gameinfo_bypass_choice_with_sampler(
             &root,
             &execs_core::execs_data_dir(),
             enabled,

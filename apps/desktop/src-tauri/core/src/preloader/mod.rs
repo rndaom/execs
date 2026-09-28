@@ -94,14 +94,16 @@ mod transaction;
 
 pub use apply::{
     apply_preloader_selection, apply_preloader_selection_with_sampler, forget_preload_profile,
-    preload_profiles, preloader_status, profile_particle_cleanup_selection, rebuild_keep_lists,
-    record_preload_profile, recover_pending_preloader, recover_pending_preloader_with_sampler,
-    revert_preloader, revert_preloader_with_sampler, take_preload_profiles, PreloaderReport,
-    PreloaderSelection, PreloaderStatus, RevertReport,
+    preload_profiles, preloader_status, profile_particle_cleanup_selection,
+    qualify_profile_particle_sources, rebuild_keep_lists, record_preload_profile,
+    recover_pending_preloader, recover_pending_preloader_with_sampler, revert_preloader,
+    revert_preloader_with_sampler, take_preload_profiles, PreloaderReport, PreloaderSelection,
+    PreloaderStatus, RevertReport,
 };
 pub use catalog::{read_mods_catalog, CatalogAddon, CatalogParticleMod, ModsCatalog};
 pub use gameinfo::{
-    gameinfo_bypass_state, set_gameinfo_bypass, set_gameinfo_bypass_with_sampler, GameinfoBypass,
+    gameinfo_bypass_state, set_gameinfo_bypass, set_gameinfo_bypass_choice_with_sampler,
+    set_gameinfo_bypass_with_sampler, GameinfoBypass,
 };
 pub use state::{preload_is_wanted, PatchedEntry, PreloaderState, SkipNotice};
 pub use transaction::{

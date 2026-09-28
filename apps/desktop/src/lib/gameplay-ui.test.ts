@@ -19,12 +19,15 @@ import {
 } from "./gameplay-ui";
 
 describe("gameplay clamp", () => {
-  it("clamps fov_desired to 54–90", () => {
-    expect(clampGameplay({ ...defaultGameplay(), fov_desired: 10 }).fov_desired).toBe(FOV_MIN);
-    expect(clampGameplay({ ...defaultGameplay(), fov_desired: 110 }).fov_desired).toBe(FOV_MAX);
-    expect(clampGameplay({ ...defaultGameplay(), fov_desired: 75 }).fov_desired).toBe(75);
-    expect(clampGameplay({ ...defaultGameplay(), fov_desired: 54.4 }).fov_desired).toBe(54);
-    expect(clampGameplay({ ...defaultGameplay(), fov_desired: 89.6 }).fov_desired).toBe(90);
+  it("keeps authored world FOV until the 75–90 control changes", () => {
+    expect(FOV_MIN).toBe(75);
+    expect(FOV_MAX).toBe(90);
+    for (const value of [10, 60.125, 75, 89.6, 110]) {
+      expect(clampGameplay({ ...defaultGameplay(), fov_desired: value }).fov_desired).toBe(value);
+      expect(serializeGameplay(seedGameplay(`fov_desired ${value}`, {}))).toContain(
+        `fov_desired ${value}`,
+      );
+    }
   });
 
   it("clamps viewmodel fov, scale, and color channels", () => {
@@ -56,6 +59,12 @@ describe("gameplay serialize and parse", () => {
     expect(text).toContain("cl_crosshair_file crosshair3");
   });
 
+  it("never writes the cheat-only r_drawtracers TF2 refuses at startup", () => {
+    const text = serializeGameplay(seedGameplay("r_drawtracers 0\n", { r_drawtracers: "0" }));
+    expect(text).not.toMatch(/^r_drawtracers /m);
+    expect(text).toContain("r_drawtracers_firstperson ");
+  });
+
   it("round-trips parse and serialize", () => {
     const original = clampGameplay({
       ...defaultGameplay(),
@@ -64,7 +73,6 @@ describe("gameplay serialize and parse", () => {
       tf_use_min_viewmodels: 1,
       r_drawviewmodel: 0,
       r_drawtracers_firstperson: 0,
-      r_drawtracers: 1,
       cl_flipviewmodels: 1,
       cl_crosshair_file: "crosshair5",
       cl_crosshair_scale: 40,

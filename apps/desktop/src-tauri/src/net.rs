@@ -104,6 +104,28 @@ pub enum RemoteSource {
 }
 
 impl RemoteSource {
+    /// The site's name as players know it, for error messages.
+    fn site_name(self) -> &'static str {
+        match self {
+            Self::GitHubApi | Self::GitHubRaw | Self::GitHubRelease | Self::GitHubCodeload => {
+                "GitHub"
+            }
+            Self::Dropbox => "Dropbox",
+            Self::TeamFortressTv => "teamfortress.tv",
+            Self::GameBananaApi | Self::GameBananaDownload => "GameBanana",
+            Self::ComfigApp | Self::ComfigHits => "comfig.app",
+            Self::Tf2Huds => "tf2huds.dev",
+            Self::SteamInventory | Self::SteamItemImage => "Steam",
+        }
+    }
+
+    fn is_github(self) -> bool {
+        matches!(
+            self,
+            Self::GitHubApi | Self::GitHubRaw | Self::GitHubRelease | Self::GitHubCodeload
+        )
+    }
+
     fn initial_hosts(self) -> &'static [&'static str] {
         match self {
             Self::GitHubApi => &["api.github.com"],
@@ -830,7 +852,56 @@ fn transfer_one(
     Ok(response)
 }
 
+/// A completed request that failed, in plain words with a next step. The
+/// full URL and status go to the activity log for Copy diagnostics.
+pub fn status_failure(url: &str, source: RemoteSource, status: reqwest::StatusCode) -> String {
+    crate::activity::record("network", &format!("{url} returned {status}"));
+    let site = source.site_name();
+    match status.as_u16() {
+        // GitHub answers unauthenticated clients over their hourly allowance
+        // with 403 or 429; shared connections reach it quickly.
+        403 | 429 if source.is_github() => {
+            "GitHub is limiting requests from your network. Try again in about an hour.".into()
+        }
+        429 => format!("{site} is limiting requests right now. Try again in a few minutes."),
+        401 | 403 => format!("{site} refused the request. Try again later."),
+        404 | 410 => {
+            format!("{site} no longer has that file. Check the author's page, or try again later.")
+        }
+        500..=599 => format!("{site} is having problems right now. Try again later."),
+        _ => format!(
+            "{site} could not send it (HTTP {}). Try again later.",
+            status.as_u16()
+        ),
+    }
+}
+
+/// A request that never completed, in plain words; the URL goes to the log.
+fn transport_failure(url: &str, source: RemoteSource, message: String) -> String {
+    crate::activity::record("network", &format!("{url}: {message}"));
+    let site = source.site_name();
+    let lower = message.to_ascii_lowercase();
+    if lower.contains("timed out") {
+        format!("{site} timed out. Check your connection, then try again.")
+    } else if lower.contains("could not resolve") || lower.contains("could not connect") {
+        format!("Could not reach {site}. Check that you are online, then try again.")
+    } else {
+        message
+    }
+}
+
 fn send_get(
+    client: &Client,
+    url: &str,
+    source: RemoteSource,
+    timeout: Option<Duration>,
+    max_bytes: u64,
+) -> Result<Response, String> {
+    send_get_unmapped(client, url, source, timeout, max_bytes)
+        .map_err(|message| transport_failure(url, source, message))
+}
+
+fn send_get_unmapped(
     client: &Client,
     url: &str,
     source: RemoteSource,
@@ -929,7 +1000,7 @@ pub fn get_text_for_limit(
         max_bytes.min(API_MAX_BYTES),
     )?;
     if !response.status.is_success() {
-        return Err(format!("Could not download {url} ({})", response.status));
+        return Err(status_failure(url, source, response.status));
     }
     Ok(text_from_bytes(response.body))
 }
@@ -965,7 +1036,7 @@ pub fn get_json_for<T: serde::de::DeserializeOwned>(
 ) -> Result<T, String> {
     let response = send_get(client, url, source, Some(API_TIMEOUT), API_MAX_BYTES)?;
     if !response.status.is_success() {
-        return Err(format!("Could not read {url} ({})", response.status));
+        return Err(status_failure(url, source, response.status));
     }
     serde_json::from_slice(&response.body).map_err(|err| err.to_string())
 }
@@ -1077,7 +1148,7 @@ pub fn download_bytes_for_timeout(
         max_bytes,
     )?;
     if !response.status.is_success() {
-        return Err(format!("Could not download {url} ({})", response.status));
+        return Err(status_failure(url, source, response.status));
     }
     Ok(response.body)
 }
@@ -1227,6 +1298,48 @@ fn cached_file_accepts_within(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn failed_requests_read_as_plain_sentences_with_a_next_step() {
+        let status = |code| reqwest::StatusCode::from_u16(code).unwrap();
+        let url = "https://api.github.com/repos/mastercomfig/mastercomfig/releases/latest";
+        let limited = status_failure(url, RemoteSource::GitHubApi, status(403));
+        assert_eq!(
+            limited,
+            "GitHub is limiting requests from your network. Try again in about an hour."
+        );
+        assert!(!limited.contains("api.github.com"));
+        assert!(
+            status_failure(url, RemoteSource::GameBananaApi, status(404))
+                .starts_with("GameBanana no longer has that file.")
+        );
+        assert!(status_failure(url, RemoteSource::ComfigHits, status(503))
+            .starts_with("comfig.app is having problems right now."));
+        assert!(status_failure(url, RemoteSource::Dropbox, status(429))
+            .starts_with("Dropbox is limiting requests"));
+        assert_eq!(
+            transport_failure(
+                url,
+                RemoteSource::Tf2Huds,
+                "Could not resolve the download host.".into()
+            ),
+            "Could not reach tf2huds.dev. Check that you are online, then try again."
+        );
+        assert!(transport_failure(
+            url,
+            RemoteSource::GitHubRaw,
+            "The download timed out.".into()
+        )
+        .contains("timed out"));
+        assert_eq!(
+            transport_failure(
+                url,
+                RemoteSource::GitHubRaw,
+                "The download redirected too many times.".into()
+            ),
+            "The download redirected too many times."
+        );
+    }
+
     use super::*;
     use std::cell::Cell;
     use std::io::Write;

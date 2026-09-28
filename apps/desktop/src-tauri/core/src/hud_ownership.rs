@@ -487,10 +487,6 @@ pub(super) fn preserve_library_hud_originals(
             return Err(ProfileError::ParticleSourceSelected(record.name.clone()));
         }
     }
-    let backup = profiles
-        .join(&manifest.id)
-        .join("hud-backups")
-        .join(random_token());
     let files: Vec<_> = manifest
         .files
         .iter()
@@ -501,6 +497,16 @@ pub(super) fn preserve_library_hud_originals(
                 || file.path.ends_with("/autoexec.cfg")
         })
         .collect();
+    let receipt = serde_json::to_vec_pretty(
+        &serde_json::json!({"hud": manifest.hud, "roots": roots, "files": files}),
+    )
+    .map_err(|err| ProfileError::Io(err.to_string()))?;
+    // Replacing the same saved HUD again reuses its exact recovery snapshot.
+    // Never overwrite a historical copy whose contents changed externally.
+    let backup = profiles
+        .join(&manifest.id)
+        .join("hud-backups")
+        .join(sha256_hex(&receipt));
     let mut total = 0u64;
     for file in &files {
         refuse_if_running_among(live_process_names())?;
@@ -516,15 +522,24 @@ pub(super) fn preserve_library_hud_originals(
                     .into(),
             ));
         }
-        write_atomic_within(profiles, &backup.join("files").join(&file.path), &bytes)
-            .map_err(|err| ProfileError::Io(err.to_string()))?;
+        preserve_once(profiles, &backup.join("files").join(&file.path), &bytes)?;
     }
-    let receipt = serde_json::to_vec_pretty(
-        &serde_json::json!({"hud": manifest.hud, "roots": roots, "files": files}),
-    )
-    .map_err(|err| ProfileError::Io(err.to_string()))?;
-    write_atomic_within(profiles, &backup.join("original-huds.json"), &receipt)
-        .map_err(|err| ProfileError::Io(err.to_string()))
+    preserve_once(profiles, &backup.join("original-huds.json"), &receipt)
+}
+
+fn preserve_once(root: &Path, path: &Path, bytes: &[u8]) -> Result<(), ProfileError> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => {
+            let existing = read_regular_file_bounded_within(root, path, bytes.len() as u64)?;
+            if existing.as_deref() == Some(bytes) {
+                return Ok(());
+            }
+            return Err(ProfileError::Io("A saved HUD recovery copy changed. Its files were kept; review HUD backups in Storage before retrying.".into()));
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(ProfileError::Io(error.to_string())),
+    }
+    write_atomic_within(root, path, bytes).map_err(|error| ProfileError::Io(error.to_string()))
 }
 
 #[cfg(test)]

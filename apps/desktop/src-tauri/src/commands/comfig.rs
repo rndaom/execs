@@ -98,47 +98,58 @@ pub async fn set_comfig_addons(
     addons: Vec<OfficialAddon>,
 ) -> Result<ProfileDetail, CommandError> {
     let wanted = addons.clone();
-    let (context, initial_addons, owned) = with_profile(move |root, profile_id| {
+    let (context, initial_state, owned) = with_profile(move |root, profile_id| {
         execs_core::refuse_if_running()?;
+        execs_core::comfig::ensure_comfig_profile(&root, &profile_id)?;
         let state = execs_core::read_comfig_state(&root, &profile_id)?;
         let needed = missing_addon_assets(&state, &wanted);
         if needed.is_empty() {
             return Ok((
                 ActiveContext::capture(&root, &profile_id),
-                state.addons,
-                Vec::new(),
+                state,
+                None,
             ));
         }
-        Ok((
-            ActiveContext::capture(&root, &profile_id),
-            state.addons,
-            crate::comfig_fetch::fetch_official_assets(&needed)?,
-        ))
+        let installed = state.release.as_ref().ok_or_else(|| CommandError::new(
+            "UnknownComfigRelease", "This profile's mastercomfig version is unknown. Update packages before adding an addon so the base and addons use the same release.",
+        ))?;
+        let owned = crate::comfig_fetch::fetch_release_packages(&needed, Some(installed))?;
+        Ok((ActiveContext::capture(&root, &profile_id), state, Some(owned)))
     })
     .await?;
     let _guard = gate.lock_for_write().await?;
     with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         let state = execs_core::read_comfig_state(&root, &profile_id)?;
-        if state.addons != initial_addons {
+        if state != initial_state {
             return Err(stale_package_selection());
         }
         let still_missing: Vec<String> = missing_addon_assets(&state, &addons)
             .into_iter()
-            .filter(|rel| !owned.iter().any(|(path, _)| path == rel))
+            .filter(|rel| {
+                !owned
+                    .as_ref()
+                    .is_some_and(|download| download.files.iter().any(|(path, _)| path == rel))
+            })
             .collect();
         if !still_missing.is_empty() {
             return Err(stale_package_selection());
         }
         let assets: Vec<WizardAsset<'_>> = owned
+            .as_ref()
+            .map(|download| download.files.as_slice())
+            .unwrap_or_default()
             .iter()
             .map(|(path, bytes)| WizardAsset { path, bytes })
             .collect();
-        Ok(execs_core::set_comfig_addons(
+        Ok(execs_core::comfig::set_comfig_addons_with_release_to(
+            &execs_core::profile::profiles_dir(),
             &root,
             &profile_id,
             &addons,
             &assets,
+            owned.as_ref().map(|download| &download.identity),
+            execs_core::process_lock::live_process_names(),
         )?)
     })
     .await
@@ -150,14 +161,15 @@ pub async fn set_comfig_addons(
 pub async fn update_comfig_vpks(
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<ProfileDetail, CommandError> {
-    let (context, expected_rels, owned) = with_profile(|root, profile_id| {
+    let (context, initial_state, owned) = with_profile(|root, profile_id| {
         execs_core::refuse_if_running()?;
+        execs_core::comfig::ensure_comfig_profile(&root, &profile_id)?;
         let state = execs_core::read_comfig_state(&root, &profile_id)?;
         let rels = execs_core::official_package_rel_paths(&state.addons);
         Ok((
             ActiveContext::capture(&root, &profile_id),
-            rels.clone(),
-            crate::comfig_fetch::fetch_official_assets(&rels)?,
+            state,
+            crate::comfig_fetch::fetch_release_packages(&rels, None)?,
         ))
     })
     .await?;
@@ -165,19 +177,45 @@ pub async fn update_comfig_vpks(
     with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         let current = execs_core::read_comfig_state(&root, &profile_id)?;
-        if execs_core::official_package_rel_paths(&current.addons) != expected_rels {
+        if current != initial_state {
             return Err(stale_package_selection());
         }
-        if owned.is_empty() {
+        if owned.files.is_empty() {
             return Err(CommandError::unknown(
                 "Official mastercomfig release had no packages to apply.",
             ));
         }
-        Ok(execs_core::comfig::apply_official_vpk_batch(
+        Ok(execs_core::comfig::apply_release_batch_to(
+            &execs_core::profile::profiles_dir(),
             &root,
             &profile_id,
-            &owned,
+            &owned.files,
+            Some(&owned.identity),
+            execs_core::process_lock::live_process_names(),
         )?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn check_comfig_release(expected_profile_id: String) -> Result<String, CommandError> {
+    let (context, state, latest) = with_profile(move |root, profile_id| {
+        if profile_id != expected_profile_id {
+            return Err(stale_package_selection());
+        }
+        Ok((
+            ActiveContext::capture(&root, &profile_id),
+            execs_core::read_comfig_state(&root, &profile_id)?,
+            crate::comfig_fetch::latest_version()?,
+        ))
+    })
+    .await?;
+    with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        if execs_core::read_comfig_state(&root, &profile_id)? != state {
+            return Err(stale_package_selection());
+        }
+        Ok(latest)
     })
     .await
 }
@@ -196,6 +234,7 @@ pub async fn import_comfig_custom(
 ) -> Result<Option<ProfileDetail>, CommandError> {
     let context = with_profile(|root, profile_id| {
         execs_core::refuse_if_running()?;
+        execs_core::comfig::ensure_comfig_profile(&root, &profile_id)?;
         Ok(ActiveContext::capture(&root, &profile_id))
     })
     .await?;

@@ -178,7 +178,7 @@ pub async fn install_hud(
     .await?;
     let _guard = gate.lock_for_write().await?;
     progress(HudInstallStep::Installing);
-    with_profile(move |root, profile_id| {
+    let result = with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         ensure_hud_unchanged(
             &profile_id,
@@ -187,10 +187,11 @@ pub async fn install_hud(
         )?;
         install_fetched_hud(&root, &profile_id, fetched, false)
     })
-    .await
+    .await;
+    super::shared::logged("Installed a HUD from the catalog", result)
 }
 
-/// Install a HUD the user has on disk as a zip or 7z. The folder name comes
+/// Install a HUD the user has on disk as a ZIP, 7z or RAR. The folder name comes
 /// from the archive's; the record is `Local` (no catalog hash, so no update
 /// checks) until Match to catalog pairs it with a hud-db entry.
 #[tauri::command]
@@ -208,7 +209,7 @@ pub async fn import_hud_archive(
         app.dialog()
             .file()
             .set_title("Import a HUD archive")
-            .add_filter("HUD archive", &["zip", "7z"])
+            .add_filter("HUD archive", &["zip", "7z", "rar"])
             .blocking_pick_file()
     })
     .await
@@ -241,7 +242,7 @@ pub async fn import_hud_archive(
     })
     .await?;
     let _guard = gate.lock_for_write().await?;
-    with_profile(move |root, profile_id| {
+    let result = with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         ensure_hud_unchanged(
             &profile_id,
@@ -250,7 +251,8 @@ pub async fn import_hud_archive(
         )?;
         Ok(Some(install_local_hud(&root, &profile_id, &name, tree)?))
     })
-    .await
+    .await;
+    super::shared::logged("Imported a HUD archive", result)
 }
 
 /// Install a HUD from a folder on disk (an extracted download, or one the
@@ -294,7 +296,7 @@ pub async fn import_hud_folder(
     })
     .await?;
     let _guard = gate.lock_for_write().await?;
-    with_profile(move |root, profile_id| {
+    let result = with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         ensure_hud_unchanged(
             &profile_id,
@@ -303,7 +305,8 @@ pub async fn import_hud_folder(
         )?;
         Ok(Some(install_local_hud(&root, &profile_id, &name, tree)?))
     })
-    .await
+    .await;
+    super::shared::logged("Imported a HUD folder", result)
 }
 
 fn install_local_hud(
@@ -377,7 +380,7 @@ pub async fn return_to_stock_hud(
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<ProfileDetail, CommandError> {
     let _guard = gate.lock_for_write().await?;
-    with_profile(|root, profile_id| {
+    let result = with_profile(|root, profile_id| {
         execs_core::refuse_if_running()?;
         Ok(execs_core::hud::return_to_stock_hud_to(
             &execs_core::profiles_dir(),
@@ -386,7 +389,8 @@ pub async fn return_to_stock_hud(
             execs_core::process_lock::live_process_names(),
         )?)
     })
-    .await
+    .await;
+    super::shared::logged("Returned to the stock HUD", result)
 }
 
 /// Same shape as `install_hud`: the download runs before the gate, the
@@ -417,7 +421,7 @@ pub async fn update_hud(
     .await?;
     let _guard = gate.lock_for_write().await?;
     progress(HudInstallStep::Installing);
-    with_profile(move |root, profile_id| {
+    let result = with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         ensure_hud_unchanged(
             &profile_id,
@@ -426,7 +430,8 @@ pub async fn update_hud(
         )?;
         install_fetched_hud(&root, &profile_id, fetched, true)
     })
-    .await
+    .await;
+    super::shared::logged("Updated the HUD", result)
 }
 
 #[tauri::command]
@@ -654,7 +659,7 @@ mod tests {
         assert_eq!(error.message, guidance);
 
         let invalid = hud_input_error(execs_core::extract_hud_archive(b"garbage").unwrap_err());
-        assert!(invalid.message.contains("not a zip or 7z"));
+        assert!(invalid.message.contains("not a ZIP, 7z or RAR"));
         assert!(!invalid.message.contains("profile library"));
 
         let lock = hud_input_error(execs_core::ProfileError::GameRunning);

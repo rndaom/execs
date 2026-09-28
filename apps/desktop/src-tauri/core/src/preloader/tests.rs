@@ -83,6 +83,213 @@ fn fake_root() -> (std::path::PathBuf, std::path::PathBuf) {
     (root, data)
 }
 
+fn profile_particle_fixture(
+    file: &str,
+    bytes: Vec<u8>,
+) -> (
+    std::path::PathBuf,
+    std::path::PathBuf,
+    ProfileContext,
+    String,
+) {
+    let (root, data) = fake_root();
+    std::fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    std::fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    std::fs::write(root.join("tf/cfg/config.cfg"), b"bind a +attack\n").unwrap();
+    let profiles = data.join("profiles");
+    let id = crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Particles",
+        ["bash"],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: None,
+        },
+    )
+    .unwrap()
+    .active_profile_id
+    .unwrap();
+    let detail = crate::mods::install_mod_to(
+        &profiles,
+        &root,
+        &id,
+        "Gory Gibbing.zip",
+        crate::mods::ModContent::Tree(vec![
+            (format!("particles/{file}"), bytes),
+            (
+                "particles/particles_manifest.txt".into(),
+                format!("particles_manifest {{ file particles/{file} }}").into_bytes(),
+            ),
+        ]),
+        crate::mods::ModSource::Local,
+        ["bash"],
+    )
+    .unwrap();
+    let mod_id = detail.mods[0].id.clone();
+    (root, data, ProfileContext { profiles, id }, mod_id)
+}
+
+#[test]
+fn new_particle_filename_is_unavailable_before_selection_and_apply_keeps_every_byte() {
+    let (root, data, profile, mod_id) =
+        profile_particle_fixture("blood_trail_new.pcf", tiny_pcf("blood_trail", 18.0));
+    let zip = fake_mods_zip(root.parent().unwrap());
+    let previous = PreloaderSelection {
+        particle_mods: vec!["Blue Water".into()],
+        ..Default::default()
+    };
+    apply_profile_preloader(&root, &data, &zip, &previous, &profile, &[], &Vec::new).unwrap();
+    let paths = [
+        root.join("tf").join(MISC_VPK),
+        root.join("tf/tf2_misc_000.vpk"),
+        root.join("tf/gameinfo.txt"),
+        root.join("tf/custom").join(PRELOADER_VPK),
+        data.join("preloader/state.json"),
+        profile.profiles.join(&profile.id).join("manifest.json"),
+    ];
+    let before: Vec<_> = paths
+        .iter()
+        .map(|path| std::fs::read(path).unwrap())
+        .collect();
+    let mut sources =
+        crate::mods::profile_particle_sources_from(&profile.profiles, &profile.id).unwrap();
+    qualify_profile_particle_sources(&root, &data, &profile.profiles, &profile.id, &mut sources)
+        .unwrap();
+    let reason = sources[0].unavailable_reason.as_deref().unwrap();
+    assert!(
+        reason.contains("blood_trail_new.pcf")
+            && reason.contains("not a replacement for one of TF2's own"),
+        "{reason}"
+    );
+    let selected = PreloaderSelection {
+        profile_particle_mods: vec![mod_id],
+        ..previous
+    };
+    let error = apply_profile_preloader(&root, &data, &zip, &selected, &profile, &[], &Vec::new)
+        .unwrap_err();
+    assert!(
+        error.contains("not a replacement for one of TF2's own"),
+        "{error}"
+    );
+    for (path, bytes) in paths.iter().zip(before) {
+        assert_eq!(std::fs::read(path).unwrap(), bytes, "{}", path.display());
+    }
+    assert!(!data.join("preloader/apply-transaction").exists());
+    // Removing a legacy unsupported selection does not plan its old source.
+    let mut state = load_state(&data).unwrap();
+    state.profile_particle_mods = selected.profile_particle_mods;
+    save_state(&data, &state).unwrap();
+    apply_profile_preloader(
+        &root,
+        &data,
+        &zip,
+        &PreloaderSelection::default(),
+        &profile,
+        &[],
+        &Vec::new,
+    )
+    .unwrap();
+    assert!(load_state(&data).unwrap().profile_particle_mods.is_empty());
+}
+
+#[test]
+fn profile_particle_qualification_uses_the_same_parse_and_slot_budgets_as_apply() {
+    for (bytes, expected) in [
+        (tiny_pcf("water_effect", 18.0), None),
+        (b"not a particle file".to_vec(), Some("could not parse")),
+        (vec![0; 4096], Some("larger than any stock particle file")),
+        (tiny_pcf("spy_smoke", 18.0), Some("spy disguise systems")),
+    ] {
+        let (root, data, profile, mod_id) = profile_particle_fixture("water.pcf", bytes);
+        let directory = std::fs::read(root.join("tf").join(MISC_VPK)).unwrap();
+        let mut sources =
+            crate::mods::profile_particle_sources_from(&profile.profiles, &profile.id).unwrap();
+        qualify_profile_particle_sources(
+            &root,
+            &data,
+            &profile.profiles,
+            &profile.id,
+            &mut sources,
+        )
+        .unwrap();
+        let selected = PreloaderSelection {
+            profile_particle_mods: vec![mod_id],
+            ..Default::default()
+        };
+        let result = apply_profile_preloader(
+            &root,
+            &data,
+            Path::new(""),
+            &selected,
+            &profile,
+            &[],
+            &Vec::new,
+        );
+        if let Some(expected) = expected {
+            assert!(sources[0]
+                .unavailable_reason
+                .as_deref()
+                .unwrap()
+                .contains(expected));
+            assert!(result.unwrap_err().contains(expected));
+            assert!(!data.join("preloader/state.json").exists());
+        } else {
+            assert_eq!(sources[0].unavailable_reason, None);
+            assert_eq!(result.unwrap().patched_files.len(), 2);
+        }
+        assert_eq!(
+            std::fs::read(root.join("tf").join(MISC_VPK)).unwrap(),
+            directory
+        );
+    }
+}
+
+#[test]
+fn profile_particle_qualification_refuses_a_too_small_dx8_carrier_before_any_patch() {
+    let (root, data, profile, mod_id) =
+        profile_particle_fixture("water.pcf", tiny_pcf("water_effect", 18.0));
+    let directory_path = root.join("tf").join(MISC_VPK);
+    let mut files = read_vpk_dir_file(&directory_path).unwrap().files;
+    files.insert("particles/water_dx80.pcf".into(), tiny_pcf("x", 3.0));
+    write_split_vpk(&directory_path, &files);
+    let before = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    let directory_before = std::fs::read(&directory_path).unwrap();
+    let mut sources =
+        crate::mods::profile_particle_sources_from(&profile.profiles, &profile.id).unwrap();
+    qualify_profile_particle_sources(&root, &data, &profile.profiles, &profile.id, &mut sources)
+        .unwrap();
+    let reason = sources[0].unavailable_reason.as_deref().unwrap();
+    assert!(
+        reason.contains("water_dx80.pcf") && reason.contains("over the stock budget"),
+        "{reason}"
+    );
+    let selected = PreloaderSelection {
+        profile_particle_mods: vec![mod_id],
+        ..Default::default()
+    };
+    let error = apply_profile_preloader(
+        &root,
+        &data,
+        Path::new(""),
+        &selected,
+        &profile,
+        &[],
+        &Vec::new,
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("water_dx80.pcf") && error.contains("over the stock budget"),
+        "{error}"
+    );
+    assert_eq!(
+        std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap(),
+        before
+    );
+    assert_eq!(std::fs::read(directory_path).unwrap(), directory_before);
+    assert!(!data.join("preloader/state.json").exists());
+}
+
 #[test]
 fn corrupt_direct_flat_source_keeps_the_installed_selection_byte_exact() {
     let (root, data) = fake_root();
@@ -1705,6 +1912,71 @@ fn gameinfo_toggle_roundtrips() {
 }
 
 #[test]
+fn wanted_bypass_survives_an_update_and_repairs_only_the_new_type_line() {
+    let (root, data) = fake_root();
+    set_gameinfo_bypass_choice_with_sampler(&root, &data, true, &[], &Vec::new).unwrap();
+    assert!(
+        preloader_status(&root, &data)
+            .unwrap()
+            .gameinfo_bypass_wanted
+    );
+    assert!(preload_is_wanted(&data, &root).unwrap());
+    let updated = b"\"GameInfo\"\r\n{\r\n\ttype multiplayer_only\r\n\tNewValveSetting 1\r\n}\r\n";
+    std::fs::write(root.join("tf/gameinfo.txt"), updated).unwrap();
+    let state = preloader_status(&root, &data).unwrap();
+    assert!(state.gameinfo_bypass_wanted);
+    assert!(!state.gameinfo_bypassed);
+    set_gameinfo_bypass_choice_with_sampler(&root, &data, true, &[], &Vec::new).unwrap();
+    let state = preloader_status(&root, &data).unwrap();
+    assert!(state.gameinfo_bypass_wanted && state.gameinfo_bypassed);
+    set_gameinfo_bypass_choice_with_sampler(&root, &data, false, &[], &Vec::new).unwrap();
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        updated
+    );
+    assert!(
+        !preloader_status(&root, &data)
+            .unwrap()
+            .gameinfo_bypass_wanted
+    );
+}
+
+#[test]
+fn bypass_intent_is_install_bound_and_running_refusal_keeps_previous_choice() {
+    let (root, data) = fake_root();
+    set_gameinfo_bypass_choice_with_sampler(&root, &data, true, &[], &Vec::new).unwrap();
+    let before = load_state(&data).unwrap();
+    assert!(set_gameinfo_bypass_choice_with_sampler(
+        &root,
+        &data,
+        false,
+        &["tf.exe".into()],
+        &Vec::new
+    )
+    .is_err());
+    assert_eq!(load_state(&data).unwrap(), before);
+    assert!(
+        set_gameinfo_bypass_choice_with_sampler(
+            &root,
+            &data,
+            false,
+            &[],
+            &|| vec!["tf.exe".into()]
+        )
+        .is_err()
+    );
+    assert_eq!(load_state(&data).unwrap(), before);
+    let (other, _) = fake_root();
+    assert!(
+        !preloader_status(&other, &data)
+            .unwrap()
+            .gameinfo_bypass_wanted
+    );
+    revert_preloader_with_sampler(&root, &data, &[], &Vec::new).unwrap();
+    assert!(!load_state(&data).unwrap().gameinfo_bypass_wanted);
+}
+
+#[test]
 fn gameinfo_reads_and_writes_refuse_a_linked_tf_parent() {
     let dir = test_temp_dir();
     let root = dir.join("game");
@@ -2186,11 +2458,23 @@ fn a_prepared_plan_is_reused_only_for_the_state_it_was_derived_from() {
         &Vec::new,
     )
     .unwrap();
-    let expected = installed_bytes(&fresh_root, &fresh_data);
+    let mut expected = installed_bytes(&fresh_root, &fresh_data);
 
     let (root, data) = fake_root();
     let zip = fake_mods_zip(&root);
     let stock_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    // Installation-bound preference metadata deliberately differs between
+    // these two otherwise equivalent fixture installs. Assert both identities
+    // rather than weakening the exact-byte recovery comparisons elsewhere.
+    let mut expected_state: PreloaderState =
+        serde_json::from_slice(expected.state.as_ref().unwrap()).unwrap();
+    assert_eq!(
+        expected_state.gameinfo_bypass_root,
+        Some(std::fs::canonicalize(&fresh_root).unwrap())
+    );
+    assert!(expected_state.gameinfo_bypass_wanted);
+    expected_state.gameinfo_bypass_root = Some(std::fs::canonicalize(&root).unwrap());
+    expected.state = Some(serde_json::to_vec_pretty(&expected_state).unwrap());
     let owner = plan_owner(&data);
     let plan = current_plan(&root, &data, &zip, &selected, &owner);
     let before = plan_derivations();

@@ -11,11 +11,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import {
-  linuxSteamCandidates,
-  publicProfileFixture,
-  seedPackageFixture,
-} from "./package-smoke-fixture.mjs";
+import { assertFixtureAbsorbCache } from "./absorb-cache-fixture.mjs";
+import { acceptWindowPlacement, setAsideAppMaintenance } from "./app-maintenance-fixture.mjs";
+import { developmentPublicFixture } from "./development-package-guard.mjs";
+import { linuxSteamCandidates, seedPackageFixture } from "./package-smoke-fixture.mjs";
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
@@ -112,16 +111,42 @@ function snapshot(fixture, stage) {
   assert.equal(fixture.exports, join(fixture.scratch, "exports"));
   assert.equal(fixture.exportPath, join(fixture.exports, "previous-ui-export.zip"));
   assertNoSteam(fixture);
-  return { data: tree(fixture.data), live: tree(fixture.tf2Root), exports: tree(fixture.exports) };
+  const data = tree(fixture.data);
+  for (const id of [fixture.activeProfileId].filter(Boolean)) {
+    const cachePath = `profiles/${id}/absorb-cache.json`;
+    if (Object.hasOwn(data.files, cachePath)) {
+      assertFixtureAbsorbCache(
+        fixture.library,
+        fixture.tf2Root,
+        id,
+        fixture.portableManifest.files,
+        stage,
+        fixture.cacheSourceStamps,
+      );
+      delete data.files[cachePath];
+    }
+  }
+  // The activity log and the tidy-up record are execs' own startup output.
+  setAsideAppMaintenance(fixture.data, data, fixture.baseline?.data.directories ?? [], stage);
+  // Closing saves the window placement into settings.json.
+  if (fixture.baseline)
+    acceptWindowPlacement(
+      fixture.data,
+      data,
+      fixture.settings,
+      fixture.baseline.data.files["settings.json"],
+      stage,
+    );
+  return { data, live: tree(fixture.tf2Root), exports: tree(fixture.exports) };
 }
 
 /** Fresh Linux case; the shared tagged payload fixture remains unchanged. */
-export function seedDevelopmentPackageFixture(parent, previousVersion) {
+export function seedDevelopmentPackageFixture(parent, publicVersion) {
   assert.ok(parent && isAbsolute(parent), "Package fixture parent must be absolute");
   ordinaryDirectory(parent);
   const canonicalParent = realpathSync(parent);
   const scratch = mkdtempSync(join(canonicalParent, "execs-development-package-"));
-  const base = seedPackageFixture(scratch, false, previousVersion);
+  const base = seedPackageFixture(scratch, false, publicVersion, developmentPublicFixture);
   const childEnv = {
     ...base.childEnv,
     HOME: join(scratch, "home"),
@@ -138,7 +163,7 @@ export function seedDevelopmentPackageFixture(parent, previousVersion) {
   writeFileSync(join(base.data, "settings.json"), `${JSON.stringify(settings, null, 2)}\n`);
   const exports = join(scratch, "exports");
   mkdirSync(exports);
-  const source = publicProfileFixture.sources.find((entry) => entry.case === "no-hud");
+  const source = developmentPublicFixture.sources.find((entry) => entry.case === "no-hud");
   assert.ok(source);
   const activeProfileId = base.metadata["index.json"].activeProfileId;
   const activeProfileName = base.metadata[`${activeProfileId}/manifest.json`].name;
@@ -156,7 +181,7 @@ export function seedDevelopmentPackageFixture(parent, previousVersion) {
     activeProfileId,
     activeProfileName,
     expectedConfigText: Buffer.from(
-      publicProfileFixture.payloads[config.sha256],
+      developmentPublicFixture.payloads[config.sha256],
       "base64",
     ).toString("utf8"),
     portableManifest,
@@ -319,7 +344,7 @@ export function inspectDevelopmentPackageExport(fixture, { python = "python3" } 
     const name = file.storage === "shared" ? `blobs/${file.sha256}` : `files/${file.path}`;
     expectedMembers.set(name, {
       sha256: file.sha256,
-      bytes: Buffer.from(publicProfileFixture.payloads[file.sha256], "base64").length,
+      bytes: Buffer.from(developmentPublicFixture.payloads[file.sha256], "base64").length,
     });
   }
   assert.deepEqual(
@@ -407,6 +432,18 @@ function candidateState(fixture, archiveProof, switched, stage) {
     `${stage}: index changed beyond the authorized import/switch`,
   );
   const portable = fixture.portableManifest;
+  const importedCachePath = `profiles/${summary.id}/absorb-cache.json`;
+  if (switched && Object.hasOwn(observed.data.files, importedCachePath)) {
+    assertFixtureAbsorbCache(
+      fixture.library,
+      fixture.tf2Root,
+      summary.id,
+      portable.files,
+      stage,
+      fixture.cacheSourceStamps,
+    );
+    delete observed.data.files[importedCachePath];
+  }
   const expectedManifest = {
     schema: 1,
     id: summary.id,
@@ -489,8 +526,8 @@ export function assertDevelopmentPackageSwitched(fixture, importedCheckpoint, st
     importedCheckpoint.liveHashes,
     `${stage}: switch payload differs from imported source`,
   );
-  // Import already sets launchSyncPending:true. NoAccount leaves it true and
-  // mark_launch_sync_pending has no metadata change to commit (switch.rs:299).
+  // Import already sets launchSyncPending:true. Switching defers any Steam
+  // update for explicit Launch review, so it must preserve this manifest byte-for-byte.
   assert.deepEqual(current.index, {
     ...importedCheckpoint.index,
     activeProfileId: current.importedProfileId,

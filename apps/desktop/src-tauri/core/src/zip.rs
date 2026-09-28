@@ -101,6 +101,8 @@ struct ProfileZipManifest {
     #[serde(default)]
     launch_options: String,
     files: Vec<ProfileFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    comfig_release: Option<crate::comfig::ComfigRelease>,
     /// Accepted for schema-1 compatibility, but never emitted: neither value
     /// is meaningful on the recipient's machine.
     #[serde(default, skip_serializing)]
@@ -620,6 +622,10 @@ where
             // An imported library has never been projected into this
             // machine's Steam config, regardless of any sender-side state.
             manifest.launch_sync_pending = true;
+            manifest.comfig_release = recipe_manifest
+                .comfig_release
+                .clone()
+                .filter(|record| record.matches_files(&manifest.files));
             manifest.hud = hud;
             manifest.hud_roots = Some(hud_roots);
             manifest.hud_selected_root = selected_hud;
@@ -721,6 +727,10 @@ fn write_profile_zip(
         name: manifest.name.clone(),
         launch_options: manifest.launch_options.clone(),
         files: export_files.clone(),
+        comfig_release: manifest
+            .comfig_release
+            .clone()
+            .filter(|record| record.matches_files(&export_files)),
         id: None,
         tf2_root: None,
         hud: manifest.hud.clone(),
@@ -1209,6 +1219,7 @@ fn validate_recipe_zip_fields(bytes: &[u8]) -> Result<(), ProfileError> {
                 | "name"
                 | "launchOptions"
                 | "files"
+                | "comfigRelease"
                 | "hud"
                 | "hudSelectedRoot"
                 | "hudReviewPending"
@@ -1384,7 +1395,7 @@ fn classify_zip_entry(raw: &str) -> Result<Option<ZipRole>, ProfileError> {
         let dest = normalize_rel_path(rest)?;
         // Zip-slip out of the root is handled above; this is the gate on what
         // an imported entry may land on *inside* the game folder.
-        if !is_profile_ownable_rel_path(&dest) {
+        if !is_profile_ownable_rel_path(&dest) && !is_legacy_stock_cfg_entry(&dest) {
             return Err(ProfileError::ForbiddenPath(dest));
         }
         if is_zip_file_name(&dest) {
@@ -1403,6 +1414,24 @@ fn classify_zip_entry(raw: &str) -> Result<Option<ZipRole>, ProfileError> {
 
 fn validate_payload(payload: &mut ZipPayload) -> Result<(), ProfileError> {
     validate_payload_with_trust(payload, false)
+}
+
+// These names were accepted by earlier native exports. Stage them only to
+// verify their original bytes and budgets; they never become imported files.
+fn is_legacy_stock_cfg_entry(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    let Some(rest) = lower.strip_prefix("tf/cfg/") else {
+        return false;
+    };
+    if !crate::profile::is_file_safe_rel_path(path)
+        || lower.split('/').any(crate::profile::is_profile_junk_name)
+    {
+        return false;
+    }
+    let name = rest.rsplit('/').next().unwrap_or(rest);
+    name == "replay_example.cfg"
+        || name == "sixense_bindings.cfg"
+        || (name.starts_with("server_") && name.ends_with(".cfg"))
 }
 
 fn validate_payload_with_trust(
@@ -1428,6 +1457,7 @@ fn validate_payload_with_trust(
     let mut seen = HashSet::new();
     let mut required_exclusive = HashSet::new();
     let mut required_blobs = HashSet::new();
+    let mut legacy_stock = HashSet::new();
     let mut path_bytes = 0usize;
 
     for file in &payload.manifest.files {
@@ -1442,7 +1472,8 @@ fn validate_payload_with_trust(
             )));
         }
         let path = normalize_rel_path(&file.path)?;
-        if !is_profile_ownable_rel_path(&path) {
+        let protected_stock = is_legacy_stock_cfg_entry(&path);
+        if !is_profile_ownable_rel_path(&path) && !protected_stock {
             return Err(ProfileError::ForbiddenPath(path));
         }
         path_bytes = path_bytes
@@ -1483,7 +1514,11 @@ fn validate_payload_with_trust(
             if sha256_file(staged).map_err(io_err)? != file.sha256.to_ascii_lowercase() {
                 return Err(invalid_zip(format!("hash mismatch for {path}")));
             }
-            validate_imported_profile_file(&path, staged, &file.sha256, trust_creator)?;
+            if protected_stock {
+                legacy_stock.insert(path.clone());
+            } else {
+                validate_imported_profile_file(&path, staged, &file.sha256, trust_creator)?;
+            }
             required_exclusive.insert(path);
         }
     }
@@ -1497,6 +1532,19 @@ fn validate_payload_with_trust(
         if !required_blobs.contains(hash) {
             return Err(invalid_zip("unexpected blob"));
         }
+    }
+    if !legacy_stock.is_empty() {
+        payload.skipped_files += legacy_stock.len();
+        payload.import_notes.push(format!(
+            "Skipped {} TF2-owned cfg files from this older profile export. Steam manages these files; importing will not replace or remove them.",
+            legacy_stock.len()
+        ));
+        payload.manifest.files.retain(|file| {
+            !normalize_rel_path(&file.path).is_ok_and(|path| legacy_stock.contains(&path))
+        });
+        payload
+            .exclusive
+            .retain(|path, _| !legacy_stock.contains(path));
     }
     validate_imported_metadata(&mut payload.manifest, &payload.exclusive, &payload.blobs)?;
     Ok(())
@@ -1571,15 +1619,17 @@ fn validate_imported_metadata(
         {
             return Err(invalid_zip("invalid mod record in profile metadata"));
         }
+        let payload_root = crate::mods::mod_payload_root(record)?;
+        let original_pack = record.inactive_pack.as_deref().unwrap_or(&record.pack);
         let expected_folder = record.id.as_str();
         let expected_vpk = format!("{}.vpk", record.id);
-        let external_pack = !record.pack.is_empty()
-            && record.pack.len() <= 255
-            && !record.pack.contains(['/', '\\'])
-            && is_profile_ownable_rel_path(&format!("tf/custom/{}", record.pack));
+        let external_pack = !original_pack.is_empty()
+            && original_pack.len() <= 255
+            && !original_pack.contains(['/', '\\'])
+            && is_profile_ownable_rel_path(&format!("tf/custom/{original_pack}"));
         let pack_owned = match record.source {
             ModSource::External => external_pack,
-            _ => record.pack == expected_folder || record.pack == expected_vpk,
+            _ => original_pack == expected_folder || original_pack == expected_vpk,
         };
         if !pack_owned {
             return Err(invalid_zip(format!(
@@ -1604,6 +1654,13 @@ fn validate_imported_metadata(
                 "mod {} has no matching profile files",
                 record.id
             )));
+        }
+        if owned.iter().any(|file| {
+            file.path != payload_root && !file.path.starts_with(&format!("{payload_root}/"))
+        }) {
+            return Err(invalid_zip(
+                "inactive mod contains files outside its saved pack",
+            ));
         }
         let mut bytes = 0u64;
         for file in &owned {
@@ -2134,6 +2191,62 @@ mod tests {
     }
 
     #[test]
+    fn legacy_native_stock_cfgs_are_verified_then_skipped_with_review_note() {
+        let dir = tempfile::tempdir().unwrap();
+        let profiles = dir.path().join("profiles");
+        let root = dir.path().join("tf2");
+        let zip_path = dir.path().join("old-profile.zip");
+        let stock = b"exec server_matchmaking_base\n";
+        let user = b"echo player\n";
+        let manifest = serde_json::json!({
+            "schema": ZIP_SCHEMA, "name": "Legacy",
+            "files": [
+                { "path": "tf/cfg/server_casual.cfg", "sha256": sha256_hex(stock), "storage": "exclusive" },
+                { "path": "tf/cfg/autoexec.cfg", "sha256": sha256_hex(user), "storage": "exclusive" }
+            ]
+        });
+        let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+        write_raw_zip(
+            &zip_path,
+            &[
+                (ZIP_MANIFEST_NAME, &manifest_bytes),
+                ("files/tf/cfg/server_casual.cfg", stock),
+                ("files/tf/cfg/autoexec.cfg", user),
+            ],
+        );
+        fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        fs::write(root.join("tf/cfg/server_casual.cfg"), b"current Valve").unwrap();
+        let review =
+            creator::inspect_profile_import_from(&profiles, &root, &zip_path, unlocked()).unwrap();
+        assert_eq!(review.skipped_files, 1);
+        assert!(review
+            .notes
+            .iter()
+            .any(|note| note.contains("TF2-owned cfg")));
+        let imported = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap();
+        let saved = load_manifest(&profiles, &imported.profiles[0].id).unwrap();
+        assert_eq!(saved.files.len(), 1);
+        assert_eq!(saved.files[0].path, "tf/cfg/autoexec.cfg");
+        assert_eq!(
+            fs::read(root.join("tf/cfg/server_casual.cfg")).unwrap(),
+            b"current Valve"
+        );
+
+        write_raw_zip(
+            &zip_path,
+            &[
+                (ZIP_MANIFEST_NAME, &manifest_bytes),
+                ("files/tf/cfg/server_casual.cfg", b"corrupt"),
+                ("files/tf/cfg/autoexec.cfg", user),
+            ],
+        );
+        let before = snapshot_tree(&profiles);
+        let error = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
+        assert!(error.message().contains("hash mismatch"));
+        assert_eq!(snapshot_tree(&profiles), before);
+    }
+
+    #[test]
     fn native_import_refuses_forged_stock_build_provenance_but_keeps_legacy_import() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("profiles");
@@ -2340,6 +2453,51 @@ mod tests {
             .unwrap(),
             candidate.vpk_bytes
         );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn recipe_zip_round_trips_comfig_release_with_stock_built_viewmodels() {
+        let (dir, profiles, root, archive, _, candidate) = stock_built_zip_fixture();
+        let id = load_library_from(&profiles, Some(&root)).unwrap().profiles[0]
+            .id
+            .clone();
+        crate::cfg_layer::install_test_base(&profiles, &root, &id);
+        let files: Vec<(String, Vec<u8>)> = vec![(
+            "tf/custom/mastercomfig-base.vpk".into(),
+            crate::cfg_layer::test_base_vpk(),
+        )];
+        let release = crate::comfig::ComfigRelease {
+            version: "9.100.1".into(),
+            packages: files
+                .iter()
+                .map(|(path, bytes)| (path.clone(), sha256_hex(bytes)))
+                .collect(),
+        };
+        crate::comfig::apply_release_batch_to(
+            &profiles,
+            &root,
+            &id,
+            &files,
+            Some(&release),
+            unlocked(),
+        )
+        .unwrap();
+        export_profile_to(&profiles, &root, &id, &archive).unwrap();
+        let imported = import_profile_with_review_and_source(
+            &profiles,
+            &root,
+            &archive,
+            unlocked(),
+            None,
+            None,
+            false,
+            |_, _| Ok(candidate.clone()),
+        )
+        .unwrap();
+        let saved = load_manifest(&profiles, &imported.profiles[1].id).unwrap();
+        assert_eq!(saved.comfig_release, Some(release));
+        assert_eq!(saved.viewmodel.unwrap().source, ViewmodelSource::StockBuilt);
         cleanup(&dir);
     }
 
@@ -3621,6 +3779,7 @@ mod tests {
             mods: Vec::new(),
             preloader: None,
             ignored_packs: Vec::new(),
+            comfig_release: None,
         };
         let json = serde_json::to_vec(&manifest).unwrap();
         let zip_path = dir.join("atomic.zip");
@@ -4562,6 +4721,7 @@ mod tests {
             files: 999,
             bytes: 999,
             installed_at: "2026-09-04T00:00:00Z".into(),
+            inactive_pack: None,
         });
         manifest.ignored_packs = vec!["kept-pack".into()];
         manifest.preloader = Some(crate::preloader::PreloaderSelection {
@@ -4873,6 +5033,7 @@ mod tests {
                 mods: Vec::new(),
                 preloader: None,
                 ignored_packs: Vec::new(),
+                comfig_release: None,
             },
             exclusive: HashMap::new(),
             blobs: HashMap::new(),

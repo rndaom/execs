@@ -1,5 +1,5 @@
 import { JSDOM } from "jsdom";
-import { act, createElement } from "react";
+import { act, type ComponentProps, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ComfigPane, comfigModulesSummary } from "./ComfigPane";
@@ -33,16 +33,18 @@ afterEach(async () => {
 function render(
   onApplyPreset = vi.fn(async () => false),
   state: ComfigUiState = PREVIEW_COMFIG_STATE,
+  overrides: Partial<ComponentProps<typeof ComfigPane>> = {},
 ) {
   root.render(
     createElement(ComfigPane, {
-      detail: null,
+      detail: { id: "profile", name: "Main", layer: "comfig", launchOptions: "", files: [] },
       state,
       onApplyPreset,
       onApplyModules: async () => false,
       onToggleAddon: async () => false,
       onUpdatePackages: () => undefined,
       onImportCustom: () => undefined,
+      ...overrides,
     }),
   );
 }
@@ -57,6 +59,80 @@ describe("comfigModulesSummary", () => {
 });
 
 describe("ComfigPane workspaces", () => {
+  it("does not select a preset or offer writes for a vanilla profile", async () => {
+    const update = vi.fn();
+    await act(async () =>
+      render(undefined, PREVIEW_COMFIG_STATE, {
+        detail: { id: "vanilla", name: "Default", layer: "vanilla", launchOptions: "", files: [] },
+        onUpdatePackages: update,
+      }),
+    );
+    expect(document.querySelector('[data-testid="comfig-vanilla-gate"]')?.textContent).toContain(
+      "overrides/",
+    );
+    expect(document.querySelectorAll('input[type="radio"]:checked')).toHaveLength(0);
+    expect(
+      document.querySelector<HTMLButtonElement>('[data-testid="comfig-update"]')?.disabled,
+    ).toBe(true);
+    for (const addon of OFFICIAL_ADDONS)
+      expect(
+        document.querySelector<HTMLButtonElement>(`[data-testid="comfig-addon-${addon.id}"]`)
+          ?.disabled,
+      ).toBe(true);
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="comfig-update"]')?.click(),
+    );
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("shows the installed release and reports a newer release for this profile", async () => {
+    await act(async () =>
+      render(
+        undefined,
+        { ...PREVIEW_COMFIG_STATE, release: { version: "9.100.0", packages: {} } },
+        { onCheckRelease: async () => "9.100.1" },
+      ),
+    );
+    expect(document.body.textContent).toContain("mastercomfig 9.100.0");
+    expect(document.body.textContent).toContain("Update available: 9.100.1");
+    expect(document.body.textContent).toContain("Updates apply only to this profile");
+  });
+
+  it("keeps an unknown version explicit and reports a failed check", async () => {
+    await act(async () =>
+      render(undefined, PREVIEW_COMFIG_STATE, {
+        onCheckRelease: async () => {
+          throw new Error("Network unavailable");
+        },
+      }),
+    );
+    expect(document.querySelector('[data-testid="comfig-release-status"]')?.textContent).toBe(
+      "Network unavailable",
+    );
+    expect(document.querySelector<HTMLInputElement>("#comfig-preset-high")?.disabled).toBe(false);
+  });
+
+  it("ignores a release check completed after the profile changed", async () => {
+    let finish: (value: string) => void = () => undefined;
+    const oldCheck = new Promise<string>((resolve) => {
+      finish = resolve;
+    });
+    await act(async () =>
+      render(undefined, PREVIEW_COMFIG_STATE, { onCheckRelease: () => oldCheck }),
+    );
+    await act(async () =>
+      render(undefined, PREVIEW_COMFIG_STATE, {
+        detail: { id: "second", name: "Second", layer: "comfig", launchOptions: "", files: [] },
+        onCheckRelease: async () => "9.100.1",
+      }),
+    );
+    await act(async () => finish("old-result"));
+    expect(document.querySelector('[data-testid="comfig-release-status"]')?.textContent).toContain(
+      "9.100.1",
+    );
+    expect(document.body.textContent).not.toContain("old-result");
+  });
+
   it("folds module overrides away by default while keeping every module and addon reachable", async () => {
     await act(async () => render());
     const fold = document.querySelector('[data-testid="comfig-modules"]')?.closest("details");

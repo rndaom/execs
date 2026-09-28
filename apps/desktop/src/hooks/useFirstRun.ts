@@ -26,7 +26,8 @@ export type FirstRunState = {
   setStartFrom: (next: StartFrom) => void;
   openCreate: () => void;
   cancelCreate: () => void;
-  applyWizard: (name: string) => Promise<boolean>;
+  /** `switchAfter: false` creates the profile without switching TF2 to it. */
+  applyWizard: (name: string, switchAfter?: boolean) => Promise<boolean>;
   clear: () => void;
   reset: () => void;
 };
@@ -120,11 +121,11 @@ export function useFirstRun(
   }, [progress, setError]);
 
   const applyWizard = useCallback(
-    async (name: string) => {
+    async (name: string, switchAfter = true) => {
       if (!canApplyWizard(name, running, busy) || progress.state.active) {
         return false;
       }
-      progress.start();
+      if (switchAfter) progress.start();
       setBusy(true);
       try {
         const spec = wizardSpec(name, preset, addons);
@@ -132,10 +133,10 @@ export function useFirstRun(
         // no tiles and this stays "fresh".
         setLibrary(
           creating
-            ? await api.createFreshProfile(spec, startFrom)
+            ? await api.createFreshProfile(spec, startFrom, switchAfter)
             : await api.applyUnusedWizard(spec),
         );
-        progress.complete();
+        if (switchAfter) progress.complete();
         setError(null, "setup:apply");
         setCreating(false);
         clear();

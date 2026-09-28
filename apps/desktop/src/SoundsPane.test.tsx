@@ -56,7 +56,7 @@ it("retries a failed stock read and offers comfig.app but not the retired TF2Hit
     expect(box.textContent).toContain("Game archive unavailable");
     const stockBoost = box.querySelector<HTMLInputElement>('[data-testid="sounds-hit-boost-6"]');
     expect(stockBoost?.disabled).toBe(true);
-    expect(box.textContent).toContain("Choose your own WAV to boost it.");
+    expect(box.textContent).toContain("Choose your own sound file to boost it.");
     const retry = () =>
       [...box.querySelectorAll("button")].find((button) =>
         button.textContent?.includes("Retry sources"),

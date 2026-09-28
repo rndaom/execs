@@ -2,6 +2,7 @@ import { Check, CheckCircle, Copy, Info, Plus, WarningCircle, X } from "@phospho
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { Disclosure } from "./components/ui/Disclosure";
+import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Loading, Spinner } from "./components/ui/Spinner";
 import { useAppStatus } from "./hooks/useAppStatus";
@@ -25,6 +26,8 @@ import {
   launchPresetPresent,
   launchSteamCopy,
   launchSteamState,
+  REMEMBERED_LAUNCH_PRESETS,
+  rememberedLaunchOptions,
   removeLaunchOption,
   type SteamWriteStatus,
   searchLaunchPresets,
@@ -34,6 +37,7 @@ import {
 
 export function LaunchPane({
   profileId = null,
+  active = true,
   value,
   saved,
   steamWrite,
@@ -41,8 +45,11 @@ export function LaunchPane({
   lastSave,
   onChange,
   onSave,
+  onWriteSteam,
+  onAdoptSteam,
 }: {
   profileId?: string | null;
+  active?: boolean;
   value: string;
   /** What the profile holds; the field is a draft of it. */
   saved: string;
@@ -54,6 +61,8 @@ export function LaunchPane({
   onChange: (value: string) => void;
   /** The existing queued save reports its outcome and owns the error toast. */
   onSave: () => Promise<boolean>;
+  onWriteSteam?: (reviewToken: string) => Promise<boolean>;
+  onAdoptSteam?: (reviewToken: string) => Promise<boolean>;
 }) {
   const { running, busy } = useAppStatus();
   const [composer, setComposer] = useSeededDraft<{
@@ -78,6 +87,16 @@ export function LaunchPane({
   const selectedPreset = LAUNCH_PRESETS.find((preset) => preset.id === presetId) ?? null;
   const composerPending = presetId !== null;
   useExplicitDraft(composerPending);
+  const [steamReview, setSteamReview] = useState<LaunchSteamSync | null>(null);
+  useEffect(() => {
+    if (!active) setSteamReview(null);
+  }, [active]);
+  useEffect(() => {
+    // A reviewed pair belongs to exactly one profile and saved string.
+    void profileId;
+    void saved;
+    setSteamReview(null);
+  }, [profileId, saved]);
   const [retrying, setRetrying] = useState(false);
   const [retryFailed, setRetryFailed] = useSeededDraft<boolean>(
     false,
@@ -108,6 +127,7 @@ export function LaunchPane({
   });
   const steamState = launchSteamState(value, saved, steamSync, steamWrite ?? null);
   const steamSettled = steamState === "in-steam" || steamState === "no-account";
+  const steamOpen = steamState === "steam-open";
   const { feedback, copy } = useCopyFeedback();
   // Typing is a draft: the lock defers the write, it does not lock the field.
   const { flush } = useAutosave({
@@ -122,6 +142,7 @@ export function LaunchPane({
   const forbidden = forbiddenLaunchTokens(value);
   const stripped = lastSave ? strippedLaunchTokens(lastSave.sent, lastSave.saved) : [];
   const groups = launchOptionGroups(value);
+  const remembered = rememberedLaunchOptions(value);
   const firstAvailablePresetId = LAUNCH_PRESETS.find(
     (preset) => !launchPresetPresent(value, preset),
   )?.id;
@@ -142,7 +163,7 @@ export function LaunchPane({
   const updateValue = (key: keyof LaunchPresetValues, next: string) =>
     setComposer({ ...composer, values: { ...values, [key]: next } });
 
-  async function retrySteamWrite() {
+  async function retrySteamWrite(reviewToken?: string) {
     if (retryPending.current || running || busy || value !== saved || composerPending) return;
     retryPending.current = true;
     setRetrying(true);
@@ -152,7 +173,8 @@ export function LaunchPane({
     const stillCurrent = () =>
       current.current.profileId === owner && current.current.value === sent;
     try {
-      const applied = await onSave();
+      const applied =
+        onWriteSteam && reviewToken ? await onWriteSteam(reviewToken) : await onSave();
       if (stillCurrent()) setRetryFailed(applied !== true);
     } catch {
       // SettingsHost owns the detailed error. Do not publish a second toast.
@@ -166,6 +188,47 @@ export function LaunchPane({
   return (
     <div data-testid="settings-launch" className="min-w-0 text-left">
       <PaneHeader title="Launch options" />
+      <Modal
+        open={steamReview !== null}
+        title="Replace Steam launch options?"
+        onClose={() => setSteamReview(null)}
+      >
+        <p className="t-body text-ink-muted">
+          This replaces Steam's options with this profile's saved options. Steam must be closed
+          first.
+        </p>
+        <dl className="t-meta mt-4 grid gap-2">
+          <div>
+            <dt>Steam now</dt>
+            <dd className="mt-0.5 break-all text-ink">
+              {steamReview?.steamOptions || "No launch options"}
+            </dd>
+          </div>
+          <div>
+            <dt>This profile</dt>
+            <dd className="mt-0.5 break-all text-ink">
+              {steamReview?.profileOptions || "No launch options"}
+            </dd>
+          </div>
+        </dl>
+        <div className="mt-6 flex justify-end gap-2">
+          <button type="button" className="btn btn-ghost" onClick={() => setSteamReview(null)}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!steamReview?.reviewToken}
+            onClick={() => {
+              const token = steamReview?.reviewToken;
+              setSteamReview(null);
+              if (token) void retrySteamWrite(token);
+            }}
+          >
+            Replace Steam options
+          </button>
+        </div>
+      </Modal>
 
       <div className="max-w-[980px]">
         <section aria-labelledby="launch-tokens-label">
@@ -221,6 +284,14 @@ export function LaunchPane({
               <Plus size={15} aria-hidden="true" /> Add option
             </button>
           </div>
+          {remembered.length > 0 ? (
+            <p className="t-meta mt-2" data-testid="launch-remembered">
+              {remembered.join(", ")} {remembered.length === 1 ? "stays" : "stay"} in effect after
+              you remove {remembered.length === 1 ? "it" : "them"} or switch profiles, because TF2
+              saves {remembered.length === 1 ? "it" : "them"} in its own settings. Change{" "}
+              {remembered.length === 1 ? "it" : "them"} back in TF2.
+            </p>
+          ) : null}
           {adding ? (
             <form
               className="surface mt-3 p-4"
@@ -386,6 +457,11 @@ export function LaunchPane({
                 </label>
               ) : null}
               {selectedPreset ? <p className="t-meta mt-3">{selectedPreset.detail}</p> : null}
+              {selectedPreset && REMEMBERED_LAUNCH_PRESETS[selectedPreset.id] ? (
+                <p className="t-meta mt-1" data-testid="launch-remembered-preset">
+                  {REMEMBERED_LAUNCH_PRESETS[selectedPreset.id]}
+                </p>
+              ) : null}
               <div className="mt-4 flex gap-2">
                 <button
                   type="submit"
@@ -475,6 +551,23 @@ export function LaunchPane({
                   ? "Could not confirm the Steam update. Copy the launch options or retry."
                   : launchSteamCopy(steamState, running)}
             </p>
+            {onAdoptSteam &&
+            steamSync?.reviewToken &&
+            !steamSync.inSync &&
+            steamSync.steamOptions !== null ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                data-testid="launch-steam-adopt"
+                disabled={running || busy || retrying || value !== saved || composerPending}
+                onClick={() => {
+                  const token = steamSync.reviewToken;
+                  if (token) void onAdoptSteam(token);
+                }}
+              >
+                Use Steam options for this profile
+              </button>
+            ) : null}
             {steamSettled && !retryFailed ? null : (
               <button
                 type="button"
@@ -487,12 +580,24 @@ export function LaunchPane({
                       ? "Add or cancel the option first."
                       : value !== saved
                         ? "Wait for the profile save to finish."
-                        : "Checks Steam again and writes only when it is closed."
+                        : steamOpen
+                          ? "execs writes Steam's options only while Steam is closed. Close Steam, then check again."
+                          : "Review the current Steam options before replacing them."
                 }
-                onClick={() => void retrySteamWrite()}
+                onClick={() => {
+                  // With Steam open nothing can be written: only re-read its state.
+                  if (onWriteSteam && steamSync && !steamOpen) setSteamReview(steamSync);
+                  else void retrySteamWrite();
+                }}
                 className="btn btn-ghost shrink-0"
               >
-                {retrying ? <Loading>Checking Steam…</Loading> : "Write to Steam"}
+                {retrying ? (
+                  <Loading>Checking Steam…</Loading>
+                ) : steamOpen ? (
+                  "Check Steam again"
+                ) : (
+                  "Write to Steam"
+                )}
               </button>
             )}
           </div>
@@ -524,11 +629,14 @@ export function LaunchPane({
           className="mt-5"
         >
           <p className="t-meta mt-2">
-            Reset and wrapper flags: <code className="text-ink-muted">-autoconfig</code>,{" "}
+            Reset flags: <code className="text-ink-muted">-autoconfig</code>,{" "}
             <code className="text-ink-muted">-default</code>,{" "}
-            <code className="text-ink-muted">-dxlevel</code>,{" "}
-            <code className="text-ink-muted">+quit</code>,{" "}
-            <code className="text-ink-muted">gamemoderun %command%</code>.
+            <code className="text-ink-muted">-dxlevel</code> and{" "}
+            <code className="text-ink-muted">+quit</code>. Anything before{" "}
+            <code className="text-ink-muted">%command%</code>, such as{" "}
+            <code className="text-ink-muted">gamemoderun</code>,{" "}
+            <code className="text-ink-muted">mangohud</code> or an environment variable, is kept
+            exactly as written.
           </p>
         </Disclosure>
       </div>

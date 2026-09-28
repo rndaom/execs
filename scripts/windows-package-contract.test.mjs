@@ -15,7 +15,6 @@ import { basename, dirname, join, resolve } from "node:path";
 import { Writable } from "node:stream";
 import { finished } from "node:stream/promises";
 import test from "node:test";
-import { publicProfileFixture } from "./package-smoke-fixture.mjs";
 import {
   assertHostObservation,
   assertNormalExit,
@@ -24,9 +23,11 @@ import {
   containedPath,
   inspectWindowsExport,
   seedWindowsFixture,
+  selectCurrentPublicNsis,
   selectPreviousNsis,
   sha256,
   windowsAppEnvironment,
+  windowsPublicFixture,
 } from "./windows-package-contract.mjs";
 import {
   actionBeforeEvidence,
@@ -45,16 +46,14 @@ import {
 
 const python =
   process.env.EXECS_TEST_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
-const retained = resolve(
-  "docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/no-hud/exported-by-v0.1.8.zip",
-);
+const retained = resolve("scripts/fixtures/windows-package-v020/no-hud.zip");
 
 function withFixture(fn) {
   const parent = realpathSync(mkdtempSync(join(tmpdir(), "execs-windows-package-test-")));
   const scratch = join(parent, "fixture");
   mkdirSync(scratch);
   try {
-    return fn(seedWindowsFixture(scratch, "0.1.8"), parent);
+    return fn(seedWindowsFixture(scratch, "0.2.0"), parent);
   } finally {
     assert.equal(dirname(parent), realpathSync(tmpdir()));
     assert.ok(basename(parent).startsWith("execs-windows-package-test-"));
@@ -110,7 +109,7 @@ test("native filename typing accepts a safe hosted path and refuses SendKeys syn
 }, () => {
   // The pure validator must not depend on os.tmpdir(): hosted TEMP can use a RUNNER~1 alias.
   const safeHostedDestination =
-    "D:\\a\\_temp\\execs-windows-package-PF11Xy\\fixture\\exports\\previous-ui-export.zip";
+    "D:\\a\\_temp\\execs-windows-package-PF11Xy\\fixture\\exports\\public-ui-export.zip";
   const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
   const script = `
 . '${helper}'
@@ -160,7 +159,7 @@ test("native Enter requires the exact filename, focused edit and default Save co
   const helper = resolve("scripts/windows-package-identity.ps1").replaceAll("'", "''");
   const script = `
 . '${helper}'
-$path = 'D:\\a\\_temp\\fixture\\exports\\previous-ui-export.zip'
+$path = 'D:\\a\\_temp\\fixture\\exports\\public-ui-export.zip'
 $save = 0x534b0001
 [pscustomobject]@{
   ready = Test-SaveEnterReadiness $path $path $true $true $true $save
@@ -420,9 +419,9 @@ $missing = Assert-Contained $env:EXECS_TEST_ROOT $env:EXECS_TEST_MISSING $true
 [pscustomobject]@{
     valid = $valid -eq [IO.Path]::GetFullPath($env:EXECS_TEST_VALID)
     missing = $missing -eq [IO.Path]::GetFullPath($env:EXECS_TEST_MISSING)
-    relative = Refused 'exports\previous-ui-export.zip'
-    driveRelative = Refused ($env:EXECS_TEST_ROOT.Substring(0, 1) + ':exports\previous-ui-export.zip')
-    rootRelative = Refused '\exports\previous-ui-export.zip'
+    relative = Refused 'exports\public-ui-export.zip'
+    driveRelative = Refused ($env:EXECS_TEST_ROOT.Substring(0, 1) + ':exports\public-ui-export.zip')
+    rootRelative = Refused '\exports\public-ui-export.zip'
     sibling = Refused $env:EXECS_TEST_SIBLING
     missingAncestor = Refused $env:EXECS_TEST_MISSING_ANCESTOR $true
     reparse = Refused $env:EXECS_TEST_LINKED
@@ -641,11 +640,11 @@ test("Windows fixture isolates child-only paths and keeps all original bytes and
     assert.throws(() => assertWindowsFixturePreserved(fixture), /app-data bytes/);
   }));
 
-test("actual retained v0.1.8 ZIP passes unchanged and all four payloads match independent hashes", () =>
+test("actual retained v0.2.0 ZIP passes unchanged and all four payloads match independent hashes", () =>
   withFixture((fixture) => {
-    const source = publicProfileFixture.sources.find((value) => value.case === "no-hud");
+    const source = windowsPublicFixture.sources.find((value) => value.case === "no-hud");
     const before = sha256(readFileSync(retained));
-    assert.equal(before, "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38");
+    assert.equal(before, "306ae6236a8b79465c6aca6fea64dbdd56c06f447f789e28c8c6d62e8dcdcde1");
     assert.equal(before, source.archiveSha256);
     // Adapt only expected identity; never rewrite the authentic archive under test.
     fixture.portableManifest.name = source.manifest.name;
@@ -663,8 +662,24 @@ test("actual retained v0.1.8 ZIP passes unchanged and all four payloads match in
     assert.throws(() => assertWindowsFixturePreserved(fixture, proof), /export bytes/);
   }));
 
+test("actual public v0.2.0 HUD export retains all eight manifest payloads and HUD options", () =>
+  withFixture((fixture) => {
+    const source = windowsPublicFixture.sources.find((value) => value.case === "single-hud");
+    const archive = resolve("scripts/fixtures/windows-package-v020/single-hud.zip");
+    const hash = sha256(readFileSync(archive));
+    assert.equal(hash, "c0488c9bd2d45f949741219f48e58f02ad6aeeb796fb5273195e9274df62a6af");
+    assert.equal(hash, source.archiveSha256);
+    fixture.portableManifest = structuredClone(source.manifest);
+    copyFileSync(archive, fixture.exportPath);
+    const proof = inspectWindowsExport(fixture, python);
+    assert.equal(proof.sha256, hash);
+    assert.equal(proof.manifest.files.length, 8);
+    assert.deepEqual(proof.manifest.hud.options, { compact: "1" });
+    assert.equal(sha256(readFileSync(archive)), hash);
+  }));
+
 function alteredArchive(fixture, change) {
-  fixture.portableManifest.name = publicProfileFixture.sources.find(
+  fixture.portableManifest.name = windowsPublicFixture.sources.find(
     (value) => value.case === "no-hud",
   ).manifest.name;
   const result = spawnSync(
@@ -984,4 +999,50 @@ test("driver downloads stop at a size cap rather than accumulating unlimited byt
   assert.equal((await readBoundedResponse(new Response("driver"), 6)).toString(), "driver");
   await assert.rejects(() => readBoundedResponse(new Response("oversized"), 3), /limit/);
   await assert.rejects(() => readBoundedResponse(new Response(""), 3));
+});
+
+test("current public Windows baseline is independent of candidate version and fails closed on release drift", () => {
+  const release = {
+    tagName: windowsPublicFixture.exporterTag,
+    isDraft: false,
+    isPrerelease: false,
+    publishedAt: windowsPublicFixture.release.publishedAt,
+    assets: ["artifact", "signature"].map((key) => {
+      const asset = windowsPublicFixture.release[key];
+      return {
+        name: asset.name,
+        size: asset.bytes,
+        digest: `sha256:${asset.sha256}`,
+        url: `https://github.com/rndaom/execs/releases/download/v0.2.0/${asset.name}`,
+      };
+    }),
+  };
+  assert.equal(selectCurrentPublicNsis(release).version, "0.2.0");
+  for (const change of [
+    (r) => {
+      r.tagName = "v0.2.1";
+    },
+    (r) => {
+      r.isDraft = true;
+    },
+    (r) => {
+      r.isPrerelease = true;
+    },
+    (r) => {
+      r.assets[0].size += 1;
+    },
+    (r) => {
+      r.assets[0].digest = `sha256:${"0".repeat(64)}`;
+    },
+    (r) => {
+      r.assets[1].digest = `sha256:${"0".repeat(64)}`;
+    },
+    (r) => {
+      r.publishedAt = "2026-09-29T00:00:00Z";
+    },
+  ]) {
+    const changed = structuredClone(release);
+    change(changed);
+    assert.throws(() => selectCurrentPublicNsis(changed));
+  }
 });

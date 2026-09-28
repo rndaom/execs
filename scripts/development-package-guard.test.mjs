@@ -16,10 +16,14 @@ import test from "node:test";
 import {
   assertDebianBundledBinary,
   assertDevelopmentHost,
+  developmentPublicFixture,
+  developmentPublicRelease,
+  developmentTransition,
   developmentVersions,
   prepareUnsignedConfig,
   regularFile,
   requireContained,
+  selectDevelopmentPublicPackage,
   selectPublicPackage,
   sha256,
   unsignedConfig,
@@ -27,6 +31,7 @@ import {
 } from "./development-package-guard.mjs";
 
 import {
+  candidateSwitchReviewPending,
   DevelopmentPackageSession,
   ownedDialogDismissal,
   selectOwnedDialog,
@@ -39,7 +44,6 @@ import {
   candidateName,
   finishPackageCase,
 } from "./development-package-smoke.mjs";
-import { publicProfileFixture } from "./package-smoke-fixture.mjs";
 
 test("Debian package identity accepts only Tauri's bundle marker patch", () => {
   const build = Buffer.from("ELF:before:__TAURI_BUNDLE_TYPE_VAR_UNK:after");
@@ -124,7 +128,7 @@ test("development version rehearsal uses actual repository history without chang
     const repository = resolve(".");
     const original = readFileSync(join(repository, "CHANGELOG.md"));
     const versions = developmentVersions(repository, root);
-    assert.equal(`v${versions.previousVersion}`, publicProfileFixture.exporterTag);
+    assert.equal(`v${versions.publicVersion}`, developmentPublicFixture.exporterTag);
     assert.equal(
       versions.version,
       JSON.parse(readFileSync(join(repository, "apps/desktop/package.json"))).version,
@@ -599,4 +603,117 @@ test("driver cleanup reports an unexplained close failure without a native proce
   assert.equal(report.checks[0].nativeAlreadyExited, false);
   assert.match(report.checks[0].error, /driver unavailable/);
   await session.stop();
+});
+
+test("development transitions distinguish same-version replacement and refuse downgrade", () => {
+  assert.equal(developmentTransition("0.2.0", "0.2.0"), "same-version-replacement");
+  assert.equal(developmentTransition("0.2.0", "0.2.1"), "upgrade");
+  assert.equal(developmentTransition("0.2.0", "0.2.0+1"), "upgrade");
+  assert.throws(() => developmentTransition("0.2.0", "0.1.8"), /downgrade/);
+  assert.throws(() => developmentTransition("0.2.0+2", "0.2.0+1"), /downgrade/);
+});
+
+test("development Linux baseline pins current public assets and refuses metadata drift", () => {
+  for (const kind of ["appimage", "deb"]) {
+    const pins = developmentPublicRelease.packages[kind];
+    const value = {
+      tagName: developmentPublicFixture.exporterTag,
+      isDraft: false,
+      isPrerelease: false,
+      publishedAt: developmentPublicRelease.publishedAt,
+      assets: [pins.artifact, pins.signature].map((p) => ({
+        name: p.name,
+        size: p.bytes,
+        digest: `sha256:${p.sha256}`,
+        url: `https://github.com/rndaom/execs/releases/download/v0.2.0/${p.name}`,
+      })),
+    };
+    assert.equal(
+      selectDevelopmentPublicPackage(value, "0.2.0", kind).artifact.name,
+      pins.artifact.name,
+    );
+    for (const edit of [
+      (r) => {
+        r.tagName = "v0.2.1";
+      },
+      (r) => {
+        r.isDraft = true;
+      },
+      (r) => {
+        r.isPrerelease = true;
+      },
+      (r) => {
+        r.assets[0].size += 1;
+      },
+      (r) => {
+        r.assets[0].digest = `sha256:${"0".repeat(64)}`;
+      },
+      (r) => {
+        r.assets[1].digest = `sha256:${"0".repeat(64)}`;
+      },
+      (r) => {
+        r.publishedAt = "2026-09-29T00:00:00Z";
+      },
+    ]) {
+      const changed = structuredClone(value);
+      edit(changed);
+      assert.throws(() => selectDevelopmentPublicPackage(changed, "0.2.0", kind));
+    }
+  }
+});
+
+test("candidate switch requires the active profile and exact native pending-review outcome", () => {
+  const ready = {
+    native: true,
+    profile: "Package smoke - active",
+    switchDetail:
+      "Launch options not written to Steam; review them in Launch before updating Steam.",
+  };
+  assert.equal(candidateSwitchReviewPending(ready, ready.profile), true);
+  for (const state of [
+    null,
+    { ...ready, native: false },
+    { ...ready, profile: "Another profile" },
+    { ...ready, switchDetail: null },
+    { ...ready, switchDetail: "Applying profile" },
+    {
+      ...ready,
+      switchDetail: "No Steam account config was found, so the launch options were not written.",
+    },
+    { ...ready, switchDetail: "Launch options written to Steam." },
+    { ...ready, switchDetail: `${ready.switchDetail} Unexpected error` },
+  ]) {
+    assert.equal(candidateSwitchReviewPending(state, ready.profile), false);
+  }
+});
+
+test("native switch flow records deferred Steam sync before the disk checkpoint", async () => {
+  const report = { checks: [] };
+  const session = new DevelopmentPackageSession({ report });
+  const clicks = [];
+  const captures = [];
+  session.driver = {
+    click: async (...args) => clicks.push(args),
+    read: async () => ({
+      native: true,
+      profile: "Imported profile",
+      switchDetail:
+        "Launch options not written to Steam; review them in Launch before updating Steam.",
+    }),
+  };
+  session.capture = async (label) => captures.push(label);
+  await session.switchImported("Imported profile");
+  assert.equal(clicks.length, 1);
+  assert.match(clicks[0][0], /Switch to profile/);
+  assert.deepEqual(report.checks, [
+    {
+      label: "candidate-switch-outcome",
+      expectedProfile: "Imported profile",
+      nativeCompletionDetail:
+        "Launch options not written to Steam; review them in Launch before updating Steam.",
+      steamWriteExpected: "not_requested",
+      launchSyncPendingExpected: true,
+    },
+  ]);
+  assert.deepEqual(captures, ["candidate-switch-complete"]);
 });

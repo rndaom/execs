@@ -94,6 +94,8 @@ pub enum LaunchWriteReason {
     /// `launch_sync_pending` keeps this retryable instead of turning a
     /// postcommit I/O problem into a misleading all-or-nothing error.
     WriteFailed,
+    /// Saved to the profile; updating Steam requires an explicit reviewed choice.
+    NotRequested,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,6 +105,7 @@ pub struct LaunchWriteResult {
     pub reason: LaunchWriteReason,
 }
 
+#[cfg(test)]
 impl LaunchWriteResult {
     fn steam_open() -> Self {
         Self {
@@ -124,13 +127,6 @@ impl LaunchWriteResult {
             reason: LaunchWriteReason::Written,
         }
     }
-
-    fn write_failed() -> Self {
-        Self {
-            written: false,
-            reason: LaunchWriteReason::WriteFailed,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -140,7 +136,8 @@ pub struct SetLaunchResult {
     pub steam_write: LaunchWriteReason,
 }
 
-pub fn write_launch_options_to_localconfig_from<I, S>(
+#[cfg(test)]
+fn write_launch_options_to_localconfig_from<I, S>(
     steam_roots: &[PathBuf],
     options: &str,
     steam_running_names: I,
@@ -153,19 +150,7 @@ where
     write_launch_options_to_localconfig_checked(steam_roots, options, || steam_running)
 }
 
-/// Production boundary for Steam-owned configuration. Unlike the injectable
-/// `_from` helper, this samples the process table at each destructive boundary
-/// so a snapshot taken before a long profile switch cannot authorize a later
-/// `localconfig.vdf` rewrite.
-pub fn write_launch_options_to_localconfig(
-    steam_roots: &[PathBuf],
-    options: &str,
-) -> Result<LaunchWriteResult, ProfileError> {
-    write_launch_options_to_localconfig_checked(steam_roots, options, || {
-        steam_running_among(live_process_names())
-    })
-}
-
+#[cfg(test)]
 fn write_launch_options_to_localconfig_checked<F>(
     steam_roots: &[PathBuf],
     options: &str,
@@ -336,6 +321,7 @@ pub struct LaunchSyncStatus {
     pub steam_options: Option<String>,
     pub in_sync: bool,
     pub steam_running: bool,
+    pub review_token: Option<String>,
 }
 
 pub fn launch_sync_status(
@@ -363,8 +349,33 @@ where
     S: AsRef<str>,
 {
     let profile_options = get_profile_launch_options_from(profiles_dir, tf2_root, profile_id)?;
-    let steam_options = read_steam_launch_options_from(steam_roots);
+    let account = pick_steam_account_from(steam_roots);
+    let steam_options = account.as_ref().and_then(|account| {
+        let text = read_small_text_bounded(&account.localconfig(), MAX_LOCALCONFIG_BYTES).ok()?;
+        let vdf = parse_vdf(&text).ok()?;
+        if !has_localconfig_root(&vdf) {
+            return None;
+        }
+        Some(launch_options_from_localconfig(&vdf).unwrap_or_default())
+    });
+    let review_token = steam_options
+        .as_ref()
+        .zip(account.as_ref())
+        .map(|(options, account)| {
+            crate::hash::sha256_hex(
+                serde_json::to_vec(&(
+                    tf2_root,
+                    profile_id,
+                    &profile_options,
+                    account.localconfig(),
+                    options,
+                ))
+                .expect("launch review tuple serializes")
+                .as_slice(),
+            )
+        });
     Ok(LaunchSyncStatus {
+        review_token,
         in_sync: steam_options
             .as_deref()
             .is_none_or(|steam| steam == profile_options),
@@ -374,82 +385,20 @@ where
     })
 }
 
-/// Write the profile's saved launch options into Steam and acknowledge the
-/// profile's pending sync. Steam must already be closed; `SteamOpen` is
-/// returned instead of writing when it is not.
-pub fn sync_profile_launch_options(
-    tf2_root: &Path,
-    profile_id: &str,
-) -> Result<LaunchWriteReason, ProfileError> {
-    let running = live_process_names();
-    let steam_roots = discover_steam_roots();
-    sync_profile_launch_options_with(&profiles_dir(), tf2_root, profile_id, &running, |options| {
-        write_launch_options_to_localconfig(&steam_roots, options)
-    })
-}
-
-pub fn sync_profile_launch_options_to<I, S>(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    steam_roots: &[PathBuf],
-    running_names: I,
-) -> Result<LaunchWriteReason, ProfileError>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    let running: Vec<String> = running_names
-        .into_iter()
-        .map(|name| name.as_ref().to_string())
-        .collect();
-    sync_profile_launch_options_with(profiles_dir, tf2_root, profile_id, &running, |options| {
-        write_launch_options_to_localconfig_from(steam_roots, options, &running)
-    })
-}
-
-fn sync_profile_launch_options_with(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    running: &[String],
-    write_steam: impl FnOnce(&str) -> Result<LaunchWriteResult, ProfileError>,
-) -> Result<LaunchWriteReason, ProfileError> {
-    refuse_if_running_among(running)?;
-    let options = get_profile_launch_options_from(profiles_dir, tf2_root, profile_id)?;
-    Ok(sync_committed_profile_launch_options(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        &options,
-        running,
-        || write_steam(&options),
-    )
-    .reason)
-}
-
 pub fn set_profile_launch_options(
     tf2_root: &Path,
     profile_id: &str,
     raw: &str,
 ) -> Result<SetLaunchResult, ProfileError> {
-    let running = live_process_names();
-    refuse_if_running_among(&running)?;
-    let profiles = profiles_dir();
-    let steam_roots = discover_steam_roots();
-    let sanitized = save_profile_launch_options_to(&profiles, tf2_root, profile_id, raw, &running)?;
-    let steam = sync_committed_profile_launch_options(
-        &profiles,
+    set_profile_launch_options_to(
+        &profiles_dir(),
         tf2_root,
         profile_id,
-        &sanitized,
-        &running,
-        || write_launch_options_to_localconfig(&steam_roots, &sanitized),
-    );
-    Ok(SetLaunchResult {
-        launch_options: sanitized,
-        steam_write: steam.reason,
-    })
+        raw,
+        live_process_names(),
+        None::<&str>,
+        &[],
+    )
 }
 
 pub fn set_profile_launch_options_to<I, J, S, T>(
@@ -458,8 +407,8 @@ pub fn set_profile_launch_options_to<I, J, S, T>(
     profile_id: &str,
     raw: &str,
     running_tf2_names: I,
-    steam_names: J,
-    steam_roots: &[PathBuf],
+    _steam_names: J,
+    _steam_roots: &[PathBuf],
 ) -> Result<SetLaunchResult, ProfileError>
 where
     I: IntoIterator<Item = S>,
@@ -471,58 +420,140 @@ where
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
-    refuse_if_running_among(&running)?;
-    let steam_names: Vec<String> = steam_names
-        .into_iter()
-        .map(|name| name.as_ref().to_string())
-        .collect();
-    let sanitized =
+    let launch_options =
         save_profile_launch_options_to(profiles_dir, tf2_root, profile_id, raw, &running)?;
-    let steam = sync_committed_profile_launch_options(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        &sanitized,
-        &running,
-        || write_launch_options_to_localconfig_from(steam_roots, &sanitized, &steam_names),
-    );
     Ok(SetLaunchResult {
-        launch_options: sanitized,
-        steam_write: steam.reason,
+        launch_options,
+        steam_write: LaunchWriteReason::NotRequested,
     })
 }
 
-pub(crate) fn sync_committed_profile_launch_options(
-    profiles_dir: &Path,
+/// Re-read after Steam exits as its in-memory options may have been flushed on exit.
+pub fn validate_launch_review(
     tf2_root: &Path,
     profile_id: &str,
-    expected_options: &str,
-    running_names: &[String],
-    write_steam: impl FnOnce() -> Result<LaunchWriteResult, ProfileError>,
-) -> LaunchWriteResult {
-    let active = load_library_from(profiles_dir, Some(tf2_root))
-        .ok()
-        .and_then(|library| library.active_profile_id)
-        .is_some_and(|active| active == profile_id);
-    if !active {
-        return LaunchWriteResult::write_failed();
-    }
-    let Ok(result) = write_steam() else {
-        return LaunchWriteResult::write_failed();
-    };
-    if result.reason != LaunchWriteReason::Written {
-        return result;
-    }
-    match crate::profile::clear_launch_sync_pending_if_matches(
-        profiles_dir,
+    token: &str,
+) -> Result<LaunchSyncStatus, ProfileError> {
+    validate_launch_review_from(
+        &profiles_dir(),
         tf2_root,
         profile_id,
-        expected_options,
-        running_names,
-    ) {
-        Ok(true) => result,
-        Ok(false) | Err(_) => LaunchWriteResult::write_failed(),
+        &discover_steam_roots(),
+        token,
+    )
+}
+
+fn validate_launch_review_from(
+    profiles: &Path,
+    root: &Path,
+    id: &str,
+    roots: &[PathBuf],
+    token: &str,
+) -> Result<LaunchSyncStatus, ProfileError> {
+    let status = launch_sync_status_from(profiles, root, id, roots, None::<&str>)?;
+    let active = load_library_from(profiles, Some(root))?.active_profile_id;
+    if active.as_deref() != Some(id) || status.review_token.as_deref() != Some(token) {
+        return Err(ProfileError::Io(
+            "Launch options changed since the review. Review Steam’s current options again.".into(),
+        ));
     }
+    Ok(status)
+}
+
+/// The only launch-pane write to Steam is an explicit choice bound to the reviewed values.
+pub fn apply_launch_review(
+    root: &Path,
+    id: &str,
+    token: &str,
+    adopt: bool,
+) -> Result<(), ProfileError> {
+    apply_launch_review_with(
+        &profiles_dir(),
+        root,
+        id,
+        &discover_steam_roots(),
+        token,
+        adopt,
+        live_process_names,
+    )
+}
+
+fn apply_launch_review_with(
+    profiles: &Path,
+    root: &Path,
+    id: &str,
+    roots: &[PathBuf],
+    token: &str,
+    adopt: bool,
+    mut processes: impl FnMut() -> Vec<String>,
+) -> Result<(), ProfileError> {
+    let running = processes();
+    refuse_if_running_among(&running)?;
+    let status = validate_launch_review_from(profiles, root, id, roots, token)?;
+    if adopt {
+        let raw = status
+            .steam_options
+            .expect("review requires readable Steam options");
+        if sanitize_launch_options(&raw) != normalize_launch_options(&raw) {
+            return Err(ProfileError::Io("Steam options contain flags execs cannot store. Edit them in Steam or keep them for this launch only.".into()));
+        }
+        validate_launch_review_from(profiles, root, id, roots, token)?;
+        let running = processes();
+        refuse_if_running_among(&running)?;
+        validate_launch_review_from(profiles, root, id, roots, token)?;
+        crate::profile::set_manifest_launch_options(profiles, root, id, raw, &running)?;
+        return Ok(());
+    }
+    if steam_running_among(&running) {
+        return Err(ProfileError::Io(
+            "Close Steam before writing its launch options.".into(),
+        ));
+    }
+    let account = pick_steam_account_from(roots)
+        .ok_or_else(|| ProfileError::Io("Steam account is unavailable.".into()))?;
+    let prepared = prepare_localconfig_update(account, &status.profile_options)?;
+    validate_launch_review_from(profiles, root, id, roots, token)?;
+    backup_localconfig_once(
+        &prepared.account.steam_root,
+        &prepared.path,
+        prepared.original.as_bytes(),
+    )?;
+    let running = processes();
+    refuse_if_running_among(&running)?;
+    if steam_running_among(&running) {
+        return Err(ProfileError::Io(
+            "Steam opened again. Review its options before trying again.".into(),
+        ));
+    }
+    validate_launch_review_from(profiles, root, id, roots, token)?;
+    let latest = read_small_text_bounded(&prepared.path, MAX_LOCALCONFIG_BYTES)
+        .map_err(|err| ProfileError::Io(err.to_string()))?;
+    if latest != prepared.original {
+        return Err(ProfileError::Io(
+            "Steam settings changed during the write. Review its options again.".into(),
+        ));
+    }
+    let running = processes();
+    refuse_if_running_among(&running)?;
+    if steam_running_among(&running) {
+        return Err(ProfileError::Io(
+            "Steam opened again before its options were written. Review them again.".into(),
+        ));
+    }
+    write_atomic_within(
+        &prepared.account.steam_root,
+        &prepared.path,
+        prepared.serialized.as_bytes(),
+    )
+    .map_err(|err| ProfileError::Io(err.to_string()))?;
+    crate::profile::clear_launch_sync_pending_if_matches(
+        profiles,
+        root,
+        id,
+        &status.profile_options,
+        &running,
+    )?;
+    Ok(())
 }
 
 fn save_profile_launch_options_to(
@@ -699,19 +730,86 @@ pub fn pick_steam_account_from(steam_roots: &[PathBuf]) -> Option<SteamAccount> 
         })
 }
 
+/// Remove the TF2 arguments a profile must never store. A Steam `%command%`
+/// launch string runs a program such as `gamemoderun`, `mangohud` or
+/// `gamescope --`, or sets environment variables, before TF2: everything up to
+/// and including `%command%` is kept exactly as written, and only the TF2
+/// arguments after it are checked. Dropping `%command%` while keeping its
+/// wrapper would turn the wrapper into TF2 arguments and break the launch.
 pub fn sanitize_launch_options(raw: &str) -> String {
-    split_launch_commands(raw)
+    rebuild_launch_options(raw, true)
+}
+
+/// The same layout `sanitize_launch_options` produces, without removing
+/// anything, so a caller can tell whether sanitizing would change a string.
+fn normalize_launch_options(raw: &str) -> String {
+    rebuild_launch_options(raw, false)
+}
+
+fn rebuild_launch_options(raw: &str, drop_forbidden: bool) -> String {
+    let (wrapper, arguments) = split_steam_wrapper(raw.trim());
+    let arguments = split_launch_commands(arguments)
         .into_iter()
         .filter_map(|command| {
-            let sanitized = sanitize_launch_command(&command);
+            let sanitized = sanitize_launch_command(&command, drop_forbidden);
             (!sanitized.is_empty()).then_some(sanitized)
         })
         .collect::<Vec<_>>()
-        .join("; ")
+        .join("; ");
+    match (wrapper, arguments.is_empty()) {
+        (Some(wrapper), true) => wrapper.to_string(),
+        (Some(wrapper), false) => format!("{wrapper} {arguments}"),
+        (None, _) => arguments,
+    }
 }
 
-fn sanitize_launch_command(raw: &str) -> String {
+/// Split a Steam launch string at its first `%command%` word: the wrapper
+/// (program, flags and environment variables, through `%command%`) and the
+/// TF2 arguments after it. Without `%command%`, Steam passes the whole string
+/// to TF2 as arguments.
+fn split_steam_wrapper(raw: &str) -> (Option<&str>, &str) {
+    let mut quote = None;
+    let mut escaped = false;
+    let mut start = None;
+    for (at, ch) in raw.char_indices().chain(std::iter::once((raw.len(), ' '))) {
+        if ch.is_whitespace() && quote.is_none() {
+            if let Some(from) = start.take() {
+                if raw[from..at].contains(STEAM_COMMAND_TOKEN) {
+                    return (Some(&raw[..at]), raw[at..].trim());
+                }
+            }
+            escaped = false;
+            continue;
+        }
+        start.get_or_insert(at);
+        if matches!(ch, '\'' | '"') && !escaped {
+            match quote {
+                Some(open) if open == ch => quote = None,
+                None => quote = Some(ch),
+                Some(_) => {}
+            }
+        }
+        escaped = ch == '\\' && !escaped;
+    }
+    if raw.contains(STEAM_COMMAND_TOKEN) {
+        // An unterminated quote around %command%: keep the whole string as the
+        // player wrote it rather than guess where TF2's arguments begin.
+        return (Some(raw), "");
+    }
+    (None, raw)
+}
+
+const STEAM_COMMAND_TOKEN: &str = "%command%";
+
+fn sanitize_launch_command(raw: &str, drop_forbidden: bool) -> String {
     let tokens = tokenize_launch_options(raw);
+    if !drop_forbidden {
+        return tokens
+            .iter()
+            .map(|token| token.raw.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
     let mut out = Vec::new();
     let mut i = 0;
     while i < tokens.len() {
@@ -856,10 +954,13 @@ fn normalized_launch_token(token: &str) -> String {
     normalized
 }
 
+/// TF2 arguments a profile never stores. `gamemoderun` and a second
+/// `%command%` do nothing useful as TF2 arguments; before the first
+/// `%command%` they are a wrapper and are kept (`split_steam_wrapper`).
 fn launch_token_is_forbidden(token: &str) -> bool {
     matches!(token, "-autoconfig" | "-default" | "+quit" | "gamemoderun")
         || token.starts_with("-dxlevel")
-        || token.contains("%command%")
+        || token.contains(STEAM_COMMAND_TOKEN)
 }
 
 fn prefer_most_recent(steam_roots: &[PathBuf], pool: &[SteamAccount]) -> Option<SteamAccount> {
@@ -1052,25 +1153,68 @@ mod tests {
         );
         assert_eq!(sanitize_launch_options("-dxlevel90 -novid"), "-novid");
         assert_eq!(sanitize_launch_options(""), "");
-        // docs/ARCHITECTURE.md RND-158 names `gamemoderun %command%` alongside the rest.
-        assert_eq!(
-            sanitize_launch_options("gamemoderun %command% -novid"),
-            "-novid"
-        );
-        assert_eq!(
-            sanitize_launch_options("mangohud %command% -nojoy"),
-            "mangohud -nojoy"
-        );
+        // Without %command%, Steam passes every word to TF2; a bare wrapper
+        // name there is a meaningless TF2 argument.
         assert_eq!(sanitize_launch_options("GAMEMODERUN -novid"), "-novid");
+    }
+
+    #[test]
+    fn keeps_steam_wrappers_and_environment_exactly() {
+        for kept in [
+            "gamemoderun %command%",
+            "gamemoderun %command% -novid",
+            "mangohud %command% -novid",
+            r#"LD_PRELOAD="" %command%"#,
+            "SDL_VIDEODRIVER=x11 DXVK_ASYNC=1 %command% -novid -nojoy",
+            "gamescope -W 1920 -H 1080 -f -- %command%",
+            "obs-gamecapture  mangohud   %command% -novid",
+            r#"env "MY VAR=a b" %command% +exec "my config.cfg""#,
+        ] {
+            assert_eq!(sanitize_launch_options(kept), kept, "{kept}");
+            assert_eq!(normalize_launch_options(kept), kept, "{kept}");
+        }
+        // Only the TF2 arguments after %command% are checked.
+        assert_eq!(
+            sanitize_launch_options("mangohud %command% -novid -autoconfig +quit -dxlevel 90"),
+            "mangohud %command% -novid"
+        );
+        assert_eq!(
+            sanitize_launch_options("gamemoderun %command% -novid %command%"),
+            "gamemoderun %command% -novid"
+        );
+        assert_ne!(
+            sanitize_launch_options("mangohud %command% -default"),
+            normalize_launch_options("mangohud %command% -default")
+        );
+    }
+
+    #[test]
+    fn keeps_wrapper_through_the_steam_localconfig_round_trip() {
+        let dir = crate::test_temp_dir();
+        let steam = dir.join("Steam");
+        write_account(&steam, "111", "-novid");
+        let options = r#"LD_PRELOAD="" gamescope -W 1920 -- %command% -novid"#;
+        write_launch_options_to_localconfig_from(
+            std::slice::from_ref(&steam),
+            options,
+            None::<&str>,
+        )
+        .unwrap();
+        assert_eq!(read_launch_options_from(&[steam]), options);
+        cleanup(&dir);
     }
 
     #[test]
     fn strips_quoted_fragmented_and_nested_banned_launch_tokens() {
         assert_eq!(
             sanitize_launch_options(
-                r#""-autoconfig" -auto"config" "-dxlevel" "90" "+quit" "gamemoderun" "%command%" -novid"#,
+                r#""-autoconfig" -auto"config" "-dxlevel" "90" "+quit" "gamemoderun" -novid"#,
             ),
             "-novid"
+        );
+        assert_eq!(
+            sanitize_launch_options(r#"mangohud "%command%" "-autoconfig" -auto"config" -novid"#),
+            r#"mangohud "%command%" -novid"#
         );
         assert_eq!(
             sanitize_launch_options(r#"+exec "my config.cfg" -console"#),
@@ -1091,7 +1235,7 @@ mod tests {
             "-novid; -console"
         );
         assert_eq!(
-            sanitize_launch_options("gamemoderun;%command%;-novid"),
+            sanitize_launch_options("gamemoderun;-autoconfig;-novid"),
             "-novid"
         );
         assert_eq!(
@@ -1570,7 +1714,7 @@ mod tests {
     }
 
     #[test]
-    fn set_profile_sanitizes_and_writes_steam_when_closed() {
+    fn set_profile_sanitizes_without_overwriting_external_steam_options() {
         let dir = crate::test_temp_dir();
         let root = dir.join("Team Fortress 2");
         let profiles = dir.join("profiles");
@@ -1594,12 +1738,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result.launch_options, "-novid -console");
-        assert_eq!(result.steam_write, LaunchWriteReason::Written);
+        assert_eq!(result.steam_write, LaunchWriteReason::NotRequested);
         assert_eq!(
             get_profile_launch_options_from(&profiles, &root, &id).unwrap(),
             "-novid -console"
         );
-        assert_eq!(read_launch_options_from(&[steam]), "-novid -console");
+        assert_eq!(read_launch_options_from(&[steam]), "-old");
         cleanup(&dir);
     }
 
@@ -1628,7 +1772,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(result.launch_options, "-console");
-        assert_eq!(result.steam_write, LaunchWriteReason::SteamOpen);
+        assert_eq!(result.steam_write, LaunchWriteReason::NotRequested);
         assert_eq!(
             load_manifest(&profiles, &id).unwrap().launch_options,
             "-console"
@@ -1638,7 +1782,7 @@ mod tests {
     }
 
     #[test]
-    fn set_profile_keeps_a_retryable_commit_when_localconfig_sync_fails() {
+    fn set_profile_save_never_touches_steam_or_its_backup() {
         let dir = crate::test_temp_dir();
         let root = dir.join("Team Fortress 2");
         let profiles = dir.join("profiles");
@@ -1670,7 +1814,7 @@ mod tests {
             std::slice::from_ref(&steam),
         )
         .unwrap();
-        assert_eq!(result.steam_write, LaunchWriteReason::WriteFailed);
+        assert_eq!(result.steam_write, LaunchWriteReason::NotRequested);
         let manifest = load_manifest(&profiles, &id).unwrap();
         assert_eq!(manifest.launch_options, "-console");
         assert!(manifest.launch_sync_pending);
@@ -1743,58 +1887,6 @@ mod tests {
     }
 
     #[test]
-    fn sync_writes_profile_options_once_steam_is_closed() {
-        let dir = crate::test_temp_dir();
-        let root = dir.join("Team Fortress 2");
-        let profiles = dir.join("profiles");
-        let steam = dir.join("Steam");
-        let id =
-            active_profile_with_options(&profiles, &root, "-novid +exec overrides/execs_preload");
-        write_account(&steam, "111", "-old");
-
-        let open = sync_profile_launch_options_to(
-            &profiles,
-            &root,
-            &id,
-            std::slice::from_ref(&steam),
-            [steam_name()],
-        )
-        .unwrap();
-        assert_eq!(open, LaunchWriteReason::SteamOpen);
-        assert_eq!(
-            read_launch_options_from(std::slice::from_ref(&steam)),
-            "-old"
-        );
-        assert!(load_manifest(&profiles, &id).unwrap().launch_sync_pending);
-
-        let written = sync_profile_launch_options_to(
-            &profiles,
-            &root,
-            &id,
-            std::slice::from_ref(&steam),
-            None::<&str>,
-        )
-        .unwrap();
-        assert_eq!(written, LaunchWriteReason::Written);
-        assert_eq!(
-            read_launch_options_from(std::slice::from_ref(&steam)),
-            "-novid +exec overrides/execs_preload"
-        );
-        assert!(!load_manifest(&profiles, &id).unwrap().launch_sync_pending);
-
-        let game = sync_profile_launch_options_to(
-            &profiles,
-            &root,
-            &id,
-            std::slice::from_ref(&steam),
-            [tf2_name()],
-        )
-        .unwrap_err();
-        assert_eq!(game, ProfileError::GameRunning);
-        cleanup(&dir);
-    }
-
-    #[test]
     fn set_profile_refuses_while_tf2_running() {
         let dir = crate::test_temp_dir();
         let root = dir.join("Team Fortress 2");
@@ -1857,6 +1949,170 @@ mod tests {
         let after: crate::profile::LibraryIndex =
             serde_json::from_str(&fs::read_to_string(&index_path).unwrap()).unwrap();
         assert_ne!(after.profiles[0].updated_at, "2000-01-01T00:00:00Z");
+        cleanup(&dir);
+    }
+    #[test]
+    fn reviewed_write_rejects_external_drift_and_post_restart_changes() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("TF2");
+        let profiles = dir.join("profiles");
+        let steam = dir.join("Steam");
+        let id = active_profile_with_options(&profiles, &root, "-novid");
+        write_account(&steam, "111", "-console");
+        let roots = [steam.clone()];
+        let review =
+            launch_sync_status_from(&profiles, &root, &id, &roots, [steam_name()]).unwrap();
+        let token = review.review_token.unwrap();
+        // Steam may flush a different in-memory choice when it exits.
+        write_account(&steam, "111", "-nojoy");
+        assert!(
+            apply_launch_review_with(&profiles, &root, &id, &roots, &token, false, Vec::new)
+                .is_err()
+        );
+        assert_eq!(read_launch_options_from(&roots), "-nojoy");
+        let review = launch_sync_status_from(&profiles, &root, &id, &roots, None::<&str>).unwrap();
+        apply_launch_review_with(
+            &profiles,
+            &root,
+            &id,
+            &roots,
+            &review.review_token.unwrap(),
+            false,
+            Vec::new,
+        )
+        .unwrap();
+        assert_eq!(read_launch_options_from(&roots), "-novid");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn reviewed_adoption_changes_only_profile_and_discloses_forbidden_steam_flags() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("TF2");
+        let profiles = dir.join("profiles");
+        let steam = dir.join("Steam");
+        let id = active_profile_with_options(&profiles, &root, "-novid");
+        let roots = [steam.clone()];
+        write_account(&steam, "111", "-console");
+        let path = steam.join("userdata/111/config/localconfig.vdf");
+        let original = fs::read(&path).unwrap();
+        let review =
+            launch_sync_status_from(&profiles, &root, &id, &roots, [steam_name()]).unwrap();
+        apply_launch_review_with(
+            &profiles,
+            &root,
+            &id,
+            &roots,
+            &review.review_token.unwrap(),
+            true,
+            || vec![steam_name().into()],
+        )
+        .unwrap();
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().launch_options,
+            "-console"
+        );
+        assert_eq!(fs::read(&path).unwrap(), original);
+        write_account(&steam, "111", "-console +quit");
+        let review = launch_sync_status_from(&profiles, &root, &id, &roots, None::<&str>).unwrap();
+        assert_eq!(review.steam_options.as_deref(), Some("-console +quit"));
+        assert!(!review.in_sync);
+        assert!(apply_launch_review_with(
+            &profiles,
+            &root,
+            &id,
+            &roots,
+            &review.review_token.unwrap(),
+            true,
+            Vec::new
+        )
+        .is_err());
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().launch_options,
+            "-console"
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn review_is_bound_to_profile_values_and_rechecks_processes_before_write() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("TF2");
+        let profiles = dir.join("profiles");
+        let steam = dir.join("Steam");
+        let id = active_profile_with_options(&profiles, &root, "-novid");
+        let roots = [steam.clone()];
+        write_account(&steam, "111", "-console");
+        let review = launch_sync_status_from(&profiles, &root, &id, &roots, None::<&str>).unwrap();
+        let token = review.review_token.unwrap();
+        let mut count = 0;
+        assert!(
+            apply_launch_review_with(&profiles, &root, &id, &roots, &token, false, || {
+                count += 1;
+                if count == 1 {
+                    vec![]
+                } else {
+                    vec!["tf.exe".into()]
+                }
+            })
+            .is_err()
+        );
+        assert_eq!(read_launch_options_from(&roots), "-console");
+        save_profile_launch_options_to(&profiles, &root, &id, "-nojoy", &[]).unwrap();
+        assert!(
+            apply_launch_review_with(&profiles, &root, &id, &roots, &token, false, Vec::new)
+                .is_err()
+        );
+        assert_eq!(read_launch_options_from(&roots), "-console");
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn stale_review_cannot_adopt_another_account_or_profile() {
+        let dir = crate::test_temp_dir();
+        let root = dir.join("TF2");
+        let profiles = dir.join("profiles");
+        let steam = dir.join("Steam");
+        let id = active_profile_with_options(&profiles, &root, "-novid");
+        write_account(&steam, "111", "-console");
+        let roots = [steam.clone()];
+        let review = launch_sync_status_from(&profiles, &root, &id, &roots, None::<&str>).unwrap();
+        let token = review.review_token.unwrap();
+        fs::rename(steam.join("userdata/111"), steam.join("userdata/222")).unwrap();
+        assert!(
+            apply_launch_review_with(&profiles, &root, &id, &roots, &token, true, Vec::new)
+                .is_err()
+        );
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().launch_options,
+            "-novid"
+        );
+        let review = launch_sync_status_from(&profiles, &root, &id, &roots, None::<&str>).unwrap();
+        let other =
+            crate::profile::create_profile_record_to(&profiles, &root, "Other", None::<&str>)
+                .unwrap();
+        let other_id = other
+            .profiles
+            .iter()
+            .find(|p| p.id != id)
+            .unwrap()
+            .id
+            .clone();
+        crate::profile::set_active_profile_to(&profiles, &root, &other_id, None::<&str>).unwrap();
+        assert!(apply_launch_review_with(
+            &profiles,
+            &root,
+            &id,
+            &roots,
+            &review.review_token.unwrap(),
+            true,
+            Vec::new
+        )
+        .is_err());
+        assert_eq!(
+            load_manifest(&profiles, &id).unwrap().launch_options,
+            "-novid"
+        );
         cleanup(&dir);
     }
 }

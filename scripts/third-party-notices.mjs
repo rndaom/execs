@@ -101,6 +101,24 @@ function addPackage(name, version, source, directory, license, explicit) {
       throw new Error("Vendored zlib LICENSE changed; review its notice");
     contents.push(`Vendored zlib 1.3.2 LICENSE\n\n${normalize(bytes.toString("utf8"))}`);
   }
+  if (name === "unrar-ng-sys") {
+    // The Rust binding's MIT/Apache license does not cover its native decoder.
+    if (version !== "0.7.7") throw new Error(`Review the vendored UnRAR notice for ${version}`);
+    const licenseFile = join(directory, "vendor", "unrar", "license.txt");
+    if (!existsSync(licenseFile)) throw new Error("Vendored UnRAR license is missing");
+    const bytes = readFileSync(licenseFile);
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (digest !== "6ecc1687808b7d66b24f874755abfed7464d9751ed0001cd4e8e5d9bf397ff8a")
+      throw new Error("Vendored UnRAR license changed; review its notice");
+    contents.push(
+      `Vendored UnRAR 7.23 license (extraction only)\n\n${normalize(bytes.toString("utf8"))}`,
+    );
+    const acknowledgments = readFileSync(join(directory, "vendor", "unrar", "acknow.txt"));
+    const acknowledgmentsHash = createHash("sha256").update(acknowledgments).digest("hex");
+    if (acknowledgmentsHash !== "082f21aab47b0135318aba98a801ea5bbcfaedfda3ae986ddc5d5ec746bd0796")
+      throw new Error("Vendored UnRAR acknowledgments changed; review their notices");
+    contents.push(normalize(acknowledgments.toString("utf8")));
+  }
   if (!contents.length) missing.push({ name, version, license, directory });
   const title = `${name} ${version}`;
   texts.set(
@@ -108,7 +126,16 @@ function addPackage(name, version, source, directory, license, explicit) {
     `${title}\nSource: ${source}\nDeclared license: ${license || "See source notices"}\n\n${[...new Set(contents)].join("\n\n")}`,
   );
 }
-for (const pkg of metadata.packages.filter((pkg) => pkg.source && supported.has(pkg.id))) {
+// The one vendored crate (see apps/desktop/src-tauri/vendor) is a local copy
+// of a crates.io package and keeps the same notice checks.
+const vendoredCrate = (pkg) =>
+  !pkg.source &&
+  pkg.name === "unrar-ng-sys" &&
+  resolve(dirname(pkg.manifest_path)) ===
+    resolve(root, "apps/desktop/src-tauri/vendor/unrar-ng-sys");
+for (const pkg of metadata.packages.filter(
+  (pkg) => (pkg.source || vendoredCrate(pkg)) && supported.has(pkg.id),
+)) {
   addPackage(
     pkg.name,
     pkg.version,

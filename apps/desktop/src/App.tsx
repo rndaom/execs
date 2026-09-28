@@ -34,6 +34,7 @@ import { useLifecycleStatus } from "./hooks/useLifecycleStatus";
 import { useOperationErrors } from "./hooks/useOperationErrors";
 import { useProfileLibrary } from "./hooks/useProfileLibrary";
 import { useReleaseNotes } from "./hooks/useReleaseNotes";
+import { useStartupTidy } from "./hooks/useStartupTidy";
 import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
@@ -45,7 +46,7 @@ import {
   CONFIRM_HOLD_MS,
   CONFIRM_MAX_MS,
 } from "./lib/boot-ui";
-import { invokeErrorMessage, type LaunchSyncStatus } from "./lib/bridge";
+import { invokeErrorMessage, isTauri, type LaunchSyncStatus } from "./lib/bridge";
 import { motionHold, revealPane, revealScreen } from "./lib/entrance";
 import { createFilesDraftStore } from "./lib/files-drafts";
 import { confirmEnabled } from "./lib/finder-ui";
@@ -59,7 +60,14 @@ import {
   previewUpdateProgress,
 } from "./lib/preview";
 import { createSettingsDraftStore } from "./lib/settings-drafts";
-import { SETTINGS_TAB_LABELS, type SettingsTab, showSettingsChrome } from "./lib/settings-ui";
+import {
+  browserStorage,
+  readLastPane,
+  SETTINGS_TAB_LABELS,
+  type SettingsTab,
+  showSettingsChrome,
+  writeLastPane,
+} from "./lib/settings-ui";
 import { SettingsHost } from "./SettingsHost";
 import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard } from "./SetupWizard";
@@ -97,10 +105,10 @@ export function App({
   const [hudReviewId, setHudReviewId] = useState<string | null>(null);
   const [hudReviewBusy, setHudReviewBusy] = useState(false);
   const [hudReviewRevision, setHudReviewRevision] = useState(0);
+  const [tidyRevision, setTidyRevision] = useState(0);
   const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const [cancelLaunchOpen, setCancelLaunchOpen] = useState(false);
   const [launchSync, setLaunchSync] = useState<LaunchSyncStatus | null>(null);
   const [launchSyncPrompt, setLaunchSyncPrompt] = useState<LaunchSyncStatus | null>(null);
   const appSettingsButton = useRef<HTMLButtonElement>(null);
@@ -108,8 +116,15 @@ export function App({
   const profileSettings = useRef<HTMLDivElement>(null);
   const [settingsReviewRequest, setSettingsReviewRequest] = useState(0);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
-    () => previewSettingsTab(preview) ?? "comfig",
+    // Fixture previews choose their own pane; the installed app reopens the last one.
+    () =>
+      previewSettingsTab(preview) ??
+      (isTauri() ? readLastPane(browserStorage()) : null) ??
+      "comfig",
   );
+  useEffect(() => {
+    if (isTauri()) writeLastPane(browserStorage(), settingsTab);
+  }, [settingsTab]);
   const navigateSettings = useCallback((tab: SettingsTab) => {
     setAppSettingsOpen(false);
     setSettingsTab(tab);
@@ -158,6 +173,14 @@ export function App({
   const lock = useWriteLock(api);
   const [filesDraftStore] = useState(createFilesDraftStore);
   const lifecycle = useLifecycleStatus(api);
+  useEffect(() => {
+    if (lifecycle.launchWaitExpired) {
+      setError(
+        "The ten-minute launch wait ended without seeing TF2. Changes are unlocked. This does not cancel a queued Steam launch.",
+        "tf2:launch",
+      );
+    }
+  }, [lifecycle.launchWaitExpired, setError]);
   const progress = useSwitchProgress(api, preview === "switch" ? previewSwitchStep() : null);
   const appSettings = useAppPreferences(api);
   const update = useAppUpdate(api, {
@@ -305,10 +328,59 @@ export function App({
     }
   }, [profiles, firstRun, draftName]);
 
+  const tidy = useStartupTidy(
+    api,
+    {
+      ready:
+        install.screen === "ready" &&
+        install.confirmed !== null &&
+        profiles.library?.usable === true &&
+        !profiles.library.rootMismatch,
+      running: lock.running,
+      busy: busy || progress.state.active,
+    },
+    () => {
+      setTidyRevision((revision) => revision + 1);
+      void api
+        .getProfileLibrary()
+        .then(profiles.setLibrary)
+        .catch(() => {});
+    },
+  );
+  const verifyAfterTidy = useCallback(() => {
+    void api
+      .repairGameFiles()
+      .then(() => {
+        setError(null, "tidy:verify");
+        navigateSettings("mods");
+        return lifecycle.refresh();
+      })
+      .catch((err) => setError(invokeErrorMessage(err), "tidy:verify"));
+  }, [api, setError, navigateSettings, lifecycle]);
+  const reviewLibraryMove = useCallback(() => api.reviewLibraryMove(), [api]);
+  const { setLibrary } = profiles;
+  const moveLibrary = useCallback(async () => {
+    setBusy(true);
+    try {
+      setLibrary(await api.moveLibraryToInstall());
+      setError(null, "profiles:move");
+    } catch (err) {
+      setError(invokeErrorMessage(err), "profiles:move");
+    } finally {
+      setBusy(false);
+    }
+  }, [api, setLibrary, setError]);
+
   const onApplyWizard = useCallback(async () => {
     if (await firstRun.applyWizard(draftName)) {
       setDraftName("");
     }
+  }, [firstRun, draftName]);
+
+  const onCreateOnly = useCallback(async () => {
+    const created = await firstRun.applyWizard(draftName, false);
+    if (created) setDraftName("");
+    return created;
   }, [firstRun, draftName]);
 
   const surface = firstRunSurface(profiles.library, firstRun.kind);
@@ -418,10 +490,10 @@ export function App({
     return () => window.removeEventListener("focus", onFocus);
   }, [refreshLaunchSync, lock.running, launchPending]);
 
-  function startLaunch(syncSteam: boolean) {
+  function startLaunch(syncSteam: boolean, reviewToken?: string, adoptSteam = false) {
     setLaunching(true);
     void api
-      .launchTf2(syncSteam)
+      .launchTf2(syncSteam, reviewToken, adoptSteam)
       .then(() => setError(null, "tf2:launch"))
       .catch((err) => setError(invokeErrorMessage(err), "tf2:launch"))
       .finally(() => {
@@ -507,6 +579,7 @@ export function App({
             onToggleAddon={firstRun.toggleAddon}
             onStartFrom={firstRun.setStartFrom}
             onApply={() => void onApplyWizard()}
+            onCreateOnly={isCreate ? onCreateOnly : undefined}
             onCancel={isCreate ? firstRun.cancelCreate : undefined}
           />
           <SwitchProgressList
@@ -599,9 +672,21 @@ export function App({
           });
         }}
         onCancelLaunch={() => {
-          setCancelLaunchOpen(true);
+          void api
+            .cancelTf2Launch()
+            .then(() => {
+              setError(null, "tf2:launch");
+              setError(null, "tf2:cancel-launch");
+              return lifecycle.refresh();
+            })
+            .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
         }}
         onReviewFiles={() => navigateSettings("files")}
+        onReviewLibraryMove={reviewLibraryMove}
+        tidyReport={tidy.report}
+        onDismissTidy={tidy.dismiss}
+        onVerifyTidy={verifyAfterTidy}
+        onMoveLibrary={moveLibrary}
         onInspectExport={(id) => api.inspectProfileExport(id)}
         onCompareSwitch={(id) => api.compareProfileSwitch(id)}
         restoreApi={api}
@@ -652,8 +737,9 @@ export function App({
                     recoveryTargetId !== null ||
                     lifecycleBusy
                   }
-                  refreshKey={`${profiles.refreshKey}:${hudReviewRevision}`}
+                  refreshKey={`${profiles.refreshKey}:${hudReviewRevision}:${tidyRevision}`}
                   bindSyncRequest={profiles.bindSyncRequest}
+                  bindSyncChanges={profiles.bindSyncChanges}
                   onBindSyncHandled={profiles.onBindSyncHandled}
                   onBusyChange={setSettingsBusy}
                   onSettledChange={setSettingsSettled}
@@ -717,51 +803,18 @@ export function App({
           }}
         />
         <Modal
-          open={cancelLaunchOpen}
-          title="Release the launch lock?"
-          onClose={() => setCancelLaunchOpen(false)}
-        >
-          <p className="t-body text-ink-muted">
-            Cancel the TF2 launch and close Steam completely before continuing. This lets execs
-            resume changes to your setup.
-          </p>
-          <div className="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setCancelLaunchOpen(false)}
-            >
-              Keep waiting
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                setCancelLaunchOpen(false);
-                void api
-                  .cancelTf2Launch()
-                  .then(() => {
-                    setError(null, "tf2:cancel-launch");
-                    return lifecycle.refresh();
-                  })
-                  .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
-              }}
-            >
-              Release launch lock
-            </button>
-          </div>
-        </Modal>
-        <Modal
           open={launchSyncPrompt !== null}
-          title="Update Steam's launch options?"
+          title="Choose launch options"
           testId="launch-sync-review"
           className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(540px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
           onClose={() => setLaunchSyncPrompt(null)}
         >
           <p className="t-body mt-2 text-ink-muted">
-            Steam has different launch options than this profile, and Steam must be closed to change
-            them. execs will close Steam, write the profile's options, then start Steam and TF2.
-            Downloads and chat pause while Steam restarts.
+            Steam has different launch options than this profile. Keep them for this launch, save
+            them to this profile, or replace them with the profile's options.
+            {launchSyncPrompt?.steamRunning
+              ? " Replacing them restarts Steam; downloads and chat pause."
+              : ""}
           </p>
           <dl className="t-meta mt-4 grid gap-2">
             <div>
@@ -794,18 +847,33 @@ export function App({
                 startLaunch(false);
               }}
             >
-              Launch without them
+              Keep Steam options and launch
+            </button>
+            <button
+              type="button"
+              data-testid="launch-sync-adopt"
+              className="btn btn-ghost"
+              onClick={() => {
+                const token = launchSyncPrompt?.reviewToken ?? undefined;
+                setLaunchSyncPrompt(null);
+                startLaunch(false, token, true);
+              }}
+            >
+              Save Steam options to profile and launch
             </button>
             <button
               type="button"
               data-testid="launch-sync-restart"
               className="btn btn-primary"
               onClick={() => {
+                const token = launchSyncPrompt?.reviewToken ?? undefined;
                 setLaunchSyncPrompt(null);
-                startLaunch(true);
+                startLaunch(true, token);
               }}
             >
-              Restart Steam and launch
+              {launchSyncPrompt?.steamRunning
+                ? "Restart Steam and launch"
+                : "Use profile options and launch"}
             </button>
           </div>
         </Modal>
@@ -885,6 +953,8 @@ export function App({
                   onConfirm={() => void install.confirm()}
                   confirmed={handoffSince !== null}
                   waitingFor={handoffSettled ? null : handoff.status}
+                  missing={install.missing}
+                  onRetryMissing={() => void install.retryMissing()}
                 />
               )}
 

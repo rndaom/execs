@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GameBananaBrowser } from "./components/GameBananaBrowser";
+import { ModContentAudit } from "./components/ModContentAudit";
 import { ModImport } from "./components/ModImport";
 import { ModList } from "./components/ModList";
 import { Alert } from "./components/ui/Alert";
@@ -11,6 +12,7 @@ import { PaneSection } from "./components/ui/PaneSection";
 import { Switch, SwitchRow } from "./components/ui/Switch";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import { useExplicitDraft } from "./hooks/useExplicitDraft";
+import { useModManagement } from "./hooks/useModManagement";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type { Api } from "./lib/api";
 import type {
@@ -23,6 +25,7 @@ import type {
   PreloaderStatusPayload,
 } from "./lib/bridge";
 import { openExternal } from "./lib/bridge";
+import { packAuditNotes } from "./lib/mod-audit-ui";
 import {
   canPreferParticleProvider,
   DIRECT_BURNING_OVERLAY_ID,
@@ -83,6 +86,8 @@ export type ModsPaneProps = {
   onImportArchive: () => void;
   onImportFolder: () => void;
   onRemoveMod: (id: string) => void;
+  onSetModEnabled?: (id: string, enabled: boolean) => void;
+  onCopyMod?: (id: string, targetProfileId: string) => Promise<boolean>;
   /** Resolves once the install and the profile reload behind it finished. */
   onInstallGameBananaMod: (id: number, fileId: number) => Promise<ModInstallResult>;
   /** A refused mod payload that must use the HUD replacement review. */
@@ -118,6 +123,8 @@ export function ModsPane({
   onImportArchive,
   onImportFolder,
   onRemoveMod,
+  onSetModEnabled,
+  onCopyMod,
   onInstallGameBananaMod,
   hudImportRequired,
   onReviewHudImport,
@@ -186,6 +193,12 @@ export function ModsPane({
     particleSources,
   );
   const [task, setTask] = useState<ModsTask>("browse");
+  const management = useModManagement(
+    api,
+    active && task === "installed",
+    profileId,
+    JSON.stringify(mods.map((mod) => [mod.id, mod.installedAt, mod.inactivePack])),
+  );
   useEffect(() => {
     if (casualOpenRequest) setTask("casual");
   }, [casualOpenRequest]);
@@ -317,6 +330,16 @@ export function ModsPane({
         }
       />
 
+      {status?.gameinfoBypassWanted && !status.gameinfoBypassed && task !== "casual" ? (
+        <Alert tone="warn" className="mb-4">
+          <span className="flex flex-wrap items-center justify-between gap-3">
+            <span>Material bypass is off. Your saved choice is still on.</span>
+            <button type="button" className="btn btn-ghost" onClick={() => setTask("casual")}>
+              Review Casual setup
+            </button>
+          </span>
+        </Alert>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-edge">
         <ClassTabs
           tabs={[
@@ -513,6 +536,7 @@ export function ModsPane({
 
         <div hidden={task !== "installed"}>
           <ModList
+            key={profileId}
             first
             active={active && task === "installed"}
             showImport={false}
@@ -522,13 +546,41 @@ export function ModsPane({
             onImportArchive={onImportArchive}
             onImportFolder={onImportFolder}
             onRemove={onRemoveMod}
+            onSetEnabled={onSetModEnabled}
+            onCopy={onCopyMod}
+            profiles={management.profiles}
+            updates={management.updates}
+            checking={management.loading}
+            managementError={management.error}
+            onCheckUpdates={management.refresh}
             selectedParticleMods={installed.profileParticleMods}
+            casualNotes={packAuditNotes(mods, payload)}
             onManageParticles={() => setTask("casual")}
             onBrowse={() => setTask("browse")}
           />
+          <ModContentAudit payload={payload} mods={mods} profileId={profileId} />
         </div>
 
         <div hidden={task !== "casual"}>
+          {status?.gameinfoBypassWanted && !status.gameinfoBypassed ? (
+            <Alert tone="warn" testId="mods-bypass-reset" className="mb-4">
+              <span className="flex flex-wrap items-center justify-between gap-3">
+                <span className="min-w-56 flex-1">
+                  Material bypass was turned off outside execs, which can happen after a TF2 update.
+                  Your saved choice is still on.
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={locked || !status.gameinfoFound}
+                  onClick={() => onToggleBypass(true)}
+                >
+                  Turn it back on
+                </button>
+              </span>
+            </Alert>
+          ) : null}
+          <ModContentAudit payload={payload} mods={mods} profileId={profileId} casual />
           {needsSteamLaunch ? (
             <Alert tone="warn" testId="mods-launch-warning" className="mb-4">
               <span className="flex flex-wrap items-center justify-between gap-3">
@@ -1061,10 +1113,13 @@ function ProfileParticleRow({
           <span className="t-meta mt-0.5 block">
             {count} particle {count === 1 ? "file" : "files"}
           </span>
+          {source.unavailableReason && (
+            <span className="t-meta mt-1 block text-warn">{source.unavailableReason}</span>
+          )}
         </span>
         <Switch
           checked={checked}
-          disabled={disabled}
+          disabled={disabled || (!checked && !!source.unavailableReason)}
           label={source.name}
           testId={`mods-profile-particle-${modDomId(source.modId)}`}
           onChange={onToggle}

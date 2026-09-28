@@ -1,11 +1,34 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { lstatSync, mkdirSync, readdirSync, realpathSync } from "node:fs";
+import { lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { regularFile, sha256, verifyPublicPackage } from "./development-package-guard.mjs";
-import { publicProfileFixture, seedPackageFixture } from "./package-smoke-fixture.mjs";
+import { seedPackageFixture } from "./package-smoke-fixture.mjs";
 import { releaseInstallerName } from "./release-version.mjs";
+
+// Independent of candidate versions: this capability probe runs only the current public installer.
+export const windowsPublicFixture = JSON.parse(
+  readFileSync(new URL("./fixtures/windows-package-v020/fixture.json", import.meta.url), "utf8"),
+);
+
+export function selectCurrentPublicNsis(release) {
+  assert.equal(
+    release.tagName,
+    windowsPublicFixture.exporterTag,
+    "Public latest advanced; generate authentic exports before refreshing the Windows fixture",
+  );
+  const version = windowsPublicFixture.exporterTag.slice(1);
+  const selected = selectPreviousNsis(release, version);
+  assert.equal(release.publishedAt, windowsPublicFixture.release.publishedAt);
+  for (const key of ["artifact", "signature"]) {
+    const pinned = windowsPublicFixture.release[key];
+    assert.equal(selected[key].name, pinned.name);
+    assert.equal(selected[key].size, pinned.bytes);
+    assert.equal(selected[key].digest, `sha256:${pinned.sha256}`);
+  }
+  return { version, selected };
+}
 
 export { sha256, verifyPublicPackage };
 
@@ -117,19 +140,19 @@ export function selectPreviousNsis(release, version) {
 }
 
 export function seedWindowsFixture(scratch, version) {
-  const fixture = seedPackageFixture(scratch, true, version);
+  const fixture = seedPackageFixture(scratch, true, version, windowsPublicFixture);
   for (const name of ["tmp", "webview", "exports"]) mkdirSync(join(scratch, name));
   const index = fixture.metadata["index.json"];
   const activeProfileId = index.activeProfileId;
   const activeProfileName = fixture.metadata[`${activeProfileId}/manifest.json`].name;
-  const source = publicProfileFixture.sources.find((value) => value.case === "no-hud");
+  const source = windowsPublicFixture.sources.find((value) => value.case === "no-hud");
   assert.ok(source);
   return {
     ...fixture,
     scratch,
     activeProfileId,
     activeProfileName,
-    exportPath: join(scratch, "exports", "previous-ui-export.zip"),
+    exportPath: join(scratch, "exports", "public-ui-export.zip"),
     webview: join(scratch, "webview"),
     portableManifest: { ...structuredClone(source.manifest), name: activeProfileName },
     baseline: { data: snapshotTree(fixture.data), live: snapshotTree(fixture.tf2Root) },
@@ -179,7 +202,7 @@ export function assertWindowsFixturePreserved(fixture, proof = null) {
   }
   assert.deepEqual(
     exported,
-    { files: proof ? { "previous-ui-export.zip": proof.sha256 } : {}, directories: [] },
+    { files: proof ? { "public-ui-export.zip": proof.sha256 } : {}, directories: [] },
     "Unexpected export bytes/destination",
   );
   return {
@@ -219,7 +242,7 @@ export function inspectWindowsExport(fixture, python = "python") {
   for (const file of fixture.portableManifest.files)
     expected.set(file.storage === "shared" ? `blobs/${file.sha256}` : `files/${file.path}`, {
       sha256: file.sha256,
-      bytes: Buffer.from(publicProfileFixture.payloads[file.sha256], "base64").length,
+      bytes: Buffer.from(windowsPublicFixture.payloads[file.sha256], "base64").length,
     });
   assert.deepEqual(proof.members.map((entry) => entry.name).sort(), [...expected.keys()].sort());
   for (const member of proof.members) {

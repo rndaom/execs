@@ -1,6 +1,7 @@
 //! Fetch official mastercomfig GitHub Release VPKs. Core stays network-free.
 
-use execs_core::{download_urls_for_spec, GitHubAsset, GitHubRelease, WizardSpec};
+use execs_core::comfig::ComfigRelease;
+use execs_core::{GitHubAsset, GitHubRelease, WizardSpec};
 use serde::Deserialize;
 
 use crate::net::{self, RemoteSource, MIB};
@@ -13,6 +14,7 @@ const VPK_MAX_BYTES: u64 = 256 * MIB;
 
 #[derive(Debug, Deserialize)]
 struct PublishedRelease {
+    tag_name: String,
     #[serde(default)]
     assets: Vec<PublishedAsset>,
 }
@@ -26,6 +28,21 @@ struct PublishedAsset {
 }
 
 impl PublishedRelease {
+    fn verify_installed(&self, installed: &ComfigRelease) -> Result<(), String> {
+        if self.tag_name != installed.version {
+            return Err("GitHub returned a different mastercomfig release.".into());
+        }
+        let paths = installed.packages.keys().cloned().collect::<Vec<_>>();
+        for asset in self.selected(execs_core::official_download_urls(
+            &paths,
+            &self.core_shape(),
+        )?)? {
+            if installed.packages.get(&asset.rel) != Some(&asset.sha256) {
+                return Err("The installed mastercomfig packages do not match their release. Update packages before adding an addon.".into());
+            }
+        }
+        Ok(())
+    }
     fn core_shape(&self) -> GitHubRelease {
         GitHubRelease {
             assets: self
@@ -40,6 +57,9 @@ impl PublishedRelease {
     }
 
     fn selected(&self, urls: Vec<(String, String)>) -> Result<Vec<SelectedAsset>, String> {
+        if !execs_core::comfig::valid_release_version(&self.tag_name) {
+            return Err("Official mastercomfig release has an invalid version.".into());
+        }
         urls.into_iter()
             .map(|(rel, url)| {
                 let name = rel.rsplit('/').next().unwrap_or(&rel);
@@ -55,6 +75,16 @@ impl PublishedRelease {
                 }
                 let sha256 = published_sha256(asset)?;
                 validate_asset_url(asset)?;
+                if asset.browser_download_url
+                    != format!(
+                        "https://github.com/mastercomfig/mastercomfig/releases/download/{}/{}",
+                        self.tag_name, asset.name
+                    )
+                {
+                    return Err(format!(
+                        "Official mastercomfig package {name} belongs to a different release."
+                    ));
+                }
                 Ok(SelectedAsset {
                     rel,
                     url,
@@ -110,25 +140,64 @@ fn validate_asset_url(asset: &PublishedAsset) -> Result<(), String> {
 }
 
 fn fetch_latest_release() -> Result<PublishedRelease, String> {
-    net::get_json_for(&net::api_client()?, RELEASE_URL, RemoteSource::GitHubApi).map_err(|err| {
-        if err.starts_with("Could not read") {
-            "Could not read the official mastercomfig release.".to_string()
-        } else {
-            err
+    net::get_json_for(&net::api_client()?, RELEASE_URL, RemoteSource::GitHubApi)
+}
+
+pub fn fetch_wizard_assets(spec: &WizardSpec) -> Result<DownloadedRelease, String> {
+    fetch_release_packages(&execs_core::wizard::required_wizard_assets(spec), None)
+}
+
+pub struct DownloadedRelease {
+    pub files: Vec<(String, Vec<u8>)>,
+    pub identity: ComfigRelease,
+}
+
+pub fn fetch_release_packages(
+    rel_paths: &[String],
+    installed: Option<&ComfigRelease>,
+) -> Result<DownloadedRelease, String> {
+    let release = if let Some(installed) = installed {
+        if !execs_core::comfig::valid_release_version(&installed.version) {
+            return Err("The installed mastercomfig version is unknown. Update packages before adding an addon.".into());
         }
+        let url = format!(
+            "https://api.github.com/repos/mastercomfig/mastercomfig/releases/tags/{}",
+            installed.version
+        );
+        let release: PublishedRelease =
+            net::get_json_for(&net::api_client()?, &url, RemoteSource::GitHubApi)?;
+        release.verify_installed(installed)?;
+        release
+    } else {
+        fetch_latest_release()?
+    };
+    let selected = release.selected(execs_core::official_download_urls(
+        rel_paths,
+        &release.core_shape(),
+    )?)?;
+    let mut packages = installed
+        .map(|record| record.packages.clone())
+        .unwrap_or_default();
+    for asset in &selected {
+        packages.insert(asset.rel.clone(), asset.sha256.clone());
+    }
+    Ok(DownloadedRelease {
+        files: fetch_all(selected)?,
+        identity: ComfigRelease {
+            version: release.tag_name,
+            packages,
+        },
     })
 }
 
-pub fn fetch_wizard_assets(spec: &WizardSpec) -> Result<Vec<(String, Vec<u8>)>, String> {
+pub fn latest_version() -> Result<String, String> {
     let release = fetch_latest_release()?;
-    let urls = download_urls_for_spec(spec, &release.core_shape())?;
-    fetch_all(release.selected(urls)?)
-}
-
-pub fn fetch_official_assets(rel_paths: &[String]) -> Result<Vec<(String, Vec<u8>)>, String> {
-    let release = fetch_latest_release()?;
-    let urls = execs_core::official_download_urls(rel_paths, &release.core_shape())?;
-    fetch_all(release.selected(urls)?)
+    let paths = vec!["tf/custom/mastercomfig-base.vpk".into()];
+    release.selected(execs_core::official_download_urls(
+        &paths,
+        &release.core_shape(),
+    )?)?;
+    Ok(release.tag_name)
 }
 
 fn fetch_all(selected: Vec<SelectedAsset>) -> Result<Vec<(String, Vec<u8>)>, String> {
@@ -179,6 +248,35 @@ mod tests {
             browser_download_url: "https://github.com/mastercomfig/mastercomfig/releases/download/9.100.1/mastercomfig-base.vpk".into(),
             digest: digest.map(str::to_string),
         }
+    }
+
+    #[test]
+    fn addons_require_the_exact_installed_release_and_all_retained_hashes() {
+        let digest = format!("sha256:{}", "a".repeat(64));
+        let mut release = PublishedRelease {
+            tag_name: "9.100.1".into(),
+            assets: vec![asset(Some(&digest))],
+        };
+        let installed = ComfigRelease {
+            version: "9.100.1".into(),
+            packages: std::collections::BTreeMap::from([(
+                "tf/custom/mastercomfig-base.vpk".into(),
+                "a".repeat(64),
+            )]),
+        };
+        assert!(release.verify_installed(&installed).is_ok());
+        release.tag_name = "9.100.2".into();
+        assert!(release.verify_installed(&installed).is_err());
+        release.tag_name = installed.version.clone();
+        release.assets[0].digest = Some(format!("sha256:{}", "b".repeat(64)));
+        assert!(release.verify_installed(&installed).is_err());
+        release.assets[0].digest = Some(digest);
+        release.assets[0].browser_download_url = release.assets[0]
+            .browser_download_url
+            .replace("9.100.1", "9.100.2");
+        assert!(release.verify_installed(&installed).is_err());
+        assert!(!execs_core::comfig::valid_release_version("../latest"));
+        assert!(!execs_core::comfig::valid_release_version("tag?redirect=x"));
     }
 
     #[test]
