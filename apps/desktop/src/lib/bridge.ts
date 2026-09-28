@@ -331,6 +331,28 @@ export async function initProfileLibrary(): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("init_profile_library");
 }
 
+/** Personal settings that can be copied from the active profile to others. */
+export type SettingsCopyScope = "binds" | "gameplay" | "sounds";
+
+export type SettingsCopyTarget = {
+  id: string;
+  name: string;
+  /** False when the profile already has exactly these settings. */
+  changes: boolean;
+};
+
+export async function reviewSettingsCopy(scope: SettingsCopyScope): Promise<SettingsCopyTarget[]> {
+  return call<SettingsCopyTarget[]>("review_settings_copy", { scope });
+}
+
+/** Copy the active profile's saved settings for one pane; returns the changed ids. */
+export async function copySettingsToProfiles(
+  scope: SettingsCopyScope,
+  targets: string[],
+): Promise<string[]> {
+  return call<string[]>("copy_settings_to_profiles", { scope, targets });
+}
+
 export async function reviewLibraryMove(): Promise<LibraryMoveReview | null> {
   return call<LibraryMoveReview | null>("review_library_move");
 }

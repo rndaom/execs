@@ -5,7 +5,7 @@ use std::path::Path;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_dialog::DialogExt;
 
-use super::shared::{blocking, with_root, RootContext};
+use super::shared::{blocking, with_profile, with_root, RootContext};
 use crate::error::CommandError;
 use crate::WriteGate;
 
@@ -64,6 +64,45 @@ pub async fn move_library_to_install(
         Ok(execs_core::profile::move_library_to(
             &execs_core::profiles_dir(),
             &root,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
+}
+
+/// Which other profiles a settings copy from the active profile would change.
+#[tauri::command]
+pub async fn review_settings_copy(
+    gate: tauri::State<'_, WriteGate>,
+    scope: execs_core::settings_copy::SettingsCopyScope,
+) -> Result<Vec<execs_core::settings_copy::SettingsCopyTarget>, CommandError> {
+    let _guard = gate.lock_for_library_read().await?;
+    with_profile(move |root, profile_id| {
+        Ok(execs_core::settings_copy::review_settings_copy_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+            scope,
+        )?)
+    })
+    .await
+}
+
+/// Copy one scope of the active profile's settings into chosen inactive profiles.
+#[tauri::command]
+pub async fn copy_settings_to_profiles(
+    gate: tauri::State<'_, WriteGate>,
+    scope: execs_core::settings_copy::SettingsCopyScope,
+    targets: Vec<String>,
+) -> Result<Vec<String>, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_profile(move |root, profile_id| {
+        Ok(execs_core::settings_copy::copy_settings_to_profiles_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &profile_id,
+            scope,
+            &targets,
             execs_core::process_lock::live_process_names(),
         )?)
     })

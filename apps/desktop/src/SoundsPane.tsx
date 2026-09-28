@@ -13,6 +13,7 @@ import {
   UploadSimple,
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CopySettings, type CopySettingsSource } from "./components/CopySettings";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
@@ -60,6 +61,7 @@ import {
   slotChange,
   soundsToCvars,
 } from "./lib/hitsound-ui";
+import { copySettingsBlocked } from "./lib/settings-ui";
 import {
   comfigEntries,
   filterSoundLibrary,
@@ -112,6 +114,7 @@ export function SoundsPane({
   sourceRefreshKey,
   onSave,
   onRemove,
+  copySettings,
 }: {
   api: Api;
   /** The profile this draft belongs to; a switch discards it. */
@@ -132,6 +135,8 @@ export function SoundsPane({
     pack: { hit: HitsoundSlotChange; kill: HitsoundSlotChange } | null,
   ) => Promise<unknown>;
   onRemove: () => void;
+  /** Copy the saved sounds to other profiles; offered only when provided. */
+  copySettings?: CopySettingsSource;
 }) {
   const { running, busy } = useAppStatus();
   // Picking a sound is a draft; only removing the installed files waits on the
@@ -374,7 +379,18 @@ export function SoundsPane({
 
   return (
     <section data-testid="settings-sounds" className="min-w-0 text-left">
-      <PaneHeader title="Sounds" />
+      <PaneHeader
+        title="Sounds"
+        actions={
+          copySettings ? (
+            <CopySettings
+              scope="sounds"
+              source={copySettings}
+              blockedReason={copySettingsBlocked(running, busy, dirty)}
+            />
+          ) : undefined
+        }
+      />
 
       <div className="pane-split gap-y-6">
         {(["hit", "kill"] as const).map((kind) => (

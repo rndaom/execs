@@ -55,3 +55,15 @@ export function showSettingsChrome(library: ProfileLibrary | null): boolean {
 export function canWriteSettings(running: boolean, busy: boolean): boolean {
   return canWrite(running, busy);
 }
+
+/** Why a pane's saved settings cannot be copied to other profiles right now. */
+export function copySettingsBlocked(
+  running: boolean,
+  busy: boolean,
+  dirty: boolean,
+): string | null {
+  if (running) return "Close TF2 to copy settings to other profiles.";
+  if (dirty) return "Wait for your changes to save, then copy them.";
+  if (busy) return "Wait for the current change to finish.";
+  return null;
+}

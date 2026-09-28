@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { CopySettings, type CopySettingsSource } from "./components/CopySettings";
 import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
@@ -21,6 +22,7 @@ import {
   serializeGameplay,
   serializeGameplayScope,
 } from "./lib/gameplay-ui";
+import { copySettingsBlocked } from "./lib/settings-ui";
 
 export type GameplayPaneProps = {
   /** The profile this draft belongs to; a switch discards it. */
@@ -32,6 +34,8 @@ export type GameplayPaneProps = {
   onOpenViewmodels?: () => void;
   /** Resolves when the write settles; the toast reports it. */
   onSave: (gameplayText: string) => Promise<unknown>;
+  /** Copy the saved Gameplay settings to other profiles; offered only when provided. */
+  copySettings?: CopySettingsSource;
 };
 
 export function GameplayPane({
@@ -41,8 +45,9 @@ export function GameplayPane({
   managedText,
   onOpenViewmodels,
   onSave,
+  copySettings,
 }: GameplayPaneProps) {
-  const { running } = useAppStatus();
+  const { running, busy } = useAppStatus();
   const seeded = useMemo(() => seedGameplay(managedText, effective), [managedText, effective]);
   const [draft, setDraft] = useSeededDraft(
     seeded,
@@ -64,7 +69,18 @@ export function GameplayPane({
     <section data-testid="settings-gameplay" className="min-w-0 text-left">
       <div className="hero-row gameplay-workspace">
         <div>
-          <PaneHeader title="Gameplay" />
+          <PaneHeader
+            title="Gameplay"
+            actions={
+              copySettings ? (
+                <CopySettings
+                  scope="gameplay"
+                  source={copySettings}
+                  blockedReason={copySettingsBlocked(running, busy, dirty)}
+                />
+              ) : undefined
+            }
+          />
           <div className="grid gap-6">
             <SliderRow
               id="gameplay-fov"

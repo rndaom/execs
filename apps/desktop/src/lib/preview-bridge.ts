@@ -27,6 +27,7 @@ import {
   type PreloaderStatusPayload,
   type ProfileDetail,
   type ProfileLibrary,
+  type SettingsCopyScope,
   type SwitchProgress,
   type Tf2Install,
 } from "./bridge";
@@ -332,6 +333,19 @@ export function createPreviewApi(state: PreviewState): Api {
     // --- library ------------------------------------------------------------
     async getProfileLibrary() {
       return library ?? emptyLibrary(BROWSED.path, true);
+    },
+    async reviewSettingsCopy(_scope: SettingsCopyScope) {
+      return (library?.profiles ?? [])
+        .filter((profile) => profile.id !== library?.activeProfileId)
+        .map((profile, index) => ({
+          id: profile.id,
+          name: profile.name,
+          changes: index % 2 === 0,
+        }));
+    },
+    async copySettingsToProfiles(_scope: SettingsCopyScope, targets: string[]) {
+      if (previewLocked(state)) throw new BridgeError("Close TF2 first.", "GameRunning");
+      return targets;
     },
     async reviewLibraryMove() {
       if (!library?.rootMismatch) return null;

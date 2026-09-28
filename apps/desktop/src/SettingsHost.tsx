@@ -3,6 +3,7 @@ import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { CfgOverridesAlert, CfgSourcesDetails } from "./components/CfgSourcesPanel";
+import type { CopySettingsSource } from "./components/CopySettings";
 import { ModImportDialog } from "./components/ModImportDialog";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
 import { Disclosure } from "./components/ui/Disclosure";
@@ -34,6 +35,7 @@ import {
   type PreloaderStatusPayload,
   type ProfileDetail,
   parseInvokeError,
+  type SettingsCopyScope,
   type SteamWriteStatus,
   type StockCrosshairSprite,
 } from "./lib/bridge";
@@ -880,6 +882,25 @@ export function SettingsHost({
         options,
       );
     }
+    /** Copy this pane's saved settings to other profiles through the settings queue. */
+    function copySettingsSource(scope: SettingsCopyScope): CopySettingsSource {
+      return {
+        review: () => api.reviewSettingsCopy(scope),
+        copy: (targets) =>
+          write(
+            async () => {
+              await api.copySettingsToProfiles(scope, targets);
+            },
+            {
+              success:
+                targets.length === 1
+                  ? `${label} copied to 1 profile`
+                  : `${label} copied to ${targets.length} profiles`,
+              failure: `Could not copy ${label}`,
+            },
+          ),
+      };
+    }
     if (tab === "comfig") {
       return (
         <ComfigPane
@@ -927,6 +948,7 @@ export function SettingsHost({
       const path = bindsFilePath(layer);
       return (
         <BindsPane
+          copySettings={copySettingsSource("binds")}
           profileId={profileId}
           layer={layer}
           effectiveBinds={maps.binds}
@@ -953,6 +975,7 @@ export function SettingsHost({
       const path = gameplayPath(layer);
       return (
         <GameplayPane
+          copySettings={copySettingsSource("gameplay")}
           profileId={profileId}
           layer={layer}
           effective={maps.effective}
@@ -1194,6 +1217,7 @@ export function SettingsHost({
       const path = gameplayPath(layer);
       return (
         <SoundsPane
+          copySettings={copySettingsSource("sounds")}
           api={api}
           profileId={profileId}
           record={detail?.hitsound ?? null}

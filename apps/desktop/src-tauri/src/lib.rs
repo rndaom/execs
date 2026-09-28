@@ -717,6 +717,8 @@ pub fn run() {
             commands::library::get_profile_library,
             commands::library::init_profile_library,
             commands::library::review_library_move,
+            commands::library::review_settings_copy,
+            commands::library::copy_settings_to_profiles,
             commands::library::move_library_to_install,
             commands::library::save_current_as,
             commands::library::rename_profile,
