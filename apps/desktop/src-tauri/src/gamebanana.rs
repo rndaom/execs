@@ -847,7 +847,10 @@ fn download_failure(file_name: &str, status: reqwest::StatusCode) -> String {
             "GameBanana no longer has {file_name}. Choose another file, or check the author's page."
         )
     } else {
-        format!("Could not download {file_name} from GameBanana ({status}).")
+        format!(
+            "Could not download {file_name}. {}",
+            crate::net::status_failure(file_name, RemoteSource::GameBananaDownload, status)
+        )
     }
 }
 
@@ -1393,8 +1396,9 @@ mod tests {
         let gone = download_failure("mod.zip", reqwest::StatusCode::NOT_FOUND);
         assert!(gone.contains("no longer has mod.zip"));
         assert_eq!(download_failure("mod.zip", reqwest::StatusCode::GONE), gone);
-        assert!(
-            download_failure("mod.zip", reqwest::StatusCode::SERVICE_UNAVAILABLE).contains("503")
+        assert_eq!(
+            download_failure("mod.zip", reqwest::StatusCode::SERVICE_UNAVAILABLE),
+            "Could not download mod.zip. GameBanana is having problems right now. Try again later."
         );
     }
 

@@ -34,6 +34,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Download failures read as plain sentences with a next step, such as "GitHub is limiting requests
+  from your network. Try again in about an hour." instead of the raw address and HTTP status. The
+  full address stays in Copy diagnostics.
 - Mods over the 512 MB limit say how large they are and explain the manual route: extract the mod
   into `tf/custom` with TF2 closed, then choose Update profile when execs asks.
 - While Steam is open, the Launch pane offers "Check Steam again" instead of a "Write to Steam"
