@@ -142,7 +142,8 @@ describe("custom binds", () => {
   });
   it("retires a custom override when TF2 removes or rebinds its key", () => {
     const text = applyCustomBind("// kept\n", "f6", "say gg");
-    expect(syncTrackedBindsFromConfig(text, {})).not.toContain("bind f6");
+    expect(syncTrackedBindsFromConfig(text, {})).toBe(text);
+    expect(syncTrackedBindsFromConfig(text, { f6: null })).not.toContain("bind f6");
     expect(syncTrackedBindsFromConfig(text, { f6: "say changed" })).not.toContain("bind f6");
     expect(syncTrackedBindsFromConfig(text, { f6: "+jump" })).toContain("bind f6 +jump");
   });

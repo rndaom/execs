@@ -85,6 +85,7 @@ export function SettingsHost({
   externalBusy,
   refreshKey,
   bindSyncRequest,
+  bindSyncChanges,
   onBindSyncHandled,
   onBusyChange,
   onWriteBusyChange,
@@ -112,6 +113,8 @@ export function SettingsHost({
   externalBusy: boolean;
   refreshKey: string | number;
   bindSyncRequest: number | null;
+  /** Binds TF2 changed in config.cfg; only these keys follow it. */
+  bindSyncChanges?: Readonly<Record<string, string | null>>;
   onBindSyncHandled: (request: number) => void;
   onBusyChange: (busy: boolean) => void;
   onWriteBusyChange?: (busy: boolean) => void;
@@ -319,7 +322,10 @@ export function SettingsHost({
   const cfgReason = useRef(maps.reason);
   cfgReason.current = cfgReadProblem ?? maps.reason;
 
-  async function reload(opts?: { syncBinds?: boolean }) {
+  async function reload(opts?: {
+    syncBinds?: boolean;
+    bindChanges?: Readonly<Record<string, string | null>>;
+  }) {
     // Every profile file is a separate IPC round trip, so a switch can easily
     // start a second reload that finishes first. Without this token the slower
     // (older) load writes the previous profile's files into state — and the
@@ -333,6 +339,7 @@ export function SettingsHost({
       const snapshot = await readSettingsSnapshot(api, {
         isStale: stale,
         syncBinds: opts?.syncBinds === true && !running,
+        bindChanges: opts?.bindChanges ?? {},
       });
       if (!snapshot) return;
       const {
@@ -427,7 +434,7 @@ export function SettingsHost({
             return;
           }
           // The load's completeness decides whether the sync request is handled.
-          return reload({ syncBinds: true });
+          return reload({ syncBinds: true, bindChanges: bindSyncChanges });
         })
       : reload();
     operation

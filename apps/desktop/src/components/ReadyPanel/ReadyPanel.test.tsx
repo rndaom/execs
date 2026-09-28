@@ -48,6 +48,7 @@ beforeEach(() => {
       deferPackPrompt: vi.fn(),
       refreshPackPrompt: vi.fn(),
       bindSyncRequest: null,
+      bindSyncChanges: {},
       refreshKey: "fixture",
       onBindSyncHandled: vi.fn(),
       saveCurrent: vi.fn(async () => false),

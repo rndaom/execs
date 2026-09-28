@@ -27,6 +27,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Binds recorded in execs are no longer replaced by older keys from TF2's `config.cfg`. After a
+  game session, only keys you rebound in TF2's own options follow `config.cfg`.
 - Settings panes no longer stop with "Cannot derive startup settings" when TF2 writes a newer
   setting (such as `tf_armory_page_skip`) into `config.cfg`.
 - Profiles leave Valve's shipped cfgs and game-owned Sixense bindings alone, including files

@@ -425,6 +425,8 @@ export type AbsorbOwnedResult = {
   library: ProfileLibrary;
   delta: AbsorbDelta;
   configCfgAbsorbed: boolean;
+  /** Keys whose bind TF2 changed in config.cfg; `null` means it removed the bind. */
+  configBindChanges?: Record<string, string | null>;
   /** Packs rewritten from the library after an interrupted write. */
   repaired?: string[];
 };

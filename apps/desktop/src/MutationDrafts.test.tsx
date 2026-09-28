@@ -154,6 +154,7 @@ beforeEach(() => {
     externalBusy: false,
     refreshKey: 1,
     bindSyncRequest: null,
+    bindSyncChanges: {},
     onBindSyncHandled: vi.fn(),
     onBusyChange: vi.fn(),
     onPendingChange: vi.fn(),

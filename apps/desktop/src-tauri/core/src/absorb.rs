@@ -131,6 +131,10 @@ pub struct AbsorbOwnedResult {
     pub delta: AbsorbDelta,
     /// True only when this absorb observed and stored a changed config.cfg.
     pub config_cfg_absorbed: bool,
+    /// Keys whose `bind` TF2 changed in the absorbed config.cfg, compared with
+    /// the profile's previous copy. `None` means TF2 removed that key's bind.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub config_bind_changes: BTreeMap<String, Option<String>>,
     /// Packs (or plain owned paths) this absorb rewrote from the library after
     /// an interrupted write. Empty on every ordinary pass.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -254,6 +258,7 @@ where
             library,
             delta: AbsorbDelta::empty(),
             config_cfg_absorbed: false,
+            config_bind_changes: BTreeMap::new(),
             repaired: Vec::new(),
             pack_review: None,
         });
@@ -272,6 +277,12 @@ where
     )?;
     let config_cfg_absorbed = classified.delta.config_cfg;
     let pending_cloud_sync = load_manifest(profiles_dir, &profile_id)?.cloud_sync_pending;
+    // Read before absorbing replaces the profile's copy.
+    let config_bind_changes = if config_cfg_absorbed {
+        read_config_bind_changes(profiles_dir, &profile_id, &classified)?
+    } else {
+        BTreeMap::new()
+    };
     if config_cfg_absorbed && !pending_cloud_sync {
         set_cloud_sync_pending(profiles_dir, tf2_root, &profile_id, true, &running)?;
     }
@@ -320,6 +331,7 @@ where
         library: load_library_from(profiles_dir, Some(tf2_root))?,
         delta: remaining,
         config_cfg_absorbed,
+        config_bind_changes,
         repaired,
     })
 }
@@ -1488,6 +1500,74 @@ fn dual_write_config(
     write_config_cfg_dual_to(tf2_root, &bytes, &roots)
 }
 
+/// Binds TF2 changed between the profile's config.cfg and the live one it
+/// just wrote. A key is listed only when its final bind differs.
+fn read_config_bind_changes(
+    profiles_dir: &Path,
+    profile_id: &str,
+    classified: &Classified,
+) -> Result<BTreeMap<String, Option<String>>, ProfileError> {
+    let read = |path: &Path| {
+        read_small_file_bounded(path, MAX_CFG_FILE_BYTES)
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .map_err(|e| ProfileError::Io(e.to_string()))
+    };
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let previous = match manifest.files.iter().find(|file| file.path == CONFIG_CFG) {
+        Some(file) => read(&manifest_source_path(profiles_dir, profile_id, file)?)?,
+        None => String::new(),
+    };
+    let current = match classified.live.get(CONFIG_CFG) {
+        Some(path) => read(path)?,
+        None => String::new(),
+    };
+    Ok(diff_binds(
+        &config_binds(&previous),
+        &config_binds(&current),
+    ))
+}
+
+/// Final `bind` table of one config.cfg, keys lowercased.
+fn config_binds(text: &str) -> BTreeMap<String, String> {
+    let mut binds = BTreeMap::new();
+    for line in text.lines() {
+        let parts = crate::profile_compare::tokens(line);
+        match parts
+            .first()
+            .map(|name| name.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("bind") if parts.len() >= 3 => {
+                binds.insert(parts[1].to_ascii_lowercase(), parts[2..].join(" "));
+            }
+            Some("unbind") if parts.len() >= 2 => {
+                binds.remove(&parts[1].to_ascii_lowercase());
+            }
+            Some("unbindall") => binds.clear(),
+            _ => {}
+        }
+    }
+    binds
+}
+
+fn diff_binds(
+    previous: &BTreeMap<String, String>,
+    current: &BTreeMap<String, String>,
+) -> BTreeMap<String, Option<String>> {
+    let mut changes = BTreeMap::new();
+    for (key, command) in current {
+        if previous.get(key) != Some(command) {
+            changes.insert(key.clone(), Some(command.clone()));
+        }
+    }
+    for key in previous.keys() {
+        if !current.contains_key(key) {
+            changes.insert(key.clone(), None);
+        }
+    }
+    changes
+}
+
 fn retry_pending_cloud_sync(
     profiles_dir: &Path,
     tf2_root: &Path,
@@ -1868,6 +1948,31 @@ mod tests {
     }
 
     #[test]
+    fn config_bind_changes_list_only_keys_tf2_changed() {
+        let previous = config_binds(
+            "bind \"w\" \"+forward\"
+bind \"e\" \"voicemenu 0 0\"
+bind \"q\" \"lastinv\"
+",
+        );
+        let current = config_binds(
+            "bind \"W\" \"+forward\"
+bind \"e\" \"+use\" // note
+bind \"h\" \"voicemenu 0 0\"
+",
+        );
+        assert_eq!(
+            diff_binds(&previous, &current),
+            BTreeMap::from([
+                ("e".to_string(), Some("+use".to_string())),
+                ("h".to_string(), Some("voicemenu 0 0".to_string())),
+                ("q".to_string(), None),
+            ])
+        );
+        assert!(diff_binds(&previous, &previous).is_empty());
+    }
+
+    #[test]
     fn owned_cfg_drift_absorbs_and_new_pack_waits() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
@@ -1911,6 +2016,10 @@ mod tests {
         assert!(result.delta.packs_added.contains(&"toon".into()));
         assert!(result.delta.owned_changed.is_empty());
         assert!(result.config_cfg_absorbed);
+        assert_eq!(
+            result.config_bind_changes,
+            BTreeMap::from([("w".to_string(), Some("+forward".to_string()))])
+        );
         let manifest = load_manifest(&profiles, &id).unwrap();
         let autoexec = manifest
             .files

@@ -11,7 +11,6 @@ import {
   bindsFilePath,
   canRecordBinds,
   clearManagedKey,
-  configBindsFromFiles,
   ensureAutoexecExecLine,
   MANAGED_BINDS_HEADER,
   normalizeBindCommand,
@@ -242,7 +241,7 @@ describe("syncTrackedBindsFromConfig", () => {
   it("updates the medic key when config.cfg moved it", () => {
     const current = serializeManagedBinds({ medic: "e", forward: "w" });
     const next = syncTrackedBindsFromConfig(current, {
-      w: "+forward",
+      e: null,
       h: "voicemenu 0 0",
     });
     expect(managedKeysByAction(next)).toEqual({ medic: ["h"], forward: ["w"] });
@@ -250,18 +249,18 @@ describe("syncTrackedBindsFromConfig", () => {
     const fromMap = syncTrackedBindsFromConfig(
       current,
       new Map([
-        ["w", "+forward"],
+        ["e", null],
         ["mouse3", "voicemenu 0 0"],
       ]),
     );
     expect(managedKeysByAction(fromMap).medic).toEqual(["mouse3"]);
   });
 
-  it("removes managed assignments that are absent from the complete config map", () => {
+  it("removes managed assignments only for keys TF2 unbound", () => {
     const current = serializeManagedBinds({ forward: "w", medic: "e", voice: "v" });
     const next = syncTrackedBindsFromConfig(current, {
-      w: "+forward",
       e: "+use",
+      v: null,
       mouse1: "+attack",
     });
 
@@ -272,10 +271,24 @@ describe("syncTrackedBindsFromConfig", () => {
     });
   });
 
-  it("clears every tracked assignment when the complete config map is empty", () => {
+  it("leaves every assignment alone when TF2 changed no binds", () => {
     const current = serializeManagedBinds({ forward: "w", medic: "e" });
 
-    expect(syncTrackedBindsFromConfig(current, {})).toBe(`${MANAGED_BINDS_HEADER}\n`);
+    expect(syncTrackedBindsFromConfig(current, {})).toBe(current);
+  });
+
+  it("keeps binds recorded in execs when config.cfg still holds older keys", () => {
+    // Keys recorded in Binds after TF2 last wrote config.cfg. That config.cfg
+    // still binds space to +jump and r to +reload, but TF2 did not change them
+    // in this session, so they are not synced back over the new keys.
+    const recorded = applyRecordedBind(
+      applyRecordedBind(serializeManagedBinds({ forward: "w" }), "jump", "mouse4"),
+      "reload",
+      "f",
+    );
+    const next = syncTrackedBindsFromConfig(recorded, { f10: "quit prompt" });
+    expect(next).toBe(recorded);
+    expect(managedKeysByAction(next)).toMatchObject({ jump: ["mouse4"], reload: ["f"] });
   });
 
   it("handles moves, reassignments, swaps, and multiple keys in one sync", () => {
@@ -318,24 +331,6 @@ describe("syncTrackedBindsFromConfig", () => {
         e: "voicemenu 0 0",
       }),
     ).toBe(current);
-  });
-
-  it("reads config.cfg binds and ignores the managed overlay file", () => {
-    expect(
-      configBindsFromFiles([
-        {
-          path: "tf/cfg/overrides/execs_binds.cfg",
-          text: 'bind e "voicemenu 0 0"\nbind w +forward\n',
-        },
-        {
-          path: "tf/cfg/config.cfg",
-          text: 'bind h "voicemenu 0 0"\nbind w +forward\n',
-        },
-      ]),
-    ).toEqual({
-      h: "voicemenu 0 0",
-      w: "+forward",
-    });
   });
 
   it("is requested only after verified config drift and never while TF2 runs", () => {

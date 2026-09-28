@@ -668,6 +668,7 @@ export function App({
                   }
                   refreshKey={`${profiles.refreshKey}:${hudReviewRevision}`}
                   bindSyncRequest={profiles.bindSyncRequest}
+                  bindSyncChanges={profiles.bindSyncChanges}
                   onBindSyncHandled={profiles.onBindSyncHandled}
                   onBusyChange={setSettingsBusy}
                   onSettledChange={setSettingsSettled}

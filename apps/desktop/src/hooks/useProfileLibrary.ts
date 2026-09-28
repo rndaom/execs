@@ -38,6 +38,8 @@ export type ProfileLibraryState = {
   refreshPackPrompt: () => void;
   /** Absorb reported `config.cfg` drift; the Binds pane re-syncs on this. */
   bindSyncRequest: number | null;
+  /** Binds TF2 changed in config.cfg since the request's profile last absorbed it. */
+  bindSyncChanges: Record<string, string | null>;
   /** Changes whenever the panes must reload (profile switch or a fresh absorb). */
   refreshKey: string;
   onBindSyncHandled: (request: number) => void;
@@ -80,6 +82,8 @@ export type ProfileLibraryState = {
   reset: () => void;
 };
 
+const NO_BIND_CHANGES: Record<string, string | null> = {};
+
 export function useProfileLibrary(
   api: Api,
   {
@@ -116,7 +120,11 @@ export function useProfileLibrary(
   const [packReview, setPackReview] = useState<string | null>(null);
   const [packPrompt, setPackPrompt] = useState<AbsorbDelta | null>(null);
   const [packPromptProfile, setPackPromptProfile] = useState<string | null>(null);
-  const [bindSyncRequest, setBindSyncRequest] = useState<number | null>(null);
+  const [bindSync, setBindSync] = useState<{
+    request: number;
+    changes: Record<string, string | null>;
+  } | null>(null);
+  const bindSyncRequest = bindSync?.request ?? null;
   const [packPromptDeferred, setPackPromptDeferred] = useState(false);
   const [absorbNonce, setAbsorbNonce] = useState(0);
   const [importStage, setImportStage] = useState<ProfileLibraryState["importStage"]>(null);
@@ -133,6 +141,7 @@ export function useProfileLibrary(
     inFlight: false,
     completed: null as string | null,
     configDrift: false,
+    bindChanges: {} as Record<string, string | null>,
   });
 
   // Load the library for a confirmed root.
@@ -204,6 +213,9 @@ export function useProfileLibrary(
     control.live = true;
     control.completed = null;
     control.configDrift = false;
+    control.bindChanges = {};
+    // A pending bind sync belongs to the profile whose config.cfg produced it.
+    setBindSync(null);
     return () => {
       control.generation += 1;
       control.live = false;
@@ -234,6 +246,7 @@ export function useProfileLibrary(
         // invalidates this snapshot. Keep that signal for the fresh idle pass,
         // but never replay stale library or pack data over a subsequent save.
         control.configDrift ||= result.configCfgAbsorbed;
+        Object.assign(control.bindChanges, result.configBindChanges ?? {});
         if (gate !== control.gate) return;
         control.completed = key;
         setLibrary(result.library);
@@ -245,9 +258,14 @@ export function useProfileLibrary(
         setPackPromptDeferred(false);
         setAbsorbNonce((value) => value + 1);
         if (control.configDrift) {
-          setBindSyncRequest((current) => (current ?? 0) + 1);
+          const changes = control.bindChanges;
+          setBindSync((current) => ({
+            request: (current?.request ?? 0) + 1,
+            changes: { ...current?.changes, ...changes },
+          }));
         }
         control.configDrift = false;
+        control.bindChanges = {};
         setError(null, "profiles:absorb");
       })
       .catch((err) => {
@@ -792,17 +810,18 @@ export function useProfileLibrary(
     setPackPrompt(null);
     setPackPromptProfile(null);
     setPackPromptDeferred(false);
-    setBindSyncRequest(null);
+    setBindSync(null);
     setAbsorbNonce(0);
     setImportedProfile(null);
     setImportError(null);
     absorb.current.generation += 1;
     absorb.current.completed = null;
     absorb.current.configDrift = false;
+    absorb.current.bindChanges = {};
   }, []);
 
   const onBindSyncHandled = useCallback((request: number) => {
-    setBindSyncRequest((current) => (current === request ? null : current));
+    setBindSync((current) => (current?.request === request ? null : current));
   }, []);
 
   return {
@@ -816,6 +835,7 @@ export function useProfileLibrary(
       setAbsorbRetry((value) => value + 1);
     },
     bindSyncRequest,
+    bindSyncChanges: bindSync?.changes ?? NO_BIND_CHANGES,
     refreshKey: `${library?.activeProfileId ?? ""}:${absorbNonce}`,
     onBindSyncHandled,
     saveCurrent,

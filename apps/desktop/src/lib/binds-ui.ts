@@ -889,70 +889,56 @@ export function applyRecordedBind(
     : currentFile;
 }
 
-/** Binds from `tf/cfg/config.cfg` only — not the managed overlay. */
-export function configBindsFromFiles(
-  files: Array<{ path: string; text: string }>,
-): Record<string, string> {
-  const config = files.find((file) => {
-    const path = file.path.replace(/\\/g, "/").toLowerCase();
-    return path === "tf/cfg/config.cfg" || path.endsWith("/config.cfg");
-  });
-  if (!config) {
-    return {};
-  }
-  const binds: Record<string, string> = {};
-  for (const command of parseCommands(config.text, "config.cfg")) {
-    if (command.name !== "bind" || command.args.length < 2) {
-      continue;
-    }
-    binds[command.args[0].toLowerCase()] = command.args.slice(1).join(" ");
-  }
-  return binds;
-}
+/** Keys whose config.cfg bind TF2 changed in one game session; `null` means it removed the bind. */
+export type ConfigBindChanges = Map<string, string | null> | Record<string, string | null>;
 
-export function syncTrackedBindsFromConfig(currentFile: string, configBinds: BindMap): string {
+/**
+ * Follow rebinds made in TF2's own options. Only keys TF2 actually changed in
+ * config.cfg are touched: a config.cfg that predates edits made in the Binds
+ * pane must never put its older keys back over them.
+ */
+export function syncTrackedBindsFromConfig(
+  currentFile: string,
+  changes: ConfigBindChanges,
+): string {
+  const changed = new Map(
+    (changes instanceof Map ? [...changes.entries()] : Object.entries(changes)).map(
+      ([key, command]) => [key.toLowerCase(), command] as const,
+    ),
+  );
   // A menu rebind/removal retires our explicit custom override. Unmarked
   // user-authored custom lines retain their previous byte-preserving policy.
-  currentFile = fileLines(currentFile)
+  // A key bound again in TF2 after the pane cleared it keeps its new binding.
+  const kept = fileLines(currentFile)
     .filter((line) => {
       const custom = ownedCustomBindLine(line);
-      return (
-        !custom ||
-        bindEntries(configBinds).some(
-          ([key, command]) => key.toLowerCase() === custom.key && command === custom.command,
-        )
-      );
+      if (custom && changed.has(custom.key)) return changed.get(custom.key) === custom.command;
+      const unbind = ownedUnbindLine(line);
+      return unbind === null || !changed.has(unbind) || changed.get(unbind) === null;
     })
     .join("");
-  const customKeys = new Set(ownedCustomBinds(currentFile).map((bind) => bind.key));
-  const next = bindEntries(configBinds).flatMap(([key, command]) => {
-    const action = COMMAND_TO_ACTION.get(normalizeBindCommand(command));
-    return action && !customKeys.has(key.toLowerCase())
-      ? [{ actionId: action.id, key: key.toLowerCase() }]
-      : [];
-  });
-  // A key bound again in TF2 after the pane cleared it keeps its new binding.
-  const configKeys = new Set(bindEntries(configBinds).map(([key]) => key.toLowerCase()));
-  const staleUnbind = (line: string) => {
-    const key = ownedUnbindLine(line);
-    return key !== null && configKeys.has(key);
-  };
-  const withoutStale = fileLines(currentFile)
-    .filter((line) => !staleUnbind(line))
-    .join("");
-  const current = ownedManagedBindKeys(withoutStale);
+  const customKeys = new Set(ownedCustomBinds(kept).map((bind) => bind.key));
+  const current = ownedManagedBindKeys(kept);
+  const next = [
+    ...current.filter((bind) => !changed.has(bind.key)),
+    ...[...changed].flatMap(([key, command]) => {
+      const action =
+        command === null ? undefined : COMMAND_TO_ACTION.get(normalizeBindCommand(command));
+      return action && !customKeys.has(key) ? [{ actionId: action.id, key }] : [];
+    }),
+  ];
   const identity = (bindings: typeof next) =>
     bindings
       .map(({ actionId, key }) => `${actionId}:${key}`)
       .sort()
       .join("\n");
-  if (currentFile.trim().length > 0 && identity(current) === identity(next)) return withoutStale;
+  if (currentFile.trim().length > 0 && identity(current) === identity(next)) return kept;
   const ordered = BIND_ACTIONS.flatMap((action) =>
     next
       .filter((bind) => bind.actionId === action.id)
       .map((bind) => `bind ${quoteCfgToken(bind.key)} ${quoteCfgToken(action.command)}`),
   );
-  return replaceOwnedLines(withoutStale, ordered);
+  return replaceOwnedLines(kept, ordered);
 }
 
 function execStem(target: string): string {
