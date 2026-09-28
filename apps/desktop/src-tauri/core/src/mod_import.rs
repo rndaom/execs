@@ -46,10 +46,8 @@ pub struct PreparedModImport {
 
 impl PreparedModImport {
     pub fn from_archive_file(path: &Path) -> Result<Self, ProfileError> {
-        let bytes =
-            crate::archive::read_regular_file_bounded(path, MAX_MOD_BYTES)?.ok_or_else(|| {
-                ProfileError::Io("This archive exceeds the 512 MiB import limit.".into())
-            })?;
+        let bytes = crate::archive::read_regular_file_bounded(path, MAX_MOD_BYTES)?
+            .ok_or_else(|| ProfileError::Io(crate::mods::oversized_mod_message(file_len(path))))?;
         Self::from_archive(
             &path.file_name().unwrap_or_default().to_string_lossy(),
             &bytes,
@@ -76,7 +74,7 @@ impl PreparedModImport {
 
     pub fn from_vpk_file(path: &Path) -> Result<Self, ProfileError> {
         let bytes = crate::archive::read_regular_file_bounded(path, MAX_MOD_BYTES)?
-            .ok_or_else(|| ProfileError::Io("This VPK exceeds the 512 MiB import limit.".into()))?;
+            .ok_or_else(|| ProfileError::Io(crate::mods::oversized_mod_message(file_len(path))))?;
         let name = path.file_name().unwrap_or_default().to_string_lossy();
         Self::from_vpk(&name, bytes)
     }
@@ -310,6 +308,10 @@ fn split_vpk(path: &str, names: &BTreeSet<String>) -> bool {
                 && names.contains(&format!("{prefix}_dir.vpk"))
         })
 }
+fn file_len(path: &Path) -> Option<u64> {
+    std::fs::metadata(path).ok().map(|meta| meta.len())
+}
+
 fn is_readme(path: &str) -> bool {
     let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
     (name.ends_with(".txt") || name.ends_with(".md"))

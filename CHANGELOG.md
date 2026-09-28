@@ -31,6 +31,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Mods over the 512 MB limit say how large they are and explain the manual route: extract the mod
+  into `tf/custom` with TF2 closed, then choose Update profile when execs asks.
 - While Steam is open, the Launch pane offers "Check Steam again" instead of a "Write to Steam"
   button that could only fail; execs writes Steam's options only while Steam is closed.
 - The Launch pane says when resolution, display-mode or console options stay in effect after you

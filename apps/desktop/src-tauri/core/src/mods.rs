@@ -36,6 +36,29 @@ use crate::vpk::{
 /// memory while it is read and copied, and nothing legitimate on GameBanana
 /// comes close.
 pub const MAX_MOD_BYTES: u64 = 512 * 1024 * 1024;
+
+/// What to tell a player whose mod is over [`MAX_MOD_BYTES`]: its size, the
+/// limit, and the manual route that still works.
+pub fn oversized_mod_message(size: Option<u64>) -> String {
+    let limit = MAX_MOD_BYTES / (1024 * 1024);
+    let what = match size {
+        Some(size) => format!("This file is {}", readable_size(size)),
+        None => "This file is larger than that".to_string(),
+    };
+    format!(
+        "{what}; execs installs mods up to {limit} MB. To use it anyway, close TF2, extract the mod into tf/custom yourself, then choose Update profile when execs asks."
+    )
+}
+
+fn readable_size(bytes: u64) -> String {
+    const MIB: f64 = 1024.0 * 1024.0;
+    let mib = bytes as f64 / MIB;
+    if mib >= 1024.0 {
+        format!("{:.1} GB", mib / 1024.0)
+    } else {
+        format!("{} MB", mib.ceil() as u64)
+    }
+}
 const MAX_MOD_ENTRIES: usize = 20_000;
 
 const MOD_LIMITS: ArchiveLimits = ArchiveLimits::new(MAX_MOD_ENTRIES, MAX_MOD_BYTES, MAX_MOD_BYTES);
@@ -269,10 +292,8 @@ pub fn mod_content_from_vpk_file(path: &Path) -> Result<(String, ModContent), Pr
         }
     }
     let Some(bytes) = read_regular_file_bounded(path, MAX_MOD_BYTES)? else {
-        return Err(ProfileError::Io(format!(
-            "That VPK is larger than {} MiB; refusing to install it.",
-            MAX_MOD_BYTES / (1024 * 1024)
-        )));
+        let size = std::fs::metadata(path).ok().map(|meta| meta.len());
+        return Err(ProfileError::Io(oversized_mod_message(size)));
     };
     // Bounds-check the tree without materializing a body: a crafted directory
     // can make a full read allocate many times the file.
@@ -1518,6 +1539,15 @@ pub fn read_mod_pcf(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn oversized_mods_name_their_size_the_limit_and_the_manual_route() {
+        let message = oversized_mod_message(Some(1_503_238_554));
+        assert!(message.starts_with("This file is 1.4 GB; execs installs mods up to 512 MB."));
+        assert!(message.contains("extract the mod into tf/custom"));
+        assert!(oversized_mod_message(Some(600 * 1024 * 1024)).contains("600 MB"));
+        assert!(oversized_mod_message(None).contains("larger than that"));
+    }
+
     use super::*;
     use crate::profile::{create_profile_record_to, set_active_profile_to};
     use crate::test_temp_dir;

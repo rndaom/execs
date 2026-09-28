@@ -752,11 +752,11 @@ fn pick_file_by_id(files: Vec<DownloadFile>, file_id: u64) -> Result<DownloadPic
     if is_split_part(chosen) {
         return Err(SPLIT_PART_REFUSAL.into());
     }
+    if chosen.size_bytes.is_some_and(|size| size > MOD_MAX_BYTES) {
+        return Err(execs_core::mods::oversized_mod_message(chosen.size_bytes));
+    }
     if !mod_file_is_supported(chosen) {
-        return Err(
-            "That GameBanana file is not a supported VPK, ZIP, 7z or RAR within the size limit."
-                .into(),
-        );
+        return Err("That GameBanana file is not a VPK, ZIP, 7z or RAR.".into());
     }
     Ok(DownloadPick {
         url: validated_download_url(chosen).expect("validated above"),
