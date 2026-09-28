@@ -653,11 +653,13 @@ export async function applyUnusedWizard(spec: WizardSpec): Promise<ProfileLibrar
   return call<ProfileLibrary>("apply_unused_wizard", { spec });
 }
 
+/** Create a profile; without `switchAfter` it stays inactive and TF2 is untouched. */
 export async function createFreshProfile(
   spec: WizardSpec,
   startFrom: StartFrom,
+  switchAfter = true,
 ): Promise<ProfileLibrary> {
-  return call<ProfileLibrary>("create_fresh_profile", { spec, startFrom });
+  return call<ProfileLibrary>("create_fresh_profile", { spec, startFrom, switchAfter });
 }
 
 export type CfgLayer = "comfig" | "vanilla";

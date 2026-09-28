@@ -755,9 +755,9 @@ export function createPreviewApi(state: PreviewState): Api {
       emitSwitchSteps();
       return addProfile(spec.name, true);
     },
-    async createFreshProfile(spec) {
-      emitSwitchSteps();
-      return addProfile(spec.name, true);
+    async createFreshProfile(spec, _startFrom, switchAfter = true) {
+      if (switchAfter) emitSwitchSteps();
+      return addProfile(spec.name, switchAfter);
     },
 
     // --- profile files ------------------------------------------------------

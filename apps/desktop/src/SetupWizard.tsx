@@ -3,6 +3,7 @@ import { OperationError } from "./components/ui/OperationError";
 import { OptionTile } from "./components/ui/OptionTile";
 import { PaneSection } from "./components/ui/PaneSection";
 import { SwitchRow } from "./components/ui/Switch";
+import { useToast } from "./components/ui/Toast";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { openExternal, type StartFrom, type WizardSpec } from "./lib/bridge";
 import { COMFIG_PRESETS, comfigPresetById } from "./lib/comfig-catalog";
@@ -27,6 +28,7 @@ export function SetupWizard({
   onToggleAddon,
   onStartFrom,
   onApply,
+  onCreateOnly,
   onCancel,
 }: {
   draftName: string;
@@ -40,9 +42,12 @@ export function SetupWizard({
   onToggleAddon: (id: OfficialAddonId) => void;
   onStartFrom?: (next: StartFrom) => void;
   onApply: () => void;
+  /** Create without switching; offered only when creating another profile. */
+  onCreateOnly?: () => Promise<boolean>;
   onCancel?: () => void;
 }) {
   const { running, busy, error, dismissError } = useAppStatus();
+  const toast = useToast();
   const canApply = canApplyWizard(draftName, running, busy);
   const selectedPreset = comfigPresetById(preset);
 
@@ -96,6 +101,25 @@ export function SetupWizard({
                   Cancel
                 </button>
               ) : null}
+              {creating && onCreateOnly ? (
+                <button
+                  type="button"
+                  data-testid="wizard-create-only"
+                  disabled={!canApply}
+                  onClick={() => {
+                    const name = draftName.trim();
+                    toast.startSave("wizard:create", "Creating profile…");
+                    void onCreateOnly().then((created) =>
+                      created
+                        ? toast.finishSave(`${name} created`, "wizard:create")
+                        : toast.cancelSave("wizard:create"),
+                    );
+                  }}
+                  className="btn btn-ghost"
+                >
+                  Create
+                </button>
+              ) : null}
               <button
                 type="submit"
                 data-testid="wizard-apply"
@@ -110,7 +134,9 @@ export function SetupWizard({
             {running
               ? "Keep choosing your setup. Close TF2 before applying it."
               : creating
-                ? "Creates the profile, then switches TF2 to it."
+                ? onCreateOnly
+                  ? "Create adds the profile and keeps TF2 as it is. Create and switch also switches TF2 to it."
+                  : "Creates the profile, then switches TF2 to it."
                 : "Creates the profile and applies your selections to TF2."}
           </p>
         </div>

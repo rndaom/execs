@@ -332,6 +332,12 @@ export function App({
     }
   }, [firstRun, draftName]);
 
+  const onCreateOnly = useCallback(async () => {
+    const created = await firstRun.applyWizard(draftName, false);
+    if (created) setDraftName("");
+    return created;
+  }, [firstRun, draftName]);
+
   const surface = firstRunSurface(profiles.library, firstRun.kind);
   const installReady =
     install.screen === "ready" && install.confirmed !== null && handoffSince === null;
@@ -528,6 +534,7 @@ export function App({
             onToggleAddon={firstRun.toggleAddon}
             onStartFrom={firstRun.setStartFrom}
             onApply={() => void onApplyWizard()}
+            onCreateOnly={isCreate ? onCreateOnly : undefined}
             onCancel={isCreate ? firstRun.cancelCreate : undefined}
           />
           <SwitchProgressList

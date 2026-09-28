@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- New profile has a Create button that adds the profile without switching TF2 to it, next to
+  Create and switch.
 - Copy binds, Gameplay settings (including mouse sensitivity) or hit and kill sounds to other
   profiles from the Binds, Gameplay and Sounds panes, with a list of which profiles would change.
 - Turn custom packs off and on without losing their files, copy saved packs to another profile,
