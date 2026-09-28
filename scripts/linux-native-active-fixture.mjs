@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { setAsideAppMaintenance } from "./app-maintenance-fixture.mjs";
 import { regularTreeHashes } from "./linux-native-fixture.mjs";
 import { linuxSteamCandidates } from "./package-smoke-fixture.mjs";
 
@@ -111,6 +112,8 @@ function protectedSnapshot(fixture, changed, stage) {
     disposableCacheFiles.push(cachePath);
     delete data.files[cachePath];
   }
+  // The activity log and the tidy-up record are execs' own startup output.
+  setAsideAppMaintenance(fixture.data, data, fixture.dataTree.directories, stage);
   const emptyMutation = `profiles/${fixture.profileId}/.mutation-data`;
   const dataDirectories = data.directories.filter((path) => changed && path === emptyMutation);
   assert.ok(dataDirectories.length <= 1);

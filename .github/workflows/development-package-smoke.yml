@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/development-package-smoke.yml
       - scripts/development-package-*.mjs
+      - scripts/app-maintenance-fixture*.mjs
       - scripts/package-smoke-fixture.mjs
       - scripts/fixtures/package-smoke-v018.json
       - scripts/fixtures/windows-package-v020/**

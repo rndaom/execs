@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { assertFixtureAbsorbCache } from "./absorb-cache-fixture.mjs";
+import { setAsideAppMaintenance } from "./app-maintenance-fixture.mjs";
 import { developmentPublicFixture } from "./development-package-guard.mjs";
 import { linuxSteamCandidates, seedPackageFixture } from "./package-smoke-fixture.mjs";
 
@@ -125,6 +126,8 @@ function snapshot(fixture, stage) {
       delete data.files[cachePath];
     }
   }
+  // The activity log and the tidy-up record are execs' own startup output.
+  setAsideAppMaintenance(fixture.data, data, fixture.baseline?.data.directories ?? [], stage);
   return { data, live: tree(fixture.tf2Root), exports: tree(fixture.exports) };
 }
 

@@ -134,6 +134,34 @@ test("only the active profile's empty disposable absorb cache may appear across 
   });
 });
 
+test("execs' own activity log and tidy-up record may appear at any checkpoint", () => {
+  withFixture((fixture) => {
+    const original = assertLinuxNativeActiveFixture(fixture, "original", "before-boot");
+    mkdirSync(join(fixture.data, "logs"));
+    mkdirSync(join(fixture.data, "maintenance"));
+    writeFileSync(
+      join(fixture.data, "logs", "activity.log"),
+      "2026-09-28T13:40:22Z tidy: Tidy-up: 0 sound caches removed\n",
+    );
+    writeFileSync(
+      join(fixture.data, "maintenance", "tidy-up.json"),
+      '{"version":1,"incompleteRuns":0}',
+    );
+    assertLinuxNativeActiveCheckpoint(fixture, original, "active-boot-and-files-read");
+    writeFileSync(join(fixture.data, "logs", "panic.log"), "panicked");
+    assert.throws(
+      () => assertLinuxNativeActiveCheckpoint(fixture, original, "panic-log"),
+      /unexpected product directories/,
+    );
+    rmSync(join(fixture.data, "logs", "panic.log"));
+    writeFileSync(join(fixture.data, "logs", "activity.log"), "not a log line\n");
+    assert.throws(
+      () => assertLinuxNativeActiveCheckpoint(fixture, original, "bad-log"),
+      /invalid activity log/,
+    );
+  });
+});
+
 test("cache exceptions refuse inactive, nested, partial, linked and nonempty cache files", () => {
   for (const target of [
     "inactive",

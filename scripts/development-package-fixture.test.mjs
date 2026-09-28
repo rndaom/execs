@@ -298,6 +298,33 @@ test("disposable caches preserve exact package checkpoints before and after a pr
   });
 });
 
+test("execs' own activity log and tidy-up record never hide other data-folder changes", () => {
+  withFixture((fixture) => {
+    mkdirSync(join(fixture.data, "logs"));
+    mkdirSync(join(fixture.data, "maintenance"));
+    writeFileSync(
+      join(fixture.data, "logs", "activity.log"),
+      "2026-09-28T13:40:22Z tidy: Tidy-up: 0 sound caches removed\n",
+    );
+    writeFileSync(
+      join(fixture.data, "maintenance", "tidy-up.json"),
+      '{"version":1,"incompleteRuns":0}',
+    );
+    assertDevelopmentPackagePreserved(fixture, "startup-output");
+    writeFileSync(join(fixture.data, "maintenance", "other.json"), "{}");
+    assert.throws(
+      () => assertDevelopmentPackagePreserved(fixture, "extra-maintenance"),
+      /original product bytes or directories changed/,
+    );
+    rmSync(join(fixture.data, "maintenance", "other.json"));
+    writeFileSync(join(fixture.data, "maintenance", "tidy-up.json"), '{"version":0}');
+    assert.throws(
+      () => assertDevelopmentPackagePreserved(fixture, "bad-marker"),
+      /invalid tidy-up record/,
+    );
+  });
+});
+
 test("original profile metadata, settings, live bytes and shared blobs are never normalized away", () => {
   for (const target of ["manifest", "settings", "live", "shared"]) {
     withFixture((fixture) => {
