@@ -42,7 +42,7 @@ pub const MAX_MOD_BYTES: u64 = 512 * 1024 * 1024;
 pub fn oversized_mod_message(size: Option<u64>) -> String {
     let limit = MAX_MOD_BYTES / (1024 * 1024);
     let what = match size {
-        Some(size) => format!("This file is {}", readable_size(size)),
+        Some(size) => format!("This file is {}", crate::disk_space::readable_size(size)),
         None => "This file is larger than that".to_string(),
     };
     format!(
@@ -50,15 +50,6 @@ pub fn oversized_mod_message(size: Option<u64>) -> String {
     )
 }
 
-fn readable_size(bytes: u64) -> String {
-    const MIB: f64 = 1024.0 * 1024.0;
-    let mib = bytes as f64 / MIB;
-    if mib >= 1024.0 {
-        format!("{:.1} GB", mib / 1024.0)
-    } else {
-        format!("{} MB", mib.ceil() as u64)
-    }
-}
 const MAX_MOD_ENTRIES: usize = 20_000;
 
 const MOD_LIMITS: ArchiveLimits = ArchiveLimits::new(MAX_MOD_ENTRIES, MAX_MOD_BYTES, MAX_MOD_BYTES);

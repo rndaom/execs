@@ -38,6 +38,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Switching profiles, imports and large installs check free space first and refuse before changing
+  anything, naming the drive, the space needed and the space free. A full disk during any other
+  write now says the drive is full instead of showing the raw system error.
 - Download failures read as plain sentences with a next step, such as "GitHub is limiting requests
   from your network. Try again in about an hour." instead of the raw address and HTTP status. The
   full address stays in Copy diagnostics.

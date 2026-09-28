@@ -122,6 +122,8 @@ pub enum ProfileError {
     HudImportRequired(String),
     KeptPackHandoff(Vec<String>),
     PendingLiveHandoff,
+    /// A drive lacks room for a write; the message names the drive and sizes.
+    NotEnoughSpace(String),
     Io(String),
 }
 
@@ -154,6 +156,7 @@ impl ProfileError {
             Self::HudImportRequired(_) => "HudImportRequired",
             Self::KeptPackHandoff(_) => "KeptPackHandoff",
             Self::PendingLiveHandoff => "PendingLiveHandoff",
+            Self::NotEnoughSpace(_) => "NotEnoughSpace",
             Self::Io(_) => "Io",
         }
     }
@@ -203,6 +206,7 @@ impl ProfileError {
                 packs.join(", ")
             ),
             Self::PendingLiveHandoff => "The deleted profile's setup is still installed. Use Save current as… to capture it before switching profiles.".into(),
+            Self::NotEnoughSpace(message) => message.clone(),
             Self::Io(err) => format!("Could not update the profile library: {err}"),
         }
     }
@@ -1279,6 +1283,10 @@ where
     let name = normalize_name(name)?;
     let mut index = init_unlocked(profiles_dir, tf2_root)?;
     sweep_orphan_profile_creations(profiles_dir, &index);
+    let incoming = incoming_bytes(puts);
+    if incoming >= SPACE_CHECK_MIN_BYTES {
+        crate::disk_space::ensure_space(profiles_dir, incoming)?;
+    }
 
     let profile_id = Uuid::new_v4().to_string();
     let transaction_id = crate::hash::random_token();
@@ -1953,6 +1961,17 @@ where
             )));
         }
         validated.push((path, key, *source));
+    }
+    // Refuse a large update before staging anything on a drive that cannot
+    // hold it: the library copy, and the live copy of the active profile.
+    let incoming = incoming_bytes(puts);
+    if incoming >= SPACE_CHECK_MIN_BYTES {
+        crate::disk_space::ensure_space(profiles_dir, incoming)?;
+        if projection == ProfileLiveProjection::MirrorIfActive
+            && index.active_profile_id.as_deref() == Some(profile_id)
+        {
+            crate::disk_space::ensure_space(tf2_root, incoming)?;
+        }
     }
 
     let staged = (|| -> Result<Vec<String>, ProfileError> {
@@ -4572,6 +4591,21 @@ where
         },
     )?;
     Ok(())
+}
+
+/// Small updates (settings saves, cfgs) are not worth enumerating drives for;
+/// the headroom in [`crate::disk_space::ensure_space`] already covers them.
+const SPACE_CHECK_MIN_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Bytes a set of profile puts will write, as far as it can be known upfront.
+fn incoming_bytes(puts: &[(String, FileSource<'_>)]) -> u64 {
+    puts.iter()
+        .map(|(_, source)| match source {
+            FileSource::Bytes(bytes) => bytes.len() as u64,
+            FileSource::PathExact { expected_len, .. } => *expected_len,
+            FileSource::Path(path) => fs::metadata(path).map_or(0, |meta| meta.len()),
+        })
+        .fold(0u64, u64::saturating_add)
 }
 
 fn reusable_empty_profile(profiles_dir: &Path, index: &LibraryIndex) -> Option<String> {

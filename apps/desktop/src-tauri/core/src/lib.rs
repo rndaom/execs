@@ -11,6 +11,7 @@ pub mod comfig;
 pub mod content_index;
 pub mod crosshair;
 pub mod custom_folders;
+pub mod disk_space;
 pub mod files_workspace;
 pub mod finder;
 pub mod first_run;

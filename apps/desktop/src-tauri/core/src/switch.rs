@@ -296,6 +296,14 @@ where
     cleanup_profile_ids.sort();
     cleanup_profile_ids.dedup();
 
+    // A switch that runs out of space after its Remove step leaves TF2 half
+    // set up. Refuse before removing anything when the drive cannot hold the
+    // difference between the target and the files the switch removes.
+    crate::disk_space::ensure_space(
+        tf2_root,
+        switch_bytes_needed(profiles_dir, &target, previous.as_deref())?,
+    )?;
+
     // This is the transaction boundary: after it succeeds, boot-time absorb
     // sees no active profile and every possible partial source/target remains
     // recorded for a deterministic retry.
@@ -351,6 +359,36 @@ where
         steam_write,
         steam_write_error,
     })
+}
+
+/// Extra bytes the live drive needs to switch: the target's files minus the
+/// previous profile's (removed first), plus the largest target file, which
+/// briefly exists twice while its part file is renamed into place.
+fn switch_bytes_needed(
+    profiles_dir: &Path,
+    target: &ProfileManifest,
+    previous: Option<&str>,
+) -> Result<u64, ProfileError> {
+    let sizes = |manifest: &ProfileManifest| -> Vec<u64> {
+        manifest
+            .files
+            .iter()
+            .map(|file| {
+                crate::apply::manifest_source_path(profiles_dir, &manifest.id, file)
+                    .ok()
+                    .and_then(|path| std::fs::metadata(path).ok())
+                    .map_or(0, |meta| meta.len())
+            })
+            .collect()
+    };
+    let target_sizes = sizes(target);
+    let incoming: u64 = target_sizes.iter().sum();
+    let largest = target_sizes.iter().copied().max().unwrap_or(0);
+    let outgoing: u64 = match previous {
+        Some(id) if id != target.id => sizes(&load_manifest(profiles_dir, id)?).iter().sum(),
+        _ => 0,
+    };
+    Ok(incoming.saturating_sub(outgoing).saturating_add(largest))
 }
 
 /// A Keep answer applies while the current profile remains installed. Once
