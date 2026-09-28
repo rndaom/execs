@@ -190,7 +190,7 @@ pub async fn install_hud(
     .await
 }
 
-/// Install a HUD the user has on disk as a zip or 7z. The folder name comes
+/// Install a HUD the user has on disk as a ZIP, 7z or RAR. The folder name comes
 /// from the archive's; the record is `Local` (no catalog hash, so no update
 /// checks) until Match to catalog pairs it with a hud-db entry.
 #[tauri::command]
@@ -208,7 +208,7 @@ pub async fn import_hud_archive(
         app.dialog()
             .file()
             .set_title("Import a HUD archive")
-            .add_filter("HUD archive", &["zip", "7z"])
+            .add_filter("HUD archive", &["zip", "7z", "rar"])
             .blocking_pick_file()
     })
     .await
@@ -654,7 +654,7 @@ mod tests {
         assert_eq!(error.message, guidance);
 
         let invalid = hud_input_error(execs_core::extract_hud_archive(b"garbage").unwrap_err());
-        assert!(invalid.message.contains("not a zip or 7z"));
+        assert!(invalid.message.contains("not a ZIP, 7z or RAR"));
         assert!(!invalid.message.contains("profile library"));
 
         let lock = hud_input_error(execs_core::ProfileError::GameRunning);

@@ -27,6 +27,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- HUDs install from RAR archives too: Import HUD, single-file GameBanana HUD pages, and Dropbox
+  or teamfortress.tv links accept RAR alongside ZIP and 7z.
 - A mod with a single VPK or content folder installs in one click again; the file chooser opens
   only when an archive has real choices. Choices are labelled by name with sizes in KB or MB,
   the chooser no longer shows "Installing mod…" or holds other saves while it is open, and it

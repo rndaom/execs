@@ -116,7 +116,7 @@ pub fn extract_archive(
         ));
     }
     Err(ProfileError::Io(
-        "The download is not a zip or 7z archive.".into(),
+        "The download is not a ZIP, 7z or RAR archive.".into(),
     ))
 }
 
@@ -1626,7 +1626,7 @@ mod tests {
         assert!(err.message().contains("web page"), "{}", err.message());
         let err = extract_archive(b"garbage", limits()).unwrap_err();
         assert!(
-            err.message().contains("not a zip or 7z"),
+            err.message().contains("not a ZIP, 7z or RAR"),
             "{}",
             err.message()
         );

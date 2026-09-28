@@ -1067,7 +1067,7 @@ export async function installHud(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("install_hud", { id });
 }
 
-/** Pick a zip/7z on disk and install it as this profile's HUD. Null = cancelled. */
+/** Pick a ZIP, 7z or RAR on disk and install it as this profile's HUD. Null = cancelled. */
 export async function importHudArchive(): Promise<ProfileDetail | null> {
   return call<ProfileDetail | null>("import_hud_archive");
 }

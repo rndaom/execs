@@ -461,7 +461,7 @@ pub fn fetch_hud_archive(entry: &HudCatalogEntry) -> Result<Vec<u8>, String> {
     let url = resolve_hud_download(entry)?;
     let bytes = net::download_bytes(&url, HUD_ZIP_MAX_BYTES)?;
     if !archive_header_is_supported(&bytes) {
-        return Err("The HUD download is not a ZIP or 7z archive.".into());
+        return Err("The HUD download is not a ZIP, 7z or RAR archive.".into());
     }
     Ok(bytes)
 }
@@ -470,6 +470,7 @@ fn archive_header_is_supported(bytes: &[u8]) -> bool {
     bytes.starts_with(b"PK\x03\x04")
         || bytes.starts_with(b"PK\x05\x06")
         || bytes.starts_with(&[0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c])
+        || bytes.starts_with(b"Rar!\x1a\x07")
 }
 
 /// One wording for the dead end every unfetchable HUD shares. The sites
@@ -532,12 +533,17 @@ pub fn no_download_message() -> String {
     format!("That HUD has no download this app can fetch — {OPEN_AUTHORS_PAGE}")
 }
 
+/// A lowercase URL path naming an archive the HUD importer reads.
+fn is_hud_archive_path(path: &str) -> bool {
+    path.ends_with(".zip") || path.ends_with(".7z") || path.ends_with(".rar")
+}
+
 /// Validate a Dropbox archive link and force its preview switch to `dl=1`.
 pub fn direct_download_url(url: &str) -> Result<String, String> {
     let mut parsed = net::validate_url_for(url, RemoteSource::Dropbox)?;
     let lower = parsed.path().to_ascii_lowercase();
-    if !lower.ends_with(".zip") && !lower.ends_with(".7z") {
-        return Err("That Dropbox link is not a ZIP or 7z archive.".into());
+    if !is_hud_archive_path(&lower) {
+        return Err("That Dropbox link is not a ZIP, 7z or RAR archive.".into());
     }
     let mut query: Vec<(String, String)> = parsed
         .query_pairs()
@@ -586,7 +592,7 @@ fn thread_download_link(html: &str) -> Option<String> {
                 continue;
             };
             let path = url.path().to_ascii_lowercase();
-            if path.ends_with(".zip") || path.ends_with(".7z") {
+            if is_hud_archive_path(&path) {
                 best = Some(url.to_string());
             }
         }
@@ -1135,6 +1141,10 @@ mod tests {
             direct_download_url("https://www.dropbox.com/s/x/Hud.7z").unwrap(),
             "https://www.dropbox.com/s/x/Hud.7z?dl=1"
         );
+        assert_eq!(
+            direct_download_url("https://www.dropbox.com/s/x/Hud.rar?dl=0").unwrap(),
+            "https://www.dropbox.com/s/x/Hud.rar?dl=1"
+        );
         assert!(direct_download_url("https://example.com/hud.zip").is_err());
         assert!(direct_download_url("http://www.dropbox.com/s/x/Hud.7z").is_err());
         assert!(direct_download_url("https://www.dropbox.com/s/x/not-an-archive").is_err());
@@ -1163,6 +1173,17 @@ mod tests {
             Some("https://www.dropbox.com/s/bbb/New.7z?dl=0&x=1")
         );
         assert!(thread_download_link("<p>nothing here</p>").is_none());
+        let rar = r#"<div class="post" id="post-id-1">
+          <a class="post-author" href="/user/owner">owner</a>
+          <div class="post-body"><a href="https://www.dropbox.com/s/r/Hud.rar?dl=0">hud</a></div>
+        </div>"#;
+        assert_eq!(
+            thread_download_link(rar).as_deref(),
+            Some("https://www.dropbox.com/s/r/Hud.rar?dl=0")
+        );
+        assert!(archive_header_is_supported(b"Rar!\x1a\x07\x01\x00"));
+        assert!(archive_header_is_supported(b"Rar!\x1a\x07\x00"));
+        assert!(!archive_header_is_supported(b"<html>"));
     }
 
     #[test]

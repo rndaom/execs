@@ -681,8 +681,10 @@ pub fn hud_id_from_name(name: &str) -> String {
         .trim()
         .trim_end_matches(".zip")
         .trim_end_matches(".7z")
+        .trim_end_matches(".rar")
         .trim_end_matches(".ZIP")
-        .trim_end_matches(".7Z");
+        .trim_end_matches(".7Z")
+        .trim_end_matches(".RAR");
     let mut id = String::new();
     let mut last_dash = true;
     for ch in stem.chars() {
@@ -2348,12 +2350,24 @@ mod tests {
         assert!(err.message().contains("web page"), "{}", err.message());
         let err = extract_hud_archive(b"garbage").unwrap_err();
         assert!(
-            err.message().contains("not a zip or 7z"),
+            err.message().contains("not a ZIP, 7z or RAR"),
             "{}",
             err.message()
         );
         // A truncated 7z is an error, not a panic.
         assert!(extract_hud_archive(&HUD_MIN_7Z[..40]).is_err());
+        // A real RAR is read through the shared extractor; this one has no HUD.
+        let err =
+            extract_hud_archive(include_bytes!("../fixtures/rar/rar5-normal.rar")).unwrap_err();
+        assert!(
+            err.message().contains("missing info.vdf"),
+            "{}",
+            err.message()
+        );
+        assert_eq!(
+            hud_id_from_name("Toon HUD.rar"),
+            hud_id_from_name("Toon HUD.zip")
+        );
     }
 
     #[test]
