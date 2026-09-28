@@ -54,9 +54,9 @@ pub fn decode_to_wav(bytes: &[u8], extension: &str) -> Result<Vec<u8>, String> {
         .map_err(|_| UNREADABLE.to_string())?;
     let track_id = track.id;
 
-    let mut pcm: Vec<i16> = Vec::new();
+    let mut pcm: Vec<f32> = Vec::new();
     let mut layout: Option<(u32, usize)> = None;
-    let mut scratch: Vec<i16> = Vec::new();
+    let mut scratch: Vec<f32> = Vec::new();
     loop {
         let packet = match format.next_packet() {
             Ok(Some(packet)) => packet,
@@ -81,7 +81,7 @@ pub fn decode_to_wav(bytes: &[u8], extension: &str) -> Result<Vec<u8>, String> {
         if *layout.get_or_insert(this) != this {
             return Err("That clip changes format partway through.".into());
         }
-        scratch.resize(buffer.samples_interleaved(), 0);
+        scratch.resize(buffer.samples_interleaved(), 0.0);
         buffer.copy_to_slice_interleaved(&mut scratch);
         pcm.extend_from_slice(&scratch);
         if pcm.len() > this.0 as usize * this.1 * MAX_DECODED_SECONDS {
@@ -93,29 +93,17 @@ pub fn decode_to_wav(bytes: &[u8], extension: &str) -> Result<Vec<u8>, String> {
     let Some((rate, channels)) = layout.filter(|_| !pcm.is_empty()) else {
         return Err("That clip has no sound.".into());
     };
-    Ok(pcm16_wav(&pcm, rate, channels as u16))
-}
-
-fn pcm16_wav(samples: &[i16], rate: u32, channels: u16) -> Vec<u8> {
-    let data_len = (samples.len() * 2) as u32;
-    let block_align = channels * 2;
-    let mut out = Vec::with_capacity(44 + samples.len() * 2);
-    out.extend_from_slice(b"RIFF");
-    out.extend_from_slice(&(36 + data_len).to_le_bytes());
-    out.extend_from_slice(b"WAVEfmt ");
-    out.extend_from_slice(&16u32.to_le_bytes());
-    out.extend_from_slice(&1u16.to_le_bytes());
-    out.extend_from_slice(&channels.to_le_bytes());
-    out.extend_from_slice(&rate.to_le_bytes());
-    out.extend_from_slice(&(rate * u32::from(block_align)).to_le_bytes());
-    out.extend_from_slice(&block_align.to_le_bytes());
-    out.extend_from_slice(&16u16.to_le_bytes());
-    out.extend_from_slice(b"data");
-    out.extend_from_slice(&data_len.to_le_bytes());
-    for sample in samples {
-        out.extend_from_slice(&sample.to_le_bytes());
-    }
-    out
+    // The hit sound encoder writes the same 16-bit PCM WAV any WAV import gets.
+    let planar: Vec<Vec<f32>> = (0..channels)
+        .map(|channel| {
+            pcm.iter()
+                .skip(channel)
+                .step_by(channels)
+                .copied()
+                .collect()
+        })
+        .collect();
+    Ok(crate::hitsound::encode_pcm16(&planar, rate))
 }
 
 #[cfg(test)]
@@ -180,7 +168,7 @@ mod tests {
 
     #[test]
     fn writes_a_wav_the_hitsound_preparation_reads() {
-        let wav = pcm16_wav(&[0, 1000, -1000, 0], 48_000, 2);
+        let wav = crate::hitsound::encode_pcm16(&[vec![0.0, -0.03], vec![0.03, 0.0]], 48_000);
         let info = crate::hitsound::inspect_wav(&wav).unwrap();
         assert_eq!(
             (info.channels, info.sample_rate, info.bits_per_sample),

@@ -647,7 +647,7 @@ fn resample_linear(samples: &[f32], from: u32, to: u32) -> Vec<f32> {
     out
 }
 
-fn encode_pcm16(channels: &[Vec<f32>], rate: u32) -> Vec<u8> {
+pub(crate) fn encode_pcm16(channels: &[Vec<f32>], rate: u32) -> Vec<u8> {
     let channel_count = channels.len() as u16;
     let frames = channels.first().map(Vec::len).unwrap_or(0);
     let block_align = channel_count * 2;
