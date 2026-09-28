@@ -38,9 +38,9 @@ User-facing changes only. The release workflow publishes the matching
 - Import single-volume RAR4 and RAR5 mods, including solid archives, with the same bounded
   extraction rules as other formats. Encrypted, split and unsupported archive features explain
   how to import an extracted folder instead.
-- Custom packs show content-based Casual restrictions, overlapping files, expected custom-pack
-  winners and mixed model components. Incomplete checks stay visible; these notes do not claim
-  a pack has been verified in a retail Casual match.
+- Custom packs say what each pack can do on Valve's Casual servers, which packs share a file and
+  which one TF2 uses, and when a model's parts come from different packs. Files that could not be
+  checked are named, and no pack is described as working on Casual before a real match confirms it.
 
 ### Fixed
 

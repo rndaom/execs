@@ -31,10 +31,10 @@ it("keeps an incomplete scan visible outside the fold and never invents winners"
     );
     const fold = box.querySelector("details");
     expect(fold?.open).toBe(false);
-    expect(fold?.previousElementSibling?.textContent).toContain("Content check incomplete");
-    expect(box.textContent).toContain("Winner unknown. Candidates: a, b");
-    expect(box.textContent).toContain("2 additional overlap or model details omitted");
-    expect(box.textContent).not.toContain("Expected first:");
+    expect(fold?.previousElementSibling?.textContent).toContain("Some files could not be checked");
+    expect(box.textContent).toContain("Can't tell which one TF2 uses: a, b");
+    expect(box.textContent).toContain("2 more results are not shown");
+    expect(box.textContent).not.toContain("TF2 uses a.");
   } finally {
     await act(async () => root.unmount());
     box.remove();

@@ -159,7 +159,7 @@ fn new_particle_filename_is_unavailable_before_selection_and_apply_keeps_every_b
     let reason = sources[0].unavailable_reason.as_deref().unwrap();
     assert!(
         reason.contains("blood_trail_new.pcf")
-            && reason.contains("no supported stock particle carrier"),
+            && reason.contains("not a replacement for one of TF2's own"),
         "{reason}"
     );
     let selected = PreloaderSelection {
@@ -169,7 +169,7 @@ fn new_particle_filename_is_unavailable_before_selection_and_apply_keeps_every_b
     let error = apply_profile_preloader(&root, &data, &zip, &selected, &profile, &[], &Vec::new)
         .unwrap_err();
     assert!(
-        error.contains("no supported stock particle carrier"),
+        error.contains("not a replacement for one of TF2's own"),
         "{error}"
     );
     for (path, bytes) in paths.iter().zip(before) {

@@ -3,6 +3,10 @@ import { packCasualNote } from "../lib/mod-audit-ui";
 import { Alert } from "./ui/Alert";
 import { Disclosure } from "./ui/Disclosure";
 
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
 export function ModContentAudit({
   payload,
   mods,
@@ -15,15 +19,15 @@ export function ModContentAudit({
   casual?: boolean;
 }) {
   const audit = payload?.contentAudit;
-  if (!audit) return <p className="t-meta mt-4">Installed content check unavailable.</p>;
+  if (!audit) return <p className="t-meta mt-4">The installed files could not be checked.</p>;
   const scriptPacks = audit.packs.filter((pack) => pack.soundScripts.length > 0);
   return (
     <div className="mt-4" data-testid="mod-content-audit">
       {audit.incomplete.length > 0 ? (
         <Alert tone="warn" className="mb-3">
           <p>
-            Content check incomplete. More overlaps or restrictions may be present; file winners are
-            unknown.
+            Some files could not be checked, so there may be more shared files or Casual limits than
+            shown here.
           </p>
           <ul className="mt-2 list-disc pl-5">
             {[...new Set(audit.incomplete)].map((reason) => (
@@ -37,15 +41,15 @@ export function ModContentAudit({
         storageKey={casual ? "mods-casual-content" : "mods-content-audit"}
         summary={
           casual
-            ? "Installed packs: Casual restrictions and requirements"
-            : `File check: ${audit.overlaps.length} overlaps, ${audit.splitModels.length} possible split model sets${audit.omittedDetails ? " (limited results)" : ""}`
+            ? "What your packs can do on Casual servers"
+            : `File check: ${plural(audit.overlaps.length, "shared file", "shared files")}, ${plural(audit.splitModels.length, "mixed model", "mixed models")}${audit.omittedDetails ? " (some not shown)" : ""}`
         }
       >
         <div className="space-y-4 pt-3">
           <p className="t-meta">
-            Read-only check of installed custom packs. Expected winners use TF2’s standard
-            alphabetical custom mount order. Server rules, map content and preloading can change
-            what is used in game.
+            {casual
+              ? "Worked out from the files in each pack. Community servers set their own rules."
+              : "When two packs have the same file, TF2 uses the pack whose name comes first alphabetically. Worked out from the files; maps and servers can still change what you see in game."}
           </p>
           {casual ? (
             <ul className="space-y-3">
@@ -64,8 +68,8 @@ export function ModContentAudit({
               {audit.overlaps.length === 0 ? (
                 <p className="t-meta">
                   {audit.incomplete.length
-                    ? "No overlaps found in the inspected files."
-                    : "No overlapping files found."}
+                    ? "No shared files among the files that could be checked."
+                    : "No two packs share a file."}
                 </p>
               ) : (
                 <ul className="space-y-3">
@@ -74,8 +78,8 @@ export function ModContentAudit({
                       <p className="t-row break-all">{overlap.path}</p>
                       <p className="t-meta break-words">
                         {overlap.winner
-                          ? `Expected first: ${overlap.winner}. Hides: ${overlap.packs.filter((pack) => pack !== overlap.winner).join(", ")}.`
-                          : `Winner unknown. Candidates: ${overlap.packs.join(", ")}.`}
+                          ? `TF2 uses ${overlap.winner}. Not used: ${overlap.packs.filter((pack) => pack !== overlap.winner).join(", ")}.`
+                          : `Can't tell which one TF2 uses: ${overlap.packs.join(", ")}.`}
                       </p>
                     </li>
                   ))}
@@ -83,15 +87,16 @@ export function ModContentAudit({
               )}
               {audit.splitModels.map((model) => (
                 <div key={model.model}>
-                  <p className="t-row break-all">Possible mixed model set: {model.model}</p>
+                  <p className="t-row break-all">Model parts from different packs: {model.model}</p>
                   <p className="t-meta">
-                    Parts supplied by different packs may have incompatible skeletons or geometry.
+                    Parts of one model from different packs may not fit together, for example
+                    causing broken ragdolls.
                   </p>
                   <ul className="mt-1 space-y-1">
                     {model.components.map((component) => (
                       <li className="t-meta break-all" key={component.path}>
                         {component.path}:{" "}
-                        {component.winner ?? `unknown (${component.packs.join(", ")})`}
+                        {component.winner ?? `unclear (${component.packs.join(", ")})`}
                       </li>
                     ))}
                   </ul>
@@ -101,18 +106,15 @@ export function ModContentAudit({
           )}
           {scriptPacks.map((pack) => (
             <div key={pack.pack}>
-              <p className="t-row break-words">{pack.pack} replaces whole sound scripts</p>
+              <p className="t-row break-words">{pack.pack} replaces TF2's sound scripts</p>
               <p className="t-meta break-words">
-                {pack.soundScripts.join(", ")}. A stale copy after a TF2 update can omit newer
-                sounds. This check cannot determine whether the script is current.
+                {pack.soundScripts.join(", ")}. After a TF2 update an old copy can leave newer
+                weapons silent, and execs can't tell whether this copy is current.
               </p>
             </div>
           ))}
           {audit.omittedDetails > 0 ? (
-            <p className="t-meta">
-              {audit.omittedDetails} additional overlap or model details omitted to keep this report
-              bounded.
-            </p>
+            <p className="t-meta">{audit.omittedDetails} more results are not shown.</p>
           ) : null}
         </div>
       </Disclosure>

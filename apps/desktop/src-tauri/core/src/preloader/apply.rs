@@ -743,7 +743,7 @@ fn plan_with_particle_baseline(
         };
         if !entries.contains_key(&format!("particles/{}", item.target)) {
             skip(
-                "has no supported stock particle carrier. A custom particles_manifest.txt does not make this file patchable in Casual".into(),
+                "is a new particle file, not a replacement for one of TF2's own, so it can't load on Casual servers. The pack's own particles_manifest.txt doesn't change that".into(),
                 &mut skipped,
             );
             continue;
@@ -1489,7 +1489,7 @@ pub fn qualify_profile_particle_sources(
                 .collect();
             if !unsupported.is_empty() {
                 source.unavailable_reason = Some(format!(
-                    "{} has no supported stock particle carrier. A custom particles_manifest.txt does not make it patchable in Casual.",
+                    "{} is a new particle file, not a replacement for one of TF2's own, so it can't load on Casual servers. The pack's own particles_manifest.txt doesn't change that.",
                     unsupported.join(", ")
                 ));
                 continue;
