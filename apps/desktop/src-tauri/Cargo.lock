@@ -1036,7 +1036,7 @@ dependencies = [
 
 [[package]]
 name = "execs"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "curl",
  "execs-core",
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "execs-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "crc32fast",
  "libc",

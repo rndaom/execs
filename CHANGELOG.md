@@ -5,119 +5,111 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-28
+
 ### Added
 
+- Mod archives with several choices, such as colour variants or "with and without sounds",
+  install from execs: a chooser lists each VPK and content folder with its size, shows the
+  author's included instructions, and installs the packs you pick. Cancel changes nothing, and a
+  mod with a single pack still installs in one click.
+- Mods and HUDs install from RAR archives as well as ZIP and 7z, including solid archives, through
+  Import mod, Import HUD, GameBanana and HUD download links. Encrypted and split archives explain
+  how to import an extracted folder instead.
+- Custom packs can be turned off and on without losing their files, copied to another profile,
+  and checked for newer versions on GameBanana.
+- Custom packs say what each pack can do on Valve's Casual servers, which packs share a file and
+  which one TF2 uses, and when a model's parts come from different packs. No pack is described as
+  working on Casual before a real match confirms it.
+- Copy binds, Gameplay settings (including mouse sensitivity) or hit and kill sounds to your other
+  profiles from the Binds, Gameplay and Sounds panes, with a list of which profiles would change.
+- Binds can bind custom commands such as `say gg`, Engineer build and destroy, Spy disguises and
+  the rest of the voice commands, with the same key-conflict review as other actions.
+- Sounds accepts MP3 and Ogg Vorbis clips as well as WAV, up to 30 seconds, and notes when a clip
+  is longer than a second.
+- New profile has a Create button that adds the profile without switching TF2 to it.
+- execs reopens at the same window size and position, and on the pane you last used.
+- When TF2 closes after pack changes, you choose what happens to each new or missing pack, and the
+  prompt names the profile and says how each choice affects switching.
+- App settings → Storage lists older HUD backups, which you can recover to a folder or delete.
+- Copy diagnostics includes a short Health summary and execs' most recent actions and errors, so
+  a bug report shows what happened. The log keeps no file contents and hides passwords.
 - After this update, execs tidies up once what earlier versions left behind: sound caches for
   packs that are gone, HUD backups in TF2's custom folder (duplicates are deleted, the rest move
-  to execs data and stay in App settings → Storage), Valve's own cfgs saved into profiles, the old
-  Casual preload hook, the cheat-only tracer line, bind keys with names TF2 rejects, and unused
-  downloads from retired features. Packs, your own files and hand edits are not touched. One quiet
-  notice says what changed, with Details, and Storage offers Tidy up again.
-- Sounds accepts MP3 and Ogg Vorbis clips as well as WAV, and notes when a clip is longer than a
-  second. Clips are converted to a WAV TF2 plays, up to 30 seconds.
-- execs reopens where you left it: the same window size and position (including maximized, and on
-  the same monitor when it is still connected) and the pane you last used.
-- Copy diagnostics includes a short Health summary and the most recent operations and errors, so a
-  bug report shows what execs was doing. The activity log keeps no file contents and hides
-  password values.
-- New profile has a Create button that adds the profile without switching TF2 to it, next to
-  Create and switch.
-- Copy binds, Gameplay settings (including mouse sensitivity) or hit and kill sounds to other
-  profiles from the Binds, Gameplay and Sounds panes, with a list of which profiles would change.
-- Turn custom packs off and on without losing their files, copy saved packs to another profile,
-  and check GameBanana for newer updates.
-- Bind custom commands, Engineer build/destroy actions, Spy disguises and the remaining voice
-  commands with the existing key-conflict review.
-- Review external custom-file changes pack by pack, with the affected profile and each choice's
-  effect on switching shown before applying.
-- See, recover and delete historical HUD backups from App settings → Storage.
-
-- Review the VPKs and content folders inside mod archives before installing, including archives
-  with several variants. Read the author's included instructions, choose one or more packs, or
-  cancel without changing your profile.
-- Import single-volume RAR4 and RAR5 mods, including solid archives, with the same bounded
-  extraction rules as other formats. Encrypted, split and unsupported archive features explain
-  how to import an extracted folder instead.
-- Custom packs say what each pack can do on Valve's Casual servers, which packs share a file and
-  which one TF2 uses, and when a model's parts come from different packs. Files that could not be
-  checked are named, and no pack is described as working on Casual before a real match confirms it.
+  to execs data and stay in Storage), Valve's own cfgs saved into profiles, the old Casual preload
+  hook, the cheat-only tracer line, bind keys with names TF2 rejects, and unused downloads from
+  retired features. Packs, your own files and hand edits are not touched. One quiet notice says
+  what changed, with Details, and Storage offers Tidy up again.
 
 ### Fixed
 
-- Switching profiles, imports and large installs check free space first and refuse before changing
-  anything, naming the drive, the space needed and the space free. A full disk during any other
-  write now says the drive is full instead of showing the raw system error.
-- Download failures read as plain sentences with a next step, such as "GitHub is limiting requests
-  from your network. Try again in about an hour." instead of the raw address and HTTP status. The
-  full address stays in Copy diagnostics.
-- Mods over the 512 MB limit say how large they are and explain the manual route: extract the mod
-  into `tf/custom` with TF2 closed, then choose Update profile when execs asks.
-- While Steam is open, the Launch pane offers "Check Steam again" instead of a "Write to Steam"
-  button that could only fail; execs writes Steam's options only while Steam is closed.
-- The Launch pane says when resolution, display-mode or console options stay in effect after you
-  remove them or switch profiles, because TF2 saves them in its own settings.
-- Inventory no longer re-reads your backpack every two minutes, which kept making Steam show you
-  as playing TF2. It reads when you open it, after TF2 closes and when you press the new Refresh
-  button, and explains the brief Steam status.
-- Switching to a profile saved by an older version installs the current Casual preload hook, which
-  keeps TF2's console and its engine errors instead of clearing them and running a menu-music
-  script. Only an unchanged execs hook is replaced; edited hooks stay as you left them.
-- Gameplay no longer writes the cheat-only `r_drawtracers` setting, which TF2 refuses from startup
-  cfgs and reported as an error on every launch. The "All tracers" switch is removed because TF2
-  never applied it; First-person tracers stays.
-- HUDs install from RAR archives too: Import HUD, single-file GameBanana HUD pages, and Dropbox
-  or teamfortress.tv links accept RAR alongside ZIP and 7z.
-- A mod with a single VPK or content folder installs in one click again; the file chooser opens
-  only when an archive has real choices. Choices are labelled by name with sizes in KB or MB,
-  the chooser no longer shows "Installing mod…" or holds other saves while it is open, and it
-  finds author notes named like `Installation.txt` or `How to install.txt`.
-- After Steam moves TF2 to another drive or library, execs offers to move your profiles to the
-  new folder instead of hiding them. Only the recorded folder changes; profile files and TF2 are
-  left alone.
-- If the saved TF2 folder is missing when execs starts, for example because its drive is not
-  connected, execs names the folder and offers Retry instead of starting over as a first run.
-- Crosshair and Viewmodels saves no longer fail on the `sound/sound.cache` file TF2 writes into
-  every custom folder; execs removes it and TF2 rebuilds it.
-- Binds recorded in execs are no longer replaced by older keys from TF2's `config.cfg`. After a
-  game session, only keys you rebound in TF2's own options follow `config.cfg`.
-- Settings panes no longer stop with "Cannot derive startup settings" when TF2 writes a newer
-  setting (such as `tf_armory_page_skip`) into `config.cfg`.
-- Profiles leave Valve's shipped cfgs and game-owned Sixense bindings alone, including files
-  captured by older versions. Unchanged large custom packs avoid repeated absorb hashing;
-  writes and switches still verify full file contents, and scan-limit errors name the folder.
-- Changes made through TF2's own Viewmodels, Sounds and Crosshair options survive the next
-  launch when execs already manages those settings. World FOV now shows TF2's effective 75–90
-  range while preserving older values until that control is changed.
-- Recognize 32-bit TF2 in the write lock. A pending launch can be released with Steam open and
-  expires after ten minutes without TF2 starting, including across an execs restart.
-- Review differing Steam launch options before replacing them, or adopt Steam's options into
-  the current profile. Profile saves, switches and Casual setup no longer silently replace them.
-- Comfig blocks unsafe package installation on vanilla profiles until their cfgs can be migrated
-  safely. Installed package versions are shown when known, updates are checked, and new addons
-  use the same mastercomfig release as the base package.
-- Fully profile-owned HUD replacements avoid duplicate live backups. Untracked or modified
-  files remain recoverable, and legacy backups can be managed explicitly.
-- Remember the material bypass choice and show a recovery notice when a TF2 update resets it.
-
-- Binds handles Mouse 4 and Mouse 5 across the press and release, prevents the recorded gesture
-  from navigating backward or forward, and explains mouse buttons TF2 cannot bind.
-- Unbuilt Viewmodels and custom Crosshair choices stay pending through pane changes and protect
-  close, profile changes and Launch. Failed builds and TF2 source refreshes preserve your choices.
-- Casual particle sources show unsupported filenames and incompatible files before selection;
-  Apply also refuses incompatible profile sources before changing game files.
-- Removing a VPK pack also cleans its leftover sound cache. Caches for surviving packs,
-  external edits and linked paths are preserved.
-- Binds records `;` `'` `,` `.` `/` `\` `-` and `=` with the key names TF2 uses. Binds recorded
-  on these keys by earlier versions never worked in game and are read as the intended key.
+- Binds records `;` `'` `,` `.` `/` `\` `-` and `=` with the key names TF2 uses. Binds recorded on
+  these keys by earlier versions never worked in game; they are now read as the intended key.
   Right Shift, Right Ctrl and Right Alt no longer rebind the left keys, and Pause, Scroll Lock,
   Num Lock, the Windows keys and the Menu key can be bound.
+- Binds records Mouse 4 and Mouse 5 without the side buttons navigating the app, and explains
+  mouse buttons TF2 cannot bind.
+- Binds you record in execs are no longer replaced by older keys from TF2's `config.cfg`. After a
+  game, only keys you rebound in TF2's own options follow `config.cfg`.
+- Settings load again after TF2 closes for a profile where you never saved binds in execs. Every
+  settings pane used to stop with "The Binds source identity is unavailable".
+- Settings panes no longer stop with "Cannot derive startup settings" when TF2 writes a newer
+  setting, such as `tf_armory_page_skip`, into `config.cfg`.
+- Changes made in TF2's own Viewmodels, Sounds and Crosshair options survive the next launch when
+  execs manages those settings.
+- World FOV shows TF2's real 75–90 range. Older lower values stay as they are until you change
+  that control.
+- Gameplay no longer writes the cheat-only `r_drawtracers`, which TF2 refused and reported as an
+  error on every launch. The "All tracers" switch is removed because TF2 never applied it;
+  First-person tracers stays.
+- Viewmodels and custom Crosshair choices that are not built yet show as unsaved changes, are kept
+  when you change panes, and must be built or discarded before closing execs, switching profiles
+  or launching TF2.
+- Profiles no longer save or delete Valve's own cfgs, such as `server_casual.cfg`, including files
+  older versions captured.
+- Steam launch options you change in Steam are no longer overwritten. When Steam and the profile
+  differ, execs asks whether to launch with Steam's options, adopt them into the profile, or
+  replace them with the profile's.
 - Linux launch wrappers such as `gamemoderun %command%`, `mangohud %command%`,
-  `gamescope -- %command%` and environment variables like `LD_PRELOAD="" %command%` are kept
-  exactly as written. execs used to drop `%command%` and pass the wrapper to TF2 as arguments,
-  and could write that broken string back into Steam.
-- Settings load again after you close TF2 for a profile where you have not saved any binds in
-  execs. When TF2 had changed `config.cfg`, every settings pane stopped with "The Binds source
-  identity is unavailable", and Retry only helped until the next refresh.
+  `gamescope -- %command%` and `LD_PRELOAD="" %command%` are kept exactly as written. execs used
+  to drop `%command%`, which broke the launch and could write the broken string into Steam.
+- While Steam is open, the Launch pane offers "Check Steam again" instead of a "Write to Steam"
+  button that could only fail.
+- The Launch pane says when resolution, display-mode or console options stay in effect after you
+  remove them or switch profiles, because TF2 saves them in its own settings.
+- The write lock also recognises the 32-bit `tf.exe`. A launch that never starts can be released
+  while Steam is open, and stops waiting on its own after ten minutes.
+- After Steam moves TF2 to another drive or library, execs offers to move your profiles to the new
+  folder instead of hiding them. Profile files and TF2 are left alone.
+- If the saved TF2 folder is missing at startup, for example because its drive is not connected,
+  execs names the folder and offers Retry instead of starting over as a first run.
+- Switches, imports and large installs check free space first and stop before changing anything,
+  naming the drive, the space needed and the space free. A full disk during another write says
+  the drive is full instead of showing a system error.
+- Download failures read as plain sentences with a next step, such as "GitHub is limiting requests
+  from your network. Try again in about an hour."
+- Mods over the 512 MB limit say how large they are and explain how to install them by hand.
+- Inventory no longer re-reads your backpack every two minutes, which kept making Steam show you
+  as playing TF2. It reads when you open it, after TF2 closes and when you press Refresh.
+- Switching to a profile saved by an older version installs the current Casual preload hook, which
+  keeps TF2's console and engine errors instead of clearing them. Edited hooks stay as you left
+  them.
+- Casual setup shows which particle files cannot work on Casual before you select a pack, and
+  Apply refuses them before changing game files.
+- Casual setup remembers that you turned on Material bypass and tells you when a TF2 update turns
+  it off, with a way to turn it back on.
+- Comfig no longer offers to install mastercomfig packages on a profile without mastercomfig,
+  which would have stopped your own autoexec and class cfgs from running. Comfig shows the
+  installed mastercomfig version and whether an update exists, and new addons come from the same
+  release as the base package.
+- Replacing a HUD no longer makes a second copy in TF2's folder when the profile already has
+  every file.
+- Removing a VPK pack also removes the sound cache TF2 made for it, and Crosshair and Viewmodels
+  saves no longer fail on the `sound.cache` file TF2 writes into custom folders.
+- Starting execs and closing TF2 are faster with large custom folders, and a folder too large to
+  scan is named in the message.
+- Dialogs opened from a pane cover the whole window, so tall ones such as the mod chooser are no
+  longer cut off under the header.
 
 ## [0.2.0] - 2026-09-27
 
