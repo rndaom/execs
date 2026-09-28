@@ -350,6 +350,45 @@ describe("settings snapshot integrity", () => {
     );
     expect(capture.panes.gameplay.managedText).toContain("sensitivity 2.2");
   });
+  it("loads after TF2 closes when the profile has no managed binds file", async () => {
+    // TF2's own config.cfg always binds movement keys. Without execs_binds.cfg
+    // execs manages no binds, so config.cfg stays in charge and nothing is written.
+    const gameplay = "tf/cfg/overrides/execs_gameplay.cfg";
+    const source = {
+      profileId: "A",
+      root: "fixture",
+      layer: "comfig",
+      sha256: "old",
+      librarySha256: "old",
+    };
+    api.getActiveProfileDetail.mockResolvedValue({
+      id: "A",
+      layer: "comfig",
+      files: [{ path: "tf/cfg/config.cfg" }, { path: gameplay }],
+      launchOptions: "",
+    });
+    let current = "fov_desired 90\nsensitivity 3\n";
+    api.readProfileFile.mockImplementation(async (path: string) =>
+      path === gameplay
+        ? { path, text: current, source }
+        : { path, text: 'bind "w" "+forward"\nbind "SPACE" "+jump"\nsensitivity "2.2"\n' },
+    );
+    api.writeOwnedFile.mockImplementation(async (_path: string, text: string) => {
+      current = text;
+      return {};
+    });
+    const onBindSyncHandled = vi.fn();
+    await render({ onBindSyncHandled });
+    await render({ refreshKey: 2, bindSyncRequest: 1 });
+    expect(container.textContent).not.toContain("source identity is unavailable");
+    expect(api.writeOwnedFile).toHaveBeenCalledTimes(1);
+    expect(api.writeOwnedFile).toHaveBeenCalledWith(
+      gameplay,
+      "fov_desired 90\nsensitivity 2.2\n",
+      source,
+    );
+    expect(onBindSyncHandled).toHaveBeenCalledWith(1);
+  });
   it("refuses unknown initial cfg bytes instead of mounting default controls", async () => {
     api.getActiveProfileDetail.mockResolvedValue({
       id: "A",

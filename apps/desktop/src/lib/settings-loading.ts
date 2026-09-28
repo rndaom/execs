@@ -83,15 +83,18 @@ export async function readSettingsSnapshot(
     throw new Error("The active profile changed. Retry loading settings.");
 
   let files = inspectedFiles;
+  // Only binds execs already manages follow TF2's config.cfg. A profile without
+  // the managed binds file has none, so config.cfg stays in charge of every key.
   if (syncBinds && !incomplete) {
     const bindsPath = bindsFilePath(detail?.layer ?? "comfig");
-    const managed = files.find((file) => file.path === bindsPath)?.text ?? "";
-    const synced = syncTrackedBindsFromConfig(managed, configBindsFromFiles(files));
-    if (synced !== managed) {
-      const expected = files.find((file) => file.path === bindsPath)?.source;
-      if (!expected)
+    const managed = files.find((file) => file.path === bindsPath);
+    const synced = managed
+      ? syncTrackedBindsFromConfig(managed.text, configBindsFromFiles(files))
+      : null;
+    if (managed && synced !== null && synced !== managed.text) {
+      if (!managed.source)
         throw new Error("The Binds source identity is unavailable. Retry loading settings.");
-      await api.writeOwnedFile(bindsPath, synced, expected);
+      await api.writeOwnedFile(bindsPath, synced, managed.source);
       if (isStale()) return;
       const refreshed = await api.readProfileFile(bindsPath);
       if (isStale()) return;
