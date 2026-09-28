@@ -6,8 +6,12 @@ transaction apply to their output. ZIP and 7z limits and decoders are unchanged.
 
 ## Decoder choice
 
-`unrar-ng-sys` is pinned to 0.7.7. Its bundled decoder is UnRAR 7.21 beta 1,
-dated March 22, 2026. The Rust wrapper is MIT OR Apache-2.0; the native decoder
+`unrar-ng-sys` is pinned to 0.7.7. Every published release of it bundles a
+beta UnRAR (0.7.7 has 7.21 beta 1), so the workspace uses a local copy of the
+0.7.7 package whose `vendor/unrar/` is RARLAB's stable UnRAR 7.23 (June 27,
+2026) with the crate's own small changes carried over. Sources, hashes and
+the update steps are in `apps/desktop/src-tauri/vendor/unrar-ng-sys/EXECS-VENDOR.md`;
+every RAR test below passes on 7.23. The Rust wrapper is MIT OR Apache-2.0; the native decoder
 has the separate non-OSI UnRAR restriction against recreating RAR compression.
 The owner explicitly approved extraction use during this task. The app never
 creates RAR archives. `THIRD_PARTY.md` identifies the distinction, and the

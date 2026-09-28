@@ -111,7 +111,7 @@ function addPackage(name, version, source, directory, license, explicit) {
     if (digest !== "6ecc1687808b7d66b24f874755abfed7464d9751ed0001cd4e8e5d9bf397ff8a")
       throw new Error("Vendored UnRAR license changed; review its notice");
     contents.push(
-      `Vendored UnRAR 7.21 beta 1 license (extraction only)\n\n${normalize(bytes.toString("utf8"))}`,
+      `Vendored UnRAR 7.23 license (extraction only)\n\n${normalize(bytes.toString("utf8"))}`,
     );
     const acknowledgments = readFileSync(join(directory, "vendor", "unrar", "acknow.txt"));
     const acknowledgmentsHash = createHash("sha256").update(acknowledgments).digest("hex");
@@ -126,7 +126,16 @@ function addPackage(name, version, source, directory, license, explicit) {
     `${title}\nSource: ${source}\nDeclared license: ${license || "See source notices"}\n\n${[...new Set(contents)].join("\n\n")}`,
   );
 }
-for (const pkg of metadata.packages.filter((pkg) => pkg.source && supported.has(pkg.id))) {
+// The one vendored crate (see apps/desktop/src-tauri/vendor) is a local copy
+// of a crates.io package and keeps the same notice checks.
+const vendoredCrate = (pkg) =>
+  !pkg.source &&
+  pkg.name === "unrar-ng-sys" &&
+  resolve(dirname(pkg.manifest_path)) ===
+    resolve(root, "apps/desktop/src-tauri/vendor/unrar-ng-sys");
+for (const pkg of metadata.packages.filter(
+  (pkg) => (pkg.source || vendoredCrate(pkg)) && supported.has(pkg.id),
+)) {
   addPackage(
     pkg.name,
     pkg.version,

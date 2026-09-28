@@ -1,6 +1,13 @@
 [workspace]
 members = [".", "core"]
+# A local copy of a crates.io package, not an execs crate: see its EXECS-VENDOR.md.
+exclude = ["vendor/unrar-ng-sys"]
 resolver = "2"
+
+# unrar-ng-sys 0.7.7 as published, with its bundled UnRAR beta replaced by the
+# stable UnRAR 7.23 release and the crate's own changes carried over.
+[patch.crates-io]
+unrar-ng-sys = { path = "vendor/unrar-ng-sys" }
 
 [package]
 name = "execs"

@@ -1,0 +1,235 @@
+diff -ru unrar/dll.cpp ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/dll.cpp
+--- unrar/dll.cpp	2026-03-22 04:09:00.000000000 -0400
++++ ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/dll.cpp	2006-07-23 21:21:28.000000000 -0400
+@@ -87,8 +87,7 @@
+         else
+           r->OpenResult=ERAR_BAD_ARCHIVE;
+       }
+-      delete Data;
+-      return nullptr;
++      return (HANDLE) Data;
+     }
+     r->Flags=0;
+     
+@@ -337,7 +336,10 @@
+   {
+     return Data->Cmd.DllError!=0 ? Data->Cmd.DllError : RarErrorToDll(ErrCode);
+   }
+-  return Data->Cmd.DllError!=0 ? Data->Cmd.DllError : RarErrorToDll(ErrHandler.GetErrorCode());
++  // Return success if no DLL-specific error was set.
++  // We avoid using global ErrHandler.GetErrorCode() here because it can be 
++  // affected by parallel operations in multi-threaded environments.
++  return Data->Cmd.DllError;
+ }
+ 
+ 
+@@ -438,7 +440,10 @@
+   {
+     return Data->Cmd.DllError!=0 ? Data->Cmd.DllError : RarErrorToDll(ErrCode);
+   }
+-  return Data->Cmd.DllError!=0 ? Data->Cmd.DllError : RarErrorToDll(ErrHandler.GetErrorCode());
++  // Return success if no DLL-specific error was set.
++  // We avoid using global ErrHandler.GetErrorCode() here because it can be 
++  // affected by parallel operations in multi-threaded environments.
++  return Data->Cmd.DllError;
+ }
+ 
+ 
+@@ -494,6 +499,116 @@
+ }
+ 
+ 
++// Batch extract all files to destination path.
++// This function bypasses the per-file API overhead for better performance
++// when extracting archives with many small files.
++int PASCAL RARExtractAll(HANDLE hArcData,char *DestPath)
++{
++  std::wstring DestPathW;
++  if (DestPath!=nullptr && *DestPath!=0)
++    CharToWide(DestPath,DestPathW);
++  return RARExtractAllW(hArcData,DestPathW.empty() ? nullptr : const_cast<wchar*>(DestPathW.c_str()));
++}
++
++
++int PASCAL RARExtractAllW(HANDLE hArcData,wchar *DestPath)
++{
++  DataSet *Data=(DataSet *)hArcData;
++  try
++  {
++    Data->Cmd.DllError=0;
++    
++    // Set extraction path
++    if (DestPath!=nullptr && *DestPath!=0)
++    {
++      Data->Cmd.ExtrPath=DestPath;
++      AddEndSlash(Data->Cmd.ExtrPath);
++    }
++    else
++      Data->Cmd.ExtrPath.clear();
++    
++    Data->Cmd.Command=L"X";
++    Data->Cmd.Test=false;
++    Data->Cmd.DllOpMode=RAR_EXTRACT;
++    
++    // Use the same loop pattern as command line version for optimal performance.
++    // ReadHeader() reads the next block header directly, and ExtractCurrentFile()
++    // handles all header types internally (HEAD_FILE, HEAD_SERVICE, HEAD_ENDARC, etc.)
++    while (true)
++    {
++      size_t Size=Data->Arc.ReadHeader();
++      
++      // Check if this is a file header and notify callback
++      bool IsFileHeader = (Data->Arc.GetHeaderType()==HEAD_FILE);
++      std::wstring CurrentFileName;
++      int64 CurrentFileSize = 0;
++      
++      if (IsFileHeader)
++      {
++        CurrentFileName = Data->Arc.FileHead.FileName;
++        CurrentFileSize = Data->Arc.FileHead.UnpSize;
++        
++        // Notify callback that file extraction is starting
++        if (Data->Cmd.Callback!=NULL)
++        {
++          if (Data->Cmd.Callback(UCM_EXTRACTFILE, Data->Cmd.UserData,
++              (LPARAM)CurrentFileName.c_str(), (LPARAM)CurrentFileSize)==-1)
++          {
++            return ERAR_SUCCESS; // User cancelled extraction
++          }
++        }
++      }
++      
++      bool Repeat=false;
++      bool Success = Data->Extract.ExtractCurrentFile(Data->Arc,Size,Repeat);
++      
++      // Notify callback of extraction result. Returning -1 from either
++      // UCM_EXTRACTFILE_OK or UCM_EXTRACTFILE_ERR aborts extraction in
++      // the same way UCM_EXTRACTFILE does, so cancel semantics are
++      // uniform across all three events.
++      if (IsFileHeader && Data->Cmd.Callback!=NULL)
++      {
++        if (Success)
++        {
++          if (Data->Cmd.Callback(UCM_EXTRACTFILE_OK, Data->Cmd.UserData,
++              (LPARAM)CurrentFileName.c_str(), 0)==-1)
++          {
++            return ERAR_SUCCESS; // User cancelled extraction
++          }
++        }
++        else if (!Repeat)
++        {
++          if (Data->Cmd.Callback(UCM_EXTRACTFILE_ERR, Data->Cmd.UserData,
++              (LPARAM)CurrentFileName.c_str(), (LPARAM)Data->Cmd.DllError)==-1)
++          {
++            return ERAR_SUCCESS; // User cancelled extraction
++          }
++        }
++      }
++      
++      if (!Success)
++      {
++        if (Repeat)
++        {
++          // Handle extraction restart from first volume
++          continue;
++        }
++        break;  // End of archive or error
++      }
++    }
++  }
++  catch (std::bad_alloc&)
++  {
++    return ERAR_NO_MEMORY;
++  }
++  catch (RAR_EXIT ErrCode)
++  {
++    return Data->Cmd.DllError!=0 ? Data->Cmd.DllError : RarErrorToDll(ErrCode);
++  }
++  return Data->Cmd.DllError;
++}
++
++
+ static int RarErrorToDll(RAR_EXIT ErrCode)
+ {
+   switch(ErrCode)
+diff -ru unrar/dll.def ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/dll.def
+--- unrar/dll.def	2008-01-16 11:58:36.000000000 -0500
++++ ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/dll.def	2006-07-23 21:21:28.000000000 -0400
+@@ -11,3 +11,5 @@
+   RARSetProcessDataProc
+   RARSetPassword
+   RARGetDllVersion
++  RARExtractAll
++  RARExtractAllW
+diff -ru unrar/dll.hpp ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/dll.hpp
+--- unrar/dll.hpp	2026-03-22 04:09:00.000000000 -0400
++++ ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/dll.hpp	2006-07-23 21:21:28.000000000 -0400
+@@ -163,7 +163,13 @@
+ 
+ enum UNRARCALLBACK_MESSAGES {
+   UCM_CHANGEVOLUME,UCM_PROCESSDATA,UCM_NEEDPASSWORD,UCM_CHANGEVOLUMEW,
+-  UCM_NEEDPASSWORDW,UCM_LARGEDICT
++  UCM_NEEDPASSWORDW,UCM_LARGEDICT,
++  // Fork-only event ids: explicitly start at 100 to reserve 6..99 for any
++  // future upstream UCM_* additions. Do NOT renumber to be consecutive
++  // with UCM_LARGEDICT.
++  UCM_EXTRACTFILE = 100, // File extraction started,   P1=filename (wchar_t*), P2=file size
++  UCM_EXTRACTFILE_OK,    // File extraction succeeded, P1=filename (wchar_t*), P2=0
++  UCM_EXTRACTFILE_ERR    // File extraction failed,    P1=filename (wchar_t*), P2=error code
+ };
+ 
+ typedef int (PASCAL *CHANGEVOLPROC)(char *ArcName,int Mode);
+@@ -185,6 +191,8 @@
+ void   PASCAL RARSetProcessDataProc(HANDLE hArcData,PROCESSDATAPROC ProcessDataProc);
+ void   PASCAL RARSetPassword(HANDLE hArcData,char *Password);
+ int    PASCAL RARGetDllVersion();
++int    PASCAL RARExtractAll(HANDLE hArcData,char *DestPath);
++int    PASCAL RARExtractAllW(HANDLE hArcData,wchar_t *DestPath);
+ 
+ #ifdef __cplusplus
+ }
+diff -ru unrar/rijndael.cpp ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/rijndael.cpp
+--- unrar/rijndael.cpp	2026-03-22 04:09:01.000000000 -0400
++++ ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/rijndael.cpp	2006-07-23 21:21:28.000000000 -0400
+@@ -111,7 +111,7 @@
+   }
+   else
+     AES_NI=false;
+-#elif defined(__GNUC__)
++#elif defined(__GNUC__) && defined(__GLIBC__) && !defined(_APPLE)
+   AES_NI=__builtin_cpu_supports("aes");
+ #endif
+ 
+diff -ru unrar/system.cpp ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/system.cpp
+--- unrar/system.cpp	2026-03-22 04:09:02.000000000 -0400
++++ ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/system.cpp	2006-07-23 21:21:28.000000000 -0400
+@@ -229,7 +229,7 @@
+     if ((CPUInfo[3] & 0x2000000)!=0)
+       return SSE_SSE;
+   }
+-#elif defined(__GNUC__)
++#elif defined(__GNUC__) && defined(__GLIBC__) && !defined(_APPLE)
+   if (__builtin_cpu_supports("avx2"))
+     return SSE_AVX2;
+   if (__builtin_cpu_supports("sse4.1"))
+diff -ru unrar/unicode.cpp ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/unicode.cpp
+--- unrar/unicode.cpp	2026-03-22 04:09:02.000000000 -0400
++++ ../x0.7.7/unrar-ng-sys-0.7.7/vendor/unrar/unicode.cpp	2006-07-23 21:21:28.000000000 -0400
+@@ -27,7 +27,7 @@
+     RetCode=false;
+ 
+ // wcstombs is broken in Android NDK r9.
+-#elif defined(_APPLE)
++#elif defined(_APPLE) || defined(UNRAR_NG_FORCE_UTF8)
+   WideToUtf(Src,Dest,DestSize);
+ 
+ #elif defined(MBFUNCTIONS)
+@@ -92,7 +92,7 @@
+     RetCode=false;
+ 
+ // mbstowcs is broken in Android NDK r9.
+-#elif defined(_APPLE)
++#elif defined(_APPLE) || defined(UNRAR_NG_FORCE_UTF8)
+   UtfToWide(Src,Dest,DestSize);
+ 
+ #elif defined(MBFUNCTIONS)

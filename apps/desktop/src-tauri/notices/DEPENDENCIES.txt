@@ -66442,7 +66442,7 @@ unrar-ng-sys 0.7.7
 Source: https://github.com/ttys3/unrar.rs
 Declared license: MIT OR Apache-2.0
 
-Vendored UnRAR 7.21 beta 1 license (extraction only)
+Vendored UnRAR 7.23 license (extraction only)
 
 ******    *****   ******   UnRAR - free utility for RAR archives
  **   **  **   **  **   **  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

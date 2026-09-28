@@ -6,6 +6,10 @@
 *.jpg binary
 *.woff2 binary
 
+# Vendored native source keeps RARLAB's exact bytes; its notices are hash-checked.
+apps/desktop/src-tauri/vendor/unrar-ng-sys/vendor/** -text
+apps/desktop/src-tauri/vendor/unrar-ng-sys/execs-crate-changes.patch -text
+
 # Archived CI evidence is byte-preserved; provenance hashes include original line endings.
 docs/design/2026-09-22-overhaul/implementation/linux-native/run-*/** -text
 docs/design/2026-09-22-overhaul/implementation/package-smoke/run-*/** -text
