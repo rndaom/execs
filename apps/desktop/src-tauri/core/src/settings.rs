@@ -50,6 +50,40 @@ pub struct Settings {
     pub tf2_root: String,
     #[serde(default)]
     pub preferences: AppPreferences,
+    /// Where the main window was when execs last closed. Additive: older
+    /// settings files have none and open at the default size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<WindowPlacement>,
+}
+
+/// The main window's last normal (not maximized) bounds in physical pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowPlacement {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+    pub maximized: bool,
+}
+
+impl WindowPlacement {
+    /// True when the window's title bar would be reachable on one of the
+    /// given monitors (`x`, `y`, `width`, `height`), so a window saved on a
+    /// monitor that is gone is not restored off screen.
+    pub fn visible_on(&self, monitors: &[(i32, i32, u32, u32)]) -> bool {
+        let bar_left = i64::from(self.x) + 40;
+        let bar_right = i64::from(self.x) + i64::from(self.width) - 40;
+        let bar_top = i64::from(self.y);
+        let bar_bottom = bar_top + 32;
+        monitors.iter().any(|&(x, y, width, height)| {
+            let left = bar_left.max(i64::from(x));
+            let right = bar_right.min(i64::from(x) + i64::from(width));
+            let top = bar_top.max(i64::from(y));
+            let bottom = bar_bottom.min(i64::from(y) + i64::from(height));
+            right - left >= 120 && bottom - top >= 16
+        })
+    }
 }
 
 impl Default for Settings {
@@ -58,6 +92,7 @@ impl Default for Settings {
             schema: SETTINGS_SCHEMA,
             tf2_root: String::new(),
             preferences: AppPreferences::default(),
+            window: None,
         }
     }
 }
@@ -234,6 +269,32 @@ pub fn remembered_tf2_root_from(file: &Path) -> Option<PathBuf> {
     Some(valid)
 }
 
+/// The main window's saved placement, if any.
+pub fn window_placement_from(file: &Path) -> Option<WindowPlacement> {
+    load_settings_from(file)?.window
+}
+
+/// Remember the main window's placement. A maximized window keeps its last
+/// normal bounds so restoring and un-maximizing both land where they were.
+pub fn save_window_placement_to(file: &Path, placement: WindowPlacement) -> Result<(), String> {
+    let _guard = SETTINGS_WRITES
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut settings = read_settings_from(file)?.unwrap_or_default();
+    let next = match (placement.maximized, settings.window) {
+        (true, Some(previous)) => WindowPlacement {
+            maximized: true,
+            ..previous
+        },
+        _ => placement,
+    };
+    if settings.window == Some(next) {
+        return Ok(());
+    }
+    settings.window = Some(next);
+    save_settings_to(file, &settings)
+}
+
 /// The remembered TF2 folder when it is set but no longer holds TF2.
 pub fn unavailable_tf2_root() -> Option<String> {
     unavailable_tf2_root_from(&settings_file())
@@ -291,6 +352,69 @@ mod tests {
             data_dir_from_appdata(Some(std::ffi::OsString::from(r"D:\Roaming"))).unwrap(),
             PathBuf::from(r"D:\Roaming").join("execs")
         );
+    }
+
+    #[test]
+    fn window_placement_round_trips_and_keeps_normal_bounds_when_maximized() {
+        let dir = crate::test_temp_dir();
+        let file = dir.join("execs").join("settings.json");
+        assert_eq!(window_placement_from(&file), None);
+        let normal = WindowPlacement {
+            x: 2000,
+            y: 100,
+            width: 1400,
+            height: 900,
+            maximized: false,
+        };
+        save_window_placement_to(&file, normal).unwrap();
+        assert_eq!(window_placement_from(&file), Some(normal));
+        save_window_placement_to(
+            &file,
+            WindowPlacement {
+                x: 1920,
+                y: 0,
+                width: 1920,
+                height: 1040,
+                maximized: true,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            window_placement_from(&file),
+            Some(WindowPlacement {
+                maximized: true,
+                ..normal
+            })
+        );
+        // Other settings survive.
+        remember_tf2_root_to(&file, &{
+            let root = dir.join("Team Fortress 2");
+            write_tf2(&root);
+            root
+        })
+        .unwrap();
+        assert!(window_placement_from(&file).is_some());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_window_on_a_disconnected_monitor_is_not_restored_off_screen() {
+        let placement = WindowPlacement {
+            x: 2000,
+            y: 100,
+            width: 1200,
+            height: 800,
+            maximized: false,
+        };
+        let one = [(0, 0, 1920, 1080)];
+        let two = [(0, 0, 1920, 1080), (1920, 0, 2560, 1440)];
+        assert!(!placement.visible_on(&one));
+        assert!(placement.visible_on(&two));
+        assert!(!WindowPlacement {
+            y: -600,
+            ..placement
+        }
+        .visible_on(&two));
     }
 
     #[test]

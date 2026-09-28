@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- execs reopens where you left it: the same window size and position (including maximized, and on
+  the same monitor when it is still connected) and the pane you last used.
 - Copy diagnostics includes a short Health summary and the most recent operations and errors, so a
   bug report shows what execs was doing. The activity log keeps no file contents and hides
   password values.

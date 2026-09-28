@@ -45,7 +45,7 @@ import {
   CONFIRM_HOLD_MS,
   CONFIRM_MAX_MS,
 } from "./lib/boot-ui";
-import { invokeErrorMessage, type LaunchSyncStatus } from "./lib/bridge";
+import { invokeErrorMessage, isTauri, type LaunchSyncStatus } from "./lib/bridge";
 import { motionHold, revealPane, revealScreen } from "./lib/entrance";
 import { createFilesDraftStore } from "./lib/files-drafts";
 import { confirmEnabled } from "./lib/finder-ui";
@@ -59,7 +59,14 @@ import {
   previewUpdateProgress,
 } from "./lib/preview";
 import { createSettingsDraftStore } from "./lib/settings-drafts";
-import { SETTINGS_TAB_LABELS, type SettingsTab, showSettingsChrome } from "./lib/settings-ui";
+import {
+  browserStorage,
+  readLastPane,
+  SETTINGS_TAB_LABELS,
+  type SettingsTab,
+  showSettingsChrome,
+  writeLastPane,
+} from "./lib/settings-ui";
 import { SettingsHost } from "./SettingsHost";
 import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard } from "./SetupWizard";
@@ -107,8 +114,15 @@ export function App({
   const profileSettings = useRef<HTMLDivElement>(null);
   const [settingsReviewRequest, setSettingsReviewRequest] = useState(0);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(
-    () => previewSettingsTab(preview) ?? "comfig",
+    // Fixture previews choose their own pane; the installed app reopens the last one.
+    () =>
+      previewSettingsTab(preview) ??
+      (isTauri() ? readLastPane(browserStorage()) : null) ??
+      "comfig",
   );
+  useEffect(() => {
+    if (isTauri()) writeLastPane(browserStorage(), settingsTab);
+  }, [settingsTab]);
   const navigateSettings = useCallback((tab: SettingsTab) => {
     setAppSettingsOpen(false);
     setSettingsTab(tab);

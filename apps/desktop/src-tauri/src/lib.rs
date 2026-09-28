@@ -842,7 +842,17 @@ pub fn run() {
             commands::mods::gamebanana_download_variants,
             commands::mods::install_gamebanana_mod,
         ])
+        .on_window_event(|window, event| {
+            // Save before the close guard decides; a cancelled close only
+            // means the next save repeats the same placement.
+            if window.label() == "main"
+                && matches!(event, tauri::WindowEvent::CloseRequested { .. })
+            {
+                save_window_placement(window);
+            }
+        })
         .setup(move |app| {
+            restore_window_placement(app);
             bind_mouse::install(app)?;
             app.manage(write_gate);
             app.manage(commands::library::PendingProfileImport::default());
@@ -856,6 +866,57 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running execs");
+}
+
+/// Reopen the main window where it was, unless that monitor is gone.
+fn restore_window_placement(app: &tauri::App) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let Some(placement) = execs_core::settings::window_placement_from(&execs_core::settings_file())
+    else {
+        return;
+    };
+    let monitors: Vec<(i32, i32, u32, u32)> = window
+        .available_monitors()
+        .unwrap_or_default()
+        .iter()
+        .map(|monitor| {
+            let position = monitor.position();
+            let size = monitor.size();
+            (position.x, position.y, size.width, size.height)
+        })
+        .collect();
+    if placement.visible_on(&monitors) {
+        let _ = window.set_size(tauri::PhysicalSize::new(placement.width, placement.height));
+        let _ = window.set_position(tauri::PhysicalPosition::new(placement.x, placement.y));
+    }
+    if placement.maximized {
+        let _ = window.maximize();
+    }
+}
+
+fn save_window_placement(window: &tauri::Window) {
+    if window.is_minimized().unwrap_or(true) {
+        return;
+    }
+    let (Ok(position), Ok(size), Ok(maximized)) = (
+        window.outer_position(),
+        window.inner_size(),
+        window.is_maximized(),
+    ) else {
+        return;
+    };
+    let placement = execs_core::settings::WindowPlacement {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+        maximized,
+    };
+    // Written before returning: the close can finish (and the process exit)
+    // right after this event, and the settings file is a few hundred bytes.
+    let _ = execs_core::settings::save_window_placement_to(&execs_core::settings_file(), placement);
 }
 
 fn startup_data_dir_preflight(
