@@ -713,6 +713,8 @@ pub fn run() {
             commands::finder::confirm_tf2_root,
             commands::finder::get_tf2_root,
             commands::finder::get_missing_tf2_root,
+            commands::app_settings::run_automatic_tidy_up,
+            commands::app_settings::tidy_up_again,
             commands::finder::tf2_write_lock,
             commands::library::get_profile_library,
             commands::library::init_profile_library,

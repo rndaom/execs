@@ -47,6 +47,7 @@ export const PREVIEW_STATES = [
   "release-notes",
   "tf2-missing",
   "library-move",
+  "tidy-up",
 ] as const;
 
 export type PreviewState = (typeof PREVIEW_STATES)[number];
@@ -95,6 +96,7 @@ const READY: PreviewState[] = [
   "update-installing",
   "release-notes",
   "library-move",
+  "tidy-up",
 ];
 
 export function previewStateFromSearch(search: string): PreviewState | null {
@@ -176,6 +178,7 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   }
   if (
     state === "saved" ||
+    state === "tidy-up" ||
     state === "profile-import-huds" ||
     state === "absorb" ||
     state === "create" ||

@@ -7,6 +7,12 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- After this update, execs tidies up once what earlier versions left behind: sound caches for
+  packs that are gone, HUD backups in TF2's custom folder (duplicates are deleted, the rest move
+  to execs data and stay in App settings → Storage), Valve's own cfgs saved into profiles, the old
+  Casual preload hook, the cheat-only tracer line, bind keys with names TF2 rejects, and unused
+  downloads from retired features. Packs, your own files and hand edits are not touched. One quiet
+  notice says what changed, with Details, and Storage offers Tidy up again.
 - Sounds accepts MP3 and Ogg Vorbis clips as well as WAV, and notes when a clip is longer than a
   second. Clips are converted to a WAV TF2 plays, up to 30 seconds.
 - execs reopens where you left it: the same window size and position (including maximized, and on

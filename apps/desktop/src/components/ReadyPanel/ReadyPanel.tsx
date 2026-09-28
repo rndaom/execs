@@ -2,7 +2,7 @@ import { type ComponentProps, type ReactNode, useRef, useState } from "react";
 import { useAppStatus } from "../../hooks/useAppStatus";
 import type { ProfileLibraryState } from "../../hooks/useProfileLibrary";
 import type { SwitchProgressController } from "../../hooks/useSwitchProgress";
-import type { LibraryMoveReview, ProfileExportReview } from "../../lib/bridge";
+import type { LibraryMoveReview, ProfileExportReview, TidyReport } from "../../lib/bridge";
 import { libraryStatusCopy } from "../../lib/library-ui";
 import type { ProfileComparison } from "../../lib/switch-compare-ui";
 import { ProfileDeleteDialog } from "../ProfileDeleteDialog";
@@ -10,6 +10,7 @@ import { ProfileImportDialog } from "../ProfileImportDialog";
 import { RestorePointsDialog } from "../RestorePointsDialog";
 import { SwitchCompareDialog } from "../SwitchCompareDialog";
 import { SwitchProgressList } from "../SwitchProgressList";
+import { TidyUpNotice } from "../TidyUpNotice";
 import { Modal } from "../ui/Modal";
 import { OperationError } from "../ui/OperationError";
 import { Loading } from "../ui/Spinner";
@@ -45,6 +46,9 @@ export function ReadyPanel({
   restoreApi,
   onReviewLibraryMove,
   onMoveLibrary,
+  tidyReport = null,
+  onDismissTidy,
+  onVerifyTidy,
 }: {
   path: string;
   profiles: ProfileLibraryState;
@@ -72,6 +76,10 @@ export function ReadyPanel({
   /** Profiles saved for another TF2 folder can move here when provided. */
   onReviewLibraryMove?: () => Promise<LibraryMoveReview | null>;
   onMoveLibrary?: () => Promise<void>;
+  /** What the automatic tidy-up after an update changed, shown once. */
+  tidyReport?: TidyReport | null;
+  onDismissTidy?: () => void;
+  onVerifyTidy?: () => void;
 }) {
   const { error, dismissError, busy, running } = useAppStatus();
   const [profileMenuRequest, setProfileMenuRequest] = useState(0);
@@ -171,6 +179,14 @@ export function ReadyPanel({
         }
       />
       <SaveAlertSlot />
+      {tidyReport && onDismissTidy && onVerifyTidy ? (
+        <TidyUpNotice
+          report={tidyReport}
+          running={running}
+          onVerify={onVerifyTidy}
+          onDismiss={onDismissTidy}
+        />
+      ) : null}
 
       {unsafeActive ? (
         <div

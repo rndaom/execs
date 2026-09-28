@@ -212,6 +212,34 @@ export type ProfileLibrary = {
   profiles: ProfileSummary[];
 };
 
+/** What the tidy-up after an update changed; see `execs-core` `tidy_up.rs`. */
+export type TidyReport = {
+  soundCachesRemoved: string[];
+  hudBackupsDeleted: string[];
+  hudBackupsMoved: string[];
+  hudBackupsKept: number;
+  valveCfgsDropped: { profile: string; count: number }[];
+  valveCfgsMissing: number;
+  managedFilesUpgraded: {
+    profile: string;
+    kind: "preloadHook" | "bindKeyNames" | "cheatTracers";
+  }[];
+  downloadsRemoved: string[];
+  freedBytes: number;
+  movedBytes: number;
+  skipped: string[];
+};
+
+/** The once-per-version tidy-up; null when it already ran or has to wait. */
+export async function runAutomaticTidyUp(): Promise<TidyReport | null> {
+  return call<TidyReport | null>("run_automatic_tidy_up");
+}
+
+/** App settings → Storage: run the tidy-up checks again. */
+export async function tidyUpAgain(): Promise<TidyReport> {
+  return call<TidyReport>("tidy_up_again");
+}
+
 /** Saved profiles that belong to another TF2 folder, and whether they can move here. */
 export type LibraryMoveReview = {
   libraryRoot: string;

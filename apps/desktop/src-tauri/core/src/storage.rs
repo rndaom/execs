@@ -111,6 +111,8 @@ fn classify(data_dir: &Path, path: &Path) -> StorageGroupId {
         _ if name.starts_with("hitsound-cache/comfig-") => StorageGroupId::Downloads,
         // Retired sound catalog downloads next to the picked folder.
         _ if name.starts_with("hitsound-cache/") => StorageGroupId::Retired,
+        // HUD backups moved out of TF2's folder: player files, not downloads.
+        "hud-backups" => StorageGroupId::Protected,
         // Recovery journals, preloader originals and state, and the legacy
         // library that saved Casual choices need and that cannot be fetched again.
         "maintenance"
@@ -239,6 +241,20 @@ pub fn inspect_storage(data_dir: &Path) -> io::Result<StorageReport> {
 /// A failure keeps that entry and continues; nothing outside the data
 /// directory, and no link, is ever followed.
 pub fn clear_download_caches(data_dir: &Path) -> io::Result<ClearReport> {
+    clear_groups(data_dir, StorageGroupId::clearable)
+}
+
+/// Delete only the retired features' leftovers (Venom crosshairs, the studio,
+/// the retired sound catalog). Profiles keep their own copies of anything they
+/// installed; current downloads stay.
+pub fn clear_retired_leftovers(data_dir: &Path) -> io::Result<ClearReport> {
+    clear_groups(data_dir, |group| group == StorageGroupId::Retired)
+}
+
+fn clear_groups(
+    data_dir: &Path,
+    wanted: impl Fn(StorageGroupId) -> bool,
+) -> io::Result<ClearReport> {
     let mut report = ClearReport {
         freed_bytes: 0,
         failed: Vec::new(),
@@ -249,7 +265,7 @@ pub fn clear_download_caches(data_dir: &Path) -> io::Result<ClearReport> {
         Err(err) => return Err(err),
     };
     for path in list {
-        if !classify(data_dir, &path).clearable() {
+        if !wanted(classify(data_dir, &path)) {
             continue;
         }
         let mut tally = Tally::default();

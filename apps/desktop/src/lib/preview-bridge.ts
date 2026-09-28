@@ -30,6 +30,7 @@ import {
   type SettingsCopyScope,
   type SwitchProgress,
   type Tf2Install,
+  type TidyReport,
 } from "./bridge";
 import { PREVIEW_COMFIG_STATE } from "./comfig-ui";
 import { previewCrosshairRecord } from "./crosshair-ui";
@@ -76,6 +77,25 @@ import {
 } from "./preview";
 import type { RestorePoint } from "./restore-points-ui";
 import { previewViewmodelRecord } from "./viewmodel-ui";
+
+/** A tidy-up like the one on a machine that used 0.1.x and 0.2.0. */
+const PREVIEW_TIDY_REPORT: TidyReport = {
+  soundCachesRemoved: Array.from({ length: 30 }, (_, index) => `pack${index}.vpk.sound.cache`),
+  hudBackupsDeleted: ["rayshud"],
+  hudBackupsMoved: ["toonhud", "budhud", "m0rehud", "flawhud", "hypnotize", "7hud"],
+  hudBackupsKept: 1,
+  valveCfgsDropped: [{ profile: "Default", count: 23 }],
+  valveCfgsMissing: 23,
+  managedFilesUpgraded: [
+    { profile: "Low", kind: "preloadHook" },
+    { profile: "Low", kind: "cheatTracers" },
+    { profile: "wacky tf2", kind: "cheatTracers" },
+  ],
+  downloadsRemoved: ["mods-v1.7.1.zip", "Retired crosshair, studio and sound catalog caches"],
+  freedBytes: 98 * 1024 * 1024,
+  movedBytes: 169 * 1024 * 1024,
+  skipped: [],
+};
 
 /** Preview-only simulation of GameBanana's global server order. Production
  * records are already ordered and must never pass through this helper. */
@@ -333,6 +353,13 @@ export function createPreviewApi(state: PreviewState): Api {
     // --- library ------------------------------------------------------------
     async getProfileLibrary() {
       return library ?? emptyLibrary(BROWSED.path, true);
+    },
+    async runAutomaticTidyUp() {
+      return state === "tidy-up" ? PREVIEW_TIDY_REPORT : null;
+    },
+    async tidyUpAgain() {
+      if (previewLocked(state)) throw new BridgeError("Close TF2 first.", "GameRunning");
+      return { ...PREVIEW_TIDY_REPORT, soundCachesRemoved: [], hudBackupsMoved: [], movedBytes: 0 };
     },
     async reviewSettingsCopy(_scope: SettingsCopyScope) {
       return (library?.profiles ?? [])

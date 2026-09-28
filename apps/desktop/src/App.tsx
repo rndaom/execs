@@ -34,6 +34,7 @@ import { useLifecycleStatus } from "./hooks/useLifecycleStatus";
 import { useOperationErrors } from "./hooks/useOperationErrors";
 import { useProfileLibrary } from "./hooks/useProfileLibrary";
 import { useReleaseNotes } from "./hooks/useReleaseNotes";
+import { useStartupTidy } from "./hooks/useStartupTidy";
 import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
@@ -104,6 +105,7 @@ export function App({
   const [hudReviewId, setHudReviewId] = useState<string | null>(null);
   const [hudReviewBusy, setHudReviewBusy] = useState(false);
   const [hudReviewRevision, setHudReviewRevision] = useState(0);
+  const [tidyRevision, setTidyRevision] = useState(0);
   const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
@@ -326,6 +328,35 @@ export function App({
     }
   }, [profiles, firstRun, draftName]);
 
+  const tidy = useStartupTidy(
+    api,
+    {
+      ready:
+        install.screen === "ready" &&
+        install.confirmed !== null &&
+        profiles.library?.usable === true &&
+        !profiles.library.rootMismatch,
+      running: lock.running,
+      busy: busy || progress.state.active,
+    },
+    () => {
+      setTidyRevision((revision) => revision + 1);
+      void api
+        .getProfileLibrary()
+        .then(profiles.setLibrary)
+        .catch(() => {});
+    },
+  );
+  const verifyAfterTidy = useCallback(() => {
+    void api
+      .repairGameFiles()
+      .then(() => {
+        setError(null, "tidy:verify");
+        navigateSettings("mods");
+        return lifecycle.refresh();
+      })
+      .catch((err) => setError(invokeErrorMessage(err), "tidy:verify"));
+  }, [api, setError, navigateSettings, lifecycle]);
   const reviewLibraryMove = useCallback(() => api.reviewLibraryMove(), [api]);
   const { setLibrary } = profiles;
   const moveLibrary = useCallback(async () => {
@@ -652,6 +683,9 @@ export function App({
         }}
         onReviewFiles={() => navigateSettings("files")}
         onReviewLibraryMove={reviewLibraryMove}
+        tidyReport={tidy.report}
+        onDismissTidy={tidy.dismiss}
+        onVerifyTidy={verifyAfterTidy}
         onMoveLibrary={moveLibrary}
         onInspectExport={(id) => api.inspectProfileExport(id)}
         onCompareSwitch={(id) => api.compareProfileSwitch(id)}
@@ -703,7 +737,7 @@ export function App({
                     recoveryTargetId !== null ||
                     lifecycleBusy
                   }
-                  refreshKey={`${profiles.refreshKey}:${hudReviewRevision}`}
+                  refreshKey={`${profiles.refreshKey}:${hudReviewRevision}:${tidyRevision}`}
                   bindSyncRequest={profiles.bindSyncRequest}
                   bindSyncChanges={profiles.bindSyncChanges}
                   onBindSyncHandled={profiles.onBindSyncHandled}

@@ -3668,6 +3668,20 @@ pub fn load_manifest(
     Ok(manifest)
 }
 
+/// Valve cfg paths an older execs captured into this profile's manifest.
+/// Reads hide them already; the next profile transaction drops them.
+pub(crate) fn protected_stock_cfg_entries(
+    profiles_dir: &Path,
+    profile_id: &str,
+) -> Result<Vec<String>, ProfileError> {
+    Ok(load_manifest_raw(profiles_dir, profile_id)?
+        .files
+        .into_iter()
+        .filter(|file| crate::surface::is_protected_stock_cfg_path(&file.path))
+        .map(|file| file.path)
+        .collect())
+}
+
 fn load_manifest_raw(
     profiles_dir: &Path,
     profile_id: &str,

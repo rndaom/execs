@@ -46,6 +46,7 @@ pub mod steam_inf;
 pub mod storage;
 pub mod surface;
 pub mod switch;
+pub mod tidy_up;
 pub mod uninstall;
 pub mod vdf;
 pub mod viewmodel;
