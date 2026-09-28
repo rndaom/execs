@@ -1,4 +1,4 @@
-# 0.2.1 release preparation
+# 0.2.1 release
 
 0.2.1 is a patch after public [0.2.0](https://github.com/rndaom/execs/releases/tag/v0.2.0).
 The owner assigned three issue lists to it on September 27–28, 2026, including
@@ -56,7 +56,7 @@ milestone scope instead of issues. Nothing outside them was added.
 - Release PR checks and a private candidate run (`workflow_dispatch` with
   `release_tag=v0.2.1`), which builds signed Windows and Linux installers into a
   private draft and upgrades public 0.2.0 on both platforms with the profile
-  library preserved. The run is recorded here when it finishes.
+  library preserved. See Candidate below.
 
 ## Not checked automatically
 
@@ -69,7 +69,30 @@ must be tried before the tag:
 - A real Valve Casual match with the preload hook and model/material packs.
 - Linux in person (CI covers the Linux builds, the native smoke and packages).
 
+## Candidate
+
+[Candidate run 36491333342](https://github.com/rndaom/execs/actions/runs/36491333342)
+on `f5322fd8` passed every gate: validation, signed Windows and Linux builds, the
+Windows installer and updater smoke and the Linux package and updater smoke from
+public 0.2.0 with the profile library preserved, updater discovery on both
+platforms, and feed verification. An earlier run on `244eb172` was cancelled: the
+release-history guard required the upgrade fixture to come from the previous
+public version, so `scripts/fixtures/package-smoke-v020.json` now holds the
+authentic v0.2.0 exports (see `scripts/fixtures/README.md`).
+
 ## Publication
 
-Not published. Publishing needs the owner's go, then an annotated `v0.2.1` tag
-on the release commit; the tag workflow repeats every gate before it publishes.
+Published [0.2.1](https://github.com/rndaom/execs/releases/tag/v0.2.1) on
+September 28, 2026 at 23:37:58 UTC (7:37 PM America/New_York) after the owner's go.
+
+- [#147](https://github.com/rndaom/execs/pull/147) merged into `main` as
+  `ebb2d507635f314675a481a0c8b5d683fb4502cf`, whose tree equals the candidate's.
+  Annotated tag `v0.2.1` ("execs 0.2.1") points to it.
+- [Tagged workflow 36495684486](https://github.com/rndaom/execs/actions/runs/36495684486)
+  repeated every gate and published.
+- Anonymous checks: `/releases/latest` is `v0.2.1` (not a draft or prerelease);
+  `latest.json` reports 0.2.1 for `windows-x86_64`, `windows-x86_64-nsis`,
+  `linux-x86_64` and `linux-x86_64-appimage`, each signed; the Windows installer,
+  AppImage and `.deb` download; `release-commit.json` names the commit and run above.
+- Watch GitHub Issues for 48 hours after publication; a broken install or updater
+  is a same-day patch.
