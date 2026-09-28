@@ -15,7 +15,9 @@ import {
   launchSteamState,
   launchSyncAction,
   launchSyncWarning,
+  REMEMBERED_LAUNCH_PRESETS,
   recommendedLaunchOptions,
+  rememberedLaunchOptions,
   removeLaunchOption,
   searchLaunchPresets,
   steamWrapperPrefix,
@@ -193,6 +195,18 @@ describe("launch option editing", () => {
     expect(forbiddenLaunchTokens(String.raw`-novid %command% -auto\"config\" %com"mand"%`)).toEqual(
       ["-autoconfig", "%command%"],
     );
+  });
+});
+
+describe("options TF2 remembers", () => {
+  it("names video-mode and console options that outlive the profile", () => {
+    expect(rememberedLaunchOptions("-novid -w 1920 -h 1080 -windowed -console")).toEqual([
+      "Open developer console",
+      "Resolution",
+      "Windowed mode",
+    ]);
+    expect(rememberedLaunchOptions("-novid -nojoy")).toEqual([]);
+    expect(REMEMBERED_LAUNCH_PRESETS.fullscreen).toContain("Video settings");
   });
 });
 

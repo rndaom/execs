@@ -174,6 +174,31 @@ export type LaunchPresetValues = {
 
 export const LAUNCH_PRESET_PAGE_SIZE = 8;
 
+/**
+ * Options TF2 saves into its own settings (the video mode in the registry or
+ * `videoconfig`, `con_enable` in config.cfg), so they keep applying after the
+ * option is removed or a profile without it is installed.
+ */
+export const REMEMBERED_LAUNCH_PRESETS: Partial<Record<LaunchPresetId, string>> = {
+  resolution:
+    "TF2 remembers this resolution after you remove the option or switch profiles. Change it back in TF2's Video settings.",
+  windowed:
+    "TF2 remembers this display mode after you remove the option or switch profiles. Change it back in TF2's Video settings.",
+  fullscreen:
+    "TF2 remembers this display mode after you remove the option or switch profiles. Change it back in TF2's Video settings.",
+  noborder:
+    "TF2 remembers this display mode after you remove the option or switch profiles. Change it back in TF2's Video settings.",
+  console:
+    "TF2 keeps the console enabled after you remove the option or switch profiles. Turn it off in TF2's Advanced options.",
+};
+
+/** Labels of options in `raw` whose effect TF2 keeps after they are removed. */
+export function rememberedLaunchOptions(raw: string): string[] {
+  return LAUNCH_PRESETS.filter(
+    (preset) => REMEMBERED_LAUNCH_PRESETS[preset.id] && launchPresetPresent(raw, preset),
+  ).map((preset) => preset.label);
+}
+
 export function searchLaunchPresets(query: string): LaunchPreset[] {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   return LAUNCH_PRESETS.filter((preset) => {

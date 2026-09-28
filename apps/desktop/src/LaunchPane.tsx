@@ -26,6 +26,8 @@ import {
   launchPresetPresent,
   launchSteamCopy,
   launchSteamState,
+  REMEMBERED_LAUNCH_PRESETS,
+  rememberedLaunchOptions,
   removeLaunchOption,
   type SteamWriteStatus,
   searchLaunchPresets,
@@ -139,6 +141,7 @@ export function LaunchPane({
   const forbidden = forbiddenLaunchTokens(value);
   const stripped = lastSave ? strippedLaunchTokens(lastSave.sent, lastSave.saved) : [];
   const groups = launchOptionGroups(value);
+  const remembered = rememberedLaunchOptions(value);
   const firstAvailablePresetId = LAUNCH_PRESETS.find(
     (preset) => !launchPresetPresent(value, preset),
   )?.id;
@@ -280,6 +283,14 @@ export function LaunchPane({
               <Plus size={15} aria-hidden="true" /> Add option
             </button>
           </div>
+          {remembered.length > 0 ? (
+            <p className="t-meta mt-2" data-testid="launch-remembered">
+              {remembered.join(", ")} {remembered.length === 1 ? "stays" : "stay"} in effect after
+              you remove {remembered.length === 1 ? "it" : "them"} or switch profiles, because TF2
+              saves {remembered.length === 1 ? "it" : "them"} in its own settings. Change{" "}
+              {remembered.length === 1 ? "it" : "them"} back in TF2.
+            </p>
+          ) : null}
           {adding ? (
             <form
               className="surface mt-3 p-4"
@@ -445,6 +456,11 @@ export function LaunchPane({
                 </label>
               ) : null}
               {selectedPreset ? <p className="t-meta mt-3">{selectedPreset.detail}</p> : null}
+              {selectedPreset && REMEMBERED_LAUNCH_PRESETS[selectedPreset.id] ? (
+                <p className="t-meta mt-1" data-testid="launch-remembered-preset">
+                  {REMEMBERED_LAUNCH_PRESETS[selectedPreset.id]}
+                </p>
+              ) : null}
               <div className="mt-4 flex gap-2">
                 <button
                   type="submit"

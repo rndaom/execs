@@ -29,6 +29,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- The Launch pane says when resolution, display-mode or console options stay in effect after you
+  remove them or switch profiles, because TF2 saves them in its own settings.
 - Inventory no longer re-reads your backpack every two minutes, which kept making Steam show you
   as playing TF2. It reads when you open it, after TF2 closes and when you press the new Refresh
   button, and explains the brief Steam status.
