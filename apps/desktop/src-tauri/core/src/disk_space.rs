@@ -17,9 +17,21 @@ use crate::profile::ProfileError;
 /// Room left beyond the estimate, for part files, journals and the OS.
 pub const HEADROOM_BYTES: u64 = 64 * 1024 * 1024;
 
-/// What a player reads when the operating system reports a full disk.
-pub const DISK_FULL_MESSAGE: &str =
-    "The drive is full. Free some space on it, then try again. Nothing else was changed.";
+/// What a player reads when the operating system reports a full disk. It
+/// makes no claim about what else changed: a write can fail after earlier
+/// steps, and [`disk_full_message`] keeps any recovery step the error named.
+pub const DISK_FULL_MESSAGE: &str = "The drive is full. Free some space on it, then try again.";
+
+/// The plain full-disk sentence for an out-of-space `original` error, followed
+/// by the recovery step it carried (a switch stopped after its Remove step
+/// must still say to re-apply a profile).
+pub fn disk_full_message(original: &str) -> String {
+    if original.contains(crate::switch::MID_SWITCH_GUIDANCE) {
+        format!("{DISK_FULL_MESSAGE} {}", crate::switch::MID_SWITCH_GUIDANCE)
+    } else {
+        DISK_FULL_MESSAGE.to_string()
+    }
+}
 
 #[cfg(test)]
 thread_local! {
@@ -75,7 +87,7 @@ fn free_bytes(path: &Path) -> Option<u64> {
     Some((stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64))
 }
 
-/// The nearest existing folder, canonicalized so it matches mount points.
+/// The nearest existing folder, canonicalized so links resolve to their volume.
 fn existing_ancestor(path: &Path) -> Option<PathBuf> {
     let mut current = Some(path);
     while let Some(candidate) = current {
@@ -87,7 +99,7 @@ fn existing_ancestor(path: &Path) -> Option<PathBuf> {
     None
 }
 
-/// `\\?\H:\…` → `H:\…`, the form sysinfo reports mount points in.
+/// `\\?\H:\…` → `H:\…`, so the drive letter reads plainly in messages.
 fn strip_verbatim(path: PathBuf) -> PathBuf {
     let text = path.to_string_lossy();
     match text.strip_prefix(r"\\?\") {
@@ -137,7 +149,9 @@ pub fn ensure_space(path: &Path, needed: u64) -> Result<(), ProfileError> {
 /// True for the operating system's out-of-space errors on Windows and Linux.
 pub fn is_disk_full_error(message: &str) -> bool {
     let lower = message.to_ascii_lowercase();
-    lower.contains("os error 112")
+    // Windows ERROR_DISK_FULL and ERROR_HANDLE_DISK_FULL, Linux ENOSPC.
+    lower.contains("os error 112)")
+        || lower.contains("os error 39)")
         || lower.contains("os error 28)")
         || lower.contains("no space left on device")
         || lower.contains("not enough space on the disk")
@@ -233,5 +247,25 @@ mod tests {
         assert!(is_disk_full_error("No space left on device (os error 28)"));
         assert!(!is_disk_full_error("Access is denied. (os error 5)"));
         assert!(!is_disk_full_error("os error 2800"));
+        assert!(!is_disk_full_error("Unexpected failure (os error 1120)"));
+        assert!(is_disk_full_error(
+            "The disk is full. (os error 39)"
+        ));
+    }
+
+    #[test]
+    fn a_full_disk_mid_switch_keeps_the_re_apply_step() {
+        let mid_switch = format!(
+            "Could not write tf/custom/pack.vpk: There is not enough space on the disk. (os error 112) {}",
+            crate::switch::MID_SWITCH_GUIDANCE
+        );
+        let message = disk_full_message(&mid_switch);
+        assert!(message.starts_with(DISK_FULL_MESSAGE));
+        assert!(message.ends_with(crate::switch::MID_SWITCH_GUIDANCE));
+        assert!(!message.contains("Nothing else was changed"));
+        assert_eq!(
+            disk_full_message("No space left on device (os error 28)"),
+            DISK_FULL_MESSAGE
+        );
     }
 }

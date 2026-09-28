@@ -459,11 +459,12 @@ fn launch_write_detail(reason: Option<LaunchWriteReason>, error: Option<&str>) -
     }
 }
 
+/// The recovery step every error after a switch's Remove step ends with.
+pub const MID_SWITCH_GUIDANCE: &str =
+    "The live folder is mid-switch and no profile is active — re-apply a profile to finish.";
+
 fn mid_switch_error(err: &ProfileError) -> ProfileError {
-    ProfileError::Io(format!(
-        "{} The live folder is mid-switch and no profile is active — re-apply a profile to finish.",
-        err.message()
-    ))
+    ProfileError::Io(format!("{} {MID_SWITCH_GUIDANCE}", err.message()))
 }
 
 /// Read-only preflight for commands that must prepare other install-global
