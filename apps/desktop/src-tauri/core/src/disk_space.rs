@@ -248,9 +248,7 @@ mod tests {
         assert!(!is_disk_full_error("Access is denied. (os error 5)"));
         assert!(!is_disk_full_error("os error 2800"));
         assert!(!is_disk_full_error("Unexpected failure (os error 1120)"));
-        assert!(is_disk_full_error(
-            "The disk is full. (os error 39)"
-        ));
+        assert!(is_disk_full_error("The disk is full. (os error 39)"));
     }
 
     #[test]

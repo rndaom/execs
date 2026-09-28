@@ -721,7 +721,9 @@ mod tests {
             "// Valve server cfg\n",
         );
         tidy_up_to(&data, &root, &running()).unwrap();
-        assert!(!crate::profile::exclusive_file_path(&profiles, &id, "tf/cfg/server_2.cfg").exists());
+        assert!(
+            !crate::profile::exclusive_file_path(&profiles, &id, "tf/cfg/server_2.cfg").exists()
+        );
         let _ = fs::remove_dir_all(&dir);
     }
 
