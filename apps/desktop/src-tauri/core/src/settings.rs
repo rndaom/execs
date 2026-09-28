@@ -269,6 +269,10 @@ pub fn remembered_tf2_root_from(file: &Path) -> Option<PathBuf> {
     Some(valid)
 }
 
+/// `tauri.conf.json`'s default main window size.
+const DEFAULT_WINDOW_WIDTH: u32 = 1200;
+const DEFAULT_WINDOW_HEIGHT: u32 = 800;
+
 /// The main window's saved placement, if any.
 pub fn window_placement_from(file: &Path) -> Option<WindowPlacement> {
     load_settings_from(file)?.window
@@ -285,6 +289,13 @@ pub fn save_window_placement_to(file: &Path, placement: WindowPlacement) -> Resu
         (true, Some(previous)) => WindowPlacement {
             maximized: true,
             ..previous
+        },
+        // No normal bounds were ever seen: keep the monitor, not the
+        // maximized size, so un-maximizing returns to the default size.
+        (true, None) => WindowPlacement {
+            width: DEFAULT_WINDOW_WIDTH,
+            height: DEFAULT_WINDOW_HEIGHT,
+            ..placement
         },
         _ => placement,
     };
@@ -394,6 +405,27 @@ mod tests {
         })
         .unwrap();
         assert!(window_placement_from(&file).is_some());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_first_maximized_close_keeps_the_default_normal_size() {
+        let dir = crate::test_temp_dir();
+        let file = dir.join("execs").join("settings.json");
+        save_window_placement_to(
+            &file,
+            WindowPlacement {
+                x: 1912,
+                y: -8,
+                width: 2560,
+                height: 1400,
+                maximized: true,
+            },
+        )
+        .unwrap();
+        let saved = window_placement_from(&file).unwrap();
+        assert_eq!((saved.width, saved.height, saved.x), (1200, 800, 1912));
+        assert!(saved.maximized);
         let _ = fs::remove_dir_all(&dir);
     }
 
