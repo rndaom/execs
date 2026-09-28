@@ -49,6 +49,7 @@ import {
   emptyAbsorbDelta,
   emptyLibrary,
   previewPackDelta,
+  previewSavedLibrary,
   previewSavedProfile,
   profileNameProblem,
   SWITCH_STEPS,
@@ -62,6 +63,7 @@ import {
   PREVIEW_PROFILE_MODS,
 } from "./mods-ui";
 import {
+  PREVIEW_MISSING_ROOT,
   type PreviewState,
   previewConfirmed,
   previewFirstRunKind,
@@ -309,6 +311,9 @@ export function createPreviewApi(state: PreviewState): Api {
     async getTf2Root() {
       return previewConfirmed(state);
     },
+    async getMissingTf2Root() {
+      return state === "tf2-missing" ? PREVIEW_MISSING_ROOT : null;
+    },
     async getTf2WriteLock() {
       return { running: previewLocked(state) };
     },
@@ -327,6 +332,19 @@ export function createPreviewApi(state: PreviewState): Api {
     // --- library ------------------------------------------------------------
     async getProfileLibrary() {
       return library ?? emptyLibrary(BROWSED.path, true);
+    },
+    async reviewLibraryMove() {
+      if (!library?.rootMismatch) return null;
+      return {
+        libraryRoot: library.tf2Root ?? PREVIEW_MISSING_ROOT,
+        profileCount: 2,
+        blockedReason: null,
+      };
+    },
+    async moveLibraryToInstall() {
+      if (previewLocked(state)) throw new BridgeError("Close TF2 first.", "GameRunning");
+      library = previewSavedLibrary(library?.confirmedRoot ?? PREVIEW_MISSING_ROOT);
+      return library;
     },
     async initProfileLibrary() {
       library = { ...(library ?? emptyLibrary(BROWSED.path, true)), initialized: true };

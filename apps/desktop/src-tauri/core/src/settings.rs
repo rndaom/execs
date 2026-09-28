@@ -234,6 +234,17 @@ pub fn remembered_tf2_root_from(file: &Path) -> Option<PathBuf> {
     Some(valid)
 }
 
+/// The remembered TF2 folder when it is set but no longer holds TF2.
+pub fn unavailable_tf2_root() -> Option<String> {
+    unavailable_tf2_root_from(&settings_file())
+}
+
+pub fn unavailable_tf2_root_from(file: &Path) -> Option<String> {
+    let settings = load_settings_from(file)?;
+    let saved = settings.tf2_root.trim();
+    (!saved.is_empty() && normalize_tf2_root(Path::new(saved)).is_err()).then(|| saved.to_string())
+}
+
 pub fn remember_tf2_root_to(file: &Path, root: &Path) -> Result<PathBuf, Tf2RootError> {
     let valid = normalize_tf2_root(root)?;
     let _guard = SETTINGS_WRITES
@@ -299,8 +310,12 @@ mod tests {
         assert_eq!(parsed.schema, 1);
         assert!(parsed.tf2_root.contains("Team Fortress 2"));
 
+        assert_eq!(unavailable_tf2_root_from(&file), None);
         fs::remove_file(root.join("tf").join("steam.inf")).unwrap();
         assert_eq!(remembered_tf2_root_from(&file), None);
+        // The saved folder is still named so startup can say what is missing.
+        assert_eq!(unavailable_tf2_root_from(&file), Some(parsed.tf2_root));
+        assert_eq!(unavailable_tf2_root_from(&dir.join("none.json")), None);
         let _ = fs::remove_dir_all(&dir);
     }
 

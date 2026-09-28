@@ -62,6 +62,13 @@ pub async fn get_tf2_root() -> Result<Option<Tf2Install>, CommandError> {
     .await
 }
 
+/// The saved TF2 folder when it no longer holds TF2 (a disconnected drive, a
+/// changed drive letter or a moved install). `None` when it is fine or unset.
+#[tauri::command]
+pub async fn get_missing_tf2_root() -> Result<Option<String>, CommandError> {
+    blocking(|| Ok(execs_core::unavailable_tf2_root())).await
+}
+
 #[tauri::command]
 pub async fn tf2_write_lock() -> Result<WriteLock, CommandError> {
     blocking(|| Ok(execs_core::write_lock_status())).await

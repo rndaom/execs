@@ -312,6 +312,20 @@ export function App({
     }
   }, [profiles, firstRun, draftName]);
 
+  const reviewLibraryMove = useCallback(() => api.reviewLibraryMove(), [api]);
+  const { setLibrary } = profiles;
+  const moveLibrary = useCallback(async () => {
+    setBusy(true);
+    try {
+      setLibrary(await api.moveLibraryToInstall());
+      setError(null, "profiles:move");
+    } catch (err) {
+      setError(invokeErrorMessage(err), "profiles:move");
+    } finally {
+      setBusy(false);
+    }
+  }, [api, setLibrary, setError]);
+
   const onApplyWizard = useCallback(async () => {
     if (await firstRun.applyWizard(draftName)) {
       setDraftName("");
@@ -616,6 +630,8 @@ export function App({
             .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
         }}
         onReviewFiles={() => navigateSettings("files")}
+        onReviewLibraryMove={reviewLibraryMove}
+        onMoveLibrary={moveLibrary}
         onInspectExport={(id) => api.inspectProfileExport(id)}
         onCompareSwitch={(id) => api.compareProfileSwitch(id)}
         restoreApi={api}
@@ -882,6 +898,8 @@ export function App({
                   onConfirm={() => void install.confirm()}
                   confirmed={handoffSince !== null}
                   waitingFor={handoffSettled ? null : handoff.status}
+                  missing={install.missing}
+                  onRetryMissing={() => void install.retryMissing()}
                 />
               )}
 

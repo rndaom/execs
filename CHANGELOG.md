@@ -27,6 +27,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- After Steam moves TF2 to another drive or library, execs offers to move your profiles to the
+  new folder instead of hiding them. Only the recorded folder changes; profile files and TF2 are
+  left alone.
+- If the saved TF2 folder is missing when execs starts, for example because its drive is not
+  connected, execs names the folder and offers Retry instead of starting over as a first run.
 - Crosshair and Viewmodels saves no longer fail on the `sound/sound.cache` file TF2 writes into
   every custom folder; execs removes it and TF2 rebuilds it.
 - Binds recorded in execs are no longer replaced by older keys from TF2's `config.cfg`. After a

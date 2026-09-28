@@ -133,7 +133,8 @@ pub use profile::{
 };
 pub use settings::{
     execs_data_dir, remember_tf2_root, remember_tf2_root_to, remembered_tf2_root,
-    remembered_tf2_root_from, settings_file, try_execs_data_dir, Settings,
+    remembered_tf2_root_from, settings_file, try_execs_data_dir, unavailable_tf2_root,
+    unavailable_tf2_root_from, Settings,
 };
 pub use surface::{inventory_live_surface, CfgLayer, LiveInventory};
 pub use switch::{switch_profile, switch_profile_with_progress, SwitchProgress, SwitchStep};

@@ -212,6 +212,14 @@ export type ProfileLibrary = {
   profiles: ProfileSummary[];
 };
 
+/** Saved profiles that belong to another TF2 folder, and whether they can move here. */
+export type LibraryMoveReview = {
+  libraryRoot: string;
+  profileCount: number;
+  /** Why the move is refused, in words for the player; null when it can run. */
+  blockedReason: string | null;
+};
+
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -291,6 +299,11 @@ export async function getTf2Root(): Promise<Tf2Install | null> {
   return call<Tf2Install | null>("get_tf2_root");
 }
 
+/** The saved TF2 folder when it no longer holds TF2, such as a disconnected drive. */
+export async function getMissingTf2Root(): Promise<string | null> {
+  return call<string | null>("get_missing_tf2_root");
+}
+
 export async function getTf2WriteLock(): Promise<WriteLock> {
   return call<WriteLock>("tf2_write_lock");
 }
@@ -316,6 +329,15 @@ export async function getProfileLibrary(): Promise<ProfileLibrary> {
 
 export async function initProfileLibrary(): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("init_profile_library");
+}
+
+export async function reviewLibraryMove(): Promise<LibraryMoveReview | null> {
+  return call<LibraryMoveReview | null>("review_library_move");
+}
+
+/** Point every saved profile at the confirmed TF2 folder after TF2 moved. */
+export async function moveLibraryToInstall(): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("move_library_to_install");
 }
 
 export async function saveCurrentAs(name: string): Promise<ProfileLibrary> {

@@ -38,6 +38,38 @@ pub async fn get_profile_library(
     .await
 }
 
+/// Whether the saved profiles belong to another TF2 folder, and whether they
+/// can move to the confirmed one. `None` when they already belong here.
+#[tauri::command]
+pub async fn review_library_move(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<Option<execs_core::profile::LibraryMoveReview>, CommandError> {
+    let _guard = gate.lock_for_library_read().await?;
+    with_root(|root| {
+        Ok(execs_core::profile::review_library_move_to(
+            &execs_core::profiles_dir(),
+            &root,
+        )?)
+    })
+    .await
+}
+
+/// Point every saved profile at the confirmed TF2 folder after Steam moved TF2.
+#[tauri::command]
+pub async fn move_library_to_install(
+    gate: tauri::State<'_, WriteGate>,
+) -> Result<ProfileLibrary, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_root(|root| {
+        Ok(execs_core::profile::move_library_to(
+            &execs_core::profiles_dir(),
+            &root,
+            execs_core::process_lock::live_process_names(),
+        )?)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn init_profile_library(
     gate: tauri::State<'_, WriteGate>,

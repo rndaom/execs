@@ -31,6 +31,10 @@ pub use deletion::delete_profile_to;
 mod duplication;
 pub use duplication::duplicate_profile_to;
 
+#[path = "profile_move.rs"]
+mod relocation;
+pub use relocation::{move_library_to, review_library_move_to, LibraryMoveReview};
+
 pub const LIBRARY_SCHEMA: u32 = 1;
 pub const SHARED_VPK_NAME: &str = "mastercomfig-base.vpk";
 pub const MAX_PROFILE_REL_PATH_BYTES: usize = 4096;

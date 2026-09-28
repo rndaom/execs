@@ -11,6 +11,10 @@ export type Tf2InstallState = {
   installs: Tf2Install[];
   selected: string | null;
   confirmed: Tf2Install | null;
+  /** The saved TF2 folder when it no longer holds TF2, such as a disconnected drive. */
+  missing: string | null;
+  /** Check the saved folder again after reconnecting its drive. */
+  retryMissing: () => Promise<void>;
   select: (path: string) => void;
   browse: () => Promise<void>;
   confirm: () => Promise<void>;
@@ -39,6 +43,7 @@ export function useTf2Install(
   const [installs, setInstalls] = useState<Tf2Install[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<Tf2Install | null>(null);
+  const [missing, setMissing] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +57,10 @@ export function useTf2Install(
           setConfirmed(stored);
           setSelected(stored.path);
           setScreen("ready");
+        } else {
+          const unavailable = await api.getMissingTf2Root();
+          if (cancelled) return;
+          setMissing(unavailable);
         }
         const found = await api.scanTf2Installs();
         if (cancelled) {
@@ -77,6 +86,34 @@ export function useTf2Install(
       cancelled = true;
     };
   }, [api, setError]);
+
+  const retryMissing = useCallback(async () => {
+    setBusy(true);
+    try {
+      const stored = await api.getTf2Root();
+      if (stored) {
+        onConfirmed?.();
+        setMissing(null);
+        setConfirmed(stored);
+        setSelected(stored.path);
+        setScreen("ready");
+        setError(null, "install:retry");
+        return;
+      }
+      setMissing(await api.getMissingTf2Root());
+      setError(
+        "TF2 is still not there. Connect the drive, or choose where TF2 is now.",
+        "install:retry",
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Could not check that folder.",
+        "install:retry",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [api, setError, setBusy, onConfirmed]);
 
   const browse = useCallback(async () => {
     setBusy(true);
@@ -108,6 +145,7 @@ export function useTf2Install(
     try {
       const stored = await api.confirmTf2Root(selected);
       onConfirmed?.();
+      setMissing(null);
       setConfirmed(stored);
       setScreen("ready");
       setError(null, "install:confirm");
@@ -139,6 +177,8 @@ export function useTf2Install(
     installs,
     selected,
     confirmed,
+    missing,
+    retryMissing,
     select: setSelected,
     browse,
     confirm,
