@@ -74,8 +74,8 @@ pub fn record_to(data_dir: &Path, kind: &str, message: &str) {
         return;
     }
     let path = log_path(data_dir);
-    let existing = match std::fs::symlink_metadata(&path) {
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+    match std::fs::symlink_metadata(&path) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => return,
         Ok(meta) if crate::hash::metadata_is_link(&meta) || !meta.is_file() => return,
         Ok(meta) if meta.len() >= MAX_LOG_BYTES => {
@@ -88,18 +88,19 @@ pub fn record_to(data_dir: &Path, kind: &str, message: &str) {
             if crate::hash::move_file_within(data_dir, &path, &rotated).is_err() {
                 return;
             }
-            Vec::new()
         }
-        Ok(_) => {
-            match crate::archive::read_regular_file_bounded_within(data_dir, &path, MAX_LOG_BYTES) {
-                Ok(Some(bytes)) => bytes,
-                _ => return,
-            }
-        }
-    };
-    let mut contents = existing;
-    contents.extend_from_slice(line(kind, message).as_bytes());
-    let _ = crate::hash::write_atomic_within(data_dir, &path, &contents);
+        Ok(_) => {}
+    }
+    // A plain append: a failure repeating in a loop must stay cheap, and a
+    // torn last line in a diagnostics log costs nothing.
+    use std::io::Write as _;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = file.write_all(line(kind, message).as_bytes());
+    }
 }
 
 /// The newest `count` lines, oldest first.
