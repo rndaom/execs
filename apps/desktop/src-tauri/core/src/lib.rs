@@ -1,4 +1,5 @@
 pub mod absorb;
+pub mod activity_log;
 pub mod apply;
 pub mod archive;
 pub mod blob;

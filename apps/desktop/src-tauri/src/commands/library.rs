@@ -60,14 +60,18 @@ pub async fn move_library_to_install(
     gate: tauri::State<'_, WriteGate>,
 ) -> Result<ProfileLibrary, CommandError> {
     let _guard = gate.lock_for_write().await?;
-    with_root(|root| {
+    let result = with_root(|root| {
         Ok(execs_core::profile::move_library_to(
             &execs_core::profiles_dir(),
             &root,
             execs_core::process_lock::live_process_names(),
         )?)
     })
-    .await
+    .await;
+    super::shared::logged(
+        "Moved the profile library to the confirmed TF2 folder",
+        result,
+    )
 }
 
 /// Which other profiles a settings copy from the active profile would change.
@@ -96,7 +100,7 @@ pub async fn copy_settings_to_profiles(
     targets: Vec<String>,
 ) -> Result<Vec<String>, CommandError> {
     let _guard = gate.lock_for_write().await?;
-    with_profile(move |root, profile_id| {
+    let result = with_profile(move |root, profile_id| {
         Ok(execs_core::settings_copy::copy_settings_to_profiles_to(
             &execs_core::profiles_dir(),
             &root,
@@ -106,7 +110,8 @@ pub async fn copy_settings_to_profiles(
             execs_core::process_lock::live_process_names(),
         )?)
     })
-    .await
+    .await;
+    super::shared::logged("Copied settings to other profiles", result)
 }
 
 #[tauri::command]
@@ -123,7 +128,8 @@ pub async fn save_current_as(
     name: String,
 ) -> Result<ProfileLibrary, CommandError> {
     let _guard = gate.lock_for_write().await?;
-    with_root(move |root| Ok(execs_core::save_current_as(&root, &name)?)).await
+    let result = with_root(move |root| Ok(execs_core::save_current_as(&root, &name)?)).await;
+    super::shared::logged("Saved the current setup as a new profile", result)
 }
 
 #[tauri::command]
@@ -153,7 +159,7 @@ pub async fn duplicate_profile(
     name: String,
 ) -> Result<ProfileLibrary, CommandError> {
     let _guard = gate.lock_for_write().await?;
-    with_root(move |root| {
+    let result = with_root(move |root| {
         execs_core::refuse_if_running()?;
         if super::shared::profile_recovery_required(&root)? {
             return Err(CommandError::new(
@@ -169,7 +175,8 @@ pub async fn duplicate_profile(
             execs_core::process_lock::live_process_names(),
         )?)
     })
-    .await
+    .await;
+    super::shared::logged("Duplicated a profile", result)
 }
 
 #[tauri::command]
@@ -181,7 +188,7 @@ pub async fn delete_profile(
     // Deletion must not double as approval to recover a different operation.
     // The serializer still rejects launch, update and Steam-repair leases.
     let _guard = gate.lock_for_interrupted_recovery().await?;
-    with_root(move |root| {
+    let result = with_root(move |root| {
         execs_core::refuse_if_running()?;
         super::shared::refuse_pending_switch(&root)?;
         super::shared::refuse_pending_preloader(&root)?;
@@ -199,7 +206,8 @@ pub async fn delete_profile(
             execs_core::process_lock::live_process_names(),
         )?)
     })
-    .await
+    .await;
+    super::shared::logged("Deleted a profile", result)
 }
 
 #[tauri::command]
@@ -284,7 +292,7 @@ pub async fn switch_profile(
     // This is the sole writer allowed through a durable pending-switch state:
     // re-applying its recorded target is what completes recovery.
     let _guard = gate.lock_for_switch().await?;
-    with_root(move |root| {
+    let result = with_root(move |root| {
         root_context.ensure_current(&root)?;
         let cloud = execs_core::launch::find_cloud_config();
         switch_profile_command_to(
@@ -301,7 +309,8 @@ pub async fn switch_profile(
             },
         )
     })
-    .await
+    .await;
+    super::shared::logged("Switched profiles", result)
 }
 
 /// Command orchestration stays profile-aware from the first preflight through
@@ -466,12 +475,13 @@ pub async fn export_profile(
     let _guard = gate.lock_for_write().await?;
     // Zipping a whole profile (all of tf/custom/) does not belong on the
     // async runtime's worker thread.
-    with_root(move |root| {
+    let result = with_root(move |root| {
         context.ensure_current(&root)?;
         execs_core::export_profile_reviewed(&root, &id, &path, &expected_review_revision)?;
         Ok(Some(path.to_string_lossy().into_owned()))
     })
-    .await
+    .await;
+    super::shared::logged("Exported a profile", result)
 }
 
 /// The review and source path remain in the backend. The renderer can only
@@ -586,7 +596,7 @@ pub async fn confirm_profile_import(
     let mut review = take_review(&mut *pending.0.lock().await, &token)?;
     review.review.select_hud(selected_hud)?;
     let _guard = gate.lock_for_write().await?;
-    with_root(move |root| {
+    let result = with_root(move |root| {
         review.context.ensure_current(&root)?;
         Ok(execs_core::import_reviewed_profile(
             &root,
@@ -594,7 +604,8 @@ pub async fn confirm_profile_import(
             &review.review,
         )?)
     })
-    .await
+    .await;
+    super::shared::logged("Imported a profile", result)
 }
 
 #[tauri::command]

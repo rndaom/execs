@@ -20,11 +20,15 @@ pub struct CommandError {
 }
 
 impl CommandError {
+    /// Every command failure passes through here, so each one is recorded
+    /// for Copy diagnostics (code and message only).
     pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
-        Self {
+        let error = Self {
             code: code.into(),
             message: message.into(),
-        }
+        };
+        execs_core::activity_log::record("error", &format!("{}: {}", error.code, error.message));
+        error
     }
 
     /// For failures with no richer classification available (a fetch error, a

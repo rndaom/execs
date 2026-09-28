@@ -7,6 +7,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- Copy diagnostics includes a short Health summary and the most recent operations and errors, so a
+  bug report shows what execs was doing. The activity log keeps no file contents and hides
+  password values.
 - New profile has a Create button that adds the profile without switching TF2 to it, next to
   Create and switch.
 - Copy binds, Gameplay settings (including mouse sensitivity) or hit and kill sounds to other
