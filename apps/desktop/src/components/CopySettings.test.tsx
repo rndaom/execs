@@ -31,6 +31,7 @@ it("reviews profiles, preselects the ones that change and copies to the chosen o
     { id: "ultra", name: "Ultra", changes: true },
     { id: "wacky", name: "wacky tf2", changes: true },
     { id: "same", name: "Same", changes: false },
+    { id: "odd", name: "Odd", changes: false, problem: "A cfg has an unfinished quoted value." },
   ]);
   await act(async () =>
     root.render(<CopySettings scope="binds" source={{ review, copy }} blockedReason={null} />),
@@ -43,8 +44,11 @@ it("reviews profiles, preselects the ones that change and copies to the chosen o
     "true",
     "true",
     "false",
+    "false",
   ]);
   expect(switches[2].disabled).toBe(true);
+  expect(switches[3].disabled).toBe(true);
+  expect(document.body.textContent).toContain("A cfg has an unfinished quoted value.");
   await act(async () => switches[1].click());
   await act(async () => button("Copy to 1 profile")?.click());
   expect(copy).toHaveBeenCalledWith(["ultra"]);

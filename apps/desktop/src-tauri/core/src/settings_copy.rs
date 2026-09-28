@@ -46,6 +46,9 @@ pub struct SettingsCopyTarget {
     pub name: String,
     /// False when the profile already has exactly these settings.
     pub changes: bool,
+    /// Why this profile cannot take the copy, such as an unreadable file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
 }
 
 /// Every file one copy writes or removes in a target profile.
@@ -272,17 +275,28 @@ pub fn review_settings_copy_to(
         &load_manifest(profiles_dir, source_id)?,
         scope,
     )?;
-    targets
+    // One unreadable profile is reported on its own row, never for all.
+    Ok(targets
         .into_iter()
         .map(|(id, name)| {
-            let target = load_manifest(profiles_dir, &id)?;
-            Ok(SettingsCopyTarget {
-                changes: !plan_copy(profiles_dir, scope, &source, &target)?.is_empty(),
-                id,
-                name,
-            })
+            let planned = load_manifest(profiles_dir, &id)
+                .and_then(|target| plan_copy(profiles_dir, scope, &source, &target));
+            match planned {
+                Ok(plan) => SettingsCopyTarget {
+                    changes: !plan.is_empty(),
+                    problem: None,
+                    id,
+                    name,
+                },
+                Err(error) => SettingsCopyTarget {
+                    changes: false,
+                    problem: Some(error.message()),
+                    id,
+                    name,
+                },
+            }
         })
-        .collect()
+        .collect())
 }
 
 /// Copy one scope of the active profile's settings to the chosen profiles.
@@ -462,6 +476,44 @@ mod tests {
             !review_settings_copy_to(&profiles, &root, &low, SettingsCopyScope::Binds).unwrap()[0]
                 .changes
         );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn one_unreadable_profile_is_reported_without_hiding_the_others() {
+        let dir = crate::test_temp_dir();
+        let (profiles, root, low, ultra) = library(&dir);
+        let broken = create_profile_record_to(&profiles, &root, "Broken", UNLOCKED)
+            .unwrap()
+            .profiles
+            .into_iter()
+            .find(|profile| profile.id != low && profile.id != ultra)
+            .unwrap()
+            .id;
+        let binds =
+            crate::profile::exclusive_file_path(&profiles, &broken, "tf/cfg/execs_gameplay.cfg");
+        fs::create_dir_all(binds.parent().unwrap()).unwrap();
+        fs::write(&binds, "sensitivity \"2\n").unwrap();
+        let manifest_path = crate::profile::manifest_file(&profiles, &broken);
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&manifest_path).unwrap()).unwrap();
+        manifest["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({
+                "path": "tf/cfg/execs_gameplay.cfg",
+                "sha256": crate::hash::sha256_hex(b"sensitivity \"2\n"),
+                "storage": "exclusive",
+            }));
+        fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let review =
+            review_settings_copy_to(&profiles, &root, &low, SettingsCopyScope::Gameplay).unwrap();
+        let broken_row = review.iter().find(|target| target.id == broken).unwrap();
+        assert!(broken_row.problem.is_some());
+        assert!(!broken_row.changes);
+        assert!(review
+            .iter()
+            .any(|target| target.id == ultra && target.changes && target.problem.is_none()));
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -114,8 +114,10 @@ export function CopySettings({
                 key={target.id}
                 id={`copy-settings-${target.id}`}
                 label={target.name}
-                description={target.changes ? undefined : "Already has these settings."}
-                disabled={!target.changes || copying}
+                description={
+                  target.problem ?? (target.changes ? undefined : "Already has these settings.")
+                }
+                disabled={!target.changes || Boolean(target.problem) || copying}
                 checked={selected.includes(target.id)}
                 onChange={(checked) =>
                   setSelected((current) =>

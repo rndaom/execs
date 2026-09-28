@@ -367,6 +367,8 @@ export type SettingsCopyTarget = {
   name: string;
   /** False when the profile already has exactly these settings. */
   changes: boolean;
+  /** Why this profile cannot take the copy, such as an unreadable file. */
+  problem?: string | null;
 };
 
 export async function reviewSettingsCopy(scope: SettingsCopyScope): Promise<SettingsCopyTarget[]> {
