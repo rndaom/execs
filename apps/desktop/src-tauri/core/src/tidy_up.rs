@@ -260,7 +260,12 @@ fn drop_valve_cfgs(
     for (id, name) in sorted(names) {
         let entries = match crate::profile::protected_stock_cfg_entries(profiles, id) {
             Ok(entries) if !entries.is_empty() => entries,
-            Ok(_) => continue,
+            Ok(_) => {
+                // Also finishes a run that dropped the entries but stopped
+                // before their saved copies were removed.
+                report.freed_bytes += remove_unlisted_valve_cfg_copies(profiles, id);
+                continue;
+            }
             Err(_) => {
                 report
                     .skipped
@@ -285,6 +290,7 @@ fn drop_valve_cfgs(
                         missing.insert(path.to_ascii_lowercase());
                     }
                 }
+                report.freed_bytes += remove_unlisted_valve_cfg_copies(profiles, id);
                 report.valve_cfgs_dropped.push(ProfileCount {
                     profile: name.clone(),
                     count: entries.len(),
@@ -294,6 +300,58 @@ fn drop_valve_cfgs(
         }
     }
     report.valve_cfgs_missing = missing.len();
+}
+
+/// Saved copies of Valve cfgs under a profile's `files/tf/cfg` once its
+/// manifest no longer lists any Valve cfg. The profile transaction drops the
+/// entries but leaves their bytes, which nothing reads again. Only regular
+/// files inside the profile folder are removed; links are never followed and
+/// TF2's folder is not touched. Returns the bytes freed.
+fn remove_unlisted_valve_cfg_copies(profiles: &Path, id: &str) -> u64 {
+    if !crate::profile::protected_stock_cfg_entries(profiles, id).is_ok_and(|e| e.is_empty()) {
+        return 0;
+    }
+    let profile = crate::profile::profile_dir(profiles, id);
+    let cfg = crate::profile::exclusive_file_path(profiles, id, "tf/cfg");
+    if validate_dir_within(&profile, &cfg).is_err() {
+        return 0;
+    }
+    let mut freed = 0;
+    let mut pending = vec![(cfg, "tf/cfg".to_string(), 0usize)];
+    let mut visited = 0usize;
+    while let Some((dir, rel, depth)) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            visited += 1;
+            if visited > 4096 {
+                return freed;
+            }
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+            let path = entry.path();
+            let child = format!("{rel}/{name}");
+            let Ok(meta) = fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if crate::hash::metadata_is_link(&meta) {
+                continue;
+            }
+            if meta.is_dir() {
+                if depth < 8 {
+                    pending.push((path, child, depth + 1));
+                }
+            } else if meta.is_file()
+                && crate::surface::is_protected_stock_cfg_path(&child)
+                && remove_file_force_within(&profile, &path).is_ok()
+            {
+                freed += meta.len();
+            }
+        }
+    }
+    freed
 }
 
 fn upgrade_managed_files(
@@ -649,8 +707,21 @@ mod tests {
         assert!(crate::profile::protected_stock_cfg_entries(&profiles, &id)
             .unwrap()
             .is_empty());
+        // The saved copy nothing lists any more is gone too; the profile's
+        // own config.cfg stays.
+        assert!(!crate::profile::exclusive_file_path(&profiles, &id, rel).exists());
+        assert!(crate::profile::exclusive_file_path(&profiles, &id, "tf/cfg/config.cfg").is_file());
+        assert!(report.freed_bytes >= bytes.len() as u64);
         // TF2's folder was not touched.
         assert!(!root.join(rel).exists());
+        // A copy left by a run that stopped after dropping the entry is
+        // removed by the next run.
+        write(
+            &crate::profile::exclusive_file_path(&profiles, &id, "tf/cfg/server_2.cfg"),
+            "// Valve server cfg\n",
+        );
+        tidy_up_to(&data, &root, &running()).unwrap();
+        assert!(!crate::profile::exclusive_file_path(&profiles, &id, "tf/cfg/server_2.cfg").exists());
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -48,13 +48,20 @@ it("says what the tidy-up did in one short sentence", () => {
   expect(tidySummary(owner)).toBe(
     "execs tidied up after the update: removed 30 unused sound caches and moved 7 HUD backups (285.0 MB) out of TF2's folder, freeing 2.0 MB.",
   );
+  // "Other changes" counts what Details lists, and reads as something done.
   expect(
     tidySummary({
       ...owner,
       downloadsRemoved: ["mods-v1.7.1.zip"],
-      managedFilesUpgraded: [{ profile: "Low", kind: "preloadHook" }],
+      managedFilesUpgraded: [
+        { profile: "Low", kind: "preloadHook" },
+        { profile: "Low", kind: "cheatTracers" },
+        { profile: "Ultra", kind: "cheatTracers" },
+      ],
     }),
-  ).toContain("and 2 other changes");
+  ).toBe(
+    "execs tidied up after the update: removed 30 unused sound caches, moved 7 HUD backups (285.0 MB) out of TF2's folder and made 4 other changes, freeing 2.0 MB.",
+  );
   expect(tidySummary(empty)).toBe("execs checked for leftovers from earlier versions.");
 });
 

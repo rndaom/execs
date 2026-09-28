@@ -18,43 +18,43 @@ function sentenceList(parts: string[]): string {
 
 /** One quiet sentence for the notice after an automatic tidy-up. */
 export function tidySummary(report: TidyReport): string {
-  const parts: string[] = [];
-  if (report.soundCachesRemoved.length) {
-    parts.push(
-      `removed ${count(report.soundCachesRemoved.length, "unused sound cache", "unused sound caches")}`,
-    );
-  }
-  if (report.hudBackupsMoved.length) {
-    parts.push(
-      `moved ${count(report.hudBackupsMoved.length, "HUD backup", "HUD backups")} (${formatModBytes(report.movedBytes)}) out of TF2's folder`,
-    );
-  }
-  if (report.hudBackupsDeleted.length) {
-    parts.push(
-      `deleted ${count(report.hudBackupsDeleted.length, "duplicate HUD backup", "duplicate HUD backups")}`,
-    );
-  }
-  if (report.valveCfgsDropped.length) {
-    parts.push(
-      `stopped ${count(report.valveCfgsDropped.length, "profile", "profiles")} from carrying Valve's own cfgs`,
-    );
-  }
-  if (report.managedFilesUpgraded.length) {
-    parts.push(
-      `updated ${count(report.managedFilesUpgraded.length, "file", "files")} older versions wrote`,
-    );
-  }
-  if (report.downloadsRemoved.length) {
-    parts.push(
-      `removed ${count(report.downloadsRemoved.length, "unused download", "unused downloads")}`,
-    );
-  }
+  // Each part carries how many things it changed, so "N other changes" counts
+  // the files and profiles Details lists, not the kinds of change.
+  const parts: Array<{ text: string; changes: number }> = [];
+  const add = (changes: number, text: string) => {
+    if (changes > 0) parts.push({ text, changes });
+  };
+  add(
+    report.soundCachesRemoved.length,
+    `removed ${count(report.soundCachesRemoved.length, "unused sound cache", "unused sound caches")}`,
+  );
+  add(
+    report.hudBackupsMoved.length,
+    `moved ${count(report.hudBackupsMoved.length, "HUD backup", "HUD backups")} (${formatModBytes(report.movedBytes)}) out of TF2's folder`,
+  );
+  add(
+    report.hudBackupsDeleted.length,
+    `deleted ${count(report.hudBackupsDeleted.length, "duplicate HUD backup", "duplicate HUD backups")}`,
+  );
+  add(
+    report.valveCfgsDropped.length,
+    `stopped ${count(report.valveCfgsDropped.length, "profile", "profiles")} from carrying Valve's own cfgs`,
+  );
+  add(
+    report.managedFilesUpgraded.length,
+    `updated ${count(report.managedFilesUpgraded.length, "file", "files")} older versions wrote`,
+  );
+  add(
+    report.downloadsRemoved.length,
+    `removed ${count(report.downloadsRemoved.length, "unused download", "unused downloads")}`,
+  );
   if (!parts.length) return "execs checked for leftovers from earlier versions.";
   // The notice stays one short line; Details lists everything.
-  const shown =
-    parts.length > 2
-      ? [...parts.slice(0, 2), count(parts.length - 2, "other change", "other changes")]
-      : parts;
+  const others = parts.slice(2).reduce((total, part) => total + part.changes, 0);
+  const shown = [
+    ...parts.slice(0, 2).map((part) => part.text),
+    ...(others > 0 ? [`made ${count(others, "other change", "other changes")}`] : []),
+  ];
   const freed = report.freedBytes > 0 ? `, freeing ${formatModBytes(report.freedBytes)}` : "";
   return `execs tidied up after the update: ${sentenceList(shown)}${freed}.`;
 }
