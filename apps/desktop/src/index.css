@@ -2346,6 +2346,12 @@ a:focus-visible,
     z-index: 1;
   }
 
+  /* A dialog opened from a pane must cover the app header (z-40) with its
+     scrim and never slide under it; `ui/Modal` marks the body while open. */
+  body[data-modal-open] .settings-workspace > .settings-scroll {
+    z-index: 45;
+  }
+
   .dot-backdrop {
     position: absolute;
     inset: 0;
