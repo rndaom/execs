@@ -127,6 +127,7 @@ export function LaunchPane({
   });
   const steamState = launchSteamState(value, saved, steamSync, steamWrite ?? null);
   const steamSettled = steamState === "in-steam" || steamState === "no-account";
+  const steamOpen = steamState === "steam-open";
   const { feedback, copy } = useCopyFeedback();
   // Typing is a draft: the lock defers the write, it does not lock the field.
   const { flush } = useAutosave({
@@ -579,15 +580,24 @@ export function LaunchPane({
                       ? "Add or cancel the option first."
                       : value !== saved
                         ? "Wait for the profile save to finish."
-                        : "Review the current Steam options before replacing them."
+                        : steamOpen
+                          ? "execs writes Steam's options only while Steam is closed. Close Steam, then check again."
+                          : "Review the current Steam options before replacing them."
                 }
                 onClick={() => {
-                  if (onWriteSteam && steamSync) setSteamReview(steamSync);
+                  // With Steam open nothing can be written: only re-read its state.
+                  if (onWriteSteam && steamSync && !steamOpen) setSteamReview(steamSync);
                   else void retrySteamWrite();
                 }}
                 className="btn btn-ghost shrink-0"
               >
-                {retrying ? <Loading>Checking Steam…</Loading> : "Write to Steam"}
+                {retrying ? (
+                  <Loading>Checking Steam…</Loading>
+                ) : steamOpen ? (
+                  "Check Steam again"
+                ) : (
+                  "Write to Steam"
+                )}
               </button>
             )}
           </div>

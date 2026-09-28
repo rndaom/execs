@@ -29,6 +29,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- While Steam is open, the Launch pane offers "Check Steam again" instead of a "Write to Steam"
+  button that could only fail; execs writes Steam's options only while Steam is closed.
 - The Launch pane says when resolution, display-mode or console options stay in effect after you
   remove them or switch profiles, because TF2 saves them in its own settings.
 - Inventory no longer re-reads your backpack every two minutes, which kept making Steam show you
