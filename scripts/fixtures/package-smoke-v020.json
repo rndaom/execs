@@ -1,15 +1,15 @@
 {
   "schema": 1,
-  "exporterTag": "v0.1.8",
-  "exporterRevision": "85aaf6bc0dd28f43351d4cb5cdb62502737688d5",
-  "provenance": "Exact manifest values and payload bytes from the actual public-tag core exporter; see docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018. The library index, profile IDs, confirmed settings and disposable TF2 tree are authored by package-smoke-fixture.mjs, not emitted by the old installer.",
+  "exporterTag": "v0.2.0",
+  "exporterRevision": "486070f6e60bbcb5879acb5ae527d659d9d60ac1",
+  "provenance": "Exact export manifests and payloads from the unmodified public v0.2.0 core; copied from windows-package-v020/fixture.json, whose README and harness record their generation and the retained ZIPs. Library identity, settings and the TF2 root are authored by package-smoke-fixture.mjs.",
   "sources": [
     {
       "case": "no-hud",
-      "archiveSha256": "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38",
+      "archiveSha256": "306ae6236a8b79465c6aca6fea64dbdd56c06f447f789e28c8c6d62e8dcdcde1",
       "manifest": {
         "schema": 1,
-        "name": "Actual public v0.1.8 export",
+        "name": "Actual public v0.2.0 export",
         "launchOptions": "-novid -nojoy",
         "files": [
           {
@@ -50,10 +50,10 @@
     },
     {
       "case": "single-hud",
-      "archiveSha256": "4b46fb3144b5c9fcd334505672fc8513fa3f9d629f821fbb4ab53b9da4667ec9",
+      "archiveSha256": "c0488c9bd2d45f949741219f48e58f02ad6aeeb796fb5273195e9274df62a6af",
       "manifest": {
         "schema": 1,
-        "name": "Actual public v0.1.8 export",
+        "name": "Actual public v0.2.0 export",
         "launchOptions": "-novid -nojoy",
         "files": [
           {
