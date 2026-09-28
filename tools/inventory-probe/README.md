@@ -14,7 +14,7 @@ marked stale and offers Retry. Refresh backpack also starts a manual read.
 
 The owner requested this manager for 0.2.0 and decided on September 27, 2026 that it
 ships: release builds include the sidebar entry, the native commands and the helper
-entry points. A refreshed release candidate must include it.
+entry points. It was published in v0.2.0 on September 27, 2026.
 
 ## Architecture
 

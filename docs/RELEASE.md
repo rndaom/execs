@@ -3,22 +3,27 @@
 Users install published GitHub Releases. Development stays on Linear and
 `main`. This file is the playbook; [ARCHITECTURE.md](ARCHITECTURE.md) keeps the durable rules.
 
-September 27 release audit: the previously qualified 0.2.0 scope remains
-accepted. [0.2.0 readiness](release-0.2.0-readiness.md) records the Inventory
-merge, positive owner development-app feedback, the production Sounds/control
-changes, the audit fixes and the required fresh installer tests.
-The existing signed draft predates those changes; public v0.1.8 remains latest.
-No tag or publication is authorized.
+Current public version: **0.2.0** (`v0.2.0`), published September 28, 2026 at
+01:03:28 UTC (9:03 PM America/New_York, September 27) after the owner's go-ahead.
+[Release PR #136](https://github.com/rndaom/execs/pull/136) was squash-merged into
+`main` as `486070f6e60bbcb5879acb5ae527d659d9d60ac1`, which immutable `v0.2.0`
+points to; its tree is the one the final private candidate
+[36360609657](https://github.com/rndaom/execs/actions/runs/36360609657) tested. Tagged workflow
+[36362601224](https://github.com/rndaom/execs/actions/runs/36362601224) passed every gate, including signed
+upgrades from public v0.1.8 on Windows and Linux with the profile library
+preserved, and published the release. Anonymous public endpoints return 0.2.0 in
+`latest.json` for all four updater platforms, downloadable installer URLs, and a
+`release-commit.json` naming that commit and run. The published
+[release](https://github.com/rndaom/execs/releases/tag/v0.2.0) is the compatibility
+baseline for the next minor. [0.2.0 readiness](release-0.2.0-readiness.md) records
+the owner's decisions and the qualification limits.
 
-Current public version: **0.1.8** (`v0.1.8`), published September 21, 2026 at
+Previous public version: **0.1.8** (`v0.1.8`), published September 21, 2026 at
 02:26:18 UTC. [Release PR #59](https://github.com/rndaom/execs/pull/59) merged the
 Mods discovery and removal-integrity update into maintenance. Immutable
-`v0.1.8` points to `85aaf6bc0dd28f43351d4cb5cdb62502737688d5`. The published
-[release](https://github.com/rndaom/execs/releases/tag/v0.1.8) is the compatibility
-baseline for the combined 0.2.0 work; recheck the latest public release when
-qualifying its final candidate.
+`v0.1.8` points to `85aaf6bc0dd28f43351d4cb5cdb62502737688d5`.
 
-Previous public version: **0.1.7 Hotfix 2** (`0.1.7+2`), published September 20,
+Earlier public version: **0.1.7 Hotfix 2** (`0.1.7+2`), published September 20,
 2026 at 19:44:49 UTC (3:44 PM America/New_York), after the owner's explicit
 hotfix authorization. PR #56 merged the Files usability rebuild into maintenance;
 PR #57 fixed the release-only WebView2 qualification URL race. Immutable
@@ -68,9 +73,10 @@ import again. At the 0.1.3 release, creator-profile ZIP imports and profile-scop
 preloader metadata remained on the minor track. Creator ZIP import is included
 in the owner-assigned 0.1.6 scope; profile-scoped preloaders remain on 0.2.0.
 See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and implementation evidence.
-Next minor: **0.2.0**. PR #60 merged the combined work into `main` on
-September 27, 2026; the release PR dates its changelog section, and the tag
-waits for the owner's go-ahead. The first-Thursday cadence remains the default.
+0.2.0 shipped on September 27, 2026 (America/New_York): PR #60 merged the
+combined work into `main`, and the owner added Inventory to it. Next minor:
+**0.3.0**; its milestone theme and three-feature budget wait for the owner. The
+first-Thursday cadence remains the default.
 
 ## Branch names and release history
 

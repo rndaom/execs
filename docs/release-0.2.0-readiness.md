@@ -1,5 +1,13 @@
 # 0.2.0 readiness — release audit, September 27, 2026
 
+**Published.** On the owner's go-ahead, execs 0.2.0 was published on
+September 27, 2026 at 9:03 PM America/New_York (01:03:28 UTC, September 28)
+from `486070f6`, which carries the tree the final private candidate
+[36360609657](https://github.com/rndaom/execs/actions/runs/36360609657) passed on (`b47b6bce`). Tagged
+workflow [36362601224](https://github.com/rndaom/execs/actions/runs/36362601224) repeated the checks and
+published it; see [RELEASE.md](RELEASE.md). The checkpoint below is the record
+that led there.
+
 This updates readiness only. The owner explicitly requested no 0.2.0 release,
 tag or publication. The previously completed release work remains accepted;
 this checkpoint records the Inventory and production Sounds/control changes
@@ -124,8 +132,9 @@ the previous `main.rs`, both printed nothing. No Steam session was opened.
 
 ## Remaining delta before shipping 0.2.0
 
-Inventory is enabled in release builds in source, but no signed release
-candidate has contained it yet.
+All of the items below were completed before publication. Inventory is enabled
+in release builds; the final candidate [36360609657](https://github.com/rndaom/execs/actions/runs/36360609657)
+and the published release contain it.
 
 1. Integrate the Inventory release enablement into the release branch (done:
    `main` with #141 is merged into this branch).
