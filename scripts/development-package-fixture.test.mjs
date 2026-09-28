@@ -325,6 +325,20 @@ test("execs' own activity log and tidy-up record never hide other data-folder ch
   });
 });
 
+test("closing may save the window placement but no other setting", () => {
+  withFixture((fixture) => {
+    const window = { x: 0, y: 0, width: 1200, height: 800, maximized: true };
+    const settingsPath = join(fixture.data, "settings.json");
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window }));
+    assertDevelopmentPackagePreserved(fixture, "closed");
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window, schema: 2 }));
+    assert.throws(
+      () => assertDevelopmentPackagePreserved(fixture, "other-setting"),
+      /settings changed beyond the window placement/,
+    );
+  });
+});
+
 test("original profile metadata, settings, live bytes and shared blobs are never normalized away", () => {
   for (const target of ["manifest", "settings", "live", "shared"]) {
     withFixture((fixture) => {

@@ -43,6 +43,53 @@ export function assertTidyMarker(path, stage) {
   );
 }
 
+function assertWindowPlacement(window, stage) {
+  const label = `${stage}: invalid saved window placement`;
+  assert.deepEqual(
+    Object.keys(window ?? {}).sort(),
+    ["height", "maximized", "width", "x", "y"],
+    label,
+  );
+  for (const key of ["x", "y"])
+    assert.ok(Number.isInteger(window[key]) && Math.abs(window[key]) <= 2 ** 31, label);
+  for (const key of ["width", "height"])
+    assert.ok(Number.isInteger(window[key]) && window[key] > 0 && window[key] < 2 ** 32, label);
+  assert.equal(typeof window.maximized, "boolean", label);
+}
+
+/**
+ * Closing the app saves the main window's placement into `settings.json`
+ * (an additive `window` key), even when a close guard then cancels the close.
+ * True when the file differs from `baselineSettings` only by a valid
+ * placement; any other settings change still fails.
+ */
+export function settingsDifferOnlyByWindow(path, baselineSettings, stage) {
+  const settings = JSON.parse(regularFile(path, 64 * 1024, `${stage}: settings`).toString("utf8"));
+  const { window, ...rest } = settings;
+  assert.deepEqual(
+    rest,
+    baselineSettings,
+    `${stage}: settings changed beyond the window placement`,
+  );
+  if (window === undefined) return false;
+  assertWindowPlacement(window, stage);
+  return true;
+}
+
+/**
+ * Accept a saved window placement in an observed data-folder snapshot: when
+ * `settings.json` differs from its baseline hash only by that placement, the
+ * baseline hash is restored so exact comparisons continue for every byte else.
+ */
+export function acceptWindowPlacement(dataRoot, observed, baselineSettings, baselineHash, stage) {
+  const hash = observed.files["settings.json"];
+  if (hash === undefined || hash === baselineHash) return false;
+  if (!settingsDifferOnlyByWindow(join(dataRoot, "settings.json"), baselineSettings, stage))
+    return false;
+  observed.files["settings.json"] = baselineHash;
+  return true;
+}
+
 /**
  * Validate and remove the app's own diagnostics and tidy-up record from an
  * observed `{ files, directories }` data-folder snapshot. Their folders are

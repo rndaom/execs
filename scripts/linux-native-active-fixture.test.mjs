@@ -162,6 +162,32 @@ test("execs' own activity log and tidy-up record may appear at any checkpoint", 
   });
 });
 
+test("a close may save the window placement but no other setting", () => {
+  withFixture((fixture) => {
+    const original = assertLinuxNativeActiveFixture(fixture, "original", "before-close");
+    const settingsPath = join(fixture.data, "settings.json");
+    const window = { x: 0, y: 0, width: 1200, height: 800, maximized: false };
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window }, null, 2));
+    assertLinuxNativeActiveCheckpoint(fixture, original, "close-cancel-before-decision");
+    writeFileSync(
+      settingsPath,
+      JSON.stringify(
+        {
+          ...fixture.settings,
+          window,
+          preferences: { ...fixture.settings.preferences, motion: "reduce" },
+        },
+        null,
+        2,
+      ),
+    );
+    assert.throws(
+      () => assertLinuxNativeActiveCheckpoint(fixture, original, "other-setting"),
+      /settings changed beyond the window placement/,
+    );
+  });
+});
+
 test("cache exceptions refuse inactive, nested, partial, linked and nonempty cache files", () => {
   for (const target of [
     "inactive",

@@ -5,9 +5,11 @@ import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import {
   ACTIVITY_LOG,
+  acceptWindowPlacement,
   assertActivityLog,
   assertTidyMarker,
   setAsideAppMaintenance,
+  settingsDifferOnlyByWindow,
   TIDY_MARKER,
 } from "./app-maintenance-fixture.mjs";
 
@@ -83,5 +85,30 @@ test("malformed diagnostics and tidy-up records are refused", () => {
     }
     mkdirSync(join(root, "maintenance", "nested"), { recursive: true });
     assert.throws(() => assertTidyMarker(join(root, "maintenance", "nested"), "bad"));
+  });
+});
+
+test("settings may gain only a valid saved window placement", () => {
+  withData((root) => {
+    const baseline = { schema: 1, tf2Root: "/tf2", preferences: { motion: "system" } };
+    const window = { x: 10, y: -20, width: 1200, height: 800, maximized: false };
+    const path = join(root, "settings.json");
+    put(root, "settings.json", JSON.stringify(baseline));
+    assert.equal(settingsDifferOnlyByWindow(path, baseline, "same"), false);
+    put(root, "settings.json", JSON.stringify({ ...baseline, window }));
+    assert.equal(settingsDifferOnlyByWindow(path, baseline, "placed"), true);
+    const observed = { files: { "settings.json": "changed" }, directories: [] };
+    assert.equal(acceptWindowPlacement(root, observed, baseline, "base", "placed"), true);
+    assert.equal(observed.files["settings.json"], "base");
+    put(root, "settings.json", JSON.stringify({ ...baseline, window, preferences: {} }));
+    assert.throws(() => settingsDifferOnlyByWindow(path, baseline, "other"), /beyond the window/);
+    for (const bad of [
+      { ...window, width: 0 },
+      { ...window, extra: 1 },
+      { ...window, x: 1.5 },
+    ]) {
+      put(root, "settings.json", JSON.stringify({ ...baseline, window: bad }));
+      assert.throws(() => settingsDifferOnlyByWindow(path, baseline, "bad"), /window placement/);
+    }
   });
 });
