@@ -27,6 +27,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- A mod with a single VPK or content folder installs in one click again; the file chooser opens
+  only when an archive has real choices. Choices are labelled by name with sizes in KB or MB,
+  the chooser no longer shows "Installing mod…" or holds other saves while it is open, and it
+  finds author notes named like `Installation.txt` or `How to install.txt`.
 - After Steam moves TF2 to another drive or library, execs offers to move your profiles to the
   new folder instead of hiding them. Only the recorded folder changes; profile files and TF2 are
   left alone.

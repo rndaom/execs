@@ -156,12 +156,23 @@ describe("picker cancellation through SettingsHost and ToastProvider", () => {
               contentRoots: [],
               disabledReason: null,
             },
+            {
+              id: "0:1",
+              name: "Pack part 2",
+              path: "pack.7z.002",
+              files: 1,
+              bytes: 20,
+              contentRoots: [],
+              disabledReason: "Split archive volumes cannot be installed.",
+            },
           ],
         });
         await act(async () => {
           result = capture.panes[tab][callback](false);
         });
         expect(api.confirmModImport).not.toHaveBeenCalled();
+        // The chooser is open outside the settings queue: nothing reads as saving.
+        expect(props.onBusyChange).toHaveBeenLastCalledWith(false);
         await act(async () => {
           [...box.querySelectorAll("button")]
             .find((button) => button.textContent === "Install selected")

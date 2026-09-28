@@ -2,7 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import type { Api } from "../lib/api";
 import type { ModImportReview } from "../lib/bridge";
 
-/** Cancellation releases the native snapshot and never reaches the write command. */
+/** The one installable choice when nothing needs the player's decision. */
+export function onlyModImportChoice(review: ModImportReview): string | null {
+  const [only] = review.choices;
+  return review.choices.length === 1 && !only.disabledReason ? only.id : null;
+}
+
+export type ChosenModImport = { token: string; ids: string[] };
+
+/**
+ * Holds the chooser for a prepared native mod review. Preparing (download,
+ * extraction) and installing run as settings writes; choosing sits between
+ * them, so the header never says "Installing" while the player reads the
+ * author's instructions and other saves are not held behind the dialog.
+ * Cancellation releases the native snapshot and never reaches the write command.
+ */
 export function useModImportReview(
   api: Api,
   profileId: string | null | undefined,
@@ -40,28 +54,43 @@ export function useModImportReview(
     };
   }, [api, profileId, active]);
 
-  async function prepare(request: () => Promise<ModImportReview | null>) {
-    const expected = context.current;
-    const epoch = generation.current;
-    const next = await request();
-    if (!next) return null;
+  /** Snapshot the pane/profile a preparation starts in. */
+  function begin() {
+    return { expected: context.current, epoch: generation.current };
+  }
+
+  /**
+   * Ask the player which prepared packs to install. A review with a single
+   * installable choice installs it directly, as before the chooser existed.
+   * `null` means cancelled or superseded by a pane or profile change.
+   */
+  async function choose(
+    next: ModImportReview,
+    started: ReturnType<typeof begin>,
+  ): Promise<ChosenModImport | null> {
     if (
-      generation.current !== epoch ||
-      context.current.profileId !== expected.profileId ||
+      generation.current !== started.epoch ||
+      context.current.profileId !== started.expected.profileId ||
       !context.current.active
     ) {
-      await api.cancelModImport(next.token);
+      await api.cancelModImport(next.token).catch(() => {});
       return null;
     }
+    const only = onlyModImportChoice(next);
+    if (only !== null) return { token: next.token, ids: [only] };
     close(null);
     const ids = await new Promise<string[] | null>((resolve) => {
       pending.current = { review: next, resolve };
       setReview(next);
     });
-    if (!ids) return null;
-    await api.confirmModImport(next.token, ids);
-    return true;
+    return ids ? { token: next.token, ids } : null;
   }
 
-  return { review, prepare, cancel: () => close(null), confirm: (ids: string[]) => close(ids) };
+  return {
+    review,
+    begin,
+    choose,
+    cancel: () => close(null),
+    confirm: (ids: string[]) => close(ids),
+  };
 }

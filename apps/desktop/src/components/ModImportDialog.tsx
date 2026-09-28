@@ -1,8 +1,20 @@
 import { useState } from "react";
 import type { ModImportReview } from "../lib/bridge";
+import { formatModBytes } from "../lib/mods-ui";
 import { Caret } from "./ui/Caret";
 import { Modal } from "./ui/Modal";
 import { SwitchRow } from "./ui/Switch";
+
+/** Where the pack sits in the archive (when that adds anything), its size and content. */
+export function modChoiceDescription(choice: ModImportReview["choices"][number]): string {
+  const where = choice.path !== "." && choice.path !== choice.name ? [choice.path] : [];
+  return [
+    ...where,
+    `${choice.files} ${choice.files === 1 ? "file" : "files"}`,
+    formatModBytes(choice.bytes),
+    ...(choice.contentRoots.length ? [choice.contentRoots.join(", ")] : []),
+  ].join(" · ");
+}
 
 /** The native review owns the payload; this dialog returns only selected opaque IDs. */
 export function ModImportDialog({
@@ -32,8 +44,8 @@ export function ModImportDialog({
             <SwitchRow
               key={choice.id}
               id={`mod-choice-${choice.id}`}
-              label={choice.path}
-              description={`${choice.files} ${choice.files === 1 ? "file" : "files"} · ${(choice.bytes / 1024 / 1024).toFixed(1)} MiB${choice.contentRoots.length ? ` · ${choice.contentRoots.join(", ")}` : ""}`}
+              label={choice.name}
+              description={modChoiceDescription(choice)}
               note={choice.disabledReason ?? undefined}
               disabled={!!choice.disabledReason}
               checked={selected.includes(choice.id)}

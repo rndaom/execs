@@ -313,7 +313,10 @@ fn split_vpk(path: &str, names: &BTreeSet<String>) -> bool {
 fn is_readme(path: &str) -> bool {
     let name = path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase();
     (name.ends_with(".txt") || name.ends_with(".md"))
-        && (name.contains("readme") || name.contains("read me") || name.contains("instruction"))
+        && (name.contains("readme")
+            || name.contains("read me")
+            || name.contains("instruction")
+            || name.contains("install"))
 }
 
 #[cfg(test)]
@@ -480,6 +483,22 @@ mod tests {
             )
             .unwrap();
             assert!(prepared.select(&ids).is_err());
+        }
+    }
+
+    #[test]
+    fn install_instructions_count_as_the_author_instructions() {
+        for name in [
+            "README.txt",
+            "Installation.txt",
+            "mod/INSTALL.txt",
+            "How to install.md",
+            "instructions.txt",
+        ] {
+            assert!(is_readme(name), "{name}");
+        }
+        for name in ["credits.txt", "install.vpk", "materials/install.vmt"] {
+            assert!(!is_readme(name), "{name}");
         }
     }
 

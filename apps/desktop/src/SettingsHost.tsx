@@ -28,6 +28,7 @@ import {
   type FilesSource,
   isTauri,
   type LaunchSyncStatus,
+  type ModImportReview,
   type ModsCatalog,
   type PreloaderReport,
   type PreloaderStatusPayload,
@@ -806,6 +807,49 @@ export function SettingsHost({
     // This closure belongs to the originating retained pane, even after the
     // user navigates elsewhere while its save is queued or in flight.
     const label = tab === "hud" ? "HUD options" : SETTINGS_TAB_LABELS[tab];
+    /**
+     * Prepare a mod review as one write, let the player choose outside the
+     * settings queue, then install the choice as a second write. `true` when
+     * installed; a handled reason or `false` otherwise.
+     */
+    async function installReviewedMod(
+      request: () => Promise<ModImportReview | null>,
+      copy: { success: string; failure: string; pending: string },
+      options?: { picker?: boolean },
+    ): Promise<boolean | "review-required" | "superseded"> {
+      let handled: "review-required" | "superseded" | null = null;
+      const prepared: { review: ModImportReview | null; done: boolean } = {
+        review: null,
+        done: false,
+      };
+      const started = modImport.begin();
+      await write(
+        async () => {
+          prepared.review = await request();
+          prepared.done = true;
+          // Nothing is installed yet: skip the reload and completion notice.
+          return null;
+        },
+        // The same copy keeps one feedback source for both steps, so a later
+        // successful install clears an earlier failure.
+        copy,
+        {
+          picker: options?.picker,
+          onHandledFailure: (reason) => {
+            handled = reason;
+          },
+        },
+      );
+      // A cancelled picker or superseded download stays quiet; failures were reported.
+      if (!prepared.review) return handled ?? (prepared.done ? "superseded" : false);
+      const chosen = await modImport.choose(prepared.review, started);
+      if (!chosen) return "superseded";
+      return write(async () => {
+        await api.confirmModImport(chosen.token, chosen.ids);
+        await refreshModsStatus().catch(() => {});
+      }, copy);
+    }
+
     function write(
       // biome-ignore lint/suspicious/noConfusingVoidType: null preserves native picker cancellation through the pane wrapper.
       work: () => Promise<void | null>,
@@ -1337,28 +1381,24 @@ export function SettingsHost({
           onOpenRepo={() => {
             void api.openExternal(PRELOADER_REPO_URL);
           }}
-          onImportArchive={() => {
+          onImportArchive={async () => {
             setModsHudImportRequired(null);
-            return write(
-              async () => {
-                if ((await modImport.prepare(() => api.prepareImportModArchive())) === null)
-                  return null;
-                await refreshModsStatus().catch(() => {});
-              },
-              { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
-              { picker: true },
+            return (
+              (await installReviewedMod(
+                () => api.prepareImportModArchive(),
+                { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
+                { picker: true },
+              )) === true
             );
           }}
-          onImportFolder={() => {
+          onImportFolder={async () => {
             setModsHudImportRequired(null);
-            return write(
-              async () => {
-                if ((await modImport.prepare(() => api.prepareImportModFolder())) === null)
-                  return null;
-                await refreshModsStatus().catch(() => {});
-              },
-              { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
-              { picker: true },
+            return (
+              (await installReviewedMod(
+                () => api.prepareImportModFolder(),
+                { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
+                { picker: true },
+              )) === true
             );
           }}
           onRemoveMod={(id) => {
@@ -1393,31 +1433,13 @@ export function SettingsHost({
           }
           // Awaited by the card, so "Installing…" lasts exactly as long as the
           // install and the profile reload behind it.
-          onInstallGameBananaMod={async (id, fileId) => {
+          onInstallGameBananaMod={(id, fileId) => {
             setModsHudImportRequired(null);
-            let handled: "review-required" | "superseded" | null = null;
-            const applied = await write(
-              async () => {
-                if (
-                  (await modImport.prepare(() => api.prepareGameBananaMod(id, fileId))) === null
-                ) {
-                  handled = "superseded";
-                  return null;
-                }
-                await refreshModsStatus().catch(() => {});
-              },
-              {
-                success: "Mod installed",
-                failure: "Could not install",
-                pending: "Installing mod…",
-              },
-              {
-                onHandledFailure: (reason) => {
-                  handled = reason;
-                },
-              },
-            );
-            return handled ?? applied;
+            return installReviewedMod(() => api.prepareGameBananaMod(id, fileId), {
+              success: "Mod installed",
+              failure: "Could not install",
+              pending: "Installing mod…",
+            });
           }}
         />
       );
