@@ -8,11 +8,13 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
+import { fixtureCacheSources } from "./absorb-cache-fixture.mjs";
 import {
   assertDevelopmentPackageCheckpoint,
   assertDevelopmentPackageImported,
@@ -30,6 +32,21 @@ const python =
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const importedId = "f20d0001-0000-4000-8000-000000000001";
 const putJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+
+function modelAbsorbCache(fixture, profileId) {
+  const files = fixture.portableManifest.files;
+  const stamps = fixtureCacheSources(fixture.tf2Root, files);
+  putJson(join(fixture.library, profileId, "absorb-cache.json"), {
+    entries: Object.fromEntries(
+      files
+        .filter((file) => Object.hasOwn(stamps, join(fixture.tf2Root, file.path)))
+        .map((file) => [
+          join(fixture.tf2Root, file.path),
+          { stamp: stamps[join(fixture.tf2Root, file.path)], sha256: file.sha256 },
+        ]),
+    ),
+  });
+}
 
 function withFixture(callback) {
   const parent = realpathSync(mkdtempSync(join(tmpdir(), "execs-development-package-test-")));
@@ -251,6 +268,32 @@ test("modeled import remains inactive, switch selects its UUID, restart preserve
     assertDevelopmentPackageCheckpoint(fixture, switched, "normal-restart-modeled");
     assert.throws(() =>
       assertDevelopmentPackageCheckpoint(fixture, checkpoint, "old-active-checkpoint"),
+    );
+  });
+});
+
+test("disposable caches preserve exact package checkpoints before and after a profile switch", () => {
+  withFixture((fixture) => {
+    modelAbsorbCache(fixture, fixture.activeProfileId);
+    assertDevelopmentPackagePreserved(fixture, "cached-original");
+    modelExport(fixture);
+    const proof = inspectDevelopmentPackageExport(fixture, { python });
+    modelImported(fixture);
+    const imported = assertDevelopmentPackageImported(fixture, proof, "cached-import");
+    modelAbsorbCache(fixture, importedId);
+    assert.throws(() => assertDevelopmentPackageImported(fixture, proof, "inactive-import-cache"));
+    rmSync(join(fixture.library, importedId, "absorb-cache.json"));
+    modelSwitch(fixture);
+    // Model the different mtimes left by switch's atomic live replacement.
+    for (const path of Object.keys(fixture.cacheSourceStamps))
+      utimesSync(path, new Date(), new Date(Date.now() - 2000));
+    modelAbsorbCache(fixture, importedId);
+    const switched = assertDevelopmentPackageSwitched(fixture, imported, "cached-switch");
+    assertDevelopmentPackageCheckpoint(fixture, switched, "cached-restart");
+    assert.ok(imported.originalPayloadsPreserved);
+    writeFileSync(join(fixture.library, importedId, "files/tf/cfg/config.cfg"), "unexpected");
+    assert.throws(() =>
+      assertDevelopmentPackageSwitched(fixture, imported, "cache-cannot-hide-payload"),
     );
   });
 });

@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { assertFixtureAbsorbCache, fixtureCacheSources } from "./absorb-cache-fixture.mjs";
 
 export const publicProfileFixture = JSON.parse(
   readFileSync(new URL("./fixtures/package-smoke-v018.json", import.meta.url), "utf8"),
@@ -177,6 +178,10 @@ export function seedPackageFixture(
     metadata,
     settings,
     libraryHashes: regularTree(library),
+    cacheSourceStamps: fixtureCacheSources(
+      tf2Root,
+      metadata[`${profileIds[0]}/manifest.json`].files,
+    ),
     liveHashes: regularTree(tf2Root),
     provenance: {
       exporterTag: sourceFixture.exporterTag,
@@ -218,6 +223,19 @@ export function assertPackageFixturePreserved(fixture, stage) {
   }
   const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
   const libraryHashes = regularTree(fixture.library);
+  const activeId = fixture.metadata["index.json"].activeProfileId;
+  const cachePath = `${activeId}/absorb-cache.json`;
+  if (activeId && Object.hasOwn(libraryHashes, cachePath)) {
+    assertFixtureAbsorbCache(
+      fixture.library,
+      fixture.tf2Root,
+      activeId,
+      fixture.metadata[`${activeId}/manifest.json`].files,
+      stage,
+      fixture.cacheSourceStamps,
+    );
+    delete libraryHashes[cachePath];
+  }
   assert.deepEqual(
     Object.keys(libraryHashes).sort(),
     Object.keys(fixture.libraryHashes).sort(),

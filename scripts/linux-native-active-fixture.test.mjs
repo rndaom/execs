@@ -108,6 +108,70 @@ test("only the explicit and close-save payload phases can change helper bytes an
   });
 });
 
+test("only the active profile's empty disposable absorb cache may appear across checkpoints", () => {
+  withFixture((fixture) => {
+    const original = assertLinuxNativeActiveFixture(fixture, "original", "before-absorb");
+    const path = join(fixture.library, fixture.profileId, "absorb-cache.json");
+    writeFileSync(path, '{"entries":{}}');
+    const cached = assertLinuxNativeActiveCheckpoint(fixture, original, "after-absorb");
+    assert.equal(cached.protectedFiles, 12);
+    assert.deepEqual(cached.disposableCacheFiles, [
+      `profiles/${fixture.profileId}/absorb-cache.json`,
+    ]);
+    modelSave(fixture);
+    const saved = assertLinuxNativeActiveFixture(fixture, "explicit-saved", "saved-with-cache");
+    rmSync(path);
+    assertLinuxNativeActiveCheckpoint(fixture, saved, "cache-discarded");
+    writeFileSync(path, '{"entries":{}}');
+    writeFileSync(
+      join(fixture.library, fixture.otherProfileId, "files", fixture.helperPath),
+      "unexpected",
+    );
+    assert.throws(
+      () => assertLinuxNativeActiveCheckpoint(fixture, saved, "changed-payload"),
+      /unrelated product file changed/,
+    );
+  });
+});
+
+test("cache exceptions refuse inactive, nested, partial, linked and nonempty cache files", () => {
+  for (const target of [
+    "inactive",
+    "nested",
+    "partial",
+    "nonempty",
+    "extra-key",
+    "directory",
+    "linked",
+  ]) {
+    withFixture((fixture, parent) => {
+      const paths = {
+        inactive: join(fixture.library, fixture.otherProfileId, "absorb-cache.json"),
+        nested: join(fixture.library, fixture.profileId, "files", "absorb-cache.json"),
+        partial: join(fixture.library, fixture.profileId, "absorb-cache.json.execs-part"),
+      };
+      const path = paths[target] ?? join(fixture.library, fixture.profileId, "absorb-cache.json");
+      if (target === "directory") mkdirSync(path);
+      else if (target === "linked") {
+        const outside = join(parent, "cache-target");
+        mkdirSync(outside);
+        symlinkSync(outside, path, process.platform === "win32" ? "junction" : "dir");
+      } else
+        writeFileSync(
+          path,
+          JSON.stringify(
+            target === "nonempty"
+              ? { entries: { unexpected: {} } }
+              : target === "extra-key"
+                ? { entries: {}, unexpected: true }
+                : { entries: {} },
+          ),
+        );
+      assert.throws(() => assertLinuxNativeActiveFixture(fixture, "original", target));
+    });
+  }
+});
+
 test("checkpoint checks bytes as well as semantic metadata and cannot cross fixtures", () => {
   withFixture((fixture, parent) => {
     modelSave(fixture);

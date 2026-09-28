@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { assertFixtureAbsorbCache } from "./absorb-cache-fixture.mjs";
 import { developmentPublicFixture } from "./development-package-guard.mjs";
 import { linuxSteamCandidates, seedPackageFixture } from "./package-smoke-fixture.mjs";
 
@@ -109,7 +110,22 @@ function snapshot(fixture, stage) {
   assert.equal(fixture.exports, join(fixture.scratch, "exports"));
   assert.equal(fixture.exportPath, join(fixture.exports, "previous-ui-export.zip"));
   assertNoSteam(fixture);
-  return { data: tree(fixture.data), live: tree(fixture.tf2Root), exports: tree(fixture.exports) };
+  const data = tree(fixture.data);
+  for (const id of [fixture.activeProfileId].filter(Boolean)) {
+    const cachePath = `profiles/${id}/absorb-cache.json`;
+    if (Object.hasOwn(data.files, cachePath)) {
+      assertFixtureAbsorbCache(
+        fixture.library,
+        fixture.tf2Root,
+        id,
+        fixture.portableManifest.files,
+        stage,
+        fixture.cacheSourceStamps,
+      );
+      delete data.files[cachePath];
+    }
+  }
+  return { data, live: tree(fixture.tf2Root), exports: tree(fixture.exports) };
 }
 
 /** Fresh Linux case; the shared tagged payload fixture remains unchanged. */
@@ -404,6 +420,18 @@ function candidateState(fixture, archiveProof, switched, stage) {
     `${stage}: index changed beyond the authorized import/switch`,
   );
   const portable = fixture.portableManifest;
+  const importedCachePath = `profiles/${summary.id}/absorb-cache.json`;
+  if (switched && Object.hasOwn(observed.data.files, importedCachePath)) {
+    assertFixtureAbsorbCache(
+      fixture.library,
+      fixture.tf2Root,
+      summary.id,
+      portable.files,
+      stage,
+      fixture.cacheSourceStamps,
+    );
+    delete observed.data.files[importedCachePath];
+  }
   const expectedManifest = {
     schema: 1,
     id: summary.id,

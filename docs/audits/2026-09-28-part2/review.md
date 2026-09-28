@@ -41,3 +41,16 @@ Total: **90 independently executed tests across 9 files**. Implementation owners
 - Matching file metadata is a performance hint, not cryptographic proof. A same-size rewrite preserving metadata can evade an automatic drift pass; full switch/review/mutation paths do not authorize writes from that hint.
 - Existing inventory limits still refuse incomplete captures with a responsible path and recovery guidance. Benchmark timings are fixture/hardware measurements, not an HDD performance guarantee.
 - This review did not launch retail TF2, mutate player data, qualify a packaged Windows/Linux build, or perform the coordinator's viewport review. Browser/component and disposable native fixtures do not establish in-game or release acceptance.
+
+## Hosted fixture compatibility follow-up
+
+The first pushed revision passed the native unit suites, but hosted Linux native/package smoke checks exposed a fixture assumption: automatic absorb now creates a disposable cache beside the active manifest, while the older fixture expected no additional library files. The correction changes fixture validation only; product versions, public package pins, export provenance and release guards remain unchanged.
+
+Independent review approved the narrow exception:
+
+- The cfg-only active fixture permits only its active profile's exact `absorb-cache.json`, containing precisely `{ "entries": {} }`. It remains optional and is reported separately from protected bytes. The twelve protected files, metadata, live payloads and directory/link checks remain exact.
+- Package fixtures permit a bounded cache only for the known active profile, and the validated imported profile only after an authorized switch. Cache entries must name the fixture's known ordinary custom paths, carry its exact expected SHA-256 values, and have the exact platform stamp shape matching the authored baseline or current observed source. Unknown, inactive, nested, partial, malformed and linked cache cases still refuse.
+- Review caught and corrected two draft-validator problems: a pre-switch cache may retain its original timestamps after an atomic live replacement, and containment/link checks must still run before the imported index is read. The final code preserves both boundaries.
+- Removing a validated cache from checkpoint hashes does not exclude any manifest, index, settings, shared blob, profile payload, live file or recovery journal. Regression cases still detect payload corruption when a valid cache is present.
+
+Independently ran `node --test scripts/linux-native-active-fixture.test.mjs scripts/package-smoke-fixture.test.mjs scripts/development-package-fixture.test.mjs scripts/development-package-guard.test.mjs`: **61 tests passed, no skips or failures**. This includes the 13 active-fixture tests also run separately during the first correction. No blocking finding remains in the reviewed fixture changes. Hosted native/package reruns must still establish the final pushed revision's result; these validator unit tests do not claim that result.

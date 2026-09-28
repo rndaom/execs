@@ -59,6 +59,10 @@ the player should choose.
 
 The initial combined native run overlapped contract regeneration and failed only the old
 serialization expectation. The complete suite above was rerun after regeneration and passed.
+The first hosted native/package smoke runs then exposed their old no-cache fixture assumption.
+The [reviewed fixture correction](review.md#hosted-fixture-compatibility-follow-up) accepts only
+validated disposable hints and keeps the protected profile/live bytes exact. After that correction,
+`node --test scripts/*.test.mjs` passed 151 tests with five platform skips; Biome and diff checks passed.
 Hosted checks on the pushed revision are available in [PR #145](https://github.com/rndaom/execs/pull/145/checks);
 the earlier part 1 checks do not stand in for those checks. Retail gameplay, physical mouse
 side buttons, native Linux UI and a packaged Steam round trip remain manual acceptance limits.
