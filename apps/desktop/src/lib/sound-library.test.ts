@@ -5,6 +5,7 @@ import {
   comfigEntries,
   filterSoundLibrary,
   ownEntry,
+  ownEntryMeta,
   pageSoundLibrary,
   parseSoundPageJump,
   SOUND_LIBRARY_PAGE_SIZE,
@@ -181,5 +182,29 @@ describe("repair flow", () => {
     expect(
       repairReadyForConfirmation({ ...base, status: { ...base.status, untrackedModified: [] } }),
     ).toBe(true);
+  });
+});
+
+describe("sounds the player adds", () => {
+  const picked = (durationMs: number, converted: boolean) => ({
+    token: "t",
+    name: "oof.mp3",
+    converted,
+    info: {
+      formatTag: 1,
+      channels: 1,
+      sampleRate: 22050,
+      bitsPerSample: 16,
+      dataBytes: 1,
+      durationMs,
+    },
+  });
+
+  it("names the conversion and warns about long clips", () => {
+    expect(ownEntryMeta(picked(400, false))).toBeUndefined();
+    expect(ownEntryMeta(picked(400, true))).toBe("Converted to 16-bit 22.05 kHz");
+    expect(ownEntryMeta(picked(3200, true))).toBe(
+      "Converted to 16-bit 22.05 kHz · 3.2 s long; hit sounds usually last under a second",
+    );
   });
 });

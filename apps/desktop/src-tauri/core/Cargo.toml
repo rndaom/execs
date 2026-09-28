@@ -23,6 +23,9 @@ sevenz-rust2 = { version = "0.22.2", default-features = false }
 # Extraction only; the bundled UnRAR terms are included in packaged notices.
 unrar-ng-sys = "=0.7.7"
 tempfile = "3"
+# Pure Rust MP3 and Ogg Vorbis decoding for hit and kill sounds; the decoded
+# samples go through the existing WAV preparation. ID3v2 tags start most MP3s.
+symphonia = { version = "0.6", default-features = false, features = ["mp3", "ogg", "vorbis", "id3v2"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

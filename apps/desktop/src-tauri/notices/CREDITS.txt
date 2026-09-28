@@ -60,6 +60,9 @@ development probe and its protocol references are documented in
   handles HTTPS downloads with destination-bound connections. Windows uses
   Schannel; Linux uses OpenSSL. Their licenses and exact locked versions are
   included in the packaged dependency inventory.
+- [Symphonia](https://github.com/pdeljanov/Symphonia) decodes MP3 and Ogg Vorbis
+  clips chosen in Sounds before they are prepared as hit or kill sound WAVs.
+  MPL-2.0, used unmodified; its notices are in the dependency inventory.
 
 Runtime dependencies are listed in `apps/desktop/package.json` and
 `apps/desktop/src-tauri/Cargo.toml`. The Rust and JavaScript dependency inventory records permissive licenses

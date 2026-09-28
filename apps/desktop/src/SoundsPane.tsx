@@ -416,7 +416,7 @@ export function SoundsPane({
         <section data-testid="sounds-saved-inactive" className="pane-note mt-4">
           <p>
             Saved custom sound files stay in this profile while built-in effects play. Assigning
-            your own WAV replaces one; Remove sound files deletes both saved files.
+            your own sound file replaces one; Remove sound files deletes both saved files.
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {dormantSounds.map(({ kind, entry, effect }) => (
@@ -590,12 +590,14 @@ export function SoundsPane({
               type="button"
               data-testid="sounds-choose-file"
               disabled={picking || !canAudition}
-              title={canAudition ? undefined : "Needs the desktop app."}
+              title={
+                canAudition ? "WAV, MP3 or Ogg Vorbis, up to 30 seconds." : "Needs the desktop app."
+              }
               onClick={() => void chooseFile()}
               className="btn btn-ghost"
             >
               {picking ? <Spinner size={14} /> : <UploadSimple size={14} />}
-              {picking ? "Reading…" : "Add a WAV…"}
+              {picking ? "Reading…" : "Add a sound file…"}
             </button>
             {record ? (
               <button
@@ -1062,7 +1064,7 @@ function SoundSlot({
           <p className="t-row">Boost</p>
           <p className="t-meta">
             {slot.choice.kind === "stock"
-              ? "Choose your own WAV to boost it."
+              ? "Choose your own sound file to boost it."
               : retiredBoost
                 ? "Saved catalog sounds keep their boost."
                 : "Makes the custom file itself louder."}

@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- Sounds accepts MP3 and Ogg Vorbis clips as well as WAV, and notes when a clip is longer than a
+  second. Clips are converted to a WAV TF2 plays, up to 30 seconds.
 - execs reopens where you left it: the same window size and position (including maximized, and on
   the same monitor when it is still connected) and the pane you last used.
 - Copy diagnostics includes a short Health summary and the most recent operations and errors, so a

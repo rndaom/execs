@@ -2,6 +2,7 @@ pub mod absorb;
 pub mod activity_log;
 pub mod apply;
 pub mod archive;
+pub mod audio_decode;
 pub mod blob;
 mod cfg_layer;
 pub mod cfg_script;
