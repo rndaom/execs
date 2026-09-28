@@ -11,9 +11,8 @@ import {
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { publicProfileFixture } from "./package-smoke-fixture.mjs";
 import {
-  previousReleaseVersion,
+  parseReleaseVersion,
   releaseAssetVersion,
   releaseInstallerName,
   releaseVersion,
@@ -24,6 +23,50 @@ export const REPOSITORY = "rndaom/execs";
 export const DEVELOPMENT_CONFIG = "execs-development-package-config.json";
 export const unsignedConfig = { bundle: { createUpdaterArtifacts: false } };
 export const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+export const developmentPublicFixture = JSON.parse(
+  readFileSync(new URL("./fixtures/windows-package-v020/fixture.json", import.meta.url), "utf8"),
+);
+export const developmentPublicRelease = JSON.parse(
+  readFileSync(new URL("./fixtures/development-package-v020.json", import.meta.url), "utf8"),
+);
+
+export function developmentTransition(publicVersion, candidateVersion) {
+  const parts = (value) => {
+    const { baseVersion, revision } = parseReleaseVersion(value);
+    return [...baseVersion.split(".").map(BigInt), BigInt(revision)];
+  };
+  const before = parts(publicVersion),
+    after = parts(candidateVersion);
+  const different = before.findIndex((value, index) => value !== after[index]);
+  assert.ok(
+    different < 0 || after[different] > before[different],
+    "Development package cannot downgrade the public baseline",
+  );
+  return different < 0 ? "same-version-replacement" : "upgrade";
+}
+
+export function selectDevelopmentPublicPackage(release, version, kind) {
+  assert.equal(
+    release.tagName,
+    developmentPublicFixture.exporterTag,
+    "Public latest advanced; generate authentic current-public fixtures before testing",
+  );
+  assert.equal(developmentPublicRelease.tagName, developmentPublicFixture.exporterTag);
+  assert.equal(
+    developmentPublicRelease.exporterRevision,
+    developmentPublicFixture.exporterRevision,
+  );
+  assert.equal(release.publishedAt, developmentPublicRelease.publishedAt);
+  const selected = selectPublicPackage(release, version, kind);
+  for (const key of ["artifact", "signature"]) {
+    const pinned = developmentPublicRelease.packages[kind][key];
+    assert.equal(selected[key].name, pinned.name);
+    assert.equal(selected[key].size, pinned.bytes);
+    assert.equal(selected[key].digest, `sha256:${pinned.sha256}`);
+  }
+  return selected;
+}
 
 /** Tauri changes only its embedded bundle-kind marker for a Debian package. */
 export function assertDebianBundledBinary(buildBinary, bundledBinary) {
@@ -113,15 +156,12 @@ export function developmentVersions(repository, scratch) {
     : history.replace(/^## \[Unreleased\][^\r\n]*$/m, `## [${version}]`);
   writeFileSync(join(copy, "CHANGELOG.md"), rehearsed);
   assert.equal(releaseVersion(copy), version);
-  const previousVersion = previousReleaseVersion(copy, version);
-  assert.equal(
-    `v${previousVersion}`,
-    publicProfileFixture.exporterTag,
-    "Previous public export fixture must be refreshed, not relabeled",
-  );
+  const publicVersion = developmentPublicFixture.exporterTag.slice(1);
+  const transition = developmentTransition(publicVersion, version);
   return {
     version,
-    previousVersion,
+    publicVersion,
+    transition,
     historySha256: sha256(history),
     temporaryHeadingRehearsal: !hasCurrent,
   };
@@ -187,7 +227,7 @@ export function verifyPublicPackage(directory, selected, publicKey) {
   };
 }
 
-export function downloadPublicPackages(directory, previousVersion, publicKey) {
+export function downloadPublicPackages(directory, publicVersion, publicKey) {
   const fields = "tagName,isDraft,isPrerelease,publishedAt,assets";
   const view = (tag) =>
     JSON.parse(
@@ -199,19 +239,19 @@ export function downloadPublicPackages(directory, previousVersion, publicKey) {
   const latest = view([]);
   assert.equal(
     latest.tagName,
-    `v${previousVersion}`,
+    `v${publicVersion}`,
     "Public latest advanced; review history and actual exporter fixtures before testing",
   );
-  const release = view([`v${previousVersion}`]);
+  const release = view([`v${publicVersion}`]);
   const packages = {};
   for (const kind of ["appimage", "deb"]) {
-    const selected = selectPublicPackage(release, previousVersion, kind);
+    const selected = selectDevelopmentPublicPackage(release, publicVersion, kind);
     execFileSync(
       "gh",
       [
         "release",
         "download",
-        `v${previousVersion}`,
+        `v${publicVersion}`,
         "--repo",
         REPOSITORY,
         "--dir",
@@ -224,6 +264,11 @@ export function downloadPublicPackages(directory, previousVersion, publicKey) {
       { stdio: "inherit", timeout: 180_000 },
     );
     packages[kind] = verifyPublicPackage(directory, selected, publicKey);
+    assert.equal(packages[kind].sha256, developmentPublicRelease.packages[kind].artifact.sha256);
+    assert.equal(
+      sha256(regularFile(join(directory, selected.signature.name), 16384)),
+      developmentPublicRelease.packages[kind].signature.sha256,
+    );
   }
   return { release, packages };
 }

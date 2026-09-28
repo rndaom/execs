@@ -8,6 +8,8 @@ on:
       - scripts/development-package-*.mjs
       - scripts/package-smoke-fixture.mjs
       - scripts/fixtures/package-smoke-v018.json
+      - scripts/fixtures/windows-package-v020/**
+      - scripts/fixtures/development-package-v020.json
       - scripts/linux-native-*.mjs
       - scripts/release-version.mjs
       - scripts/verify-release.mjs
@@ -88,7 +90,7 @@ jobs:
           grep -Eq '(^|, )zlib1g(,|$)' "$RUNNER_TEMP/execs-development-deb-depends.txt"
       - name: Install pinned external native driver
         run: cargo install tauri-driver --version 2.0.6 --locked
-      - name: Previous-public package upgrades, native round trip and Debian first install
+      - name: Current-public replacement or upgrade, native round trip and Debian first install
         timeout-minutes: 15
         env:
           GH_TOKEN: ${{ github.token }}

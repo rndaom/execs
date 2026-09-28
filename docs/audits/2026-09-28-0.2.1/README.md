@@ -47,6 +47,15 @@ upgrade fixtures are unchanged. [Fixture provenance and reproduction](../../../s
 record the exact source, downloads and checks; 66 focused Windows/fixture/guard tests pass.
 The PR checks are authoritative for the final pushed revision; no CI run here publishes a release.
 
+The Linux package build succeeded, then exposed the same stale public baseline. Its development
+smoke test now reuses those authentic 0.2.0 exports with separately pinned, signed Linux packages.
+With both public and development versions at 0.2.0, the report explicitly records a same-version
+replacement and Debian uses `--reinstall`; exact candidate binary hashes still prove replacement.
+Future newer development versions use the upgrade case, while downgrades refuse. The historical
+release fixtures and release-version rules are unchanged. All main CI jobs and both Linux native
+smoke scenarios passed before this test-only refresh; the final package check remains visible on
+the PR.
+
 Per-workstream evidence: [mouse recording](binds.md), [RAR decoding and licensing](rar.md),
 and [Casual/conflict diagnostics](mod-content-audit.md). The chooser tests bind confirmation to
 the exact source and current profile revision, reject replay and changed unselected sources,

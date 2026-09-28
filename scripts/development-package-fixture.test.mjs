@@ -22,7 +22,8 @@ import {
   inspectDevelopmentPackageExport,
   seedDevelopmentPackageFixture,
 } from "./development-package-fixture.mjs";
-import { linuxSteamCandidates, publicProfileFixture } from "./package-smoke-fixture.mjs";
+import { developmentPublicFixture } from "./development-package-guard.mjs";
+import { linuxSteamCandidates } from "./package-smoke-fixture.mjs";
 
 const python =
   process.env.EXECS_TEST_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
@@ -33,7 +34,7 @@ const putJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, nu
 function withFixture(callback) {
   const parent = realpathSync(mkdtempSync(join(tmpdir(), "execs-development-package-test-")));
   try {
-    callback(seedDevelopmentPackageFixture(parent, "0.1.8"), parent);
+    callback(seedDevelopmentPackageFixture(parent, "0.2.0"), parent);
   } finally {
     assert.equal(dirname(parent), realpathSync(tmpdir()));
     assert.ok(basename(parent).startsWith("execs-development-package-test-"));
@@ -61,7 +62,7 @@ function modelExport(fixture, edit = () => {}) {
   for (const file of fixture.portableManifest.files)
     entries.push({
       name: file.storage === "shared" ? `blobs/${file.sha256}` : `files/${file.path}`,
-      base64: publicProfileFixture.payloads[file.sha256],
+      base64: developmentPublicFixture.payloads[file.sha256],
     });
   edit(entries);
   const result = spawnSync(
@@ -118,7 +119,10 @@ function modelImported(fixture) {
   for (const file of portable.files.filter((file) => file.storage === "exclusive")) {
     const destination = join(path, "files", file.path);
     mkdirSync(dirname(destination), { recursive: true });
-    writeFileSync(destination, Buffer.from(publicProfileFixture.payloads[file.sha256], "base64"));
+    writeFileSync(
+      destination,
+      Buffer.from(developmentPublicFixture.payloads[file.sha256], "base64"),
+    );
   }
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   editJson(join(fixture.library, "index.json"), (index) => {
@@ -151,7 +155,7 @@ test("development fixture retains tagged payloads and adds a fully private Linux
       fixture.expectedConfigText,
       "unbindall\nbind w +forward\nsensitivity 2.5\ncon_enable 1\n",
     );
-    assert.equal(fixture.provenance.exporterRevision, "85aaf6bc0dd28f43351d4cb5cdb62502737688d5");
+    assert.equal(fixture.provenance.exporterRevision, "486070f6e60bbcb5879acb5ae527d659d9d60ac1");
     assert.equal(fixture.settings.preferences.checkForUpdatesOnStartup, false);
     const checkpoint = assertDevelopmentPackagePreserved(fixture, "original");
     assert.equal(
@@ -172,7 +176,7 @@ test("development fixture retains tagged payloads and adds a fully private Linux
     assert.equal(env.DISPLAY, ":99");
     for (const key of ["GH_TOKEN", "LD_PRELOAD", "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS"])
       assert.equal(Object.hasOwn(env, key), false);
-    assert.throws(() => seedDevelopmentPackageFixture("relative", "0.1.8"), /absolute/);
+    assert.throws(() => seedDevelopmentPackageFixture("relative", "0.2.0"), /absolute/);
     assert.throws(() => seedDevelopmentPackageFixture(parent, "0.1.9"), /previous public/);
   });
   assert.equal(process.env.HOME, home);
@@ -197,16 +201,16 @@ test("export proof validates the exact portable metadata and all four bounded pa
   });
 });
 
-test("inspector reads the unchanged actual v0.1.8 exporter archive", () => {
+test("inspector reads the unchanged actual v0.2.0 exporter archive", () => {
   withFixture((fixture) => {
-    const archive = new URL(
-      "../docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/no-hud/exported-by-v0.1.8.zip",
-      import.meta.url,
+    const archive = new URL("./fixtures/windows-package-v020/no-hud.zip", import.meta.url);
+    const expectedHash = "306ae6236a8b79465c6aca6fea64dbdd56c06f447f789e28c8c6d62e8dcdcde1";
+    const source = developmentPublicFixture.sources.find((entry) => entry.case === "no-hud");
+    assert.equal(developmentPublicFixture.exporterTag, "v0.2.0");
+    assert.equal(
+      developmentPublicFixture.exporterRevision,
+      "486070f6e60bbcb5879acb5ae527d659d9d60ac1",
     );
-    const expectedHash = "3299cf62cb18da34785c309803ed2d8abad427eab9b95918ea72b1bf9259ac38";
-    const source = publicProfileFixture.sources.find((entry) => entry.case === "no-hud");
-    assert.equal(publicProfileFixture.exporterTag, "v0.1.8");
-    assert.equal(publicProfileFixture.exporterRevision, "85aaf6bc0dd28f43351d4cb5cdb62502737688d5");
     assert.equal(source.archiveSha256, expectedHash);
     const bytes = readFileSync(archive);
     assert.equal(digest(bytes), expectedHash);
@@ -386,7 +390,7 @@ test("archive replacement, alternate Save destination and proof from another cas
       Buffer.concat([readFileSync(fixture.exportPath), Buffer.from("extra")]),
     );
     assert.throws(() => assertDevelopmentPackagePreserved(fixture, "changed-export", proof));
-    const other = seedDevelopmentPackageFixture(parent, "0.1.8");
+    const other = seedDevelopmentPackageFixture(parent, "0.2.0");
     assert.throws(
       () => assertDevelopmentPackagePreserved(other, "foreign-proof", proof),
       /another case/,

@@ -11,11 +11,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import {
-  linuxSteamCandidates,
-  publicProfileFixture,
-  seedPackageFixture,
-} from "./package-smoke-fixture.mjs";
+import { developmentPublicFixture } from "./development-package-guard.mjs";
+import { linuxSteamCandidates, seedPackageFixture } from "./package-smoke-fixture.mjs";
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
@@ -116,12 +113,12 @@ function snapshot(fixture, stage) {
 }
 
 /** Fresh Linux case; the shared tagged payload fixture remains unchanged. */
-export function seedDevelopmentPackageFixture(parent, previousVersion) {
+export function seedDevelopmentPackageFixture(parent, publicVersion) {
   assert.ok(parent && isAbsolute(parent), "Package fixture parent must be absolute");
   ordinaryDirectory(parent);
   const canonicalParent = realpathSync(parent);
   const scratch = mkdtempSync(join(canonicalParent, "execs-development-package-"));
-  const base = seedPackageFixture(scratch, false, previousVersion);
+  const base = seedPackageFixture(scratch, false, publicVersion, developmentPublicFixture);
   const childEnv = {
     ...base.childEnv,
     HOME: join(scratch, "home"),
@@ -138,7 +135,7 @@ export function seedDevelopmentPackageFixture(parent, previousVersion) {
   writeFileSync(join(base.data, "settings.json"), `${JSON.stringify(settings, null, 2)}\n`);
   const exports = join(scratch, "exports");
   mkdirSync(exports);
-  const source = publicProfileFixture.sources.find((entry) => entry.case === "no-hud");
+  const source = developmentPublicFixture.sources.find((entry) => entry.case === "no-hud");
   assert.ok(source);
   const activeProfileId = base.metadata["index.json"].activeProfileId;
   const activeProfileName = base.metadata[`${activeProfileId}/manifest.json`].name;
@@ -156,7 +153,7 @@ export function seedDevelopmentPackageFixture(parent, previousVersion) {
     activeProfileId,
     activeProfileName,
     expectedConfigText: Buffer.from(
-      publicProfileFixture.payloads[config.sha256],
+      developmentPublicFixture.payloads[config.sha256],
       "base64",
     ).toString("utf8"),
     portableManifest,
@@ -319,7 +316,7 @@ export function inspectDevelopmentPackageExport(fixture, { python = "python3" } 
     const name = file.storage === "shared" ? `blobs/${file.sha256}` : `files/${file.path}`;
     expectedMembers.set(name, {
       sha256: file.sha256,
-      bytes: Buffer.from(publicProfileFixture.payloads[file.sha256], "base64").length,
+      bytes: Buffer.from(developmentPublicFixture.payloads[file.sha256], "base64").length,
     });
   }
   assert.deepEqual(

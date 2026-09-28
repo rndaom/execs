@@ -265,7 +265,7 @@ export async function main() {
       pullRequestBase: event.pull_request?.base?.sha ?? null,
     },
     scope:
-      "Unsigned Linux development packages: authenticated previous public packages, normal FUSE AppImage manual replacement, Debian package-manager upgrade/first install and native profile round trip. No release operations.",
+      "Unsigned Linux development packages: authenticated current public packages, normal FUSE AppImage manual replacement, Debian package-manager replacement or upgrade/first install and native profile round trip. No release operations.",
     override: unsignedConfig,
     notQualified: [
       "Windows NSIS (not implemented)",
@@ -277,8 +277,16 @@ export async function main() {
       "media decoding",
       "other Linux distributions/Wayland",
     ],
-    plannedCases: ["appimage-upgrade", "deb-upgrade", "deb-first-install"],
-    unstartedCases: ["appimage-upgrade", "deb-upgrade", "deb-first-install"],
+    plannedCases: [
+      `appimage-${versions.transition}`,
+      `deb-${versions.transition}`,
+      "deb-first-install",
+    ],
+    unstartedCases: [
+      `appimage-${versions.transition}`,
+      `deb-${versions.transition}`,
+      "deb-first-install",
+    ],
     cases: [],
   };
   const saveReport = () =>
@@ -290,7 +298,7 @@ export async function main() {
     mkdirSync(downloads);
     const previous = downloadPublicPackages(
       downloads,
-      versions.previousVersion,
+      versions.publicVersion,
       config.plugins.updater.pubkey,
     );
     report.previousRelease = previous.release;
@@ -313,8 +321,8 @@ export async function main() {
       ["deb", false],
     ]) {
       assertNoPlayerProcesses(execFileSync("ps", ["-A", "-o", "comm="], { encoding: "utf8" }));
-      const label = `${kind}-${upgrade ? "upgrade" : "first-install"}`;
-      const fixture = seedDevelopmentPackageFixture(root, versions.previousVersion);
+      const label = `${kind}-${upgrade ? versions.transition : "first-install"}`;
+      const fixture = seedDevelopmentPackageFixture(root, versions.publicVersion);
       const childEnv = developmentPackageEnvironment(fixture, process.env);
       const caseEvidence = join(evidence, label);
       mkdirSync(caseEvidence);
@@ -351,7 +359,7 @@ export async function main() {
       const install = (path, expectedVersion) => {
         execFileSync(
           "sudo",
-          ["-n", "apt-get", "install", "--yes", "--no-install-recommends", path],
+          ["-n", "apt-get", "install", "--yes", "--reinstall", "--no-install-recommends", path],
           { stdio: "inherit", timeout: 180_000 },
         );
         assert.equal(installedDeb(), expectedVersion);
@@ -399,14 +407,14 @@ export async function main() {
             kind,
             join(fixture.scratch, "previous-inspection"),
             childEnv,
-            versions.previousVersion,
+            versions.publicVersion,
             false,
           );
           row.previous = old;
           if (kind === "appimage") {
             copyFileSync(old.path, application);
             chmodSync(application, 0o755);
-          } else install(old.path, versions.previousVersion);
+          } else install(old.path, versions.publicVersion);
           preserve("after-previous-install");
           await launch(old, "previous-launch");
           await session.readProfile(
@@ -425,7 +433,7 @@ export async function main() {
             archive,
           );
           row.preservation.push(checkpoint);
-          await session.close("previous-close-before-upgrade");
+          await session.close("public-close-before-candidate-replacement");
           preserve("previous-closed");
         }
         if (kind === "appimage") {
@@ -440,7 +448,7 @@ export async function main() {
           install(inspectedCandidate.path, versions.version);
           assert.equal(sha256(regularFile(application)), inspectedCandidate.binarySha256);
           row.transition = upgrade
-            ? "Debian package-manager upgrade"
+            ? `Debian package-manager ${versions.transition}`
             : "Debian fresh package installation";
         }
         preserve("after-candidate-package-install");
