@@ -417,7 +417,8 @@ export function SettingsHost({
           if (cancelled) {
             return;
           }
-          await reload({ syncBinds: true });
+          // The load's completeness decides whether the sync request is handled.
+          return reload({ syncBinds: true });
         })
       : reload();
     operation

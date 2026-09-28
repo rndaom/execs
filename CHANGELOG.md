@@ -5,6 +5,12 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings load again after you close TF2 for a profile where you have not saved any binds in
+  execs. When TF2 had changed `config.cfg`, every settings pane stopped with "The Binds source
+  identity is unavailable", and Retry only helped until the next refresh.
+
 ## [0.2.0] - 2026-09-27
 
 ### Added
