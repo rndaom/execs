@@ -324,6 +324,7 @@ pub(crate) struct WorkItem {
     target: String,
     mod_name: String,
     bytes: Vec<u8>,
+    profile_source: bool,
 }
 
 fn format_unresolved(summary: &str, details: &[String]) -> String {
@@ -513,6 +514,48 @@ pub(super) fn plan_preloader_selection(
     entries: &BTreeMap<String, VpkEntryLocation>,
     profile: Option<&ProfileContext>,
 ) -> Result<PreloaderPlan, String> {
+    plan_with_particle_baseline(
+        tf2_root, data_dir, zip_path, selection, state, entries, profile, None,
+    )
+}
+
+struct ParticleBaseline {
+    untracked: Vec<String>,
+    roots_by_file: BTreeMap<String, Vec<String>>,
+}
+
+fn stock_particle_roots(
+    tf2_root: &Path,
+    data_dir: &Path,
+    state: &PreloaderState,
+    entries: &BTreeMap<String, VpkEntryLocation>,
+) -> BTreeMap<String, Vec<String>> {
+    let mut roots_by_file = BTreeMap::new();
+    for rel in entries.keys() {
+        let Some(name) = rel.strip_prefix("particles/") else {
+            continue;
+        };
+        if name.contains('/') || !name.ends_with(".pcf") || name.ends_with("_dx80.pcf") {
+            continue;
+        }
+        if let Ok(vanilla) = decode_baseline(tf2_root, data_dir, state, entries, rel) {
+            roots_by_file.insert(name.to_string(), find_root_systems(&vanilla));
+        }
+    }
+    roots_by_file
+}
+
+#[allow(clippy::too_many_arguments)]
+fn plan_with_particle_baseline(
+    tf2_root: &Path,
+    data_dir: &Path,
+    zip_path: &Path,
+    selection: &PreloaderSelection,
+    state: &PreloaderState,
+    entries: &BTreeMap<String, VpkEntryLocation>,
+    profile: Option<&ProfileContext>,
+    baseline: Option<&ParticleBaseline>,
+) -> Result<PreloaderPlan, String> {
     #[cfg(test)]
     PLAN_DERIVATIONS.with(|count| count.set(count.get() + 1));
     // Opening the selection verifies every direct author file exactly once.
@@ -534,11 +577,17 @@ pub(super) fn plan_preloader_selection(
     }
     let profile_mods =
         resolve_profile_particle_mods(tf2_root, &selection.profile_particle_mods, profile)?;
-    let untracked = untracked_modified_particles(&misc_vpk_path(tf2_root), entries, state)?;
+    let checked_untracked;
+    let untracked = if let Some(baseline) = baseline {
+        &baseline.untracked
+    } else {
+        checked_untracked = untracked_modified_particles(&misc_vpk_path(tf2_root), entries, state)?;
+        &checked_untracked
+    };
     if !untracked.is_empty() {
         return Err(format_unresolved(
             "TF2 contains particle files execs cannot restore; repair the game through Steam before applying mods",
-            &untracked,
+            untracked,
         ));
     }
 
@@ -584,6 +633,7 @@ pub(super) fn plan_preloader_selection(
                     target,
                     mod_name: mod_name.clone(),
                     bytes,
+                    profile_source: false,
                 },
             );
         }
@@ -622,6 +672,7 @@ pub(super) fn plan_preloader_selection(
                         target,
                         mod_name: source.name.clone(),
                         bytes,
+                        profile_source: true,
                     },
                 );
             }
@@ -631,19 +682,14 @@ pub(super) fn plan_preloader_selection(
     // Rebuild the duplicate-carrier files whenever particle mods are in play
     // and a mod did not already replace them outright.
     if !selection.particle_mods.is_empty() || profile_mods.is_some() {
-        let mut roots_by_file: BTreeMap<String, Vec<String>> = BTreeMap::new();
-        for rel in entries.keys() {
-            let Some(name) = rel.strip_prefix("particles/") else {
-                continue;
-            };
-            if name.contains('/') || !name.ends_with(".pcf") || name.ends_with("_dx80.pcf") {
-                continue;
-            }
-            if let Ok(vanilla) = decode_baseline(tf2_root, data_dir, state, entries, rel) {
-                roots_by_file.insert(name.to_string(), find_root_systems(&vanilla));
-            }
-        }
-        for (target, keep) in rebuild_keep_lists(&roots_by_file) {
+        let checked_roots;
+        let roots_by_file = if let Some(baseline) = baseline {
+            &baseline.roots_by_file
+        } else {
+            checked_roots = stock_particle_roots(tf2_root, data_dir, state, entries);
+            &checked_roots
+        };
+        for (target, keep) in rebuild_keep_lists(roots_by_file) {
             if work.contains_key(&target) {
                 continue;
             }
@@ -657,6 +703,7 @@ pub(super) fn plan_preloader_selection(
                     target,
                     mod_name: "stock rebuild".into(),
                     bytes,
+                    profile_source: false,
                 },
             );
         }
@@ -681,14 +728,26 @@ pub(super) fn plan_preloader_selection(
     let stock_ceiling = largest_stock_particle(entries);
     let mut touched = BTreeSet::new();
     let mut patches = Vec::new();
+    let mut refused_profile_sources = Vec::new();
     for item in work.values() {
-        let skip = |reason: String, skipped: &mut Vec<SkipNotice>| {
+        let mut skip = |reason: String, skipped: &mut Vec<SkipNotice>| {
+            if item.profile_source {
+                refused_profile_sources
+                    .push(format!("{} ({}): {reason}", item.mod_name, item.target));
+            }
             skipped.push(SkipNotice {
                 file: item.target.clone(),
                 mod_name: item.mod_name.clone(),
                 reason,
             });
         };
+        if !entries.contains_key(&format!("particles/{}", item.target)) {
+            skip(
+                "has no supported stock particle carrier. A custom particles_manifest.txt does not make this file patchable in Casual".into(),
+                &mut skipped,
+            );
+            continue;
+        }
         if item.bytes.len() > stock_ceiling {
             skip(
                 format!(
@@ -775,6 +834,16 @@ pub(super) fn plan_preloader_selection(
                 padded,
             });
         }
+    }
+
+    // A profile source is offered as one complete choice. Never save it as
+    // installed when any of its effective files cannot actually be patched.
+    // This is also the authoritative check for clients bypassing the UI.
+    if !refused_profile_sources.is_empty() {
+        return Err(format_unresolved(
+            "These profile particles cannot be applied; the installed selection was kept",
+            &refused_profile_sources,
+        ));
     }
 
     // Custom content: particle-mod support files plus the selected addons.
@@ -1358,6 +1427,107 @@ fn resolve_profile_particle_mods(
         resolved.push(source.clone());
     }
     Ok(Some((profile_id, resolved)))
+}
+
+/// Check the same complete plan used by Apply without starting a transaction,
+/// repairing snapshots, or writing any files. A successful check is conditional
+/// on this install and source: Apply still checks the combined selection again.
+pub fn qualify_profile_particle_sources(
+    tf2_root: &Path,
+    data_dir: &Path,
+    profiles: &Path,
+    profile_id: &str,
+    sources: &mut [ParticleSource],
+) -> Result<(), String> {
+    if sources.is_empty() {
+        return Ok(());
+    }
+    crate::vpk::with_directory_memo(|| {
+        let baseline = (|| {
+            let entries = map_vpk_entries(&misc_vpk_path(tf2_root)).map_err(|err| err.message())?;
+            let mut state = load_state_for_snapshot_recovery(data_dir)?;
+            discover_orphaned_snapshots_readonly(data_dir, &mut state, Some(&entries));
+            Ok::<_, String>((entries, state))
+        })();
+        let (entries, state) = match baseline {
+            Ok(baseline) => baseline,
+            Err(reason) => {
+                for source in sources {
+                    source.unavailable_reason = Some(format!(
+                        "Particle compatibility could not be checked: {reason}"
+                    ));
+                }
+                return Ok(());
+            }
+        };
+        let profile = ProfileContext {
+            profiles: profiles.to_path_buf(),
+            id: profile_id.to_string(),
+        };
+        // Scan/decode the stock archive once for this read-only report.
+        // Apply never reuses these facts and checks the install afresh.
+        let mut particle_baseline: Option<Result<ParticleBaseline, String>> = None;
+        for source in sources {
+            // New filenames cannot be made loadable just by accepting their
+            // manifest. No guessed filename aliases or partial graph merges.
+            let unsupported: Vec<_> = source
+                .pcf_files
+                .iter()
+                .filter(|file| {
+                    let file = file.to_ascii_lowercase();
+                    let target = if file == "blood_trail.pcf" {
+                        "npc_fx.pcf"
+                    } else {
+                        &file
+                    };
+                    !entries.contains_key(&format!("particles/{target}"))
+                })
+                .cloned()
+                .collect();
+            if !unsupported.is_empty() {
+                source.unavailable_reason = Some(format!(
+                    "{} has no supported stock particle carrier. A custom particles_manifest.txt does not make it patchable in Casual.",
+                    unsupported.join(", ")
+                ));
+                continue;
+            }
+            let baseline = particle_baseline.get_or_insert_with(|| {
+                Ok(ParticleBaseline {
+                    untracked: untracked_modified_particles(
+                        &misc_vpk_path(tf2_root),
+                        &entries,
+                        &state,
+                    )?,
+                    roots_by_file: stock_particle_roots(tf2_root, data_dir, &state, &entries),
+                })
+            });
+            let baseline = match baseline {
+                Ok(baseline) => baseline,
+                Err(reason) => {
+                    source.unavailable_reason = Some(format!(
+                        "Particle compatibility could not be checked: {reason}"
+                    ));
+                    continue;
+                }
+            };
+            let selection = PreloaderSelection {
+                profile_particle_mods: vec![source.mod_id.clone()],
+                ..PreloaderSelection::default()
+            };
+            source.unavailable_reason = plan_with_particle_baseline(
+                tf2_root,
+                data_dir,
+                Path::new(""), // Profile-only plans never open the default library.
+                &selection,
+                &state,
+                &entries,
+                Some(&profile),
+                Some(baseline),
+            )
+            .err();
+        }
+        Ok(())
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

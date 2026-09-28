@@ -167,6 +167,9 @@ pub struct ParticleSource {
     pub name: String,
     /// Bare `*.pcf` file names at the pack's `particles/` root.
     pub pcf_files: Vec<String>,
+    /// A read-only plan refused this source on the current TF2 install.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unavailable_reason: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -965,6 +968,7 @@ pub fn profile_particle_sources_from(
             mod_id: record.id.clone(),
             name: record.name.clone(),
             pcf_files,
+            unavailable_reason: None,
         });
     }
     Ok(sources)
@@ -2024,8 +2028,11 @@ mod tests {
             Some(b"pcf".as_slice())
         );
 
+        let cache = tf2.join("tf/custom/flames.vpk.sound.cache");
+        fs::write(&cache, b"game cache").unwrap();
         remove_mod_to(&profiles, &tf2, &id, "flames", unlocked()).unwrap();
         assert!(!tf2.join("tf/custom/flames.vpk").exists());
+        assert!(!cache.exists());
         cleanup(&root);
     }
 

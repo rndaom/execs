@@ -50,11 +50,6 @@ fn packs_from_file(path: &Path) -> Result<Vec<(String, ModContent)>, CommandErro
         return Ok(vec![(name, content)]);
     }
     let bytes = read_bounded_file(path, MAX_MOD_BYTES, archive_too_large(MAX_MOD_BYTES))?;
-    if bytes.starts_with(b"Rar!") {
-        return Err(CommandError::unknown(
-            "RAR archives cannot be unpacked here. Extract it with 7-Zip, then use Add folder.",
-        ));
-    }
     Ok(execs_core::mods::mod_content_from_archive(&name, &bytes)?)
 }
 
@@ -71,8 +66,8 @@ pub async fn import_mod_archive(
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
             .file()
-            .set_title("Add mods (.vpk, .zip or .7z)")
-            .add_filter("Mods", &["vpk", "zip", "7z"])
+            .set_title("Add mods (.vpk, .zip, .7z or .rar)")
+            .add_filter("Mods", &["vpk", "zip", "7z", "rar"])
             .blocking_pick_files()
     })
     .await

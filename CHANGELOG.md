@@ -5,8 +5,28 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Added
+
+- Review the VPKs and content folders inside mod archives before installing, including archives
+  with several variants. Read the author's included instructions, choose one or more packs, or
+  cancel without changing your profile.
+- Import single-volume RAR4 and RAR5 mods, including solid archives, with the same bounded
+  extraction rules as other formats. Encrypted, split and unsupported archive features explain
+  how to import an extracted folder instead.
+- Custom packs show content-based Casual restrictions, overlapping files, expected custom-pack
+  winners and mixed model components. Incomplete checks stay visible; these notes do not claim
+  a pack has been verified in a retail Casual match.
+
 ### Fixed
 
+- Binds handles Mouse 4 and Mouse 5 across the press and release, prevents the recorded gesture
+  from navigating backward or forward, and explains mouse buttons TF2 cannot bind.
+- Unbuilt Viewmodels and custom Crosshair choices stay pending through pane changes and protect
+  close, profile changes and Launch. Failed builds and TF2 source refreshes preserve your choices.
+- Casual particle sources show unsupported filenames and incompatible files before selection;
+  Apply also refuses incompatible profile sources before changing game files.
+- Removing a VPK pack also cleans its leftover sound cache. Caches for surviving packs,
+  external edits and linked paths are preserved.
 - Settings load again after you close TF2 for a profile where you have not saved any binds in
   execs. When TF2 had changed `config.cfg`, every settings pane stopped with "The Binds source
   identity is unavailable", and Retry only helped until the next refresh.

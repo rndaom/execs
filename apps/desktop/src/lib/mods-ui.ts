@@ -643,6 +643,22 @@ export const PREVIEW_PARTICLE_SOURCES: ParticleSource[] = [
 ];
 
 export const PREVIEW_MODS_STATUS: PreloaderStatusPayload = {
+  contentAudit: {
+    packs: PREVIEW_PROFILE_MODS.map((mod) => ({
+      pack: mod.pack,
+      files: mod.files,
+      restrictedSounds: false,
+      soundScripts: [],
+      exemptHitSounds: false,
+      modelsMaterials: true,
+      particles: mod.id === "gb-618734",
+      other: false,
+    })),
+    overlaps: [],
+    splitModels: [],
+    incomplete: [],
+    omittedDetails: 0,
+  },
   status: {
     gameinfoFound: true,
     gameinfoBypassed: true,

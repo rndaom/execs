@@ -1,11 +1,12 @@
 import { type CfgFile, parseCommands } from "@execs/cfglint";
 import { MagnifyingGlass, Plus, X } from "@phosphor-icons/react";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity, useAutosave } from "./hooks/useAutosave";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
+import { createBindMouseReleaseGuard, setNativeBindMouseCapture } from "./lib/bind-mouse-capture";
 import {
   actionBindings,
   applyRecordedBind,
@@ -63,6 +64,7 @@ export function BindsPane({
   const { running, busy } = useAppStatus();
   const [recordingId, setRecordingId] = useState<BindActionId | null>(null);
   const [recorderNotice, setRecorderNotice] = useState<string | null>(null);
+  const mouseReleaseGuard = useRef<ReturnType<typeof createBindMouseReleaseGuard> | null>(null);
   const [pendingKey, setPendingKey] = useState<{
     actionId: BindActionId;
     key: string;
@@ -86,6 +88,14 @@ export function BindsPane({
   // The draft changes immediately, even while its previous save is in flight.
   // SettingsHost still blocks profile operations and incomplete loads.
   const canRecord = active && !(blocked ?? busy);
+  useEffect(() => {
+    const guard = createBindMouseReleaseGuard(window);
+    mouseReleaseGuard.current = guard;
+    return () => {
+      guard.dispose();
+      mouseReleaseGuard.current = null;
+    };
+  }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: A profile or layer change invalidates an unfinished key review.
   useEffect(() => {
     setRecordingId(null);
@@ -155,8 +165,20 @@ export function BindsPane({
     const armTimer = window.setTimeout(() => {
       armed = true;
     }, 0);
+    let cancelled = false;
+    void setNativeBindMouseCapture(true).catch(() => {
+      if (!cancelled) {
+        setKeyNotice({
+          actionId: recordingId,
+          text: "Mouse capture could not start. Try recording again.",
+        });
+        setRecordingId(null);
+      }
+    });
 
+    let finished = false;
     function finish(key: string | null) {
+      if (finished) return;
       const outcome = recorderOutcomeForKey(key);
       if (outcome.kind === "unbindable") {
         // Keep listening: the recorder must not sit open with no explanation
@@ -164,6 +186,7 @@ export function BindsPane({
         setRecorderNotice(outcome.message);
         return;
       }
+      finished = true;
       if (outcome.kind === "cancel" || !recordingId) {
         setRecordingId(null);
         return;
@@ -206,14 +229,34 @@ export function BindsPane({
         return;
       }
       // Category navigation ends capture; its click must not become mouse1.
-      if (event.target instanceof HTMLElement && event.target.closest("[data-bind-navigation]")) {
+      if (
+        event.button === 0 &&
+        event.target instanceof HTMLElement &&
+        event.target.closest("[data-bind-navigation]")
+      ) {
         setRecordingId(null);
         setRecorderNotice(null);
         return;
       }
       event.preventDefault();
       event.stopPropagation();
+      mouseReleaseGuard.current?.capture(event.button);
       finish(sourceKeyFromMouseButton(event.button));
+    }
+
+    function onMouseUp(event: MouseEvent) {
+      // Some hosts deliver the side-button release without a DOM press.
+      if (!armed || event.defaultPrevented || event.button < 3) return;
+      event.preventDefault();
+      event.stopPropagation();
+      mouseReleaseGuard.current?.capture(event.button);
+      mouseReleaseGuard.current?.release(event);
+      finish(sourceKeyFromMouseButton(event.button));
+    }
+
+    function onBlur() {
+      setRecordingId(null);
+      setRecorderNotice(null);
     }
 
     function onWheel(event: WheelEvent) {
@@ -227,11 +270,17 @@ export function BindsPane({
 
     window.addEventListener("keydown", onKeyDown, true);
     window.addEventListener("mousedown", onMouseDown, true);
+    window.addEventListener("mouseup", onMouseUp, true);
+    window.addEventListener("blur", onBlur);
     window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
+      cancelled = true;
+      void setNativeBindMouseCapture(false).catch(() => {});
       window.clearTimeout(armTimer);
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("mousedown", onMouseDown, true);
+      window.removeEventListener("mouseup", onMouseUp, true);
+      window.removeEventListener("blur", onBlur);
       window.removeEventListener("wheel", onWheel, true);
     };
   }, [recordingId, canRecord, draft, setDraft, preview]);

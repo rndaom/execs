@@ -26,6 +26,8 @@ pub mod launch;
 mod managed_cfg;
 pub use managed_cfg::ManagedCfgScope;
 pub mod mdl;
+pub mod mod_audit;
+pub mod mod_import;
 pub mod mods;
 pub mod pcf;
 pub mod preloader;

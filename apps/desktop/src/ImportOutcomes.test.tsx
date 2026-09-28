@@ -41,8 +41,8 @@ const detail = { id: "A", layer: "vanilla", files: [], launchOptions: "" };
 const cases = [
   ["hud", "onImportArchive", "importHudArchive", "HUD imported"],
   ["hud", "onImportFolder", "importHudFolder", "HUD imported"],
-  ["mods", "onImportArchive", "importModArchive", "Mod imported"],
-  ["mods", "onImportFolder", "importModFolder", "Mod imported"],
+  ["mods", "onImportArchive", "prepareImportModArchive", "Mod imported"],
+  ["mods", "onImportFolder", "prepareImportModFolder", "Mod imported"],
   ["viewmodels", "onImport", "importViewmodels", "Pack imported"],
   ["comfig", "onImportCustom", "importComfigCustom", "comfig-custom imported"],
 ] as const;
@@ -68,6 +68,8 @@ beforeEach(() => {
     getHudSchema: vi.fn(async () => null),
     getPreloaderStatus: vi.fn(async () => ({})),
     ...Object.fromEntries(cases.map(([, , command]) => [command, vi.fn(async () => detail)])),
+    cancelModImport: vi.fn(async () => {}),
+    confirmModImport: vi.fn(async () => detail),
   };
   props = {
     api,
@@ -139,7 +141,36 @@ describe("picker cancellation through SettingsHost and ToastProvider", () => {
       expect(box.querySelector('[data-testid="toast"]')?.textContent).toContain(
         "injected import failure",
       );
-      await act(async () => expect(capture.panes[tab][callback](false)).resolves.toBe(true));
+      if (tab === "mods") {
+        api[command].mockResolvedValueOnce({
+          token: "review",
+          readmes: [],
+          choices: [
+            {
+              id: "0:0",
+              name: "Pack",
+              path: "pack.vpk",
+              files: 1,
+              bytes: 20,
+              contentRoots: [],
+              disabledReason: null,
+            },
+          ],
+        });
+        await act(async () => {
+          result = capture.panes[tab][callback](false);
+        });
+        expect(api.confirmModImport).not.toHaveBeenCalled();
+        await act(async () => {
+          [...box.querySelectorAll("button")]
+            .find((button) => button.textContent === "Install selected")
+            ?.click();
+        });
+        await expect(result).resolves.toBe(true);
+        expect(api.confirmModImport).toHaveBeenCalledExactlyOnceWith("review", ["0:0"]);
+      } else {
+        await act(async () => expect(capture.panes[tab][callback](false)).resolves.toBe(true));
+      }
       expect(props.onBusyChange).toHaveBeenLastCalledWith(false);
       expect(box.querySelector('[data-testid="toast"]')?.textContent).toBe(message);
       expect(api[command]).toHaveBeenCalledTimes(4);

@@ -54,6 +54,150 @@ function capSource(actionId: string, key: string): string {
 }
 
 describe("BindsPane autosave", () => {
+  it.each([
+    [0, "mouse1", "Mouse 1"],
+    [1, "mouse3", "Mouse 3"],
+    [2, "mouse2", "Mouse 2"],
+    [3, "mouse4", "Mouse 4"],
+    [4, "mouse5", "Mouse 5"],
+  ])(
+    "records DOM button %s and consumes its release after rendering",
+    async (button, key, label) => {
+      const save = vi.fn(async (_text: string) => undefined);
+      await act(async () =>
+        root.render(
+          createElement(BindsPane, {
+            profileId: "profile-a",
+            layer: "vanilla",
+            effectiveBinds: {},
+            managedText: "",
+            onSave: save,
+          }),
+        ),
+      );
+      await act(async () =>
+        document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+      );
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+      const down = new dom.window.MouseEvent("mousedown", {
+        button: Number(button),
+        cancelable: true,
+        bubbles: true,
+      });
+      await act(async () => dom.window.dispatchEvent(down));
+      expect(down.defaultPrevented).toBe(true);
+      expect(caps("jump")).toEqual([label]);
+      // React has already closed recording; holding the button must not let the
+      // later release trigger history navigation or activate another control.
+      await act(async () => vi.advanceTimersByTimeAsync(100));
+      for (const type of ["mouseup", Number(button) === 0 ? "click" : "auxclick", "contextmenu"]) {
+        const event = new dom.window.MouseEvent(type, {
+          button: Number(button),
+          cancelable: true,
+          bubbles: true,
+        });
+        await act(async () => dom.window.dispatchEvent(event));
+        expect(event.defaultPrevented).toBe(true);
+      }
+      await act(async () => vi.advanceTimersByTimeAsync(700));
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save.mock.calls[0][0]).toContain(`bind ${key} +jump`);
+      const later = new dom.window.MouseEvent("mouseup", {
+        button: Number(button),
+        cancelable: true,
+      });
+      dom.window.dispatchEvent(later);
+      expect(later.defaultPrevented).toBe(false);
+    },
+  );
+
+  it.each([3, 4])("records a side-button release fallback for button %s", async (button) => {
+    const save = vi.fn(async (_text: string) => undefined);
+    await act(async () =>
+      root.render(
+        createElement(BindsPane, {
+          profileId: "profile-a",
+          layer: "vanilla",
+          effectiveBinds: {},
+          managedText: "",
+          onSave: save,
+        }),
+      ),
+    );
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    const event = new dom.window.MouseEvent("mouseup", { button, cancelable: true });
+    await act(async () => dom.window.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(caps("jump")).toEqual([`Mouse ${button + 1}`]);
+    await act(async () => vi.advanceTimersByTimeAsync(700));
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a side button over category navigation and rejects unsupported buttons", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    await act(async () =>
+      root.render(
+        createElement(BindsPane, {
+          profileId: "profile-a",
+          layer: "vanilla",
+          effectiveBinds: {},
+          managedText: "",
+          onSave: save,
+        }),
+      ),
+    );
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    await act(async () =>
+      dom.window.dispatchEvent(
+        new dom.window.MouseEvent("mousedown", { button: 5, cancelable: true }),
+      ),
+    );
+    expect(document.querySelector('[data-testid="bind-recorder-notice"]')?.textContent).toContain(
+      "can't be bound",
+    );
+    expect(save).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    await act(async () =>
+      document
+        .getElementById("bind-category-combat")
+        ?.dispatchEvent(
+          new dom.window.MouseEvent("mousedown", { button: 3, bubbles: true, cancelable: true }),
+        ),
+    );
+    expect(caps("jump")).toEqual(["Mouse 4"]);
+  });
+
+  it("cancels capture on blur and leaves a later side click alone", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    await act(async () =>
+      root.render(
+        createElement(BindsPane, {
+          profileId: "profile-a",
+          layer: "vanilla",
+          effectiveBinds: {},
+          managedText: "",
+          onSave: save,
+        }),
+      ),
+    );
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="bind-record-jump"]')?.click(),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    await act(async () => dom.window.dispatchEvent(new dom.window.Event("blur")));
+    const event = new dom.window.MouseEvent("mouseup", { button: 3, cancelable: true });
+    await act(async () => dom.window.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(false);
+    expect(caps("jump")).toEqual([]);
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it("lists two startup keys with their sources, then adds and removes only an execs key", async () => {
     const save = vi.fn(async (_text: string) => undefined);
     const managedText = `${MANAGED_BINDS_HEADER}\nbind x +jump\n`;

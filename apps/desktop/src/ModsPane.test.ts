@@ -69,6 +69,37 @@ function button(id: string): HTMLButtonElement {
 }
 
 describe("ModsPane profile particle containment", () => {
+  it("explains unsupported particles before selection and still lets a saved choice be removed", async () => {
+    const mod = { ...PREVIEW_PROFILE_MODS[1], id: "gory-gibbing", name: "Gory Gibbing" };
+    const unavailableReason = "blood_trail_new.pcf has no supported stock particle carrier.";
+    const payload = {
+      ...PREVIEW_MODS_STATUS,
+      status: { ...PREVIEW_MODS_STATUS.status, profileParticleMods: [] as string[] },
+      profileParticleSources: [
+        { modId: mod.id, name: mod.name, pcfFiles: ["blood_trail_new.pcf"], unavailableReason },
+      ],
+    };
+    const onApply = vi.fn();
+    await act(async () =>
+      root.render(createElement(ModsPane, props({ payload, mods: [mod], onApply }))),
+    );
+    await act(async () => document.getElementById("mods-task-casual")?.click());
+    expect(button("mods-profile-particle-gory-gibbing").disabled).toBe(true);
+    expect(document.body.textContent).toContain(unavailableReason);
+    const savedPayload = {
+      ...payload,
+      status: { ...payload.status, profileParticleMods: [mod.id] },
+    };
+    await act(async () =>
+      root.render(createElement(ModsPane, props({ payload: savedPayload, mods: [mod], onApply }))),
+    );
+    expect(button("mods-profile-particle-gory-gibbing").disabled).toBe(false);
+    await act(async () => button("mods-profile-particle-gory-gibbing").click());
+    expect(button("mods-profile-particle-gory-gibbing").disabled).toBe(true);
+    await act(async () => button("mods-apply").click());
+    expect(onApply).toHaveBeenCalledWith(expect.any(Array), expect.any(Array), []);
+  });
+
   it("shows only saved library choices and lets an uncached legacy choice be removed", async () => {
     const onApply = vi.fn();
     const initial = props({

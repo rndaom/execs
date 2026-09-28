@@ -2263,6 +2263,8 @@ where
         };
     }
 
+    prune_committed_vpk_caches(tf2_root, &journal);
+
     // The committed marker makes leftover cleanup idempotent. Remove the
     // journal last; orphan transaction data is harmless and can be swept.
     let cleaned = refuse_writes(profile_live_process_names()).is_ok()
@@ -2272,6 +2274,17 @@ where
         let _ = remove_file_force_within(profiles_dir, &journal_path);
     }
     Ok(ProfileMutationResult { manifest, hashes })
+}
+
+fn prune_committed_vpk_caches(tf2_root: &Path, journal: &ProfileMutationJournal) {
+    for change in &journal.live_changes {
+        if change.old_sha256.is_some() && change.new_sha256.is_none() {
+            crate::switch::prune_removed_vpk_cache(
+                &profile_live_path(tf2_root, &change.path),
+                tf2_root,
+            );
+        }
+    }
 }
 
 fn mutation_committed_as_requested(
@@ -4426,6 +4439,7 @@ pub(crate) fn recover_profile_mutation_to(
 
     if journal.committed {
         roll_forward_committed_profile_mutation(profiles_dir, &confirmed_live_root, &journal)?;
+        prune_committed_vpk_caches(&confirmed_live_root, &journal);
     } else {
         // Recovery itself mutates the library and may restore live files. The
         // original caller snapshot can be arbitrarily old after a restart.
@@ -6274,6 +6288,132 @@ mod tests {
         assert_eq!(fs::read(&destination).unwrap(), b"new");
         assert!(!mutation_journal_file(&profiles, &id).exists());
         assert!(!mutation_root(&profiles, &id, transaction_id).exists());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn vpk_cache_follows_committed_removal_but_survives_rollback() {
+        for committed in [false, true] {
+            let dir = crate::test_temp_dir();
+            let profiles = dir.join("execs/profiles");
+            let root = dir.join("Team Fortress 2");
+            write_live(&root.join("tf/steam.inf"), "appID=440\n");
+            let library = create_profile_record_to(&profiles, &root, "A", unlocked()).unwrap();
+            let id = library.profiles[0].id.clone();
+            set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+            let rel = "tf/custom/removed.vpk";
+            mutate_profile_files_to(
+                &profiles,
+                &root,
+                &id,
+                &[(rel.into(), FileSource::Bytes(b"pack"))],
+                &[],
+                ProfileLiveProjection::MirrorIfActive,
+                unlocked(),
+                |_| Ok(()),
+            )
+            .unwrap();
+            let cache = root.join("tf/custom/removed.vpk.sound.cache");
+            fs::write(&cache, b"cache").unwrap();
+            let token = "0123456789abcdef0123456789abcdef";
+            let profile_root = profile_dir(&profiles, &id);
+            let old_manifest = load_manifest(&profiles, &id).unwrap();
+            let mut new_manifest = old_manifest.clone();
+            new_manifest.files.clear();
+            let index = load_index(&profiles).unwrap().unwrap();
+            let destination = exclusive_file_path(&profiles, &id, rel);
+            let backup = mutation_file_path(&profiles, &id, token, "old", rel);
+            move_file_within(&profile_root, &destination, &backup).unwrap();
+            let live = profile_live_path(&root, rel);
+            let live_backup = mutation_file_path(&profiles, &id, token, "live-old", rel);
+            copy_and_sha256_within(&profile_root, &live, &live_backup).unwrap();
+            fs::remove_file(&live).unwrap();
+            write_json(&manifest_file(&profiles, &id), &new_manifest).unwrap();
+            write_json(
+                &mutation_journal_file(&profiles, &id),
+                &ProfileMutationJournal {
+                    transaction_id: token.into(),
+                    profile_id: id.clone(),
+                    old_manifest,
+                    new_manifest,
+                    file_changes: vec![ProfileFileChange {
+                        old_path: Some(rel.into()),
+                        new_path: None,
+                    }],
+                    live_changes: vec![ProfileLiveChange {
+                        path: rel.into(),
+                        old_sha256: Some(sha256_hex(b"pack")),
+                        new_sha256: None,
+                    }],
+                    live_renames: Vec::new(),
+                    old_index: Some(index.clone()),
+                    new_index: Some(index),
+                    touched_paths: Vec::new(),
+                    committed,
+                },
+            )
+            .unwrap();
+            recover_profile_mutation_to(&profiles, &root, &id).unwrap();
+            assert_eq!(cache.exists(), !committed);
+            assert_eq!(live.exists(), !committed);
+            assert_eq!(destination.exists(), !committed);
+            if !committed {
+                assert_eq!(fs::read(&live).unwrap(), b"pack");
+                assert_eq!(fs::read(&cache).unwrap(), b"cache");
+            }
+            cleanup(&dir);
+        }
+    }
+
+    #[test]
+    fn inactive_vpk_removal_preserves_the_active_pack_cache() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs/profiles");
+        let root = dir.join("Team Fortress 2");
+        let first = create_profile_record_to(&profiles, &root, "A", unlocked()).unwrap();
+        let active = first.profiles[0].id.clone();
+        let second = create_profile_record_to(&profiles, &root, "B", unlocked()).unwrap();
+        let inactive = second
+            .profiles
+            .iter()
+            .find(|profile| profile.id != active)
+            .unwrap()
+            .id
+            .clone();
+        set_active_profile_to(&profiles, &root, &active, unlocked()).unwrap();
+        let rel = "tf/custom/shared-name.vpk";
+        for id in [&active, &inactive] {
+            mutate_profile_files_to(
+                &profiles,
+                &root,
+                id,
+                &[(rel.into(), FileSource::Bytes(b"pack"))],
+                &[],
+                ProfileLiveProjection::MirrorIfActive,
+                unlocked(),
+                |_| Ok(()),
+            )
+            .unwrap();
+        }
+        let cache = root.join("tf/custom/shared-name.vpk.sound.cache");
+        fs::write(&cache, b"cache").unwrap();
+        mutate_profile_files_to(
+            &profiles,
+            &root,
+            &inactive,
+            &[],
+            &[rel.into()],
+            ProfileLiveProjection::MirrorIfActive,
+            unlocked(),
+            |_| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(fs::read(root.join(rel)).unwrap(), b"pack");
+        assert_eq!(fs::read(cache).unwrap(), b"cache");
+        assert!(load_manifest(&profiles, &inactive)
+            .unwrap()
+            .files
+            .is_empty());
         cleanup(&dir);
     }
 

@@ -750,7 +750,8 @@ fn pick_file_by_id(files: Vec<DownloadFile>, file_id: u64) -> Result<DownloadPic
     }
     if !mod_file_is_supported(chosen) {
         return Err(
-            "That GameBanana file is not a supported VPK, ZIP, or 7z within the size limit.".into(),
+            "That GameBanana file is not a supported VPK, ZIP, 7z or RAR within the size limit."
+                .into(),
         );
     }
     Ok(DownloadPick {
@@ -844,7 +845,9 @@ fn download_failure(file_name: &str, status: reqwest::StatusCode) -> String {
 }
 
 fn mod_file_is_supported(file: &DownloadFile) -> bool {
-    (is_archive_file(&file.file) || file.file.to_ascii_lowercase().ends_with(".vpk"))
+    (is_archive_file(&file.file)
+        || file.file.to_ascii_lowercase().ends_with(".vpk")
+        || file.file.to_ascii_lowercase().ends_with(".rar"))
         && file.size_bytes.is_none_or(|size| size <= MOD_MAX_BYTES)
 }
 
@@ -1294,7 +1297,7 @@ mod tests {
         assert_eq!(variants[0].size_bytes, Some(1234));
         assert!(variants[0].supported);
         assert!(variants[1].supported);
-        assert!(!variants[2].supported);
+        assert!(variants[2].supported);
         assert_eq!(
             pick_file_by_id(files.clone(), 2).unwrap(),
             DownloadPick {
@@ -1302,7 +1305,7 @@ mod tests {
                 file_name: "middle.vpk".into(),
             }
         );
-        assert!(pick_file_by_id(files.clone(), 1).is_err());
+        assert!(pick_file_by_id(files.clone(), 1).is_ok());
         assert!(pick_file_by_id(files, 999).is_err());
 
         let hostile: Vec<DownloadFile> = serde_json::from_value(serde_json::json!([

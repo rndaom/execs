@@ -707,7 +707,7 @@ pub fn hud_id_from_name(name: &str) -> String {
 
 /// A HUD archive of whatever kind the host handed back: zip (GitHub,
 /// GameBanana), 7z (every Dropbox entry) — sniffed by magic, never by the
-/// URL's extension. RAR is named in the error so the user knows why.
+/// URL's extension. The shared reader also recognizes supported RAR bytes.
 pub fn extract_hud_archive(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
     finish_extracted(extract_archive(bytes, HUD_LIMITS)?)
 }

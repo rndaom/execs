@@ -270,6 +270,10 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   }
 }
 
+export async function setBindMouseCapture(enabled: boolean, sequence: number): Promise<void> {
+  return call<void>("set_bind_mouse_capture", { enabled, sequence });
+}
+
 export async function scanTf2Installs(): Promise<Tf2Install[]> {
   return call<Tf2Install[]>("scan_tf2_installs");
 }
@@ -1342,6 +1346,40 @@ export type GameBananaDownloadVariant = {
 export type GameBananaSort = "new" | "updated" | "downloads" | "likes" | "views";
 
 /** Pick an archive or vpk and install it into the active profile. Null = cancelled. */
+export type ModImportReview = {
+  token: string;
+  choices: {
+    id: string;
+    name: string;
+    path: string;
+    files: number;
+    bytes: number;
+    contentRoots: string[];
+    disabledReason: string | null;
+  }[];
+  readmes: { path: string; text: string; truncated: boolean }[];
+};
+
+export async function prepareImportModArchive(): Promise<ModImportReview | null> {
+  return call("prepare_import_mod_archive");
+}
+
+export async function prepareImportModFolder(): Promise<ModImportReview | null> {
+  return call("prepare_import_mod_folder");
+}
+
+export async function prepareGameBananaMod(id: number, fileId: number): Promise<ModImportReview> {
+  return call("prepare_gamebanana_mod", { id, fileId });
+}
+
+export async function confirmModImport(token: string, choices: string[]): Promise<ProfileDetail> {
+  return call("confirm_mod_import", { token, choices });
+}
+
+export async function cancelModImport(token: string): Promise<void> {
+  return call("cancel_mod_import", { token });
+}
+
 export async function importModArchive(): Promise<ProfileDetail | null> {
   return call<ProfileDetail | null>("import_mod_archive");
 }
@@ -1421,9 +1459,13 @@ export type ParticleSource = {
   modId: string;
   name: string;
   pcfFiles: string[];
+  /** Current-install planning refusal; saved selections can still be removed. */
+  unavailableReason?: string;
 };
 
 export type PreloaderStatusPayload = {
+  /** Read-only installed-file expectations; not a retail Casual test. */
+  contentAudit?: ModContentAudit;
   status: PreloaderStatus;
   modsCached: boolean;
   modsSizeBytes: number;
@@ -1437,6 +1479,25 @@ export type PreloaderStatusPayload = {
   profilePreload: boolean;
   /** Particle sources found in the profile's own mods. Absent on older payloads. */
   profileParticleSources?: ParticleSource[];
+};
+
+export type PackContent = {
+  pack: string;
+  files: number;
+  restrictedSounds: boolean;
+  soundScripts: string[];
+  exemptHitSounds: boolean;
+  modelsMaterials: boolean;
+  particles: boolean;
+  other: boolean;
+};
+export type ContentOverlap = { path: string; winner: string | null; packs: string[] };
+export type ModContentAudit = {
+  packs: PackContent[];
+  overlaps: ContentOverlap[];
+  splitModels: { model: string; components: ContentOverlap[] }[];
+  incomplete: string[];
+  omittedDetails: number;
 };
 
 export type CatalogAddon = {

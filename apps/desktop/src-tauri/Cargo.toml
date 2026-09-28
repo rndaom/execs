@@ -39,6 +39,9 @@ rfd = { version = "0.16", default-features = false, features = ["gtk3"] }
 # poisoning.
 tokio = { version = "1", features = ["rt", "sync"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
 [features]
 release-probes = ["tauri/test"]
 

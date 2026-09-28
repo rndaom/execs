@@ -309,7 +309,7 @@ where
         live_process_names(),
     )?;
 
-    let mut result = remove_unmodified_live(tf2_root, &journal.cleanup_files);
+    let mut result = remove_unmodified_live(tf2_root, &journal.cleanup_files, &target.files);
     if result.is_ok() {
         result = preserve_live_huds_for_switch(tf2_root, &live_hud_folders);
     }
@@ -682,7 +682,12 @@ fn clone_options<'a>(options: &'a AbsorbOptions<'a>) -> AbsorbOptions<'a> {
 fn remove_unmodified_live(
     tf2_root: &Path,
     files: &[SwitchCleanupFile],
+    target_files: &[ProfileFile],
 ) -> Result<(), ProfileError> {
+    let retained: BTreeSet<_> = target_files
+        .iter()
+        .map(|file| portable_path_key(&file.path))
+        .collect::<Result<_, _>>()?;
     for file in files {
         if !is_profile_ownable_rel_path(&file.path) {
             return Err(ProfileError::ForbiddenPath(file.path.clone()));
@@ -701,6 +706,9 @@ fn remove_unmodified_live(
                 refuse_if_running_among(live_process_names())?;
                 remove_file_force_within(tf2_root, &candidate)
                     .map_err(|e| ProfileError::Io(e.to_string()))?;
+                if !retained.contains(&portable_path_key(&file.path)?) {
+                    prune_removed_vpk_cache(&candidate, tf2_root);
+                }
                 prune_empty_parents(&candidate, tf2_root);
             }
         }
@@ -776,6 +784,30 @@ pub(crate) fn live_path(tf2_root: &Path, rel: &str) -> PathBuf {
         path.push(part);
     }
     path
+}
+
+/// A removed top-level VPK leaves one regenerable sibling cache. Only callers
+/// that removed this pack may prune it; this is not an orphan-cache sweep.
+/// Like directory pruning, optional cleanup never changes a committed result.
+pub(crate) fn prune_removed_vpk_cache(pack: &Path, tf2_root: &Path) {
+    if pack.parent() != Some(tf2_root.join("tf/custom").as_path())
+        || !pack
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("vpk"))
+        || !matches!(fs::symlink_metadata(pack), Err(err) if err.kind() == std::io::ErrorKind::NotFound)
+    {
+        return;
+    }
+    let mut cache_name = pack.as_os_str().to_os_string();
+    cache_name.push(".sound.cache");
+    let cache = PathBuf::from(cache_name);
+    if validate_file_within(tf2_root, &cache).is_err()
+        || refuse_if_running_among(live_process_names()).is_err()
+    {
+        return;
+    }
+    let _ = remove_file_force_within(tf2_root, &cache);
 }
 
 /// TF2 writes a `sound.cache` into every `tf/custom` folder it scans. It is the
@@ -910,6 +942,100 @@ mod tests {
         SaveCurrentOptions,
     };
     use std::io::Write;
+
+    #[test]
+    fn removed_vpk_cache_cleanup_is_exact_and_preserves_retained_or_changed_packs() {
+        let dir = crate::test_temp_dir();
+        let tf2 = dir.join("tf2");
+        let custom = tf2.join("tf/custom");
+        fs::create_dir_all(&custom).unwrap();
+        let mut files = Vec::new();
+        for name in ["gone.VPK", "retained.vpk", "changed.vpk"] {
+            fs::write(custom.join(name), b"owned").unwrap();
+            fs::write(custom.join(format!("{name}.sound.cache")), b"cache").unwrap();
+            files.push(SwitchCleanupFile {
+                path: format!("tf/custom/{name}"),
+                sha256: crate::hash::sha256_hex(b"owned"),
+            });
+        }
+        fs::write(custom.join("changed.vpk"), b"external edit").unwrap();
+        fs::write(custom.join("gone.sound.cache"), b"unrelated").unwrap();
+        fs::write(custom.join("orphan.vpk.sound.cache"), b"unrelated").unwrap();
+        let target = ProfileFile {
+            path: "tf/custom/retained.vpk".into(),
+            sha256: crate::hash::sha256_hex(b"owned"),
+            storage: FileStorage::Exclusive,
+        };
+        remove_unmodified_live(&tf2, &files, &[target]).unwrap();
+        assert!(!custom.join("gone.VPK").exists());
+        assert!(!custom.join("gone.VPK.sound.cache").exists());
+        for name in [
+            "retained.vpk.sound.cache",
+            "changed.vpk",
+            "changed.vpk.sound.cache",
+            "gone.sound.cache",
+            "orphan.vpk.sound.cache",
+        ] {
+            assert!(custom.join(name).is_file(), "must preserve {name}");
+        }
+    }
+
+    #[test]
+    fn vpk_cache_cleanup_preserves_survivors_nonfiles_and_the_game_lock() {
+        let dir = crate::test_temp_dir();
+        let tf2 = dir.join("tf2");
+        let custom = tf2.join("tf/custom");
+        fs::create_dir_all(&custom).unwrap();
+        let pack = custom.join("keep.vpk");
+        let cache = custom.join("keep.vpk.sound.cache");
+        fs::write(&pack, b"survives").unwrap();
+        fs::write(&cache, b"cache").unwrap();
+        prune_removed_vpk_cache(&pack, &tf2);
+        assert!(cache.is_file());
+        fs::remove_file(&pack).unwrap();
+        crate::profile::with_profile_process_sampler(
+            || vec![tf2_name().into()],
+            || prune_removed_vpk_cache(&pack, &tf2),
+        );
+        assert!(cache.is_file());
+        fs::remove_file(&cache).unwrap();
+        fs::create_dir(&cache).unwrap();
+        prune_removed_vpk_cache(&pack, &tf2);
+        assert!(cache.is_dir());
+    }
+
+    #[test]
+    fn vpk_cache_cleanup_never_follows_links() {
+        let dir = crate::test_temp_dir();
+        let tf2 = dir.join("tf2");
+        let custom = tf2.join("tf/custom");
+        fs::create_dir_all(&custom).unwrap();
+        let outside = dir.join("outside.cache");
+        fs::write(&outside, b"keep").unwrap();
+        let cache = custom.join("gone.vpk.sound.cache");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, &cache).unwrap();
+        #[cfg(windows)]
+        if std::os::windows::fs::symlink_file(&outside, &cache).is_err() {
+            return; // Creating symlinks needs Windows Developer Mode or elevation.
+        }
+        prune_removed_vpk_cache(&custom.join("gone.vpk"), &tf2);
+        assert!(fs::symlink_metadata(&cache)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read(&outside).unwrap(), b"keep");
+        fs::remove_file(&cache).unwrap();
+
+        let linked_root = dir.join("linked-tf2");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&tf2, &linked_root).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&tf2, &linked_root).unwrap();
+        fs::write(&cache, b"cache").unwrap();
+        prune_removed_vpk_cache(&linked_root.join("tf/custom/gone.vpk"), &linked_root);
+        assert_eq!(fs::read(&cache).unwrap(), b"cache");
+    }
 
     #[test]
     fn pruning_clears_a_husk_left_by_the_game_sound_cache() {
@@ -1311,7 +1437,7 @@ mod tests {
                 sha256: file.sha256,
             })
             .collect();
-        remove_unmodified_live(&root, &files).unwrap();
+        remove_unmodified_live(&root, &files, &[]).unwrap();
         assert_eq!(
             fs::read(root.join("tf/custom/pack/a.txt")).unwrap(),
             b"user-changed\n"

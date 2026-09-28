@@ -20,6 +20,9 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 # maintained fork; recent releases bound attacker-controlled header counts and
 # fixed malformed-archive panics in the abandoned original.
 sevenz-rust2 = { version = "0.22.2", default-features = false }
+# Extraction only; the bundled UnRAR terms are included in packaged notices.
+unrar-ng-sys = "=0.7.7"
+tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

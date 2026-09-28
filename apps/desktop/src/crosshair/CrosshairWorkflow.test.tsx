@@ -334,14 +334,48 @@ describe("0.1.4 crosshair workflow", () => {
     await act(async () => button?.click());
     expect(deactivate).toHaveBeenCalledTimes(1);
   });
-  it("does not leave an unbuilt custom shape pending after returning to the active in-game mode", async () => {
+  it("protects unbuilt custom shapes after returning to In-game and offers resume or discard", async () => {
     record = null;
     await render();
     await click('[data-testid="crosshair-mode-custom"]');
     await click('[data-testid="crosshair-shape-dot"]');
     expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
     await click('[data-testid="crosshair-mode-stock"]');
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
+    expect(box.querySelector('[data-testid="crosshair-hidden-draft"]')).not.toBeNull();
+    const resume = [...box.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Resume custom edits",
+    );
+    await act(async () => resume?.click());
+    expect(element<HTMLInputElement>('[data-testid="crosshair-shape-dot"]').checked).toBe(true);
+    await click('[data-testid="crosshair-mode-stock"]');
+    const discard = [...box.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Discard custom edits",
+    );
+    await act(async () => discard?.click());
     expect(pending).toHaveBeenLastCalledWith(expect.any(String), false);
+    expect(box.querySelector('[data-testid="crosshair-hidden-draft"]')).toBeNull();
+    expect(build).not.toHaveBeenCalled();
+  });
+  it("keeps a designer draft protected while In-game mode or another pane is showing", async () => {
+    record = null;
+    await render();
+    await click('[data-testid="crosshair-mode-custom"]');
+    await click('[data-testid="crosshair-open-designer"]');
+    await input("#designer-size", "19");
+    const explicitId = pending.mock.calls.find((call) => call.length === 2 && call[1])?.[0];
+    await click('[data-testid="crosshair-mode-stock"]');
+    active = false;
+    await render();
+    expect(pending.mock.calls.filter((call) => call[0] === explicitId).at(-1)).toEqual([
+      explicitId,
+      true,
+    ]);
+    active = true;
+    await render();
+    await click('[data-testid="crosshair-mode-custom"]');
+    await click('[data-testid="crosshair-open-designer"]');
+    expect(element<HTMLInputElement>("#designer-size").value).toBe("19");
   });
   it("keeps unbuilt controls after a rejected build", async () => {
     build.mockRejectedValueOnce(new Error("disk refused"));

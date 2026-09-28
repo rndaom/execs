@@ -547,7 +547,25 @@ pub fn validate_vpk_dir_bytes_with_paths(
     bytes: &[u8],
     visit_path: &mut dyn FnMut(&str) -> Result<(), VpkError>,
 ) -> Result<VpkSummary, VpkError> {
+    inspect_import_vpk(bytes, visit_path, false).map(|(summary, _)| summary)
+}
+
+/// Review metadata only. External members are reported, never read or accepted for install.
+pub(crate) fn review_vpk_dir_bytes(
+    bytes: &[u8],
+    visit_path: &mut dyn FnMut(&str) -> Result<(), VpkError>,
+) -> Result<(VpkSummary, bool), VpkError> {
+    inspect_import_vpk(bytes, visit_path, true)
+}
+
+fn inspect_import_vpk(
+    bytes: &[u8],
+    visit_path: &mut dyn FnMut(&str) -> Result<(), VpkError>,
+    allow_external_metadata: bool,
+) -> Result<(VpkSummary, bool), VpkError> {
     let mut summary = VpkSummary::default();
+    let mut external = false;
+    let mut in_memory_bytes = 0;
     let budget = materialize_budget(bytes.len() as u64);
     walk_vpk_tree(bytes, bytes.len() as u64, IMPORT_LIMITS, &mut |entry| {
         let length = entry.length as usize;
@@ -562,12 +580,15 @@ pub fn validate_vpk_dir_bytes_with_paths(
                 MAX_VPK_ENTRY_BYTES / (1024 * 1024)
             )));
         }
-        if length > 0 {
-            if entry.archive_index != DIR_ARCHIVE {
+        if length > 0 && entry.archive_index != DIR_ARCHIVE {
+            if !allow_external_metadata {
                 return Err(VpkError(
                     "Refusing an in-memory split VPK (need the *_dir.vpk path).".into(),
                 ));
             }
+            external = true;
+        }
+        if length > 0 && entry.archive_index == DIR_ARCHIVE {
             let start = entry
                 .data_base
                 .checked_add(u64::from(entry.offset))
@@ -583,11 +604,21 @@ pub fn validate_vpk_dir_bytes_with_paths(
             }
         }
         summary.files += 1;
-        charge(&mut summary.bytes, budget, total_len)?;
+        charge(&mut summary.bytes, MAX_MATERIALIZED_VPK_BYTES, total_len)?;
+        // External payloads are only metadata in this review: comparing them
+        // against the tiny directory file would reject ordinary split sets.
+        // Their declared sizes retain the aggregate/per-entry limits above;
+        // every byte actually present keeps the normal amplification guard.
+        let in_memory_len = if allow_external_metadata && entry.archive_index != DIR_ARCHIVE {
+            entry.preload.len()
+        } else {
+            total_len
+        };
+        charge(&mut in_memory_bytes, budget, in_memory_len)?;
         visit_path(&entry.rel)?;
         Ok(())
     })?;
-    Ok(summary)
+    Ok((summary, external))
 }
 
 /// Twice what is on disk, plus headroom. Anything past that is entries

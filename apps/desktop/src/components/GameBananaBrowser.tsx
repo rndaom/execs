@@ -534,7 +534,7 @@ export function GameBananaBrowser({
                 }
               }}
             >
-              Download and install
+              Download and review
             </button>
           </div>
         </Modal>

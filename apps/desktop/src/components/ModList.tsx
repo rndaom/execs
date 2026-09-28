@@ -25,6 +25,7 @@ export function ModList({
   onImportArchive,
   onImportFolder,
   onRemove,
+  casualNotes,
 }: {
   mods: ModRecord[];
   /** TF2 is running or a write is in flight. */
@@ -39,6 +40,7 @@ export function ModList({
   onImportArchive: () => void;
   onImportFolder: () => void;
   onRemove: (id: string) => void;
+  casualNotes?: Record<string, string>;
 }) {
   const [confirming, setConfirming] = useState<ModRecord | null>(null);
   useEffect(() => {
@@ -112,6 +114,9 @@ export function ModList({
                 <span className="min-w-48 flex-1">
                   <span className="t-row block break-words">{mod.name}</span>
                   <span className="t-meta mt-0.5 block">{modMetaLine(mod)}</span>
+                  {casualNotes?.[mod.id] ? (
+                    <span className="t-meta mt-1 block">{casualNotes[mod.id]}</span>
+                  ) : null}
                   {selected ? (
                     <span id={`mods-protected-${modDomId(mod.id)}`} className="t-meta mt-1 block">
                       Used by Casual setup. Change the particle selection before removing.

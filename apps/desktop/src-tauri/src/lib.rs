@@ -1,3 +1,4 @@
+mod bind_mouse;
 mod comfig_fetch;
 mod commands;
 mod error;
@@ -656,6 +657,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            bind_mouse::set_bind_mouse_capture,
             commands::inventory::get_inventory,
             commands::inventory::get_inventory_icons,
             commands::inventory::get_inventory_steam_items,
@@ -776,6 +778,11 @@ pub fn run() {
             commands::hud::import_hud_folder,
             commands::mods::import_mod_archive,
             commands::mods::import_mod_folder,
+            commands::mod_import::prepare_import_mod_archive,
+            commands::mod_import::prepare_import_mod_folder,
+            commands::mod_import::prepare_gamebanana_mod,
+            commands::mod_import::confirm_mod_import,
+            commands::mod_import::cancel_mod_import,
             commands::mods::remove_mod,
             commands::mods::search_gamebanana_mods,
             commands::mods::gamebanana_mod_categories,
@@ -783,8 +790,10 @@ pub fn run() {
             commands::mods::install_gamebanana_mod,
         ])
         .setup(move |app| {
+            bind_mouse::install(app)?;
             app.manage(write_gate);
             app.manage(commands::library::PendingProfileImport::default());
+            app.manage(commands::mod_import::PendingModImport::default());
             app.manage(HitsoundCacheGate::default());
             if let Some(token) = restored_launch {
                 spawn_launch_monitor(token, data_dir);

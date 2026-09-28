@@ -3,6 +3,7 @@ import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
 import { CfgOverridesAlert, CfgSourcesDetails } from "./components/CfgSourcesPanel";
+import { ModImportDialog } from "./components/ModImportDialog";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
 import { Disclosure } from "./components/ui/Disclosure";
 import { Loading, LoadingState } from "./components/ui/Spinner";
@@ -14,6 +15,7 @@ import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
 import { AutosaveActivity } from "./hooks/useAutosave";
 import { useHudResources } from "./hooks/useHudResources";
 import { useInventoryDraftGuard } from "./hooks/useInventoryDraftGuard";
+import { useModImportReview } from "./hooks/useModImportReview";
 import type { SetOperationError } from "./hooks/useOperationErrors";
 import { InventoryPane } from "./InventoryPane";
 import { LaunchPane } from "./LaunchPane";
@@ -175,6 +177,7 @@ export function SettingsHost({
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [modsHudImportRequired, setModsHudImportRequired] = useState<string | null>(null);
+  const modImport = useModImportReview(api, activeProfileId, visible && tab === "mods");
   const [settingsBusyQueue] = useState(() => new SettingsBusyQueue(setQueueBusy));
   /** Rejects obsolete profile snapshots. */
   const loadRequest = useRef(0);
@@ -1324,7 +1327,8 @@ export function SettingsHost({
             setModsHudImportRequired(null);
             return write(
               async () => {
-                if ((await api.importModArchive()) === null) return null;
+                if ((await modImport.prepare(() => api.prepareImportModArchive())) === null)
+                  return null;
                 await refreshModsStatus().catch(() => {});
               },
               { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
@@ -1335,7 +1339,8 @@ export function SettingsHost({
             setModsHudImportRequired(null);
             return write(
               async () => {
-                if ((await api.importModFolder()) === null) return null;
+                if ((await modImport.prepare(() => api.prepareImportModFolder())) === null)
+                  return null;
                 await refreshModsStatus().catch(() => {});
               },
               { success: "Mod imported", failure: "Could not import", pending: "Importing mod…" },
@@ -1359,7 +1364,12 @@ export function SettingsHost({
             let handled: "review-required" | "superseded" | null = null;
             const applied = await write(
               async () => {
-                await api.installGameBananaMod(id, fileId);
+                if (
+                  (await modImport.prepare(() => api.prepareGameBananaMod(id, fileId))) === null
+                ) {
+                  handled = "superseded";
+                  return null;
+                }
                 await refreshModsStatus().catch(() => {});
               },
               {
@@ -1469,6 +1479,14 @@ export function SettingsHost({
           (!queueBusy && (loading || (filesLimited && usesCfgState(tab)) || loadError !== null)),
       }}
     >
+      {modImport.review ? (
+        <ModImportDialog
+          key={modImport.review.token}
+          review={modImport.review}
+          onClose={modImport.cancel}
+          onConfirm={modImport.confirm}
+        />
+      ) : null}
       {shownLoadError ? (
         <div role="alert" className="mb-4 text-warn">
           <p>

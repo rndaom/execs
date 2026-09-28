@@ -165,6 +165,7 @@ export function createPreviewApi(state: PreviewState): Api {
   let mods: ModRecord[] =
     state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
+  let pendingModImport: { token: string; id: number; fileId: number } | null = null;
   const crosshairPixels: Record<string, { width: number; height: number; rgba: number[] }> = {};
   let crosshair = state === "settings-crosshair" ? previewCrosshairRecord() : null;
   let viewmodel = state === "settings-viewmodels" ? previewViewmodelRecord() : null;
@@ -266,6 +267,7 @@ export function createPreviewApi(state: PreviewState): Api {
   }
 
   const api: Api = {
+    async setBindMouseCapture() {},
     ...createInventorySimulation(),
     async getInventoryIcons() {
       return {};
@@ -1112,6 +1114,53 @@ export function createPreviewApi(state: PreviewState): Api {
     openEmbeddedPage,
 
     // --- your mods and GameBanana -------------------------------------------
+    async prepareImportModArchive() {
+      throw notInPreview("Importing a mod archive");
+    },
+    async prepareImportModFolder() {
+      throw notInPreview("Importing a mod folder");
+    },
+    async prepareGameBananaMod(id: number, fileId: number) {
+      pendingModImport = null;
+      const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
+      const variants = await this.gameBananaDownloadVariants(id);
+      if (listing?.route !== "mod" || !variants.some((file) => file.id === fileId))
+        throw notInPreview(`Installing mod ${id}`);
+      const token = `preview-mod-${id}-${fileId}-${Date.now()}`;
+      pendingModImport = { token, id, fileId };
+      return {
+        token,
+        choices: [
+          {
+            id: "0:0",
+            name: listing.name,
+            path: `${listing.name}.vpk`,
+            files: 1,
+            bytes: 4200000,
+            contentRoots: ["materials"],
+            disabledReason: null,
+          },
+        ],
+        readmes: [
+          {
+            path: "Preview instructions.txt",
+            text: "Preview data: this simulates a reviewed mod import without writing game files.",
+            truncated: false,
+          },
+        ],
+      };
+    },
+    async confirmModImport(token: string, choices: string[]) {
+      const pending = pendingModImport;
+      if (!pending || pending.token !== token)
+        throw new Error("Choose the mod again to review it.");
+      pendingModImport = null;
+      if (choices.length !== 1 || choices[0] !== "0:0") throw new Error("Choose an available mod.");
+      return this.installGameBananaMod(pending.id, pending.fileId);
+    },
+    async cancelModImport(token: string) {
+      if (pendingModImport?.token === token) pendingModImport = null;
+    },
     async importModArchive() {
       throw notInPreview("Importing a mod archive");
     },

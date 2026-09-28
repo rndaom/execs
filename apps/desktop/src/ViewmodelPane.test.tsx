@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import {
   getViewmodelSourceCatalog,
@@ -9,6 +10,7 @@ import {
   type ViewmodelRecord,
   type ViewmodelSourceCatalog,
 } from "./lib/bridge";
+import { createSettingsDraftStore, type SettingsDraftStore } from "./lib/settings-drafts";
 import { resetViewmodelCatalogCache } from "./lib/viewmodel-catalog-cache";
 import { ViewmodelPane } from "./ViewmodelPane";
 
@@ -58,6 +60,7 @@ let paneActive: boolean;
 let focused: boolean;
 let visible: boolean;
 let now: number;
+let drafts: SettingsDraftStore;
 const getCatalog = vi.mocked(getViewmodelSourceCatalog);
 const importPack = vi.fn();
 const removePack = vi.fn();
@@ -75,6 +78,7 @@ beforeEach(() => {
   focused = true;
   visible = true;
   now = 1_000_000;
+  drafts = createSettingsDraftStore();
   vi.spyOn(Date, "now").mockImplementation(() => now);
   vi.spyOn(document, "hasFocus").mockImplementation(() => focused);
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() =>
@@ -99,25 +103,33 @@ async function render(profilePreload: boolean | null = true, globalShown = true)
   await act(async () =>
     root.render(
       <AppStatusProvider value={{ running, busy: false, error: null, setError: () => {} }}>
-        <ViewmodelPane
+        <SettingsDraftBoundary
+          store={drafts}
+          profile={profileId}
+          tab="viewmodels"
           active={paneActive}
-          profileId={profileId}
-          record={record}
-          settings={{
-            effective: {},
-            managedText: `r_drawviewmodel ${globalShown ? 1 : 0}\n`,
-            cfgReady: true,
-            transparentViewmodels: false,
-            canUseComfigAddons: true,
-            onToggleTransparentViewmodels: () => undefined,
-            onSave: async () => undefined,
-          }}
-          profilePreload={profilePreload}
-          loadCatalog={getCatalog}
-          onImport={importPack}
-          onBuild={buildPack}
-          onRemove={removePack}
-        />
+          blocked={false}
+        >
+          <ViewmodelPane
+            active={paneActive}
+            profileId={profileId}
+            record={record}
+            settings={{
+              effective: {},
+              managedText: `r_drawviewmodel ${globalShown ? 1 : 0}\n`,
+              cfgReady: true,
+              transparentViewmodels: false,
+              canUseComfigAddons: true,
+              onToggleTransparentViewmodels: () => undefined,
+              onSave: async () => undefined,
+            }}
+            profilePreload={profilePreload}
+            loadCatalog={getCatalog}
+            onImport={importPack}
+            onBuild={buildPack}
+            onRemove={removePack}
+          />
+        </SettingsDraftBoundary>
       </AppStatusProvider>,
     ),
   );
@@ -253,7 +265,7 @@ describe("Viewmodels source-derived draft", () => {
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-import"]').disabled).toBe(true);
   });
 
-  it("keeps a failed refresh stale and clears draft choices after installed sources change", async () => {
+  it("keeps a failed refresh stale and protects choices until an updated catalog is explicitly accepted", async () => {
     await render();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
@@ -273,10 +285,20 @@ describe("Viewmodels source-derived draft", () => {
       sourceFingerprints: [{ id: "models/weapons/c_models/c_scout_animations.mdl", sha256: "new" }],
     });
     await click('[data-testid="viewmodel-catalog-refresh"]');
-    expect(box.textContent).toContain("TF2 was updated, so your unsaved choices were cleared");
+    expect(box.textContent).toContain("Your unbuilt choices are kept below");
+    expect(
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-full"]').checked,
+    ).toBe(true);
+    expect(drafts.getSnapshot()).toHaveLength(1);
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
       true,
     );
+    expect(buildPack).not.toHaveBeenCalled();
+    await click('[data-testid="viewmodel-discard-reload"]');
+    expect(
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-shown"]').checked,
+    ).toBe(true);
+    expect(drafts.getSnapshot()).toHaveLength(0);
   });
 
   it("reads only on focused active use, keeps drafts while hidden, and closes review", async () => {
@@ -301,6 +323,7 @@ describe("Viewmodels source-derived draft", () => {
     paneActive = false;
     await render();
     expect(box.querySelector('[data-testid="viewmodel-build-review"]')).toBeNull();
+    expect(drafts.getSnapshot()).toHaveLength(1);
     focused = false;
     await act(async () => window.dispatchEvent(new Event("blur")));
     focused = true;
@@ -436,9 +459,12 @@ describe("Viewmodels source-derived draft", () => {
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
     await act(async () => finish(false));
     expect(box.querySelector('[data-testid="viewmodel-build-review"]')).not.toBeNull();
+    expect(drafts.getSnapshot()).toHaveLength(1);
     await click('[data-testid="viewmodel-build"]');
     await act(async () => finish(true));
     expect(box.querySelector('[data-testid="viewmodel-build-review"]')).toBeNull();
+    expect(drafts.getSnapshot()).toHaveLength(0);
+    expect(box.textContent).not.toContain("not built yet");
   });
 
   it("keeps Build disabled while TF2 runs or choices conflict", async () => {
@@ -458,6 +484,138 @@ describe("Viewmodels source-derived draft", () => {
     await click('[data-testid="viewmodel-review-build"]');
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
     expect(buildPack).not.toHaveBeenCalled();
+  });
+
+  it("keeps locked choices in the session guard and lets an explicit discard reset them", async () => {
+    running = true;
+    await render();
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
+    expect(drafts.getSnapshot()).toHaveLength(1);
+    expect(await drafts.flush()).toBe(false);
+    expect(buildPack).not.toHaveBeenCalled();
+    await act(async () => {
+      expect(drafts.discard()).toBe(true);
+    });
+    expect(drafts.getSnapshot()).toHaveLength(0);
+    expect(
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-shown"]').checked,
+    ).toBe(true);
+  });
+
+  it("acknowledges only the built snapshot while newer choices and preset Undo stay protected", async () => {
+    let finish: (ok: boolean) => void = () => {};
+    buildPack = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await render();
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
+    await click('[data-testid="viewmodel-review-build"]');
+    await click('[data-testid="viewmodel-build"]');
+    // Simulate the user's newer selection while the asynchronous write is pending.
+    await click('[data-testid="viewmodel-slot-choice-primary-weapon"]');
+    record = {
+      id: "execs-viewmodels",
+      source: "stockBuilt",
+      preload: true,
+      options: {},
+      buildRecipe: {
+        schema: 1,
+        catalog: catalog.catalog,
+        sourceFingerprints: catalog.sourceFingerprints,
+        choices: [
+          { groupId: "scout/a", mode: "full" },
+          { groupId: "scout/b", mode: "full" },
+        ],
+      },
+    };
+    await render();
+    await act(async () => finish(true));
+    expect(
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-weapon"]').checked,
+    ).toBe(true);
+    expect(drafts.getSnapshot()).toHaveLength(1);
+    await click('[data-testid="viewmodel-discard-draft"]');
+    expect(
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-full"]').checked,
+    ).toBe(true);
+    expect(drafts.getSnapshot()).toHaveLength(0);
+    await click('[data-testid="viewmodel-presets"]');
+    await click('[data-testid="viewmodel-preset-show-all"]');
+    await click('[data-testid="viewmodel-preset-apply"]');
+    expect(box.textContent).toContain("remove the saved pack below");
+    expect(drafts.getSnapshot()).toHaveLength(1);
+    await click('[data-testid="viewmodel-preset-undo"]');
+    expect(drafts.getSnapshot()).toHaveLength(0);
+  });
+
+  it("keeps a rejected build retryable and reseeds clean choices after a saved pack is removed", async () => {
+    buildPack = vi.fn().mockRejectedValueOnce(new Error("disk refused")).mockResolvedValue(true);
+    await render();
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
+    await click('[data-testid="viewmodel-review-build"]');
+    await click('[data-testid="viewmodel-build"]');
+    expect(drafts.getSnapshot()).toHaveLength(1);
+    await click('[data-testid="viewmodel-build"]');
+    expect(drafts.getSnapshot()).toHaveLength(0);
+    record = {
+      id: "execs-viewmodels",
+      source: "stockBuilt",
+      preload: true,
+      options: {},
+      buildRecipe: {
+        schema: 1,
+        catalog: catalog.catalog,
+        sourceFingerprints: catalog.sourceFingerprints,
+        choices: [
+          { groupId: "scout/a", mode: "full" },
+          { groupId: "scout/b", mode: "full" },
+        ],
+      },
+    };
+    await render();
+    record = null;
+    await render();
+    expect(
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-shown"]').checked,
+    ).toBe(true);
+    expect(drafts.getSnapshot()).toHaveLength(0);
+  });
+
+  it("keeps a newer edit when the saved recipe arrives after build completion", async () => {
+    await render();
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
+    await click('[data-testid="viewmodel-review-build"]');
+    await click('[data-testid="viewmodel-build"]');
+    expect(drafts.getSnapshot()).toHaveLength(0);
+    await click('[data-testid="viewmodel-slot-choice-primary-weapon"]');
+    record = {
+      id: "execs-viewmodels",
+      source: "stockBuilt",
+      preload: true,
+      options: {},
+      buildRecipe: {
+        schema: 1,
+        catalog: catalog.catalog,
+        sourceFingerprints: catalog.sourceFingerprints,
+        choices: [
+          { groupId: "scout/a", mode: "full" },
+          { groupId: "scout/b", mode: "full" },
+        ],
+      },
+    };
+    await render();
+    expect(
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-weapon"]').checked,
+    ).toBe(true);
+    expect(drafts.getSnapshot()).toHaveLength(1);
+    await click('[data-testid="viewmodel-discard-draft"]');
+    expect(
+      element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-full"]').checked,
+    ).toBe(true);
+    expect(drafts.getSnapshot()).toHaveLength(0);
   });
 
   it("opens ready from the app's background read, then rechecks only on refresh", async () => {

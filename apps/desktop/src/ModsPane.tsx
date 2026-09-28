@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GameBananaBrowser } from "./components/GameBananaBrowser";
+import { ModContentAudit } from "./components/ModContentAudit";
 import { ModImport } from "./components/ModImport";
 import { ModList } from "./components/ModList";
 import { Alert } from "./components/ui/Alert";
@@ -23,6 +24,7 @@ import type {
   PreloaderStatusPayload,
 } from "./lib/bridge";
 import { openExternal } from "./lib/bridge";
+import { packAuditNotes } from "./lib/mod-audit-ui";
 import {
   canPreferParticleProvider,
   DIRECT_BURNING_OVERLAY_ID,
@@ -523,12 +525,15 @@ export function ModsPane({
             onImportFolder={onImportFolder}
             onRemove={onRemoveMod}
             selectedParticleMods={installed.profileParticleMods}
+            casualNotes={packAuditNotes(mods, payload)}
             onManageParticles={() => setTask("casual")}
             onBrowse={() => setTask("browse")}
           />
+          <ModContentAudit payload={payload} mods={mods} profileId={profileId} />
         </div>
 
         <div hidden={task !== "casual"}>
+          <ModContentAudit payload={payload} mods={mods} profileId={profileId} casual />
           {needsSteamLaunch ? (
             <Alert tone="warn" testId="mods-launch-warning" className="mb-4">
               <span className="flex flex-wrap items-center justify-between gap-3">
@@ -1061,10 +1066,13 @@ function ProfileParticleRow({
           <span className="t-meta mt-0.5 block">
             {count} particle {count === 1 ? "file" : "files"}
           </span>
+          {source.unavailableReason && (
+            <span className="t-meta mt-1 block text-warn">{source.unavailableReason}</span>
+          )}
         </span>
         <Switch
           checked={checked}
-          disabled={disabled}
+          disabled={disabled || (!checked && !!source.unavailableReason)}
           label={source.name}
           testId={`mods-profile-particle-${modDomId(source.modId)}`}
           onChange={onToggle}
