@@ -184,6 +184,7 @@ export type WriteLock = {
 };
 
 export type LifecycleStatus = {
+  launchWaitExpired?: boolean;
   launchingTf2: boolean;
   steamVerification: boolean;
   installingUpdate: boolean;
@@ -387,6 +388,30 @@ export function clearDownloadCaches(): Promise<ClearReport> {
   return call("clear_download_caches");
 }
 
+export type HudBackup = {
+  id: string;
+  name: string;
+  location: string;
+  modifiedAt: number | null;
+  bytes: number;
+  files: number;
+  revision: string;
+};
+
+export type HudBackupReport = { backups: HudBackup[]; unreadable: string[] };
+
+export function getHudBackups(): Promise<HudBackupReport> {
+  return call("get_hud_backups");
+}
+
+export function restoreHudBackup(id: string, revision: string): Promise<string | null> {
+  return call("restore_hud_backup", { id, revision });
+}
+
+export function deleteHudBackup(id: string, revision: string): Promise<void> {
+  return call("delete_hud_backup", { id, revision });
+}
+
 export type AbsorbDelta = {
   ownedChanged: string[];
   ownedMissing: string[];
@@ -396,6 +421,7 @@ export type AbsorbDelta = {
 };
 
 export type AbsorbOwnedResult = {
+  packReview?: string;
   library: ProfileLibrary;
   delta: AbsorbDelta;
   configCfgAbsorbed: boolean;
@@ -413,6 +439,18 @@ export async function absorbOwned(): Promise<AbsorbOwnedResult> {
 
 export async function absorbPacks(choice: PackChoice): Promise<ProfileLibrary> {
   return call<ProfileLibrary>("absorb_packs", { choice });
+}
+
+export type PackAction = "add" | "remove" | "restore" | "keep";
+export type PackDecision = { pack: string; choice: PackAction };
+export type PackReviewRequest = {
+  profileId: string;
+  fingerprint: string;
+  decisions: PackDecision[];
+};
+
+export async function resolvePackChanges(request: PackReviewRequest): Promise<ProfileLibrary> {
+  return call<ProfileLibrary>("resolve_pack_changes", { request });
 }
 
 export type SwitchStep = "closed" | "pack" | "remove" | "write" | "cloud" | "done";
@@ -633,6 +671,8 @@ export type ModRecord = {
   bytes: number;
   /** ISO timestamp of the install. */
   installedAt: string;
+  /** Original mounted name when this pack is stored outside TF2's content roots. */
+  inactivePack?: string;
 };
 
 export type ViewmodelSource = "compiled" | "imported" | "stockBuilt";
@@ -856,7 +896,19 @@ export type ComfigState = {
   addons: OfficialAddon[];
   hasBaseVpk: boolean;
   hasComfigCustom: boolean;
+  supportedLoader: boolean;
+  release: ComfigRelease | null;
+  packageHashes: Record<string, string>;
 };
+
+export type ComfigRelease = {
+  version: string;
+  packages: Record<string, string>;
+};
+
+export async function checkComfigRelease(expectedProfileId: string): Promise<string> {
+  return call<string>("check_comfig_release", { expectedProfileId });
+}
 
 export async function getComfigState(id?: string): Promise<ComfigState | null> {
   return call<ComfigState | null>("get_comfig_state", { id: id ?? null });
@@ -888,7 +940,12 @@ export async function importComfigCustom(id?: string): Promise<ProfileDetail | n
   return call<ProfileDetail | null>("import_comfig_custom", { id: id ?? null });
 }
 
-export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
+export type SteamWriteStatus =
+  | "written"
+  | "steam_open"
+  | "no_account"
+  | "write_failed"
+  | "not_requested";
 
 export type SetLaunchResult = {
   launchOptions: string;
@@ -902,6 +959,7 @@ export type LaunchSyncStatus = {
   steamOptions: string | null;
   inSync: boolean;
   steamRunning: boolean;
+  reviewToken?: string | null;
 };
 
 export async function getLaunchSyncStatus(): Promise<LaunchSyncStatus> {
@@ -919,8 +977,15 @@ export async function getProfileLaunchOptions(id?: string): Promise<string> {
 export async function setProfileLaunchOptions(
   options: string,
   id?: string,
+  reviewToken?: string,
+  adoptSteam = false,
 ): Promise<SetLaunchResult> {
-  return call<SetLaunchResult>("set_profile_launch_options", { options, id: id ?? null });
+  return call<SetLaunchResult>("set_profile_launch_options", {
+    options,
+    id: id ?? null,
+    reviewToken,
+    adoptSteam,
+  });
 }
 
 export type HudCatalogPayload = { entries: HudCatalogEntry[]; warning: string | null };
@@ -1393,6 +1458,25 @@ export async function removeMod(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_mod", { id });
 }
 
+export type ModUpdateStatus = {
+  id: string;
+  updatedAt: number | null;
+  updateAvailable: boolean;
+  error: string | null;
+};
+
+export function setModEnabled(id: string, enabled: boolean): Promise<ProfileDetail> {
+  return call("set_mod_enabled", { id, enabled });
+}
+
+export function copyModToProfile(id: string, targetProfileId: string): Promise<ProfileDetail> {
+  return call("copy_mod_to_profile", { id, targetProfileId });
+}
+
+export function checkModUpdates(): Promise<ModUpdateStatus[]> {
+  return call("check_mod_updates");
+}
+
 /**
  * One page of GameBanana listings. `page` is 1-based. Query, category, content
  * rating and ordering are sent to the index together. Safety filtering for the
@@ -1442,6 +1526,7 @@ export type PreloaderSkipNotice = {
 export type PreloaderStatus = {
   gameinfoFound: boolean;
   gameinfoBypassed: boolean;
+  gameinfoBypassWanted?: boolean;
   patchedFiles: string[];
   addons: string[];
   particleMods: string[];
@@ -1606,8 +1691,12 @@ export async function cancelGameFileRepair(): Promise<boolean> {
  * player agreed to close Steam first so the profile's launch options can be
  * written; the launch then starts Steam again.
  */
-export async function launchTf2(syncSteam = false): Promise<void> {
-  return call<void>("launch_tf2", { syncSteam });
+export async function launchTf2(
+  syncSteam = false,
+  reviewToken?: string,
+  adoptSteam = false,
+): Promise<void> {
+  return call<void>("launch_tf2", { syncSteam, reviewToken, adoptSteam });
 }
 
 /** Release a pending launch after the user has cancelled it in Steam. */

@@ -17,6 +17,7 @@ const UPDATE_PROGRESS_EVENT: &str = "app-update-progress";
 #[serde(rename_all = "camelCase")]
 pub struct LifecycleStatus {
     launching_tf2: bool,
+    launch_wait_expired: bool,
     steam_verification: bool,
     installing_update: bool,
 }
@@ -25,6 +26,9 @@ pub struct LifecycleStatus {
 pub fn get_lifecycle_status(gate: tauri::State<'_, WriteGate>) -> LifecycleStatus {
     LifecycleStatus {
         launching_tf2: gate.operation_is(ExclusiveOperation::LaunchingTf2),
+        launch_wait_expired: crate::LAST_EXPIRED_LAUNCH.load(std::sync::atomic::Ordering::Acquire)
+            == (gate.operation.load(std::sync::atomic::Ordering::Acquire)
+                | ExclusiveOperation::LaunchingTf2 as u64),
         steam_verification: gate.operation_is(ExclusiveOperation::SteamVerification),
         installing_update: gate.operation_is(ExclusiveOperation::InstallingUpdate),
     }

@@ -33,6 +33,65 @@ afterEach(async () => {
 });
 
 describe("ModList", () => {
+  it("toggles saved packs and protects selected particle sources", async () => {
+    const onSetEnabled = vi.fn();
+    const render = (selected: string[], inactive = false) =>
+      root.render(
+        <ModList
+          mods={[{ ...mod, ...(inactive ? { inactivePack: mod.pack } : {}) }]}
+          locked={false}
+          running={false}
+          onImportArchive={vi.fn()}
+          onImportFolder={vi.fn()}
+          onRemove={vi.fn()}
+          onSetEnabled={onSetEnabled}
+          selectedParticleMods={selected}
+        />,
+      );
+    await act(async () => render([]));
+    await act(async () => box.querySelector<HTMLButtonElement>('[role="switch"]')?.click());
+    expect(onSetEnabled).toHaveBeenCalledWith(mod.id, false);
+    await act(async () => render([mod.id]));
+    expect(box.querySelector<HTMLButtonElement>('[role="switch"]')?.disabled).toBe(true);
+    await act(async () => render([], true));
+    expect(box.textContent).toContain("Off · saved");
+    await act(async () => box.querySelector<HTMLButtonElement>('[role="switch"]')?.click());
+    expect(onSetEnabled).toHaveBeenLastCalledWith(mod.id, true);
+  });
+
+  it("reviews destination and keeps the copy dialog after a refused write", async () => {
+    const onCopy = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    await act(async () =>
+      root.render(
+        <ModList
+          mods={[mod]}
+          locked={false}
+          running={false}
+          onImportArchive={vi.fn()}
+          onImportFolder={vi.fn()}
+          onRemove={vi.fn()}
+          onCopy={onCopy}
+          profiles={[{ id: "other", name: "Other profile", createdAt: "", updatedAt: "" }]}
+          updates={[{ id: mod.id, updatedAt: 123, updateAvailable: true, error: null }]}
+        />,
+      ),
+    );
+    expect(box.textContent).toContain("Update available on GameBanana");
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[aria-label^="Add A long"]')?.click(),
+    );
+    expect(onCopy).not.toHaveBeenCalled();
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[aria-label="Add to Other profile"]')?.click(),
+    );
+    expect(onCopy).toHaveBeenCalledWith(mod.id, "other");
+    expect(box.querySelector('[role="dialog"]')).not.toBeNull();
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[aria-label="Add to Other profile"]')?.click(),
+    );
+    expect(box.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it("uses one accessible import choice for archive, VPK, and folder paths", async () => {
     const onImportArchive = vi.fn();
     const onImportFolder = vi.fn();

@@ -10,6 +10,7 @@ import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import {
   ALL_TRACERS_NOTE,
   clampGameplay,
+  clampInt,
   FOV_MAX,
   FOV_MIN,
   formatCvarNumber,
@@ -70,8 +71,12 @@ export function GameplayPane({
               id="gameplay-fov"
               testId="gameplay-fov"
               label="World FOV"
-              description="How much of the world you can see."
-              value={draft.fov_desired}
+              description={
+                draft.fov_desired < FOV_MIN || draft.fov_desired > FOV_MAX
+                  ? `TF2 uses ${clampInt(draft.fov_desired, FOV_MIN, FOV_MAX)}°. Your cfg value (${draft.fov_desired}) stays until you change this slider.`
+                  : "How much of the world you can see."
+              }
+              value={clampInt(draft.fov_desired, FOV_MIN, FOV_MAX)}
               min={FOV_MIN}
               max={FOV_MAX}
               suffix="°"
@@ -237,8 +242,8 @@ export function GameplayPane({
         </section>
       </div>
       <p className="pane-note mt-6">
-        Saved to {gameplayPath(layer)}. Changes made in TF2’s options are picked up after the game
-        closes.
+        Saved to {gameplayPath(layer)}. Supported menu settings already managed by execs follow
+        TF2’s options after the game closes.
       </p>
     </section>
   );

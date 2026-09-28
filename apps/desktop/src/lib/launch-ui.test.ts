@@ -201,14 +201,14 @@ describe("launch sync", () => {
     expect(launchSyncWarning(status(false, true, null))).toBeNull();
   });
 
-  it("writes without asking when Steam is closed", () => {
-    expect(launchSyncAction(status(false, false))).toBe("write-then-launch");
-    expect(launchSyncWarning(status(false, false))).toBe("Launch options not in Steam");
+  it("asks before replacing different options even when Steam is closed", () => {
+    expect(launchSyncAction(status(false, false))).toBe("ask");
+    expect(launchSyncWarning(status(false, false))).toBe("Steam has different launch options");
   });
 
   it("asks before closing a running Steam", () => {
     expect(launchSyncAction(status(false, true))).toBe("ask");
-    expect(launchSyncWarning(status(false, true))).toBe("Launch options not in Steam");
+    expect(launchSyncWarning(status(false, true))).toBe("Steam has different launch options");
   });
 });
 

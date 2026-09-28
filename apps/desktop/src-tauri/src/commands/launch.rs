@@ -5,7 +5,7 @@ use execs_core::SetLaunchResult;
 use super::shared::{confirmed_root, refuse_pending_switch, with_profile};
 use crate::error::CommandError;
 use crate::{
-    complete_durable_operation, finish_durable_operation, handoff_durable_operation,
+    finish_durable_operation, handoff_durable_operation, release_pending_launch_wait,
     spawn_launch_monitor, ExclusiveOperation, WriteGate,
 };
 
@@ -24,9 +24,36 @@ pub async fn get_profile_launch_options() -> Result<String, CommandError> {
 pub async fn set_profile_launch_options(
     gate: tauri::State<'_, WriteGate>,
     options: String,
+    review_token: Option<String>,
+    adopt_steam: Option<bool>,
 ) -> Result<SetLaunchResult, CommandError> {
     let _guard = gate.lock_for_write().await?;
+    if adopt_steam.unwrap_or(false) && review_token.is_none() {
+        return Err(CommandError::new(
+            "LaunchReviewRequired",
+            "Review Steam options before adopting them.",
+        ));
+    }
     with_profile(move |root, profile_id| {
+        if let Some(token) = review_token {
+            let review = execs_core::launch::validate_launch_review(&root, &profile_id, &token)?;
+            if review.profile_options != options {
+                return Err(CommandError::new(
+                    "LaunchReviewChanged",
+                    "Save the profile options before reviewing Steam.",
+                ));
+            }
+            execs_core::launch::apply_launch_review(
+                &root,
+                &profile_id,
+                &token,
+                adopt_steam.unwrap_or(false),
+            )?;
+            return Ok(SetLaunchResult {
+                launch_options: execs_core::get_profile_launch_options(&root, &profile_id)?,
+                steam_write: execs_core::LaunchWriteReason::Written,
+            });
+        }
         Ok(execs_core::set_profile_launch_options(
             &root,
             &profile_id,
@@ -53,6 +80,8 @@ pub async fn get_launch_sync_status() -> Result<execs_core::LaunchSyncStatus, Co
 pub async fn launch_tf2(
     gate: tauri::State<'_, WriteGate>,
     sync_steam: bool,
+    review_token: Option<String>,
+    adopt_steam: Option<bool>,
 ) -> Result<(), CommandError> {
     let data_dir = execs_core::try_execs_data_dir().map_err(CommandError::unknown)?;
     let operation = gate
@@ -80,8 +109,27 @@ pub async fn launch_tf2(
         operation.finish();
         return Ok(());
     }
-    if sync_steam {
-        if let Err(error) = super::shared::blocking(write_steam_launch_options).await {
+    if sync_steam || adopt_steam.unwrap_or(false) {
+        if let Err(error) = super::shared::blocking(move || {
+            let token = review_token.ok_or_else(|| {
+                CommandError::new(
+                    "LaunchReviewRequired",
+                    "Review Steam’s launch options first.",
+                )
+            })?;
+            if adopt_steam.unwrap_or(false) {
+                let root = confirmed_root()?;
+                let id = execs_core::load_library(Some(&root))?
+                    .active_profile_id
+                    .ok_or_else(|| CommandError::new("NoProfile", "Choose a profile first."))?;
+                execs_core::launch::apply_launch_review(&root, &id, &token, true)?;
+                Ok(())
+            } else {
+                write_steam_launch_options(&token)
+            }
+        })
+        .await
+        {
             operation.finish();
             return Err(error);
         }
@@ -98,13 +146,17 @@ pub async fn launch_tf2(
     .await;
     if let Err(error) = launch {
         // Shell hand-off failures are ambiguous on some platforms. Keep the
-        // lease and watcher; the user can safely cancel after closing Steam.
+        // lease and watcher; the user can explicitly release the wait after cancelling in Steam.
         spawn_launch_monitor(operation, data_dir);
         return Err(error);
     }
 
-    let started = super::shared::blocking(|| {
+    let waiting_token = operation.clone();
+    let started = super::shared::blocking(move || {
         for _ in 0..120 {
+            if !waiting_token.is_current() {
+                return Ok(false);
+            }
             if execs_core::is_tf2_running() {
                 return Ok(true);
             }
@@ -113,6 +165,9 @@ pub async fn launch_tf2(
         Ok(false)
     })
     .await?;
+    if !operation.is_current() {
+        return Ok(());
+    }
     if started {
         finish_durable_operation(&data_dir, &operation)?;
         return Ok(());
@@ -124,17 +179,18 @@ pub async fn launch_tf2(
     spawn_launch_monitor(operation, data_dir);
     Err(CommandError::new(
         "LaunchPending",
-        "Steam has not started TF2 yet. Changes stay locked while execs keeps waiting.",
+        "Steam has not started TF2 yet. Release the launch wait if you cancelled in Steam. Waiting ends after ten minutes; this does not cancel Steam’s launch.",
     ))
 }
 
 /// Steam keeps launch options in memory and rewrites `localconfig.vdf` on
 /// exit, so it must be fully closed before the profile's options are written.
-fn write_steam_launch_options() -> Result<(), CommandError> {
+fn write_steam_launch_options(token: &str) -> Result<(), CommandError> {
     let root = confirmed_root()?;
     let Some(profile_id) = execs_core::load_library(Some(&root))?.active_profile_id else {
         return Ok(());
     };
+    execs_core::launch::validate_launch_review(&root, &profile_id, token)?;
     if steam_running() {
         tauri_plugin_opener::open_url("steam://exit", None::<&str>).map_err(|err| {
             CommandError::unknown(format!("Could not ask Steam to close ({err})"))
@@ -146,17 +202,8 @@ fn write_steam_launch_options() -> Result<(), CommandError> {
             ));
         }
     }
-    match execs_core::sync_profile_launch_options(&root, &profile_id)? {
-        execs_core::LaunchWriteReason::Written | execs_core::LaunchWriteReason::NoAccount => Ok(()),
-        execs_core::LaunchWriteReason::SteamOpen => Err(CommandError::new(
-            "SteamRunning",
-            "Steam opened again before its launch options were written. Launch again.",
-        )),
-        execs_core::LaunchWriteReason::WriteFailed => Err(CommandError::new(
-            "LaunchOptionsNotWritten",
-            "Could not write Steam's launch options, so TF2 was not started. Steam is closed; launch again to retry.",
-        )),
-    }
+    execs_core::launch::apply_launch_review(&root, &profile_id, token, false)?;
+    Ok(())
 }
 
 fn steam_running() -> bool {
@@ -175,7 +222,7 @@ fn wait_until(mut done: impl FnMut() -> bool, attempts: u32) -> bool {
 }
 
 /// Explicit recovery for a Steam launch the user cancelled in Steam. The UI
-/// asks for confirmation first; the exact token keeps a delayed request from
+/// exposes release directly; the exact token keeps a delayed request from
 /// clearing a newer launch lease.
 #[tauri::command]
 pub async fn cancel_tf2_launch(gate: tauri::State<'_, WriteGate>) -> Result<bool, CommandError> {
@@ -184,47 +231,43 @@ pub async fn cancel_tf2_launch(gate: tauri::State<'_, WriteGate>) -> Result<bool
     };
     let data_dir = execs_core::try_execs_data_dir().map_err(CommandError::unknown)?;
     super::shared::blocking(move || {
-        complete_durable_operation(&data_dir, &operation, || {
-            let first = execs_core::process_lock::live_process_names();
-            refuse_launch_cancel_while_processes_run(&first)?;
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            let second = execs_core::process_lock::live_process_names();
-            refuse_launch_cancel_while_processes_run(&second)?;
-            Ok(true)
-        })
+        release_pending_launch_wait(
+            &data_dir,
+            &operation,
+            execs_core::process_lock::live_process_names,
+            || std::thread::sleep(std::time::Duration::from_secs(2)),
+        )
     })
     .await
 }
 
+pub(crate) fn verify_tf2_absent(
+    mut processes: impl FnMut() -> Vec<String>,
+    wait: impl FnOnce(),
+) -> Result<(), CommandError> {
+    refuse_launch_cancel_while_processes_run(&processes())?;
+    wait();
+    refuse_launch_cancel_while_processes_run(&processes())
+}
+
 fn refuse_launch_cancel_while_processes_run(names: &[String]) -> Result<(), CommandError> {
     execs_core::refuse_if_running_among(names)?;
-    if execs_core::process_lock::steam_running_among(names) {
-        return Err(CommandError::new(
-            "SteamRunning",
-            "Close Steam completely before cancelling the launch lock.",
-        ));
-    }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::refuse_launch_cancel_while_processes_run;
+    use super::{refuse_launch_cancel_while_processes_run, verify_tf2_absent};
 
     #[test]
-    fn launch_cancel_requires_steam_and_tf2_to_be_closed() {
+    fn launch_cancel_permits_steam_but_requires_tf2_closed() {
         assert!(refuse_launch_cancel_while_processes_run(&[]).is_ok());
         let steam = vec![if cfg!(windows) {
             "steam.exe".to_string()
         } else {
             "steam".to_string()
         }];
-        assert_eq!(
-            refuse_launch_cancel_while_processes_run(&steam)
-                .unwrap_err()
-                .code,
-            "SteamRunning"
-        );
+        assert!(refuse_launch_cancel_while_processes_run(&steam).is_ok());
         let game = vec![if cfg!(windows) {
             "tf_win64.exe".to_string()
         } else {
@@ -236,5 +279,22 @@ mod tests {
                 .code,
             "GameRunning"
         );
+    }
+    #[test]
+    fn launch_release_rechecks_after_the_quiet_interval() {
+        let mut calls = 0;
+        let result = verify_tf2_absent(
+            || {
+                calls += 1;
+                if calls == 1 {
+                    vec!["steam".into()]
+                } else {
+                    vec!["tf.exe".into()]
+                }
+            },
+            || {},
+        );
+        assert_eq!(calls, 2);
+        assert_eq!(result.unwrap_err().code, "GameRunning");
     }
 }

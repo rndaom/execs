@@ -3,8 +3,7 @@
 use std::path::Path;
 
 use execs_core::{
-    materialize_wizard_profile, FirstRunClass, ProfileLibrary, StartFrom, SwitchProgress,
-    WizardAsset, WizardSpec,
+    FirstRunClass, ProfileLibrary, StartFrom, SwitchProgress, WizardAsset, WizardSpec,
 };
 use tauri::{AppHandle, Emitter};
 
@@ -69,13 +68,25 @@ pub(crate) fn apply_wizard_and_switch(
     root: &Path,
     spec: WizardSpec,
     start_from: StartFrom,
-    owned: &[(String, Vec<u8>)],
+    owned: &crate::comfig_fetch::DownloadedRelease,
 ) -> Result<ProfileLibrary, CommandError> {
     let assets: Vec<WizardAsset<'_>> = owned
+        .files
         .iter()
         .map(|(path, bytes)| WizardAsset { path, bytes })
         .collect();
-    let result = materialize_wizard_profile(root, &spec, start_from, &assets)?;
+    let result = execs_core::wizard::materialize_wizard_profile_to(
+        &execs_core::profile::profiles_dir(),
+        root,
+        &spec,
+        start_from,
+        &assets,
+        execs_core::process_lock::live_process_names(),
+        execs_core::wizard::WizardOptions {
+            launch_options: None,
+            comfig_release: Some(&owned.identity),
+        },
+    )?;
     Ok(execs_core::switch_profile_with_progress(
         root,
         &result.profile_id,

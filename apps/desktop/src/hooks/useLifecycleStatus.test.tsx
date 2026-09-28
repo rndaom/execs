@@ -220,3 +220,11 @@ it("ignores pending results and removes timers and presence listeners after unmo
   expect(renders).toBe(count);
   expect(getStatus).toHaveBeenCalledTimes(1);
 });
+
+it("publishes a timeout outcome even when the gate is already idle", async () => {
+  await render();
+  getStatus.mockResolvedValue({ ...IDLE, launchWaitExpired: true });
+  await act(async () => result.refresh());
+  expect(result.launchWaitExpired).toBe(true);
+  expect(result.launchingTf2).toBe(false);
+});

@@ -17,6 +17,7 @@ pub mod health;
 pub mod hitsound;
 pub mod hud;
 pub mod hud_apply;
+pub mod hud_backups;
 pub mod hud_schema_compat;
 mod hud_text_edit;
 pub mod ice;
@@ -67,7 +68,8 @@ pub mod wizard;
 pub mod zip;
 
 pub use absorb::{
-    absorb_owned, absorb_packs, write_config_cfg_dual, AbsorbDelta, AbsorbOwnedResult, PackChoice,
+    absorb_owned, absorb_packs, resolve_pack_changes, write_config_cfg_dual, AbsorbDelta,
+    AbsorbOwnedResult, PackChoice, PackReviewRequest,
 };
 pub use apply::{
     get_active_profile_detail, profile_file_bytes_from, read_profile_file, write_managed_cfg,
@@ -111,8 +113,7 @@ pub use hud_apply::{
 };
 pub use launch::{
     get_profile_launch_options, launch_sync_status, recommended_launch_options,
-    set_profile_launch_options, sync_profile_launch_options, LaunchSyncStatus, LaunchWriteReason,
-    SetLaunchResult,
+    set_profile_launch_options, LaunchSyncStatus, LaunchWriteReason, SetLaunchResult,
 };
 pub use mods::{
     install_mod, mod_content_from_archive, mod_content_from_dir, mod_content_from_vpk_file,

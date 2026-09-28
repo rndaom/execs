@@ -241,6 +241,8 @@ struct ProfilePage {
     root_category: Option<CategoryRow>,
     #[serde(rename = "_aGame", default)]
     game: Option<GameRow>,
+    #[serde(rename = "_tsDateUpdated", default)]
+    updated: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -255,6 +257,7 @@ pub struct GameBananaProfile {
     pub id: u64,
     pub name: String,
     pub url: String,
+    pub updated_at: Option<i64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -566,7 +569,7 @@ pub fn mod_profile(id: u64) -> Result<GameBananaProfile, String> {
     // not its root. Request the root explicitly so descendants cannot bypass
     // the same install policy applied to All and search results.
     let url =
-        format!("{API}/Mod/{id}?_csvProperties=_idRow,_sName,_sProfileUrl,_aRootCategory,_aGame");
+        format!("{API}/Mod/{id}?_csvProperties=_idRow,_sName,_sProfileUrl,_aRootCategory,_aGame,_tsDateUpdated");
     let page: ProfilePage =
         net::get_json_for(&net::api_client()?, &url, RemoteSource::GameBananaApi)
             .map_err(|err| format!("Could not read that GameBanana mod ({err})"))?;
@@ -591,6 +594,7 @@ fn profile_from(page: ProfilePage, id: u64) -> Result<GameBananaProfile, String>
         );
     }
     Ok(GameBananaProfile {
+        updated_at: valid_timestamp(page.updated),
         name: if page.name.is_empty() {
             format!("GameBanana mod {id}")
         } else {
@@ -1239,6 +1243,29 @@ mod tests {
         let profile = profile_from(serde_json::from_value(valid.clone()).unwrap(), 7).unwrap();
         assert_eq!(profile.name, "A skin");
         assert_eq!(profile.url, "https://gamebanana.com/mods/7");
+        assert_eq!(profile.updated_at, None);
+        let mut dated = valid.clone();
+        dated["_tsDateModified"] = 1_900_000_000.into();
+        assert_eq!(
+            profile_from(serde_json::from_value(dated.clone()).unwrap(), 7)
+                .unwrap()
+                .updated_at,
+            None
+        );
+        dated["_tsDateUpdated"] = 1_700_000_000.into();
+        assert_eq!(
+            profile_from(serde_json::from_value(dated.clone()).unwrap(), 7)
+                .unwrap()
+                .updated_at,
+            Some(1_700_000_000)
+        );
+        dated["_tsDateUpdated"] = (-1).into();
+        assert_eq!(
+            profile_from(serde_json::from_value(dated).unwrap(), 7)
+                .unwrap()
+                .updated_at,
+            None
+        );
         for name in EXCLUDED_CATEGORIES.into_iter().chain(["", "GUIs"]) {
             let mut page = valid.clone();
             page["_aRootCategory"]["_sName"] = name.into();

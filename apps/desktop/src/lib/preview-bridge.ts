@@ -142,6 +142,17 @@ function notInPreview(what: string): BridgeError {
 export function createPreviewApi(state: PreviewState): Api {
   let appPreferences = { checkForUpdatesOnStartup: true, motion: "system" as "system" | "reduce" };
   let previewDownloadBytes = 1_088_218;
+  let previewHudBackups = [
+    {
+      id: "live/preview/rayshud",
+      name: "rayshud",
+      location: "TF2 folder",
+      modifiedAt: 1790467200,
+      bytes: 12_584_000,
+      files: 120,
+      revision: "preview-hud-backup",
+    },
+  ];
   let previewRetiredBytes = 20_159_439;
   let failNextAppPreferenceSave = state === "settings-app-failure";
   const hudCatalog =
@@ -155,8 +166,12 @@ export function createPreviewApi(state: PreviewState): Api {
     ...PREVIEW_COMFIG_STATE,
     hasBaseVpk: true,
     hasComfigCustom: false,
+    supportedLoader: true,
+    release: { version: "9.100.1", packages: {} },
+    packageHashes: {},
   };
   let launchOptions = recommendedLaunchOptions();
+  let steamLaunchOptions = "-novid";
   let hudState: HudUiState =
     state === "settings-hud-installed" || state === "hud-ownership"
       ? previewInstalledState()
@@ -164,6 +179,7 @@ export function createPreviewApi(state: PreviewState): Api {
   let hudOwnershipPending = state === "hud-ownership";
   let mods: ModRecord[] =
     state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
+  const savedMods = new Map<string, ModRecord[]>();
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
   let pendingModImport: { token: string; id: number; fileId: number } | null = null;
   const crosshairPixels: Record<string, { width: number; height: number; rgba: number[] }> = {};
@@ -190,7 +206,9 @@ export function createPreviewApi(state: PreviewState): Api {
 
   /** Only packs that are still installed can offer particles. */
   function particleSources() {
-    return PREVIEW_PARTICLE_SOURCES.filter((source) => mods.some((mod) => mod.id === source.modId));
+    return PREVIEW_PARTICLE_SOURCES.filter((source) =>
+      mods.some((mod) => mod.id === source.modId && !mod.inactivePack),
+    );
   }
 
   function detail(): ProfileDetail | null {
@@ -515,6 +533,19 @@ export function createPreviewApi(state: PreviewState): Api {
       previewRetiredBytes = 0;
       return { freedBytes, failed: [] };
     },
+    async getHudBackups() {
+      return { backups: previewHudBackups.map((backup) => ({ ...backup })), unreadable: [] };
+    },
+    async restoreHudBackup(id, revision) {
+      if (!previewHudBackups.some((backup) => backup.id === id && backup.revision === revision))
+        throw new BridgeError("This HUD backup changed. Refresh Storage.", "BackupChanged");
+      return "/home/user/Documents/hud-recovery-preview";
+    },
+    async deleteHudBackup(id, revision) {
+      if (!previewHudBackups.some((backup) => backup.id === id && backup.revision === revision))
+        throw new BridgeError("This HUD backup changed. Refresh Storage.", "BackupChanged");
+      previewHudBackups = previewHudBackups.filter((backup) => backup.id !== id);
+    },
     async getHudOwnership(profileId) {
       const folder = hudState.installed?.id ?? null;
       if (hudOwnershipPending)
@@ -584,13 +615,25 @@ export function createPreviewApi(state: PreviewState): Api {
         delta,
         configCfgAbsorbed: false,
         repaired: [],
+        packReview: "preview-pack-review",
       };
+    },
+    async resolvePackChanges(request) {
+      if (
+        request.profileId !== library?.activeProfileId ||
+        request.fingerprint !== "preview-pack-review"
+      ) {
+        throw new BridgeError("Custom files changed. Refresh the review.", "StalePackReview");
+      }
+      return library;
     },
     async absorbPacks() {
       return library ?? emptyLibrary(BROWSED.path, true);
     },
     async switchProfile(id: string) {
       emitSwitchSteps();
+      if (library?.activeProfileId) savedMods.set(library.activeProfileId, mods);
+      mods = savedMods.get(id) ?? [];
       library = { ...(library ?? emptyLibrary(BROWSED.path, true)), activeProfileId: id };
       return library;
     },
@@ -798,6 +841,9 @@ export function createPreviewApi(state: PreviewState): Api {
     async getComfigState() {
       return comfig;
     },
+    async checkComfigRelease() {
+      return "9.100.1";
+    },
     async setComfigPreset(preset) {
       comfig = { ...comfig, preset };
       return requireDetail();
@@ -827,17 +873,29 @@ export function createPreviewApi(state: PreviewState): Api {
     },
     async getLaunchSyncStatus() {
       // Preview data: Steam still has the options from before the last switch.
-      const steamOptions = "-novid";
+      const steamOptions = steamLaunchOptions;
       return {
         profileOptions: launchOptions,
+        reviewToken: `preview:${launchOptions}:${steamLaunchOptions}`,
         steamOptions,
         inSync: launchOptions === steamOptions,
         steamRunning: true,
       };
     },
-    async setProfileLaunchOptions(options: string) {
-      launchOptions = options;
-      return { launchOptions: options, steamWrite: "steam_open" as const };
+    async setProfileLaunchOptions(
+      options: string,
+      _id?: string,
+      reviewToken?: string,
+      adoptSteam = false,
+    ) {
+      if (reviewToken && reviewToken !== `preview:${launchOptions}:${steamLaunchOptions}`)
+        throw new Error("Launch options changed. Review again.");
+      launchOptions = adoptSteam ? steamLaunchOptions : options;
+      if (reviewToken && !adoptSteam) steamLaunchOptions = options;
+      return {
+        launchOptions,
+        steamWrite: reviewToken ? ("written" as const) : ("not_requested" as const),
+      };
     },
 
     // --- HUD ----------------------------------------------------------------
@@ -1181,6 +1239,39 @@ export function createPreviewApi(state: PreviewState): Api {
       };
       return requireDetail();
     },
+    async setModEnabled(id: string, enabled: boolean) {
+      mods = mods.map((mod) => {
+        if (mod.id !== id) return mod;
+        if (enabled) {
+          const { inactivePack, ...rest } = mod;
+          return { ...rest, pack: inactivePack ?? mod.pack };
+        }
+        return mod.inactivePack
+          ? mod
+          : { ...mod, inactivePack: mod.pack, pack: `execs-inactive-${mod.id}` };
+      });
+      modsPayload = { ...modsPayload, profileParticleSources: particleSources() };
+      return requireDetail();
+    },
+    async copyModToProfile(id: string, targetProfileId: string) {
+      const mod = mods.find((entry) => entry.id === id);
+      const target = library?.profiles.find((entry) => entry.id === targetProfileId);
+      if (!mod || !target || target.id === library?.activeProfileId)
+        throw notInPreview("Copying to this profile");
+      const targetMods = [...(savedMods.get(target.id) ?? []), { ...mod, id: `${mod.id}-copy` }];
+      savedMods.set(target.id, targetMods);
+      return { ...requireDetail(), id: target.id, name: target.name, mods: targetMods };
+    },
+    async checkModUpdates() {
+      return mods
+        .filter((mod) => mod.source.kind === "gamebanana")
+        .map((mod) => ({
+          id: mod.id,
+          updatedAt: Date.parse(mod.installedAt) / 1000 + 86_400,
+          updateAvailable: true,
+          error: null,
+        }));
+    },
     async searchGameBananaMods(
       query: string,
       sort,
@@ -1352,7 +1443,7 @@ export function createPreviewApi(state: PreviewState): Api {
     async setGameinfoBypass(enabled: boolean) {
       modsPayload = {
         ...modsPayload,
-        status: { ...modsPayload.status, gameinfoBypassed: enabled },
+        status: { ...modsPayload.status, gameinfoBypassed: enabled, gameinfoBypassWanted: enabled },
       };
       return modsPayload;
     },
@@ -1363,7 +1454,13 @@ export function createPreviewApi(state: PreviewState): Api {
       }
       return modsPayload;
     },
-    async launchTf2(_syncSteam?: boolean) {
+    async launchTf2(syncSteam?: boolean, reviewToken?: string, adoptSteam = false) {
+      if (syncSteam || adoptSteam) {
+        if (reviewToken !== `preview:${launchOptions}:${steamLaunchOptions}`)
+          throw new Error("Launch options changed. Review again.");
+        if (adoptSteam) launchOptions = steamLaunchOptions;
+        else steamLaunchOptions = launchOptions;
+      }
       // Steam is not reachable from the preview; the button is a no-op here.
     },
     async cancelTf2Launch() {
@@ -1394,6 +1491,7 @@ export function createPreviewApi(state: PreviewState): Api {
         status: {
           ...modsPayload.status,
           gameinfoBypassed: false,
+          gameinfoBypassWanted: false,
           addons: [],
           particleMods: [],
           profileParticleMods: [],

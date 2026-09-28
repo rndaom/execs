@@ -89,6 +89,9 @@ pub struct ModRecord {
     pub files: usize,
     pub bytes: u64,
     pub installed_at: String,
+    /// Original mounted pack name while bytes live below an inactive container.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inactive_pack: Option<String>,
 }
 
 /// A mod's payload, already separated from whatever container it arrived in.
@@ -780,6 +783,7 @@ where
                 files: files.len(),
                 bytes: bytes_total,
                 installed_at: utc_rfc3339(),
+                inactive_pack: None,
             },
             files,
         });
@@ -934,6 +938,440 @@ fn pack_files(manifest: &ProfileManifest, pack: &str) -> Vec<crate::profile::Pro
         .filter(|file| file.path == exact || file.path.starts_with(&prefix))
         .cloned()
         .collect()
+}
+
+pub(crate) fn inactive_container(id: &str) -> String {
+    format!("execs-inactive-{id}")
+}
+
+/// Missing/malformed dates stay unknown. Site metadata edits are deliberately
+/// not considered releases; the caller supplies only `_tsDateUpdated`.
+pub fn mod_update_available(installed: &str, updated: i64) -> Option<bool> {
+    if updated <= 0 || updated > 253_402_300_799 {
+        return None;
+    }
+    let b = installed.as_bytes();
+    if b.len() != 20
+        || b[4] != b'-'
+        || b[7] != b'-'
+        || b[10] != b'T'
+        || b[13] != b':'
+        || b[16] != b':'
+        || b[19] != b'Z'
+        || b.iter()
+            .enumerate()
+            .any(|(i, c)| ![4, 7, 10, 13, 16, 19].contains(&i) && !c.is_ascii_digit())
+    {
+        return None;
+    }
+    let year = installed[0..4].parse::<u32>().ok()?;
+    let month = installed[5..7].parse::<usize>().ok()?;
+    let day = installed[8..10].parse::<u32>().ok()?;
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    if year < 1970
+        || !(1..=12).contains(&month)
+        || day == 0
+        || day > days[month - 1]
+        || installed[11..13].parse::<u32>().ok()? > 23
+        || installed[14..16].parse::<u32>().ok()? > 59
+        || installed[17..19].parse::<u32>().ok()? > 59
+    {
+        return None;
+    }
+    let (y, m, d, h, min, s) = crate::profile::unix_to_ymd_hms(updated as u64);
+    Some(format!("{y:04}-{m:02}-{d:02}T{h:02}:{min:02}:{s:02}Z").as_str() > installed)
+}
+
+/// Validate the complete shape so imported metadata cannot turn an arbitrary
+/// nested path into a mounted file when a pack is enabled.
+pub(crate) fn mod_payload_root(record: &ModRecord) -> Result<String, ProfileError> {
+    let original = record.inactive_pack.as_deref().unwrap_or(&record.pack);
+    if original.is_empty()
+        || original.contains(['/', '\\'])
+        || portable_path_key(original).is_err()
+        || !is_profile_ownable_rel_path(&format!("tf/custom/{original}"))
+        || RESERVED_PACK_PREFIXES
+            .iter()
+            .any(|prefix| original.to_ascii_lowercase().starts_with(prefix))
+    {
+        return Err(ProfileError::InvalidPath);
+    }
+    if record.inactive_pack.is_some() {
+        if record.pack != inactive_container(&record.id) {
+            return Err(ProfileError::InvalidPath);
+        }
+        Ok(format!("tf/custom/{}/content/{original}", record.pack))
+    } else {
+        Ok(format!("tf/custom/{original}"))
+    }
+}
+
+fn saved_mod_bytes(
+    profiles: &Path,
+    manifest: &ProfileManifest,
+    record: &ModRecord,
+) -> Result<Vec<(String, Vec<u8>)>, ProfileError> {
+    let root = mod_payload_root(record)?;
+    let prefix = format!("{root}/");
+    let files = pack_files(manifest, &record.pack);
+    if files.is_empty() || files.len() > MAX_MOD_ENTRIES {
+        return Err(ProfileError::Io(
+            "The saved mod has no files or exceeds the file limit.".into(),
+        ));
+    }
+    let mut total = 0u64;
+    let original = record.inactive_pack.as_deref().unwrap_or(&record.pack);
+    let vpk = original.to_ascii_lowercase().ends_with(".vpk");
+    if vpk && files.len() != 1 {
+        return Err(ProfileError::InvalidPath);
+    }
+    files.into_iter().map(|file| {
+        if (vpk && file.path != root) || (!vpk && !file.path.starts_with(&prefix)) {
+            return Err(ProfileError::InvalidPath);
+        }
+        let source = crate::apply::manifest_source_path(profiles, &manifest.id, &file)?;
+        let bytes = read_regular_file_bounded_within(profiles, &source, MAX_MOD_BYTES)?
+            .ok_or_else(|| ProfileError::Io("The saved mod exceeds the size limit.".into()))?;
+        total = total.checked_add(bytes.len() as u64).ok_or(ProfileError::InvalidPath)?;
+        if total > MAX_MOD_BYTES || !crate::hash::sha256_hex(&bytes).eq_ignore_ascii_case(&file.sha256) {
+            return Err(ProfileError::Io("The saved mod changed or exceeds the size limit. Refresh the profile before retrying.".into()));
+        }
+        Ok((file.path, bytes))
+    }).collect()
+}
+
+fn refuse_mod_move_drift(
+    profiles: &Path,
+    root: &Path,
+    manifest: &ProfileManifest,
+    record: &ModRecord,
+    destination_pack: &str,
+    active: bool,
+) -> Result<(), ProfileError> {
+    // Re-read hashes after staging, before transaction publication as well.
+    if load_manifest(profiles, &manifest.id)? != *manifest {
+        return Err(ProfileError::Io(
+            "The profile changed while this action was prepared. Refresh and retry.".into(),
+        ));
+    }
+    saved_mod_bytes(profiles, manifest, record)?;
+    if !active {
+        return Ok(());
+    }
+    for file in pack_files(manifest, &record.pack) {
+        let live = live_path(root, &file.path);
+        crate::hash::validate_file_within(root, &live)
+            .map_err(|e| ProfileError::Io(e.to_string()))?;
+        if !crate::hash::sha256_file(&live)
+            .map_err(|e| ProfileError::Io(e.to_string()))?
+            .eq_ignore_ascii_case(&file.sha256)
+        {
+            return Err(ProfileError::Io(
+                "This pack changed in TF2. Update the profile before turning it on or off.".into(),
+            ));
+        }
+    }
+    if !record.pack.to_ascii_lowercase().ends_with(".vpk") {
+        let entries = crate::archive::read_dir_entries(
+            &root.join("tf/custom").join(&record.pack),
+            MOD_LIMITS,
+        )?;
+        if entries.len() != pack_files(manifest, &record.pack).len() {
+            return Err(ProfileError::Io(
+                "This pack has new files in TF2. Update the profile before turning it on or off."
+                    .into(),
+            ));
+        }
+    }
+    for entry in
+        fs::read_dir(root.join("tf/custom")).map_err(|e| ProfileError::Io(e.to_string()))?
+    {
+        let entry = entry.map_err(|e| ProfileError::Io(e.to_string()))?;
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .eq_ignore_ascii_case(destination_pack)
+        {
+            return Err(ProfileError::Io(
+                "The destination pack already exists in TF2; it was left unchanged.".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub fn set_mod_enabled(
+    root: &Path,
+    profile_id: &str,
+    id: &str,
+    enabled: bool,
+) -> Result<ProfileDetail, ProfileError> {
+    set_mod_enabled_to(
+        &profiles_dir(),
+        root,
+        profile_id,
+        id,
+        enabled,
+        live_process_names(),
+    )
+}
+
+pub fn set_mod_enabled_to<I, S>(
+    profiles: &Path,
+    root: &Path,
+    profile_id: &str,
+    id: &str,
+    enabled: bool,
+    running: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running: Vec<String> = running
+        .into_iter()
+        .map(|s| s.as_ref().to_string())
+        .collect();
+    refuse_if_running_among(&running)?;
+    let manifest = load_manifest(profiles, profile_id)?;
+    let record = manifest
+        .mods
+        .iter()
+        .find(|r| r.id == id)
+        .cloned()
+        .ok_or(ProfileError::InvalidPath)?;
+    if enabled == record.inactive_pack.is_none() {
+        return detail_from_manifest(profiles, &manifest);
+    }
+    if crate::preloader::selected_profile_particle_mod_ids(profiles, profile_id)?
+        .contains(&record.id)
+    {
+        return Err(ProfileError::ParticleSourceSelected(record.name));
+    }
+    if crate::hud::manifest_hud_packs(&manifest)
+        .iter()
+        .any(|p| p.eq_ignore_ascii_case(&record.pack))
+    {
+        return Err(ProfileError::Io(
+            "Manage this HUD from the HUD pane.".into(),
+        ));
+    }
+    let bytes = saved_mod_bytes(profiles, &manifest, &record)?;
+    let mut next = record.clone();
+    if enabled {
+        next.pack = next.inactive_pack.take().ok_or(ProfileError::InvalidPath)?;
+    } else {
+        next.inactive_pack = Some(next.pack.clone());
+        next.pack = inactive_container(id);
+    }
+    if manifest
+        .files
+        .iter()
+        .any(|f| pack_key(&f.path).is_some_and(|p| p.eq_ignore_ascii_case(&next.pack)))
+    {
+        return Err(ProfileError::Io(
+            "This profile already owns the destination pack.".into(),
+        ));
+    }
+    let old_root = mod_payload_root(&record)?;
+    let new_root = mod_payload_root(&next)?;
+    let active = load_library_from(profiles, Some(root))?
+        .active_profile_id
+        .as_deref()
+        == Some(profile_id);
+    let preflight =
+        || refuse_mod_move_drift(profiles, root, &manifest, &record, &next.pack, active);
+    preflight()?;
+    if enabled {
+        let content = if next.pack.to_ascii_lowercase().ends_with(".vpk") {
+            ModContent::Vpk(bytes[0].1.clone())
+        } else {
+            ModContent::Tree(
+                bytes
+                    .iter()
+                    .map(|(p, b)| (p[old_root.len() + 1..].to_string(), b.clone()))
+                    .collect(),
+            )
+        };
+        refuse_crosshair_script_collision(&content, &active_crosshair_script_targets(&manifest))?;
+    }
+    let puts: Vec<_> = bytes
+        .iter()
+        .map(|(p, b)| {
+            (
+                format!("{new_root}{}", &p[old_root.len()..]),
+                FileSource::Bytes(b),
+            )
+        })
+        .collect();
+    let removes: Vec<_> = bytes.iter().map(|(p, _)| p.clone()).collect();
+    let new_record = next.clone();
+    let result = crate::profile::mutate_profile_files_checked_to(
+        profiles,
+        root,
+        profile_id,
+        &puts,
+        &removes,
+        ProfileLiveProjection::MirrorIfActive,
+        &running,
+        |m| {
+            *m.mods
+                .iter_mut()
+                .find(|r| r.id == id)
+                .ok_or(ProfileError::InvalidPath)? = new_record;
+            Ok(())
+        },
+        Some(&preflight),
+    )?;
+    if active {
+        for p in &removes {
+            prune_empty_parents(&live_path(root, p), root);
+        }
+    }
+    detail_from_manifest(profiles, &result)
+}
+
+pub fn copy_mod_to_profile(
+    root: &Path,
+    source_id: &str,
+    id: &str,
+    target_id: &str,
+) -> Result<ProfileDetail, ProfileError> {
+    copy_mod_to_profile_to(
+        &profiles_dir(),
+        root,
+        source_id,
+        id,
+        target_id,
+        live_process_names(),
+    )
+}
+
+pub fn copy_mod_to_profile_to<I, S>(
+    profiles: &Path,
+    root: &Path,
+    source_id: &str,
+    id: &str,
+    target_id: &str,
+    running: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let running: Vec<String> = running
+        .into_iter()
+        .map(|s| s.as_ref().to_string())
+        .collect();
+    refuse_if_running_among(&running)?;
+    let library = load_library_from(profiles, Some(root))?;
+    if source_id == target_id || library.active_profile_id.as_deref() == Some(target_id) {
+        return Err(ProfileError::Io(
+            "Choose a different, inactive profile.".into(),
+        ));
+    }
+    let source = load_manifest(profiles, source_id)?;
+    let target = load_manifest(profiles, target_id)?;
+    let record = source
+        .mods
+        .iter()
+        .find(|r| r.id == id)
+        .ok_or(ProfileError::InvalidPath)?;
+    if crate::hud::manifest_hud_packs(&source)
+        .iter()
+        .any(|p| p.eq_ignore_ascii_case(&record.pack))
+    {
+        return Err(ProfileError::Io(
+            "Manage this HUD from the HUD pane.".into(),
+        ));
+    }
+    let bytes = saved_mod_bytes(profiles, &source, record)?;
+    let mut next = record.clone();
+    next.id = unique_mod_id(
+        &mod_id_from_name(&record.name),
+        &taken_pack_identities(root, &target),
+    );
+    let original = record.inactive_pack.as_deref().unwrap_or(&record.pack);
+    let target_pack = if original.to_ascii_lowercase().ends_with(".vpk") {
+        format!("{}.vpk", next.id)
+    } else {
+        next.id.clone()
+    };
+    next.pack = if record.inactive_pack.is_some() {
+        inactive_container(&next.id)
+    } else {
+        target_pack.clone()
+    };
+    next.inactive_pack = record.inactive_pack.as_ref().map(|_| target_pack);
+    let from = mod_payload_root(record)?;
+    let to = mod_payload_root(&next)?;
+    if target
+        .files
+        .iter()
+        .any(|f| pack_key(&f.path).is_some_and(|p| p.eq_ignore_ascii_case(&next.pack)))
+    {
+        return Err(ProfileError::Io(
+            "The destination profile already owns that inactive container.".into(),
+        ));
+    }
+    let content = if original.to_ascii_lowercase().ends_with(".vpk") {
+        ModContent::Vpk(bytes[0].1.clone())
+    } else {
+        ModContent::Tree(
+            bytes
+                .iter()
+                .map(|(p, b)| (p[from.len() + 1..].to_string(), b.clone()))
+                .collect(),
+        )
+    };
+    refuse_hud_mod(&content)?;
+    if next.inactive_pack.is_none() {
+        refuse_crosshair_script_collision(&content, &active_crosshair_script_targets(&target))?;
+    }
+    let puts: Vec<_> = bytes
+        .iter()
+        .map(|(p, b)| (format!("{to}{}", &p[from.len()..]), FileSource::Bytes(b)))
+        .collect();
+    let preflight = || {
+        if load_manifest(profiles, source_id)? != source
+            || load_manifest(profiles, target_id)? != target
+        {
+            return Err(ProfileError::Io(
+                "A profile changed while the copy was prepared. Refresh and retry.".into(),
+            ));
+        }
+        saved_mod_bytes(profiles, &source, record)?;
+        Ok(())
+    };
+    let result = crate::profile::mutate_profile_files_checked_to(
+        profiles,
+        root,
+        target_id,
+        &puts,
+        &[],
+        ProfileLiveProjection::LibraryOnly,
+        &running,
+        |m| {
+            m.mods.push(next);
+            Ok(())
+        },
+        Some(&preflight),
+    )?;
+    detail_from_manifest(profiles, &result)
 }
 
 // ---------------------------------------------------------------------------
@@ -1253,6 +1691,186 @@ mod tests {
 
     fn cleanup(root: &Path) {
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn disabled_tree_and_vpk_roundtrip_through_absorb_export_switch_and_copy() {
+        for packed in [false, true] {
+            let (area, profiles, root, id) = setup();
+            let content = if packed {
+                ModContent::Vpk(write_vpk_v1(&BTreeMap::from([(
+                    "materials/test.vmt".into(),
+                    b"exact payload".to_vec(),
+                )])))
+            } else {
+                ModContent::Tree(vec![
+                    ("materials/test.vmt".into(), b"exact payload".to_vec()),
+                    ("cfg/test.cfg".into(), b"echo hello\r\n".to_vec()),
+                ])
+            };
+            let installed = install_mod_to(
+                &profiles,
+                &root,
+                &id,
+                "My pack",
+                content,
+                ModSource::Gamebanana {
+                    id: 123,
+                    url: "https://gamebanana.com/mods/123".into(),
+                },
+                unlocked(),
+            )
+            .unwrap();
+            let record = installed.mods[0].clone();
+            let before = load_manifest(&profiles, &id).unwrap();
+            let original = saved_mod_bytes(&profiles, &before, &record).unwrap();
+            let disabled =
+                set_mod_enabled_to(&profiles, &root, &id, &record.id, false, unlocked()).unwrap();
+            let off = disabled.mods[0].clone();
+            assert_eq!(off.inactive_pack.as_deref(), Some(record.pack.as_str()));
+            assert_eq!(off.installed_at, record.installed_at);
+            assert!(!root.join(format!("tf/custom/{}", record.pack)).exists());
+            assert!(profile_particle_sources_from(&profiles, &id)
+                .unwrap()
+                .is_empty());
+            let after = load_manifest(&profiles, &id).unwrap();
+            for (path, bytes) in saved_mod_bytes(&profiles, &after, &off).unwrap() {
+                assert!(path.starts_with(&format!("tf/custom/{}/content/", off.pack)));
+                assert_eq!(fs::read(root.join(path)).unwrap(), bytes);
+            }
+            let opts = || crate::absorb::AbsorbOptions {
+                cloud_config: None,
+                steam_roots: Some(&[]),
+            };
+            let absorbed =
+                crate::absorb::absorb_owned_to(&profiles, &root, unlocked(), opts()).unwrap();
+            assert!(absorbed.delta.packs_added.is_empty());
+            assert!(absorbed.delta.packs_removed.is_empty());
+            assert_eq!(load_manifest(&profiles, &id).unwrap().mods[0], off);
+            let export = area.join("disabled.zip");
+            crate::zip::export_profile_to(&profiles, &root, &id, &export).unwrap();
+            let library =
+                crate::zip::import_profile_from(&profiles, &root, &export, unlocked()).unwrap();
+            let imported = library
+                .profiles
+                .iter()
+                .find(|p| p.id != id)
+                .unwrap()
+                .id
+                .clone();
+            assert_eq!(load_manifest(&profiles, &imported).unwrap().mods[0], off);
+            crate::switch::switch_profile_to(
+                &profiles,
+                &root,
+                &imported,
+                unlocked(),
+                opts(),
+                |_| {},
+            )
+            .unwrap();
+            assert!(!root.join(format!("tf/custom/{}", record.pack)).exists());
+            assert_eq!(load_manifest(&profiles, &imported).unwrap().mods[0], off);
+            set_mod_enabled_to(&profiles, &root, &imported, &record.id, true, unlocked()).unwrap();
+            for (path, bytes) in &original {
+                assert_eq!(fs::read(root.join(path)).unwrap(), *bytes);
+            }
+            // The original profile remains disabled and is a safe library-only target.
+            let copied =
+                copy_mod_to_profile_to(&profiles, &root, &imported, &record.id, &id, unlocked())
+                    .unwrap();
+            assert_eq!(copied.mods.len(), 2);
+            let copy = copied.mods.iter().find(|r| r.id != record.id).unwrap();
+            assert_eq!(copy.source, record.source);
+            assert_eq!(copy.installed_at, record.installed_at);
+            assert!(!root.join(format!("tf/custom/{}", copy.pack)).exists());
+            // Copy a disabled source too; its destination remains disabled.
+            let library =
+                crate::profile::create_profile_record_to(&profiles, &root, "Third", unlocked())
+                    .unwrap();
+            let third = library
+                .profiles
+                .iter()
+                .find(|p| p.id != id && p.id != imported)
+                .unwrap()
+                .id
+                .clone();
+            let copied =
+                copy_mod_to_profile_to(&profiles, &root, &id, &record.id, &third, unlocked())
+                    .unwrap();
+            assert!(copied.mods[0].inactive_pack.is_some());
+            assert_eq!(copied.mods[0].source, record.source);
+            cleanup(&area);
+        }
+    }
+
+    #[test]
+    fn mod_toggle_refuses_particle_selection_drift_and_collisions_without_changes() {
+        let (area, profiles, root, id) = setup();
+        let record = install_particle_mod(&profiles, &root, &id, "Particles", "water.pcf");
+        save_selected_profile_mods(&profiles, &root, &id, &[&record.id]);
+        let selected = load_manifest(&profiles, &id).unwrap();
+        assert!(matches!(
+            set_mod_enabled_to(&profiles, &root, &id, &record.id, false, unlocked()),
+            Err(ProfileError::ParticleSourceSelected(_))
+        ));
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), selected);
+        save_selected_profile_mods(&profiles, &root, &id, &[]);
+        let before = load_manifest(&profiles, &id).unwrap();
+        let live = root.join(format!("tf/custom/{}/particles/water.pcf", record.pack));
+        fs::write(&live, b"external edit").unwrap();
+        assert!(set_mod_enabled_to(&profiles, &root, &id, &record.id, false, unlocked()).is_err());
+        assert_eq!(fs::read(&live).unwrap(), b"external edit");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        fs::write(&live, b"pcf").unwrap();
+        let collision = root.join(format!("tf/custom/{}", inactive_container(&record.id)));
+        fs::create_dir_all(&collision).unwrap();
+        fs::write(collision.join("keep"), b"unowned").unwrap();
+        assert!(set_mod_enabled_to(&profiles, &root, &id, &record.id, false, unlocked()).is_err());
+        assert_eq!(fs::read(collision.join("keep")).unwrap(), b"unowned");
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(set_mod_enabled_to(&profiles, &root, &id, &record.id, false, ["tf.exe"]).is_err());
+        cleanup(&area);
+    }
+
+    #[test]
+    fn mod_copy_refuses_corrupt_saved_bytes_and_active_destination() {
+        let (area, profiles, root, id) = setup();
+        let record = install_particle_mod(&profiles, &root, &id, "Particles", "water.pcf");
+        let library = create_profile_record_to(&profiles, &root, "Other", unlocked()).unwrap();
+        let target = library
+            .profiles
+            .iter()
+            .find(|p| p.id != id)
+            .unwrap()
+            .id
+            .clone();
+        assert!(
+            copy_mod_to_profile_to(&profiles, &root, &id, &record.id, &id, unlocked()).is_err()
+        );
+        let before = load_manifest(&profiles, &target).unwrap();
+        let path = format!("tf/custom/{}/particles/water.pcf", record.pack);
+        fs::write(exclusive_file_path(&profiles, &id, &path), b"corrupt").unwrap();
+        assert!(
+            copy_mod_to_profile_to(&profiles, &root, &id, &record.id, &target, unlocked()).is_err()
+        );
+        assert_eq!(load_manifest(&profiles, &target).unwrap(), before);
+        assert_eq!(fs::read(root.join(path)).unwrap(), b"pcf");
+        cleanup(&area);
+    }
+
+    #[test]
+    fn mod_updates_compare_only_valid_known_install_and_update_dates() {
+        assert_eq!(mod_update_available("1970-01-01T00:00:01Z", 2), Some(true));
+        assert_eq!(mod_update_available("1970-01-01T00:00:02Z", 2), Some(false));
+        for date in [
+            "",
+            "not a date",
+            "2026-02-30T00:00:00Z",
+            "2026-13-01T00:00:00Z",
+        ] {
+            assert_eq!(mod_update_available(date, 1_800_000_000), None);
+        }
+        assert_eq!(mod_update_available("2026-09-28T00:00:00Z", 0), None);
     }
 
     #[test]
@@ -1659,6 +2277,7 @@ mod tests {
                         files: 1,
                         bytes: INFO.len() as u64,
                         installed_at: String::new(),
+                        inactive_pack: None,
                     });
                     Ok(())
                 },
@@ -2186,6 +2805,7 @@ mod tests {
             files: 1,
             bytes: 2,
             installed_at: "2026-09-02T00:00:00Z".into(),
+            inactive_pack: None,
         };
         let json = serde_json::to_value(&record).unwrap();
         assert_eq!(json["installedAt"], "2026-09-02T00:00:00Z");

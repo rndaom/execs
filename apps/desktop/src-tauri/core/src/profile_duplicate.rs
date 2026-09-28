@@ -89,6 +89,7 @@ where
             }
             manifest.launch_options = source.launch_options;
             manifest.launch_sync_pending = true;
+            manifest.comfig_release = source.comfig_release;
             manifest.hud = source.hud;
             manifest.hud_roots = source.hud_roots;
             manifest.hud_selected_root = source.hud_selected_root;

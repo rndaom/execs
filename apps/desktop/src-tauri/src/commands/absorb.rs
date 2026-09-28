@@ -27,3 +27,17 @@ pub async fn absorb_packs(
     })
     .await
 }
+
+#[tauri::command]
+pub async fn resolve_pack_changes(
+    gate: tauri::State<'_, WriteGate>,
+    request: execs_core::PackReviewRequest,
+) -> Result<ProfileLibrary, CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        let library = execs_core::resolve_pack_changes(&root, request)?;
+        super::shared::recover_pending_profile_mutations(&root)?;
+        Ok(library)
+    })
+    .await
+}

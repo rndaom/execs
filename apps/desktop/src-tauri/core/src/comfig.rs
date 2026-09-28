@@ -48,6 +48,94 @@ pub struct ComfigState {
     pub addons: Vec<OfficialAddon>,
     pub has_base_vpk: bool,
     pub has_comfig_custom: bool,
+    pub supported_loader: bool,
+    pub release: Option<ComfigRelease>,
+    pub package_hashes: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComfigRelease {
+    pub version: String,
+    pub packages: BTreeMap<String, String>,
+}
+
+pub fn valid_release_version(version: &str) -> bool {
+    version
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_alphanumeric)
+        && version.len() <= 64
+        && version
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+}
+
+impl ComfigRelease {
+    pub fn matches_files(&self, files: &[ProfileFile]) -> bool {
+        valid_release_version(&self.version)
+            && self.packages.contains_key(BASE_VPK)
+            && self.packages.len() <= OfficialAddon::all().len() + 1
+            && self.packages.iter().all(|(path, hash)| {
+                (path == BASE_VPK
+                    || OfficialAddon::all()
+                        .iter()
+                        .any(|addon| addon.rel_path() == *path))
+                    && files
+                        .iter()
+                        .any(|file| file.path == *path && file.sha256 == *hash)
+            })
+            && files
+                .iter()
+                .filter(|file| file.path == BASE_VPK || addon_from_rel_path(&file.path).is_some())
+                .all(|file| self.packages.get(&file.path) == Some(&file.sha256))
+    }
+}
+
+/// Adding a loader changes Source's cfg search path. Until that migration is
+/// reviewed as a whole, this pane may only edit an existing supported loader.
+pub fn ensure_comfig_profile(tf2_root: &Path, profile_id: &str) -> Result<(), ProfileError> {
+    ensure_comfig_profile_from(&profiles_dir(), tf2_root, profile_id)
+}
+
+fn ensure_comfig_profile_from(profiles: &Path, root: &Path, id: &str) -> Result<(), ProfileError> {
+    let library = load_library_from(profiles, Some(root))?;
+    let manifest = load_manifest(profiles, id)?;
+    if crate::cfg_layer::cfg_layer_from_manifest(profiles, &manifest)?
+        != crate::surface::CfgLayer::Comfig
+    {
+        return Err(ProfileError::Io("This profile does not use a supported mastercomfig loader. Installing it needs a review of autoexec and class cfgs before moving them into overrides. Comfig changes are blocked to preserve your current setup.".into()));
+    }
+    if library.active_profile_id.as_deref() == Some(id)
+        && crate::cfg_layer::cfg_layer_from_live(root)? != crate::surface::CfgLayer::Comfig
+    {
+        return Err(ProfileError::Io("The installed mastercomfig loader differs from this profile. Save or resolve the external change before editing Comfig.".into()));
+    }
+    // A matching loader shape alone cannot prove release identity. A player
+    // may replace a base with another release between a read and an addon write.
+    for file in manifest
+        .files
+        .iter()
+        .filter(|file| file.path == BASE_VPK || addon_from_rel_path(&file.path).is_some())
+    {
+        let source = crate::apply::manifest_source_path(profiles, id, file)?;
+        if crate::hash::sha256_file(&source).map_err(|err| ProfileError::Io(err.to_string()))?
+            != file.sha256
+        {
+            return Err(ProfileError::Io("A saved mastercomfig package changed outside execs. Save or repair this profile before editing Comfig.".into()));
+        }
+        if library.active_profile_id.as_deref() == Some(id) {
+            let live = root.join(&file.path);
+            crate::hash::validate_file_within(root, &live)
+                .map_err(|err| ProfileError::Io(err.to_string()))?;
+            if crate::hash::sha256_file(&live).map_err(|err| ProfileError::Io(err.to_string()))?
+                != file.sha256
+            {
+                return Err(ProfileError::Io("An installed mastercomfig package changed outside execs. Save or resolve the external change before editing Comfig.".into()));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn comfig_preset_from_str(value: &str) -> Option<ComfigPreset> {
@@ -253,6 +341,18 @@ pub fn read_comfig_state_from(
         addons,
         has_base_vpk,
         has_comfig_custom,
+        supported_loader: crate::cfg_layer::cfg_layer_from_manifest(profiles_dir, &manifest)?
+            == crate::surface::CfgLayer::Comfig,
+        release: manifest
+            .comfig_release
+            .clone()
+            .filter(|release| release.matches_files(&manifest.files)),
+        package_hashes: manifest
+            .files
+            .iter()
+            .filter(|file| file.path == BASE_VPK || addon_from_rel_path(&file.path).is_some())
+            .map(|file| (file.path.clone(), file.sha256.clone()))
+            .collect(),
     })
 }
 
@@ -286,6 +386,7 @@ where
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    ensure_comfig_profile_from(profiles_dir, tf2_root, profile_id)?;
     let existing = read_profile_text_from(profiles_dir, tf2_root, profile_id, SETUP_HOOK)?;
     let text = serialize_setup_hook(preset, existing.as_deref());
     write_owned_file_to(
@@ -329,6 +430,7 @@ where
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    ensure_comfig_profile_from(profiles_dir, tf2_root, profile_id)?;
     validate_modules_cfg(modules)?;
     let text = serialize_modules_cfg(modules);
     write_owned_file_to(
@@ -370,11 +472,36 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    set_comfig_addons_with_release_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        addons,
+        assets,
+        None,
+        running_names,
+    )
+}
+
+pub fn set_comfig_addons_with_release_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    addons: &[OfficialAddon],
+    assets: &[WizardAsset<'_>],
+    release: Option<&ComfigRelease>,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    ensure_comfig_profile_from(profiles_dir, tf2_root, profile_id)?;
     let current = read_comfig_state_from(profiles_dir, tf2_root, profile_id)?;
     let desired: Vec<OfficialAddon> = unique_addons(addons);
 
@@ -405,6 +532,13 @@ where
         .into_iter()
         .map(|(path, bytes)| (path, FileSource::Bytes(bytes)))
         .collect();
+    let identity = release.cloned().or_else(|| {
+        if puts.is_empty() {
+            current.release.clone()
+        } else {
+            None
+        }
+    });
     let manifest = mutate_profile_files_to(
         profiles_dir,
         tf2_root,
@@ -413,7 +547,24 @@ where
         &remove,
         ProfileLiveProjection::MirrorIfActive,
         &running,
-        |_| Ok(()),
+        |manifest| {
+            manifest.comfig_release = identity.map(|mut record| {
+                record.packages.retain(|path, _| {
+                    path == BASE_VPK || desired.iter().any(|addon| addon.rel_path() == *path)
+                });
+                record
+            });
+            if manifest
+                .comfig_release
+                .as_ref()
+                .is_some_and(|record| !record.matches_files(&manifest.files))
+            {
+                return Err(ProfileError::Io(
+                    "The mastercomfig release does not match the selected addons.".into(),
+                ));
+            }
+            Ok(())
+        },
     )?;
     crate::apply::detail_from_manifest(profiles_dir, &manifest)
 }
@@ -448,6 +599,7 @@ where
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    ensure_comfig_profile_from(profiles_dir, tf2_root, profile_id)?;
     if !source_dir.is_dir() {
         return Err(ProfileError::Io(
             "Pick a comfig-custom folder to import.".into(),
@@ -609,6 +761,7 @@ where
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    ensure_comfig_profile_from(profiles_dir, tf2_root, profile_id)?;
     let path = normalize_rel_path(rel_path)?;
     if !is_official_vpk_rel(&path) {
         return Err(ProfileError::ForbiddenPath(path));
@@ -654,11 +807,34 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    apply_release_batch_to(
+        profiles_dir,
+        tf2_root,
+        profile_id,
+        files,
+        None,
+        running_names,
+    )
+}
+
+pub fn apply_release_batch_to<I, S>(
+    profiles_dir: &Path,
+    tf2_root: &Path,
+    profile_id: &str,
+    files: &[(String, Vec<u8>)],
+    release: Option<&ComfigRelease>,
+    running_names: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running: Vec<String> = running_names
         .into_iter()
         .map(|name| name.as_ref().to_string())
         .collect();
     refuse_if_running_among(&running).map_err(ProfileError::from)?;
+    ensure_comfig_profile_from(profiles_dir, tf2_root, profile_id)?;
 
     let mut validated = Vec::with_capacity(files.len());
     for (rel_path, bytes) in files {
@@ -676,7 +852,17 @@ where
         &[],
         ProfileLiveProjection::MirrorIfActive,
         &running,
-        |_| Ok(()),
+        |manifest| {
+            if let Some(release) = release {
+                if !release.matches_files(&manifest.files) {
+                    return Err(ProfileError::Io(
+                        "The mastercomfig release does not match the downloaded packages.".into(),
+                    ));
+                }
+            }
+            manifest.comfig_release = release.cloned();
+            Ok(())
+        },
     )?;
     crate::apply::detail_from_manifest(profiles_dir, &manifest)
 }
@@ -962,7 +1148,7 @@ mod tests {
         file.write_all(contents.as_bytes()).unwrap();
     }
 
-    fn fresh_profile(dir: &Path) -> (PathBuf, PathBuf, String) {
+    fn vanilla_profile(dir: &Path) -> (PathBuf, PathBuf, String) {
         let root = tf2_root(dir);
         let profiles = dir.join("execs").join("profiles");
         create_profile_record_to(&profiles, &root, "Main", unlocked()).unwrap();
@@ -970,6 +1156,224 @@ mod tests {
             .id
             .clone();
         (profiles, root, id)
+    }
+
+    fn fresh_profile(dir: &Path) -> (PathBuf, PathBuf, String) {
+        let (profiles, root, id) = vanilla_profile(dir);
+        crate::cfg_layer::install_test_base(&profiles, &root, &id);
+        (profiles, root, id)
+    }
+
+    #[test]
+    fn vanilla_install_reproduction_changes_loader_without_moving_player_cfgs() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = vanilla_profile(&dir);
+        for (path, bytes) in [
+            ("tf/cfg/autoexec.cfg", b"exec execs_binds\n".as_slice()),
+            ("tf/cfg/scout.cfg", b"sensitivity 2\n".as_slice()),
+        ] {
+            write_owned_file_to(
+                &profiles,
+                &root,
+                &id,
+                path,
+                bytes,
+                unlocked(),
+                WriteOwnedOptions::default(),
+            )
+            .unwrap();
+        }
+        let before = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(
+            crate::cfg_layer::cfg_layer_from_manifest(&profiles, &before).unwrap(),
+            crate::surface::CfgLayer::Vanilla
+        );
+        crate::cfg_layer::install_test_base(&profiles, &root, &id);
+        let after = load_manifest(&profiles, &id).unwrap();
+        assert_eq!(
+            crate::cfg_layer::cfg_layer_from_manifest(&profiles, &after).unwrap(),
+            crate::surface::CfgLayer::Comfig
+        );
+        assert!(after
+            .files
+            .iter()
+            .any(|file| file.path == "tf/cfg/autoexec.cfg"));
+        assert!(!after
+            .files
+            .iter()
+            .any(|file| file.path == "tf/cfg/overrides/autoexec.cfg"));
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn vanilla_comfig_writes_refuse_without_changing_any_player_cfg() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = vanilla_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        for path in [
+            "tf/cfg/autoexec.cfg",
+            "tf/cfg/scout.cfg",
+            "tf/cfg/execs_binds.cfg",
+            "tf/cfg/execs_gameplay.cfg",
+        ] {
+            write_owned_file_to(
+                &profiles,
+                &root,
+                &id,
+                path,
+                b"echo preserved\n",
+                unlocked(),
+                WriteOwnedOptions::default(),
+            )
+            .unwrap();
+        }
+        let before = load_manifest(&profiles, &id).unwrap();
+        assert!(
+            !read_comfig_state_from(&profiles, &root, &id)
+                .unwrap()
+                .supported_loader
+        );
+        let source = dir.join("custom");
+        write_file(&source.join("cfg/test.cfg"), "echo custom\n");
+        for result in [
+            write_comfig_preset_to(&profiles, &root, &id, ComfigPreset::Low, unlocked()),
+            write_comfig_modules_to(&profiles, &root, &id, &BTreeMap::new(), unlocked()),
+            set_comfig_addons_to(
+                &profiles,
+                &root,
+                &id,
+                &[OfficialAddon::NoTutorial],
+                &[],
+                unlocked(),
+            ),
+            import_comfig_custom_to(&profiles, &root, &id, &source, unlocked()),
+            apply_official_vpk_batch_to(
+                &profiles,
+                &root,
+                &id,
+                &[(BASE_VPK.into(), crate::cfg_layer::test_base_vpk())],
+                unlocked(),
+            ),
+        ] {
+            assert!(result.unwrap_err().message().contains("review"));
+        }
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert!(!root.join(BASE_VPK).exists());
+        for file in &before.files {
+            assert_eq!(
+                fs::read(root.join(&file.path)).unwrap(),
+                b"echo preserved\n"
+            );
+        }
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn live_package_drift_refuses_addons_even_when_the_loader_still_matches() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
+        let before = load_manifest(&profiles, &id).unwrap();
+        let mut changed = crate::cfg_layer::test_base_vpk();
+        changed.push(0);
+        fs::write(root.join(BASE_VPK), &changed).unwrap();
+        let err = set_comfig_addons_to(
+            &profiles,
+            &root,
+            &id,
+            &[OfficialAddon::NoTutorial],
+            &[],
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(
+            err.message().contains("package changed outside execs"),
+            "{err:?}"
+        );
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        assert_eq!(fs::read(root.join(BASE_VPK)).unwrap(), changed);
+        assert!(!root.join(OfficialAddon::NoTutorial.rel_path()).exists());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn release_identity_commits_with_packages_and_invalidates_on_hash_changes() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = fresh_profile(&dir);
+        let files: Vec<(String, Vec<u8>)> = vec![
+            (BASE_VPK.into(), crate::cfg_layer::test_base_vpk()),
+            (OfficialAddon::NoTutorial.rel_path(), b"addon".to_vec()),
+        ];
+        let release = ComfigRelease {
+            version: "9.100.1".into(),
+            packages: files
+                .iter()
+                .map(|(path, bytes)| (path.clone(), crate::hash::sha256_hex(bytes)))
+                .collect(),
+        };
+        apply_release_batch_to(&profiles, &root, &id, &files, Some(&release), unlocked()).unwrap();
+        assert_eq!(
+            read_comfig_state_from(&profiles, &root, &id)
+                .unwrap()
+                .release,
+            Some(release.clone())
+        );
+        let duplicate =
+            crate::profile::duplicate_profile_to(&profiles, &root, &id, "Copied", unlocked())
+                .unwrap();
+        let copy = duplicate
+            .profiles
+            .iter()
+            .find(|profile| profile.id != id)
+            .unwrap();
+        assert_eq!(
+            load_manifest(&profiles, &copy.id).unwrap().comfig_release,
+            Some(release.clone())
+        );
+        let zip = dir.join("profile.zip");
+        crate::zip::export_profile_to(&profiles, &root, &id, &zip).unwrap();
+        let imported = crate::zip::import_profile_from(&profiles, &root, &zip, unlocked()).unwrap();
+        let restored = imported
+            .profiles
+            .iter()
+            .find(|profile| !duplicate.profiles.iter().any(|old| old.id == profile.id))
+            .unwrap();
+        assert_eq!(
+            load_manifest(&profiles, &restored.id)
+                .unwrap()
+                .comfig_release,
+            Some(release.clone())
+        );
+        let before = load_manifest(&profiles, &id).unwrap();
+        let mut wrong = release.clone();
+        wrong.packages.insert(BASE_VPK.into(), "0".repeat(64));
+        assert!(
+            apply_release_batch_to(&profiles, &root, &id, &files, Some(&wrong), unlocked())
+                .is_err()
+        );
+        assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
+        set_comfig_addons_to(&profiles, &root, &id, &[], &[], unlocked()).unwrap();
+        let removed = read_comfig_state_from(&profiles, &root, &id)
+            .unwrap()
+            .release
+            .unwrap();
+        assert_eq!(removed.version, release.version);
+        assert_eq!(removed.packages.len(), 1);
+        let mut altered = load_manifest(&profiles, &id).unwrap();
+        altered
+            .files
+            .iter_mut()
+            .find(|file| file.path == BASE_VPK)
+            .unwrap()
+            .sha256 = "f".repeat(64);
+        assert!(!removed.matches_files(&altered.files));
+        let mut legacy = serde_json::to_value(&before).unwrap();
+        legacy.as_object_mut().unwrap().remove("comfigRelease");
+        assert!(serde_json::from_value::<ProfileManifest>(legacy)
+            .unwrap()
+            .comfig_release
+            .is_none());
+        cleanup(&dir);
     }
 
     #[test]
@@ -1170,7 +1574,10 @@ mod tests {
 
         assert!(matches!(err, ProfileError::InvalidPath));
         assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
-        assert!(!root.join("tf/custom/mastercomfig-base.vpk").exists());
+        assert_eq!(
+            fs::read(root.join(BASE_VPK)).unwrap(),
+            crate::cfg_layer::test_base_vpk()
+        );
         assert_eq!(fs::read(victim).unwrap(), b"outside custom");
         cleanup(&dir);
     }
@@ -1489,7 +1896,7 @@ mod tests {
 
         let err = import_comfig_custom_to(&profiles, &root, &id, &source, unlocked()).unwrap_err();
 
-        assert!(err.message().contains("untracked"), "{err:?}");
+        assert!(err.message().contains("loader differs"), "{err:?}");
         assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
         assert_eq!(fs::read_to_string(stray).unwrap(), "quit\n");
         cleanup(&dir);
@@ -1513,7 +1920,9 @@ mod tests {
         let err = import_comfig_custom_to(&profiles, &root, &id, &source, unlocked()).unwrap_err();
 
         assert!(
-            err.message().contains("link") || err.message().contains("reparse"),
+            matches!(err, ProfileError::InvalidPath)
+                || err.message().contains("link")
+                || err.message().contains("reparse"),
             "{err:?}"
         );
         assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
@@ -1547,8 +1956,15 @@ mod tests {
     fn official_vpk_bytes_are_shared_for_base() {
         let dir = test_temp_dir();
         let (profiles, root, id) = fresh_profile(&dir);
-        apply_official_vpk_bytes_to(&profiles, &root, &id, BASE_VPK, b"base-vpk", unlocked())
-            .unwrap();
+        apply_official_vpk_bytes_to(
+            &profiles,
+            &root,
+            &id,
+            BASE_VPK,
+            &crate::cfg_layer::test_base_vpk(),
+            unlocked(),
+        )
+        .unwrap();
         apply_official_vpk_bytes_to(
             &profiles,
             &root,
@@ -1584,7 +2000,7 @@ mod tests {
         set_active_profile_to(&profiles, &root, &id, unlocked()).unwrap();
         let addon = "tf/custom/mastercomfig-addon-lowmem.vpk";
         let old = [
-            (BASE_VPK.into(), b"old base".to_vec()),
+            (BASE_VPK.into(), crate::cfg_layer::test_base_vpk()),
             (addon.into(), b"old addon".to_vec()),
         ];
         apply_official_vpk_batch_to(&profiles, &root, &id, &old, unlocked()).unwrap();
@@ -1603,7 +2019,7 @@ mod tests {
         assert_eq!(load_manifest(&profiles, &id).unwrap(), before);
         assert_eq!(
             fs::read(root.join("tf/custom/mastercomfig-base.vpk")).unwrap(),
-            b"old base"
+            crate::cfg_layer::test_base_vpk()
         );
         assert_eq!(
             fs::read(root.join(addon.replace('/', std::path::MAIN_SEPARATOR_STR))).unwrap(),

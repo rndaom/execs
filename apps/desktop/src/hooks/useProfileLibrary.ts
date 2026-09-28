@@ -3,7 +3,7 @@ import type { Api } from "../lib/api";
 import type {
   AbsorbDelta,
   CustomFolderRepair,
-  PackChoice,
+  PackDecision,
   ProfileImportReview,
   ProfileLibrary,
   ProfileSummary,
@@ -35,6 +35,7 @@ export type ProfileLibraryState = {
   /** Dismissed for now — re-offered after the next switch or TF2 session. */
   packPromptDeferred: boolean;
   deferPackPrompt: () => void;
+  refreshPackPrompt: () => void;
   /** Absorb reported `config.cfg` drift; the Binds pane re-syncs on this. */
   bindSyncRequest: number | null;
   /** Changes whenever the panes must reload (profile switch or a fresh absorb). */
@@ -74,7 +75,7 @@ export type ProfileLibraryState = {
   reviewFolderRepair: (id: string) => Promise<void>;
   repairFolders: () => Promise<void>;
   cancelFolderRepair: () => void;
-  answerPackPrompt: (choice: PackChoice) => Promise<void>;
+  answerPackPrompt: (decisions: PackDecision[]) => Promise<void>;
   setLibrary: (library: ProfileLibrary) => void;
   reset: () => void;
 };
@@ -112,6 +113,7 @@ export function useProfileLibrary(
   const [deleting, setDeleting] = useState(false);
   const deleteInFlight = useRef(false);
   const [folderRepair, setFolderRepair] = useState<ProfileLibraryState["folderRepair"]>(null);
+  const [packReview, setPackReview] = useState<string | null>(null);
   const [packPrompt, setPackPrompt] = useState<AbsorbDelta | null>(null);
   const [packPromptProfile, setPackPromptProfile] = useState<string | null>(null);
   const [bindSyncRequest, setBindSyncRequest] = useState<number | null>(null);
@@ -239,6 +241,7 @@ export function useProfileLibrary(
         // outlive its files or be presented as a choice for a different profile.
         setPackPrompt(hasPackChanges(result.delta) ? result.delta : null);
         setPackPromptProfile(result.library.activeProfileId);
+        setPackReview(result.packReview ?? null);
         setPackPromptDeferred(false);
         setAbsorbNonce((value) => value + 1);
         if (control.configDrift) {
@@ -691,12 +694,20 @@ export function useProfileLibrary(
   }, []);
 
   const answerPackPrompt = useCallback(
-    async (choice: PackChoice) => {
+    async (decisions: PackDecision[]) => {
       if (!packPrompt || packPromptProfile !== activeProfileId || running || busy) return;
       setBusy(true);
       let reviewId: string | null = null;
       try {
-        setLibrary(await api.absorbPacks(choice));
+        if (!packReview || !packPromptProfile)
+          throw new Error("Refresh the custom files review before applying choices.");
+        setLibrary(
+          await api.resolvePackChanges({
+            profileId: packPromptProfile,
+            fingerprint: packReview,
+            decisions,
+          }),
+        );
         setError(null, "profiles:packs");
         setPackPrompt(null);
         setPackPromptDeferred(false);
@@ -720,6 +731,7 @@ export function useProfileLibrary(
       api,
       packPrompt,
       packPromptProfile,
+      packReview,
       activeProfileId,
       running,
       busy,
@@ -798,6 +810,11 @@ export function useProfileLibrary(
     packPrompt: packPromptProfile === activeProfileId ? packPrompt : null,
     packPromptDeferred,
     deferPackPrompt: () => setPackPromptDeferred(true),
+    refreshPackPrompt: () => {
+      if (running || busy) return;
+      absorb.current.completed = null;
+      setAbsorbRetry((value) => value + 1);
+    },
     bindSyncRequest,
     refreshKey: `${library?.activeProfileId ?? ""}:${absorbNonce}`,
     onBindSyncHandled,

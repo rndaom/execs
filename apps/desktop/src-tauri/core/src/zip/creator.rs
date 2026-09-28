@@ -380,6 +380,7 @@ pub(super) fn read_creator_zip(
             mods: Vec::new(),
             preloader: Some(crate::preloader::PreloaderSelection::default()),
             ignored_packs: Vec::new(),
+            comfig_release: None,
         },
         exclusive: HashMap::new(),
         blobs: HashMap::new(),

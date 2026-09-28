@@ -350,6 +350,11 @@ pub struct SkipNotice {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct PreloaderState {
     pub schema: u32,
+    /// The independent global material-bypass choice, bound to its install.
+    #[serde(default)]
+    pub gameinfo_bypass_wanted: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gameinfo_bypass_root: Option<PathBuf>,
     /// Length of `tf2_misc_dir.vpk` plus every sibling `_NNN.vpk`. The patched
     /// bytes live in the siblings, so watching the directory file alone missed
     /// a content update that rewrote an archive.
@@ -630,7 +635,8 @@ pub fn preload_is_wanted(data_dir: &Path, tf2_root: &Path) -> Result<bool, Strin
     } else {
         false
     };
-    Ok(!state.patched.is_empty()
+    Ok(gameinfo_bypass_wanted(&state, tf2_root)?
+        || !state.patched.is_empty()
         || !state.addons.is_empty()
         || !state.particle_mods.is_empty()
         || orphaned_snapshots
@@ -639,6 +645,27 @@ pub fn preload_is_wanted(data_dir: &Path, tf2_root: &Path) -> Result<bool, Strin
             &tf2_root.join("tf").join("custom").join(PRELOADER_VPK),
         )
         .map_err(|err| format!("Could not inspect the preloader pack safely: {err}"))?)
+}
+
+pub(crate) fn gameinfo_bypass_wanted(state: &PreloaderState, root: &Path) -> Result<bool, String> {
+    if !state.gameinfo_bypass_wanted {
+        return Ok(false);
+    }
+    let canonical =
+        fs::canonicalize(root).map_err(|e| format!("Could not resolve the TF2 install: {e}"))?;
+    Ok(state.gameinfo_bypass_root.as_ref() == Some(&canonical))
+}
+
+pub(crate) fn set_bypass_intent(
+    state: &mut PreloaderState,
+    root: &Path,
+    enabled: bool,
+) -> Result<(), String> {
+    state.gameinfo_bypass_root = Some(
+        fs::canonicalize(root).map_err(|e| format!("Could not resolve the TF2 install: {e}"))?,
+    );
+    state.gameinfo_bypass_wanted = enabled;
+    Ok(())
 }
 
 /// Snapshots on disk that state does not track — the crash hit between the

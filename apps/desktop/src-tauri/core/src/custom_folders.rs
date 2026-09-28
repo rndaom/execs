@@ -456,6 +456,7 @@ mod tests {
                 files: 1,
                 bytes: 16,
                 installed_at: "2026-09-14T00:00:00Z".into(),
+                inactive_pack: None,
             });
         }
         let selection = crate::preloader::PreloaderSelection {
@@ -581,6 +582,7 @@ mod tests {
             files: 1,
             bytes: 16,
             installed_at: "2026-09-14T00:00:00Z".into(),
+            inactive_pack: None,
         });
         manifest.ignored_packs.push("materials".into());
         save_manifest(&profiles, &root, &manifest, Vec::<String>::new()).unwrap();

@@ -42,10 +42,10 @@ pub fn process_name_is_tf2_for(os: ProcessOs, name: &str) -> bool {
     let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
     let lower = base.to_ascii_lowercase();
     match os {
-        ProcessOs::Windows => lower == "tf_win64.exe" || lower == "tf_win64",
+        ProcessOs::Windows => matches!(lower.as_str(), "tf_win64.exe" | "tf_win64" | "tf.exe"),
         // Native, plus the Windows binary under Proton: the lock exists to
         // stop writes into a running game, whichever runtime launched it.
-        ProcessOs::Linux => lower == "tf_linux64" || lower == "tf_win64.exe",
+        ProcessOs::Linux => matches!(lower.as_str(), "tf_linux64" | "tf_win64.exe" | "tf.exe"),
     }
 }
 
@@ -185,6 +185,22 @@ mod tests {
         assert!(process_name_is_tf2_for(ProcessOs::Linux, "tf_win64.exe"));
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "hl2_linux"));
         assert!(!process_name_is_tf2_for(ProcessOs::Linux, "steam"));
+    }
+
+    #[test]
+    fn legacy_tf_executable_is_locked_on_windows_and_proton() {
+        for os in [ProcessOs::Windows, ProcessOs::Linux] {
+            for name in ["tf.exe", "TF.EXE", r"C:\games\TF.exe", "/games/tf.exe"] {
+                assert!(process_name_is_tf2_for(os, name));
+                assert_eq!(
+                    refuse_if_running_among_for(os, [name]),
+                    Err(WriteLockError::GameRunning)
+                );
+            }
+            for name in ["tf.exe.bak", "mytf.exe", "tf", "srcds.exe", "hl2.exe"] {
+                assert!(!process_name_is_tf2_for(os, name));
+            }
+        }
     }
 
     #[test]

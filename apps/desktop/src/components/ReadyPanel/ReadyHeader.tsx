@@ -100,7 +100,7 @@ export function ReadyHeader({
             <p
               data-testid="launch-sync-warning"
               className="t-meta flex min-w-0 items-center gap-1.5 text-warn"
-              title="Launch TF2 will write this profile's launch options into Steam first."
+              title="Choose which launch options to use before launching TF2."
             >
               <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-warn" />
               <span className="truncate">{launchWarning}</span>
@@ -115,12 +115,12 @@ export function ReadyHeader({
             className="btn btn-ghost shrink-0 gap-1.5 border-brand/70 text-[13px]"
             title={
               launching
-                ? "Cancel only after cancelling the launch and closing Steam"
+                ? "Cancel any queued launch in Steam first. Releasing this wait does not cancel Steam; waiting ends after ten minutes."
                 : (blockedReason ?? undefined)
             }
           >
             <Play size={13} weight="fill" className="text-brand" />
-            {launching ? "Cancel launch wait" : "Launch TF2"}
+            {launching ? "Release launch wait" : "Launch TF2"}
           </button>
           {!launching && disabled && blockedReason ? (
             <>

@@ -1363,6 +1363,9 @@ fn apply_preloader_selection_inner(
     state.profile_particle_mods = selection.profile_particle_mods.clone();
     state.skipped = report.skipped.clone();
     state.selection_profile = profile.map(|p| p.id.clone());
+    if report.gameinfo_bypassed {
+        super::state::set_bypass_intent(&mut state, tf2_root, true)?;
+    }
     before_final_state_save()?;
     save_state(data_dir, &state)?;
 
@@ -1625,6 +1628,7 @@ fn revert_in_memo(
         running_names,
         process_sampler,
     )?;
+    super::state::set_bypass_intent(&mut state, tf2_root, false)?;
 
     let custom_vpk = tf2_root.join("tf").join("custom").join(PRELOADER_VPK);
     if live_file_exists(tf2_root, &custom_vpk, PRELOADER_VPK)? {
@@ -1714,6 +1718,7 @@ pub fn take_preload_profiles(data_dir: &Path) -> Result<Vec<String>, String> {
 pub struct PreloaderStatus {
     pub gameinfo_found: bool,
     pub gameinfo_bypassed: bool,
+    pub gameinfo_bypass_wanted: bool,
     pub patched_files: Vec<String>,
     pub addons: Vec<String>,
     pub particle_mods: Vec<String>,
@@ -1781,6 +1786,7 @@ pub fn preloader_status(tf2_root: &Path, data_dir: &Path) -> Result<PreloaderSta
     Ok(PreloaderStatus {
         gameinfo_found: gameinfo.found,
         gameinfo_bypassed: gameinfo.enabled,
+        gameinfo_bypass_wanted: super::state::gameinfo_bypass_wanted(&state, tf2_root)?,
         patched_files: state.patched.keys().cloned().collect(),
         addons: state.addons,
         particle_mods: state.particle_mods,

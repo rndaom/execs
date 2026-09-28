@@ -520,7 +520,7 @@ pub async fn set_gameinfo_bypass(
             &execs_core::process_lock::live_process_names,
         )
         .map_err(CommandError::preloader)?;
-        execs_core::preloader::set_gameinfo_bypass_with_sampler(
+        execs_core::preloader::set_gameinfo_bypass_choice_with_sampler(
             &root,
             &execs_core::execs_data_dir(),
             enabled,

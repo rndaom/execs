@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BindsPane } from "./BindsPane";
+import { BIND_ACTIONS } from "./lib/binds-ui";
 
 vi.mock("./hooks/useAppStatus", () => ({ useAppStatus: () => ({ running: false, busy: false }) }));
 
@@ -54,7 +55,15 @@ describe("Binds search", () => {
     expect(rows()).toContain("loadout3");
 
     await search("spy");
-    expect(rows().sort()).toEqual(["lastdisguise", "spy"]);
+    expect(rows().sort()).toEqual(
+      [
+        "lastdisguise",
+        "spy",
+        ...BIND_ACTIONS.filter((action) => action.id.startsWith("disguise")).map(
+          (action) => action.id,
+        ),
+      ].sort(),
+    );
     await search("mouse 4");
     expect(rows()).toEqual(["spy"]);
     expect(box.querySelector('[data-testid="bind-cap-spy-mouse4"]')?.textContent).toBe("Mouse 4");

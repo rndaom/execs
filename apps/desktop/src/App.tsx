@@ -100,7 +100,6 @@ export function App({
   const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const [cancelLaunchOpen, setCancelLaunchOpen] = useState(false);
   const [launchSync, setLaunchSync] = useState<LaunchSyncStatus | null>(null);
   const [launchSyncPrompt, setLaunchSyncPrompt] = useState<LaunchSyncStatus | null>(null);
   const appSettingsButton = useRef<HTMLButtonElement>(null);
@@ -158,6 +157,14 @@ export function App({
   const lock = useWriteLock(api);
   const [filesDraftStore] = useState(createFilesDraftStore);
   const lifecycle = useLifecycleStatus(api);
+  useEffect(() => {
+    if (lifecycle.launchWaitExpired) {
+      setError(
+        "The ten-minute launch wait ended without seeing TF2. Changes are unlocked. This does not cancel a queued Steam launch.",
+        "tf2:launch",
+      );
+    }
+  }, [lifecycle.launchWaitExpired, setError]);
   const progress = useSwitchProgress(api, preview === "switch" ? previewSwitchStep() : null);
   const appSettings = useAppPreferences(api);
   const update = useAppUpdate(api, {
@@ -418,10 +425,10 @@ export function App({
     return () => window.removeEventListener("focus", onFocus);
   }, [refreshLaunchSync, lock.running, launchPending]);
 
-  function startLaunch(syncSteam: boolean) {
+  function startLaunch(syncSteam: boolean, reviewToken?: string, adoptSteam = false) {
     setLaunching(true);
     void api
-      .launchTf2(syncSteam)
+      .launchTf2(syncSteam, reviewToken, adoptSteam)
       .then(() => setError(null, "tf2:launch"))
       .catch((err) => setError(invokeErrorMessage(err), "tf2:launch"))
       .finally(() => {
@@ -599,7 +606,14 @@ export function App({
           });
         }}
         onCancelLaunch={() => {
-          setCancelLaunchOpen(true);
+          void api
+            .cancelTf2Launch()
+            .then(() => {
+              setError(null, "tf2:launch");
+              setError(null, "tf2:cancel-launch");
+              return lifecycle.refresh();
+            })
+            .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
         }}
         onReviewFiles={() => navigateSettings("files")}
         onInspectExport={(id) => api.inspectProfileExport(id)}
@@ -717,51 +731,18 @@ export function App({
           }}
         />
         <Modal
-          open={cancelLaunchOpen}
-          title="Release the launch lock?"
-          onClose={() => setCancelLaunchOpen(false)}
-        >
-          <p className="t-body text-ink-muted">
-            Cancel the TF2 launch and close Steam completely before continuing. This lets execs
-            resume changes to your setup.
-          </p>
-          <div className="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setCancelLaunchOpen(false)}
-            >
-              Keep waiting
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                setCancelLaunchOpen(false);
-                void api
-                  .cancelTf2Launch()
-                  .then(() => {
-                    setError(null, "tf2:cancel-launch");
-                    return lifecycle.refresh();
-                  })
-                  .catch((err) => setError(invokeErrorMessage(err), "tf2:cancel-launch"));
-              }}
-            >
-              Release launch lock
-            </button>
-          </div>
-        </Modal>
-        <Modal
           open={launchSyncPrompt !== null}
-          title="Update Steam's launch options?"
+          title="Choose launch options"
           testId="launch-sync-review"
           className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(540px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
           onClose={() => setLaunchSyncPrompt(null)}
         >
           <p className="t-body mt-2 text-ink-muted">
-            Steam has different launch options than this profile, and Steam must be closed to change
-            them. execs will close Steam, write the profile's options, then start Steam and TF2.
-            Downloads and chat pause while Steam restarts.
+            Steam has different launch options than this profile. Keep them for this launch, save
+            them to this profile, or replace them with the profile's options.
+            {launchSyncPrompt?.steamRunning
+              ? " Replacing them restarts Steam; downloads and chat pause."
+              : ""}
           </p>
           <dl className="t-meta mt-4 grid gap-2">
             <div>
@@ -794,18 +775,33 @@ export function App({
                 startLaunch(false);
               }}
             >
-              Launch without them
+              Keep Steam options and launch
+            </button>
+            <button
+              type="button"
+              data-testid="launch-sync-adopt"
+              className="btn btn-ghost"
+              onClick={() => {
+                const token = launchSyncPrompt?.reviewToken ?? undefined;
+                setLaunchSyncPrompt(null);
+                startLaunch(false, token, true);
+              }}
+            >
+              Save Steam options to profile and launch
             </button>
             <button
               type="button"
               data-testid="launch-sync-restart"
               className="btn btn-primary"
               onClick={() => {
+                const token = launchSyncPrompt?.reviewToken ?? undefined;
                 setLaunchSyncPrompt(null);
-                startLaunch(true);
+                startLaunch(true, token);
               }}
             >
-              Restart Steam and launch
+              {launchSyncPrompt?.steamRunning
+                ? "Restart Steam and launch"
+                : "Use profile options and launch"}
             </button>
           </div>
         </Modal>

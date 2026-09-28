@@ -1,0 +1,35 @@
+# Profile safety: part 2 items 1 and 14
+
+## Audit and proposed change
+
+Item 1 is confirmed in code: surface.rs and profile.rs duplicate the stock-cfg list and neither protects server_*.cfg, replay_example.cfg or sixense_bindings.cfg. The existing switch cleanup only excludes paths the ownership predicate rejects. Consolidate the predicate, add these stock names/patterns, and retain config.cfg as the explicit engine-managed exception. Existing manifests must remain readable. Normalize stock cfg entries out of the public manifest view, and drop them on the next transaction without touching either live stock bytes or their old library copies. Keep the original manifest intact in the journal for recovery identity; ignore only these protected entries when deriving library file changes and validating historical manifests. New/live mutation targets remain strictly forbidden. Pending switch cleanup must also discard historical stock entries.
+
+Item 14 is confirmed in classify: each unchanged owned file is SHA-256-read on every pass. Inventory enforces 20,000 files/40,000 entries and currently gives no responsible path. Add a bounded, disposable, per-profile metadata/hash cache for automatic startup/post-game absorb only, keyed by the complete source path, byte length and modification time. Cache only ordinary custom payloads, never cfg/config.cfg. A cache hit means only unchanged drift classification; all writes, pack reviews/resolution and switches still perform complete hashes. Cache records are populated only after a full hash with matching before/after metadata, are invalidated by metadata/source changes, and are pruned to the current complete inventory. Missing/corrupt/unreadable cache falls back to hashes. Preserve safe refusal on incomplete inventory; name the folder/path and state how to reduce it, rather than capturing a partial profile or inferring deletions. Keep existing caps unless evidence justifies a bounded increase.
+
+## Reproduction and validation
+
+- Disposable vanilla fixtures: capture excludes stock cfgs; user autoexec and config.cfg remain; legacy manifest switches leave server_casual.cfg present and unchanged; later metadata write drops legacy entries; interrupted transaction recovery preserves identity without live stock writes.
+- Before/after repeated large-payload fixture: count full hash operations and measure a 5 GiB zero-filled ordinary custom payload. First pass must hash; an unchanged second automatic absorb must reuse metadata. Changed length/mtime/source rehashes; full verification path must detect content changes even if timestamps are restored. No benchmark touches real player files.
+- Fixture over an injected small inventory budget proves named actionable refusal and no manifest/live change. Existing depth/width/path/collision/containment tests remain valid.
+- Targeted Rust surface/profile/absorb/switch and integration tests, formatting and clippy as coordinated with root; independent implementation review before handoff.
+
+## Sources and limits
+
+- Valve Source SDK Sixense client source: https://github.com/ValveSoftware/source-sdk-2013/blob/master/src/game/client/sixense/in_sixense.cpp (engine-owned Sixense settings).
+- Rust Metadata documentation: https://doc.rust-lang.org/std/fs/struct.Metadata.html (file length and fallible modification timestamps).
+- Supplied Linear document gives the audited shipped loose cfg list and 24 affected files. No real install modifications are authorized or needed for this change.
+- Independently checked the complete tracked loose `tf/cfg` directory at GameTracking-TF2 commit `f2c334fb73a7b10fddb3ee79a60461c459f98c66`: every shipped `.cfg` name is covered by the shared list plus `server_*.cfg`, `chapter*.cfg` and `sourcevr*.cfg`. Tracking mirror: https://github.com/SteamDatabase/GameTracking-TF2/tree/f2c334fb73a7b10fddb3ee79a60461c459f98c66/tf/cfg. The official SDK does not ship that retail cfg directory; the supplied audit and tracked retail bytes provide the list evidence.
+
+Metadata is an optimization, never proof for a destructive action. Same-size data deliberately rewritten with a preserved timestamp can evade a metadata-only drift pass; full switches and mutations must not rely on the cache. The first observation necessarily reads all bytes. Timings depend on hardware; report the actual fixture result rather than an HDD guarantee.
+
+Status: root approved the plan; independent reviewer approved the implementation after two compatibility fixes. Historical metadata-only journals retain their original old/new identities through rollback and completion. Old native exports and restore points verify original stock-entry hashes and budgets, then skip those entries with an import review note; corrupt entries still refuse the whole import. Historical journals that explicitly target protected live cfgs remain refused, since replaying those writes would violate stock protection.
+
+## Completed verification (Windows, September 28)
+
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p execs-core --lib absorb:: -- --nocapture`: 35 passed, one separately executed benchmark ignored. Includes persisted cache reuse, changed/deleted payloads, corruption fallback, cfg full reads, and switching away/back after a same-size edit with its original modification timestamp restored.
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p execs-core --lib -- surface:: profile::tests::legacy_stock profile::tests::previous_version_metadata`: 16 passed. Includes named-cap refusal, full stock exclusions in vanilla/mastercomfig layers, and both rollback/committed legacy journal recovery.
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p execs-core --lib legacy_native_stock_cfgs -- --nocapture`: passed. Import review discloses the skip; original hash mismatch refuses without changing the library or live Valve file.
+- `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml -p execs-core --lib large_absorb_benchmark -- --ignored --nocapture`: passed. Full 5 GiB classification took 3.113 and 3.196 seconds; first cache-populating classification took 3.068 seconds; unchanged cached classification took 2.010 milliseconds with one cumulative full hash. A complete unchanged automatic absorb using the persisted cache and matching 5 GiB saved/live zero-filled files took 36.055 milliseconds. This is a disposable one-file fixture on this machine, not an HDD or many-small-files timing guarantee. Cold observation still reads all bytes.
+- Targeted files formatted with rustfmt. Root owns whole-workspace checks and final integration. No live TF2, Steam Cloud or real profile bytes were modified; no release/version change was made.
+
+The existing bounded scan limits remain. An over-limit scan names the directory where the limit was reached and offers a concrete way to reduce the tree, while refusing partial capture. Skipping unknown portions could otherwise silently erase profile entries or claim a complete snapshot; that unsafe behavior was deliberately excluded in the approved plan.

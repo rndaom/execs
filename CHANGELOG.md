@@ -7,6 +7,14 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- Turn custom packs off and on without losing their files, copy saved packs to another profile,
+  and check GameBanana for newer updates.
+- Bind custom commands, Engineer build/destroy actions, Spy disguises and the remaining voice
+  commands with the existing key-conflict review.
+- Review external custom-file changes pack by pack, with the affected profile and each choice's
+  effect on switching shown before applying.
+- See, recover and delete historical HUD backups from App settings → Storage.
+
 - Review the VPKs and content folders inside mod archives before installing, including archives
   with several variants. Read the author's included instructions, choose one or more packs, or
   cancel without changing your profile.
@@ -18,6 +26,23 @@ User-facing changes only. The release workflow publishes the matching
   a pack has been verified in a retail Casual match.
 
 ### Fixed
+
+- Profiles leave Valve's shipped cfgs and game-owned Sixense bindings alone, including files
+  captured by older versions. Unchanged large custom packs avoid repeated absorb hashing;
+  writes and switches still verify full file contents, and scan-limit errors name the folder.
+- Changes made through TF2's own Viewmodels, Sounds and Crosshair options survive the next
+  launch when execs already manages those settings. World FOV now shows TF2's effective 75–90
+  range while preserving older values until that control is changed.
+- Recognize 32-bit TF2 in the write lock. A pending launch can be released with Steam open and
+  expires after ten minutes without TF2 starting, including across an execs restart.
+- Review differing Steam launch options before replacing them, or adopt Steam's options into
+  the current profile. Profile saves, switches and Casual setup no longer silently replace them.
+- Comfig blocks unsafe package installation on vanilla profiles until their cfgs can be migrated
+  safely. Installed package versions are shown when known, updates are checked, and new addons
+  use the same mastercomfig release as the base package.
+- Fully profile-owned HUD replacements avoid duplicate live backups. Untracked or modified
+  files remain recoverable, and legacy backups can be managed explicitly.
+- Remember the material bypass choice and show a recovery notice when a TF2 update resets it.
 
 - Binds handles Mouse 4 and Mouse 5 across the press and release, prevents the recorded gesture
   from navigating backward or forward, and explains mouse buttons TF2 cannot bind.

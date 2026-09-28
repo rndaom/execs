@@ -408,7 +408,9 @@ describe("BindsPane autosave", () => {
         reachable.add(row.dataset.testid?.replace("bind-row-", "") ?? "");
       }
     }
-    expect([...reachable].sort()).toEqual(BIND_ACTIONS.map((action) => action.id).sort());
+    expect([...reachable].sort()).toEqual(
+      [...BIND_ACTIONS.map((action) => action.id), "custom"].sort(),
+    );
     expect(save).not.toHaveBeenCalled();
   });
 

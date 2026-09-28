@@ -354,6 +354,10 @@ describe("sound acknowledgements through the real host", () => {
 });
 
 describe("Comfig saved selections", () => {
+  beforeEach(() => {
+    detail = { ...detail, layer: "comfig" };
+    comfig = { ...comfig, supportedLoader: true };
+  });
   it("keeps the saved preset through failure and navigation, then retries the same choice", async () => {
     api.setComfigPreset.mockRejectedValueOnce(new Error("download failed"));
     await render({ tab: "comfig" });

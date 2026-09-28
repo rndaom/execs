@@ -361,6 +361,11 @@ export function ReadyPanel({
       </Modal>
 
       <PackPrompt
+        profileName={
+          library?.profiles.find((profile) => profile.id === library.activeProfileId)?.name ??
+          "Current profile"
+        }
+        onRefresh={profiles.refreshPackPrompt}
         delta={
           running ||
           profiles.importing ||

@@ -143,6 +143,7 @@ pub struct WizardAsset<'a> {
 #[derive(Debug, Clone, Default)]
 pub struct WizardOptions<'a> {
     pub launch_options: Option<&'a str>,
+    pub comfig_release: Option<&'a crate::comfig::ComfigRelease>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -275,6 +276,14 @@ where
             // This profile is not active yet. Its first switch owns the Steam
             // projection and clears the durable pending bit after success.
             manifest.launch_sync_pending = true;
+            if let Some(release) = options.comfig_release {
+                if !release.matches_files(&manifest.files) {
+                    return Err(ProfileError::Io(
+                        "The mastercomfig release does not match the downloaded packages.".into(),
+                    ));
+                }
+                manifest.comfig_release = Some(release.clone());
+            }
             Ok(())
         },
     )?;
@@ -453,6 +462,43 @@ mod tests {
     }
 
     #[test]
+    fn wizard_records_comfig_release_identity_in_the_profile_creation_transaction() {
+        let dir = crate::test_temp_dir();
+        let root = tf2_root(&dir);
+        write_file(&root.join("tf/cfg/config_default.cfg"), "sensitivity 3\n");
+        let profiles = dir.join("profiles");
+        let base = crate::cfg_layer::test_base_vpk();
+        let assets = assets(&base, b"addon");
+        let release = crate::comfig::ComfigRelease {
+            version: "9.100.1".into(),
+            packages: assets
+                .iter()
+                .map(|asset| (asset.path.into(), crate::hash::sha256_hex(asset.bytes)))
+                .collect(),
+        };
+        let result = materialize_wizard_profile_to(
+            &profiles,
+            &root,
+            &spec("Release"),
+            StartFrom::Fresh,
+            &assets,
+            None::<&str>,
+            WizardOptions {
+                comfig_release: Some(&release),
+                ..WizardOptions::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            load_manifest(&profiles, &result.profile_id)
+                .unwrap()
+                .comfig_release,
+            Some(release)
+        );
+        cleanup(&dir);
+    }
+
+    #[test]
     fn required_assets_include_base_and_addons() {
         let spec = spec("Fresh");
         assert_eq!(
@@ -518,6 +564,7 @@ mod tests {
             None::<&str>,
             WizardOptions {
                 launch_options: Some("-novid -autoconfig"),
+                ..WizardOptions::default()
             },
         )
         .unwrap();
@@ -903,6 +950,7 @@ mod tests {
             None::<&str>,
             WizardOptions {
                 launch_options: Some("-console"),
+                ..WizardOptions::default()
             },
         )
         .unwrap();

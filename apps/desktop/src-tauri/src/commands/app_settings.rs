@@ -3,9 +3,10 @@
 use execs_core::settings::{app_preferences_from, set_app_preferences_to, AppPreferences};
 use serde::Serialize;
 
-use super::shared::blocking;
+use super::shared::{blocking, with_root, RootContext};
 use crate::error::CommandError;
 use crate::WriteGate;
+use tauri_plugin_dialog::DialogExt;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +72,79 @@ pub async fn clear_download_caches(
         let data_dir = execs_core::try_execs_data_dir().map_err(CommandError::unknown)?;
         execs_core::storage::clear_download_caches(&data_dir)
             .map_err(|err| CommandError::new("StorageClear", err.to_string()))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn get_hud_backups() -> Result<execs_core::hud_backups::HudBackupReport, CommandError> {
+    with_root(|root| {
+        Ok(execs_core::hud_backups::list_hud_backups_to(
+            &execs_core::profiles_dir(),
+            &root,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_hud_backup(
+    gate: tauri::State<'_, WriteGate>,
+    id: String,
+    revision: String,
+) -> Result<(), CommandError> {
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        execs_core::hud_backups::delete_hud_backup_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &id,
+            &revision,
+            &execs_core::process_lock::live_process_names(),
+        )?;
+        Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn restore_hud_backup(
+    gate: tauri::State<'_, WriteGate>,
+    app: tauri::AppHandle,
+    id: String,
+    revision: String,
+) -> Result<Option<String>, CommandError> {
+    let context = with_root(|root| {
+        execs_core::refuse_if_running()?;
+        Ok(RootContext::capture(&root))
+    })
+    .await?;
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Choose a folder for recovered HUD files")
+            .blocking_pick_folder()
+    })
+    .await
+    .map_err(|error| CommandError::unknown(error.to_string()))?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let parent = picked
+        .into_path()
+        .map_err(|error| CommandError::unknown(error.to_string()))?;
+    let _guard = gate.lock_for_write().await?;
+    with_root(move |root| {
+        context.ensure_current(&root)?;
+        let restored = execs_core::hud_backups::restore_hud_backup_to(
+            &execs_core::profiles_dir(),
+            &root,
+            &id,
+            &revision,
+            &parent,
+            &execs_core::process_lock::live_process_names(),
+        )?;
+        Ok(Some(execs_core::finder::user_path_string(&restored)))
     })
     .await
 }

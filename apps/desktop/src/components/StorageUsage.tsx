@@ -9,6 +9,7 @@ import {
   visibleStorageGroups,
 } from "../lib/app-settings-ui";
 import { invokeErrorMessage } from "../lib/bridge";
+import { type HudBackupApi, HudBackupStorage } from "./HudBackupStorage";
 import { Modal } from "./ui/Modal";
 import { Loading } from "./ui/Spinner";
 
@@ -16,10 +17,12 @@ import { Loading } from "./ui/Spinner";
 export function StorageUsage({
   api,
   ready = true,
+  backupsEnabled = false,
 }: {
-  api: Pick<Api, "getStorageUsage" | "clearDownloadCaches">;
+  api: Pick<Api, "getStorageUsage" | "clearDownloadCaches"> & Partial<HudBackupApi>;
   /** Clearing waits for the native close listener, like other app-data writes. */
   ready?: boolean;
+  backupsEnabled?: boolean;
 }) {
   const [report, setReport] = useState<StorageReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,6 +139,13 @@ export function StorageUsage({
         <p className="t-meta mt-2" aria-live="polite" data-testid="storage-clear-result">
           {clearResultCopy(result)}
         </p>
+      ) : null}
+      {backupsEnabled && api.getHudBackups && api.restoreHudBackup && api.deleteHudBackup ? (
+        <HudBackupStorage
+          api={api as HudBackupApi}
+          ready={ready && !clearing}
+          onChanged={() => void load()}
+        />
       ) : null}
       <Modal
         open={confirming}

@@ -1,4 +1,9 @@
-export type SteamWriteStatus = "written" | "steam_open" | "no_account" | "write_failed";
+export type SteamWriteStatus =
+  | "written"
+  | "steam_open"
+  | "no_account"
+  | "write_failed"
+  | "not_requested";
 
 /**
  * TF2-relevant options documented by comfig, Steam Support, and the Valve
@@ -375,6 +380,7 @@ export type LaunchSync = {
   steamOptions: string | null;
   inSync: boolean;
   steamRunning: boolean;
+  reviewToken?: string | null;
 };
 
 /**
@@ -387,12 +393,12 @@ export function launchSyncAction(sync: LaunchSync | null): LaunchSyncAction {
   if (!sync || sync.inSync || sync.steamOptions === null) {
     return "launch";
   }
-  return sync.steamRunning ? "ask" : "write-then-launch";
+  return "ask";
 }
 
 /** Header flag for a profile whose launch options are not in Steam yet. */
 export function launchSyncWarning(sync: LaunchSync | null): string | null {
-  return launchSyncAction(sync) === "launch" ? null : "Launch options not in Steam";
+  return launchSyncAction(sync) === "launch" ? null : "Steam has different launch options";
 }
 
 /**
@@ -450,12 +456,12 @@ export function launchSteamCopy(state: LaunchSteamState, running: boolean): stri
     case "steam-open":
       return "Saved to this profile. Steam is open with different options. Copy them in, or Launch TF2 can restart Steam to write them.";
     case "steam-closed":
-      return "Saved to this profile. Steam has different options. Write them now, or Launch TF2 writes them first.";
+      return "Saved to this profile. Steam has different options. Review them before writing, or choose which options to use when launching.";
     case "write-failed":
       return "Saved to this profile. Steam could not be updated. Retry, or copy them into Steam.";
     case "no-account":
       return "Saved to this profile. No Steam account found, so copy them into Steam yourself.";
     case "unknown":
-      return "Saved to this profile. Steam updates only while it is closed.";
+      return "Saved to this profile. Review Steam’s options before updating them.";
   }
 }

@@ -9,11 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::apply::{cfg_layer_from_manifest, detail_from_manifest, ProfileDetail};
 use crate::finder::discover_steam_roots;
 use crate::hash::{metadata_is_link, validate_dir_within, validate_file_within};
-use crate::launch::{
-    sanitize_launch_options, sync_committed_profile_launch_options,
-    write_launch_options_to_localconfig, write_launch_options_to_localconfig_from,
-    LaunchWriteReason,
-};
+use crate::launch::sanitize_launch_options;
 use crate::preloader::preload_is_wanted;
 use crate::process_lock::{live_process_names, refuse_if_running_among};
 use crate::profile::{
@@ -272,7 +268,7 @@ where
         precommit,
     )?;
     if let Some(expected) = expected_launch {
-        sync_launch_after_commit(
+        verify_pending_launch_after_commit(
             profiles_dir,
             tf2_root,
             profile_id,
@@ -690,7 +686,7 @@ where
         },
     )?;
     if let Some(expected) = expected_launch {
-        sync_launch_after_commit(
+        verify_pending_launch_after_commit(
             profiles_dir,
             tf2_root,
             profile_id,
@@ -751,7 +747,7 @@ pub fn set_profile_preload(
             Ok(())
         },
     )?;
-    sync_launch_after_commit(
+    verify_pending_launch_after_commit(
         &profiles_dir,
         tf2_root,
         profile_id,
@@ -925,7 +921,7 @@ where
         },
     )?;
     if let Some(expected) = expected_launch {
-        sync_launch_after_commit(
+        verify_pending_launch_after_commit(
             profiles_dir,
             tf2_root,
             profile_id,
@@ -971,7 +967,7 @@ fn set_preload_state(
             Ok(())
         },
     )?;
-    sync_launch_after_commit(
+    verify_pending_launch_after_commit(
         profiles_dir,
         tf2_root,
         profile_id,
@@ -1012,48 +1008,26 @@ fn preload_plan(
     })
 }
 
-/// Steam owns `localconfig.vdf`, so it cannot join the profile mutation
-/// journal. The profile's launch options and pending marker commit first;
-/// only an exact successful projection clears that marker. Deferred or failed
-/// writes leave a durable, retryable source of truth instead of rolling the
-/// already-committed viewmodel files back.
+/// Viewmodel changes keep the durable launch-sync marker pending. Only an
+/// explicit Launch review may replace Steam's independently edited options.
 #[allow(clippy::too_many_arguments)]
-fn sync_launch_after_commit(
+fn verify_pending_launch_after_commit(
     profiles_dir: &Path,
-    tf2_root: &Path,
+    _tf2_root: &Path,
     profile_id: &str,
     expected_launch_options: &str,
-    running: &[String],
-    steam: &[String],
-    steam_roots: &[PathBuf],
-    fresh_steam_process_check: bool,
+    _running: &[String],
+    _steam: &[String],
+    _steam_roots: &[PathBuf],
+    _fresh_steam_process_check: bool,
 ) -> Result<(), ProfileError> {
-    let result = sync_committed_profile_launch_options(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        expected_launch_options,
-        running,
-        || {
-            if fresh_steam_process_check {
-                write_launch_options_to_localconfig(steam_roots, expected_launch_options)
-            } else {
-                write_launch_options_to_localconfig_from(
-                    steam_roots,
-                    expected_launch_options,
-                    steam.iter().map(String::as_str),
-                )
-            }
-        },
-    );
-    if result.reason == LaunchWriteReason::WriteFailed {
-        Err(ProfileError::Io(
-            "The viewmodel change was saved, but Steam launch-option sync is still pending and can be retried."
-                .into(),
-        ))
-    } else {
-        Ok(())
+    let saved = load_manifest(profiles_dir, profile_id)?;
+    if saved.launch_options != expected_launch_options || !saved.launch_sync_pending {
+        return Err(ProfileError::Io(
+            "The viewmodel change was saved, but its launch options need review.".into(),
+        ));
     }
+    Ok(())
 }
 
 fn preload_target(
@@ -2145,10 +2119,11 @@ mod tests {
     }
 
     #[test]
-    fn preload_updates_steam_launch_options_when_steam_is_closed() {
+    fn preload_preserves_external_steam_options_until_review() {
         let (root, profiles, tf2, id) = setup();
         let steam = root.join("Steam");
         let localconfig = write_steam_account(&steam, "-novid");
+        let original = std::fs::read(&localconfig).unwrap();
         let mut files = BTreeMap::new();
         files.insert("models/weapons/c_models/a.mdl".into(), b"x".to_vec());
         import_viewmodel_vpk_to_with_launch(
@@ -2168,9 +2143,8 @@ mod tests {
             None,
         )
         .unwrap();
-        let text = std::fs::read_to_string(localconfig).unwrap();
-        assert!(text.contains("\"LaunchOptions\"\t\t\"+exec execs_preload\""));
-        assert!(!load_manifest(&profiles, &id).unwrap().launch_sync_pending);
+        assert_eq!(std::fs::read(localconfig).unwrap(), original);
+        assert!(load_manifest(&profiles, &id).unwrap().launch_sync_pending);
         cleanup(&root);
     }
 
@@ -2201,7 +2175,7 @@ mod tests {
         let mut new_files = BTreeMap::new();
         new_files.insert("models/weapons/c_models/new.mdl".into(), b"new".to_vec());
         let new_vpk = write_vpk_v1(&new_files);
-        let err = import_viewmodel_vpk_to_with_launch(
+        import_viewmodel_vpk_to_with_launch(
             &profiles,
             &no_mods(&root),
             &tf2,
@@ -2217,11 +2191,8 @@ mod tests {
             None,
             None,
         )
-        .unwrap_err();
+        .unwrap();
 
-        let message = err.message().to_ascii_lowercase();
-        assert!(message.contains("saved"), "{err:?}");
-        assert!(message.contains("pending"), "{err:?}");
         let after = load_manifest(&profiles, &id).unwrap();
         assert_ne!(after, before_manifest);
         assert!(after.launch_sync_pending);

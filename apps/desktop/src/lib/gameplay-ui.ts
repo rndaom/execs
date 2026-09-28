@@ -18,7 +18,7 @@ export const FLIP_VIEWMODELS_NOTE = "Not while connected to a server.";
 /// sv_cheats, logging "Can't use cheat cvar r_drawtracers in multiplayer".
 export const ALL_TRACERS_NOTE = "Ignored on live servers; needs sv_cheats.";
 
-export const FOV_MIN = 54;
+export const FOV_MIN = 75;
 export const FOV_MAX = 90;
 /** TF2's viewmodel ConVar limits are independent of world FOV and menu limits. */
 export const VIEWMODEL_FOV_MIN = 0.1;
@@ -202,7 +202,8 @@ export function clampInt(value: number, min: number, max: number): number {
 
 export function clampGameplay(settings: GameplaySettings): GameplaySettings {
   return {
-    fov_desired: clampInt(settings.fov_desired, FOV_MIN, FOV_MAX),
+    // Keep authored values until the World FOV control changes. TF2 clamps the result.
+    fov_desired: Number.isFinite(settings.fov_desired) ? settings.fov_desired : 90,
     viewmodel_fov: Number.isFinite(settings.viewmodel_fov)
       ? Math.min(VIEWMODEL_FOV_MAX, Math.max(VIEWMODEL_FOV_MIN, settings.viewmodel_fov))
       : VIEWMODEL_FOV_MIN,
@@ -375,7 +376,8 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
 
   const fov = read("fov_desired");
   if (fov !== undefined) {
-    next.fov_desired = parseIntish(fov, next.fov_desired);
+    const value = Number(fov.trim());
+    if (Number.isFinite(value)) next.fov_desired = value;
   }
   const viewmodel = read("viewmodel_fov");
   if (viewmodel !== undefined) {
@@ -518,39 +520,93 @@ export function parseSensitivityInput(
   return { value, problem: null };
 }
 
-/** A config.cfg value TF2's options could have written, or null when it is not one. */
-function gameOptionValue(name: (typeof GAME_SYNCED_CVARS)[number], raw: string): number | null {
+/** Menu-owned values, separate from pane ownership of the shared cfg. */
+export const MENU_SYNC_CVARS = {
+  gameplay: [...GAME_SYNCED_CVARS, "fov_desired"],
+  viewmodels: ["viewmodel_fov", "cl_flipviewmodels", "tf_use_min_viewmodels"],
+  sounds: [
+    "tf_dingalingaling",
+    "tf_dingalingaling_lasthit",
+    "tf_dingaling_volume",
+    "tf_dingaling_lasthit_volume",
+    "tf_dingaling_pitchmindmg",
+    "tf_dingaling_pitchmaxdmg",
+    "tf_dingaling_lasthit_pitchmindmg",
+    "tf_dingaling_lasthit_pitchmaxdmg",
+    "tf_dingalingaling_effect",
+    "tf_dingalingaling_last_effect",
+  ],
+  crosshair: [
+    "cl_crosshair_file",
+    "cl_crosshair_scale",
+    "cl_crosshair_red",
+    "cl_crosshair_green",
+    "cl_crosshair_blue",
+  ],
+} as const;
+
+function gameOptionValue(name: string, raw: string): string | null {
   const text = raw.trim();
-  if (text === "") return null;
+  if (name === "cl_crosshair_file") return isStockCrosshairFile(text) ? text : null;
+  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return null;
   const value = Number(text);
   if (!Number.isFinite(value)) return null;
-  if ((MOUSE_CVARS as readonly string[]).includes(name)) return value > 0 ? value : null;
-  if (name === "hud_fastswitch") return Number.isInteger(value) ? value : null;
-  return value === 0 || value === 1 ? value : null;
+  const inRange = (min: number, max: number, integer = false) =>
+    value >= min && value <= max && (!integer || Number.isInteger(value));
+  let valid: boolean;
+  if ((MOUSE_CVARS as readonly string[]).includes(name)) valid = value > 0;
+  else if (name === "hud_fastswitch") valid = Number.isInteger(value);
+  else if (name === "fov_desired") valid = inRange(FOV_MIN, FOV_MAX, true);
+  else if (name === "viewmodel_fov") valid = inRange(54, 70);
+  else if (name.endsWith("_volume")) valid = inRange(0, 1);
+  else if (name.includes("_pitch")) valid = inRange(1, 255, true);
+  else if (name.endsWith("_effect")) valid = inRange(0, HITSOUND_EFFECT_MAX, true);
+  else if (name === "cl_crosshair_scale") valid = inRange(CROSSHAIR_SCALE_MIN, CROSSHAIR_SCALE_MAX);
+  else if (name.startsWith("cl_crosshair_")) valid = inRange(COLOR_MIN, COLOR_MAX, true);
+  else valid = value === 0 || value === 1;
+  return valid ? formatCvarNumber(value) : null;
 }
 
 /**
- * After a game session, TF2's own options may have changed Gameplay cvars in
- * config.cfg (mouse sensitivity, auto reload, damage numbers and so on). The
- * managed Gameplay cfg runs later and would put the old values back, so its
- * matching lines follow config.cfg. Only lines the managed file already sets
- * change; every other byte stays.
+ * A completed absorb with config.cfg drift may reconcile each pane's existing
+ * menu settings. Replace value spans only: comments, quotes, separators and
+ * unrelated commands remain byte-for-byte intact. Never insert a setting.
  */
-export function syncGameOptionsFromConfig(managedText: string, configText: string): string {
-  const config: Record<string, string> = {};
-  for (const [name, value] of Object.entries(parseCvarMap(configText))) {
-    config[name.toLowerCase()] = value;
+export function syncGameOptionsFromConfig(
+  managedText: string,
+  configText: string,
+  scope?: keyof typeof MENU_SYNC_CVARS,
+): string {
+  const allowed = new Set<string>(
+    scope ? MENU_SYNC_CVARS[scope] : Object.values(MENU_SYNC_CVARS).flat(),
+  );
+  const config = new Map<string, string>();
+  for (const command of parseCommands(configText, "config.cfg")) {
+    if (!allowed.has(command.name)) continue;
+    // A malformed last assignment must not revive an earlier valid value.
+    config.delete(command.name);
+    if (command.args.length !== 1 || command.tokens.some((token) => !token.closed)) continue;
+    const value = gameOptionValue(command.name, command.args[0]);
+    if (value !== null) config.set(command.name, value);
   }
   let next = managedText;
-  for (const name of GAME_SYNCED_CVARS) {
-    const raw = config[name];
-    const value = raw === undefined ? null : gameOptionValue(name, String(raw));
-    if (value === null) continue;
-    const line = new RegExp(`^([ \\t]*)${name}[ \\t]+[^\\r\\n]*$`, "gim");
-    next = next.replace(line, (whole, indent: string) => {
-      const current = Number(whole.trim().split(/\s+/)[1]?.replace(/"/g, ""));
-      return current === value ? whole : `${indent}${name} ${formatCvarNumber(value)}`;
-    });
+  for (const command of parseCommands(managedText, "execs_gameplay.cfg").reverse()) {
+    const value = config.get(command.name);
+    if (
+      value === undefined ||
+      command.args.length !== 1 ||
+      command.tokens.some((token) => !token.closed)
+    )
+      continue;
+    const token = command.tokens[1];
+    if (
+      token.value === value ||
+      (command.name !== "cl_crosshair_file" && Number(token.value) === Number(value))
+    )
+      continue;
+    // Empty stock crosshair requires a quoted token.
+    const replacement = token.quoted ? value : value === "" ? '""' : value;
+    next = next.slice(0, token.contentFrom) + replacement + next.slice(token.contentTo);
   }
   return next;
 }

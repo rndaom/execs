@@ -356,7 +356,7 @@ it("routes retained live files to Save current as without mutating them", async 
   vi.spyOn(api, "switchProfile").mockRejectedValue(
     new BridgeError("Save current as… before switching.", "PendingLiveHandoff"),
   );
-  const capture = vi.spyOn(api, "absorbPacks");
+  const capture = vi.spyOn(api, "resolvePackChanges");
   await act(async () => state.switchProfile(target.id));
   expect(state.switchHandoff?.kind).toBe("retained");
   await act(async () => state.captureKeptPacks());
@@ -456,12 +456,12 @@ it("never offers or answers the previous profile's pack delta on the target", as
           finishTarget = resolve;
         }),
     );
-  const answer = vi.spyOn(api, "absorbPacks");
+  const answer = vi.spyOn(api, "resolvePackChanges");
   await render();
   expect(state.packPrompt).not.toBeNull();
   await act(async () => state.switchProfile("second"));
   expect(state.packPrompt).toBeNull();
-  await act(async () => state.answerPackPrompt("restore"));
+  await act(async () => state.answerPackPrompt([{ pack: "old", choice: "restore" }]));
   expect(answer).not.toHaveBeenCalled();
   await act(async () =>
     finishTarget({ library: target, delta: emptyAbsorbDelta(), configCfgAbsorbed: false }),
@@ -475,12 +475,17 @@ it("refreshes settings after answering a pack choice without another absorb", as
     library,
     delta: previewPackDelta(),
     configCfgAbsorbed: false,
+    packReview: "review-1",
   });
-  const answer = vi.spyOn(api, "absorbPacks");
+  const answer = vi.spyOn(api, "resolvePackChanges").mockResolvedValue(library);
   await render();
   const key = state.refreshKey;
-  await act(async () => state.answerPackPrompt("update"));
-  expect(answer).toHaveBeenCalledWith("update");
+  await act(async () => state.answerPackPrompt([{ pack: "toonhud", choice: "add" }]));
+  expect(answer).toHaveBeenCalledWith({
+    profileId: library.activeProfileId,
+    fingerprint: "review-1",
+    decisions: [{ pack: "toonhud", choice: "add" }],
+  });
   expect(state.refreshKey).not.toBe(key);
   expect(state.packPrompt).toBeNull();
   expect(absorb).toHaveBeenCalledTimes(1);

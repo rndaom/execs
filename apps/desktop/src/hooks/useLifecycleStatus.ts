@@ -24,6 +24,7 @@ const MAX_RETRY_MS = 30_000;
 function sameSnapshot(left: Snapshot, right: Snapshot) {
   return (
     left.launchingTf2 === right.launchingTf2 &&
+    left.launchWaitExpired === right.launchWaitExpired &&
     left.steamVerification === right.steamVerification &&
     left.installingUpdate === right.installingUpdate &&
     left.available === right.available &&

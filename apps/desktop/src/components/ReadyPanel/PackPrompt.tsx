@@ -1,73 +1,111 @@
-import type { AbsorbDelta, PackChoice } from "../../lib/bridge";
+import { useState } from "react";
+import type { AbsorbDelta, PackAction, PackDecision } from "../../lib/bridge";
+import { packConsequence, packDecisions } from "../../lib/pack-prompt-ui";
 import { Modal } from "../ui/Modal";
+import { Segmented } from "../ui/Segmented";
 
-/**
- * "Custom files changed" — how pack changes from a TF2 session are adopted.
- * Update is the default action, on Enter as well as on click; dismissing only
- * defers it, so the question is re-offered later. Restore is offered only when
- * something went missing, since it answers exactly that half of the delta.
- */
 export function PackPrompt({
   delta,
+  profileName,
   busy,
   onChoice,
   onDefer,
+  onRefresh,
 }: {
   delta: AbsorbDelta | null;
+  profileName: string;
   busy: boolean;
-  onChoice: (choice: PackChoice) => void;
+  onChoice: (choices: PackDecision[]) => void;
   onDefer: () => void;
+  onRefresh: () => void;
 }) {
+  // Reset the local choices for each complete native snapshot, even when its
+  // pack names happen to match a previous profile or deferred review.
+  const [draft, setDraft] = useState<{ delta: AbsorbDelta | null; decisions: PackDecision[] }>({
+    delta,
+    decisions: delta ? packDecisions(delta) : [],
+  });
+  if (draft.delta !== delta) {
+    setDraft({ delta, decisions: delta ? packDecisions(delta) : [] });
+  }
+  const decisions = draft.delta === delta ? draft.decisions : delta ? packDecisions(delta) : [];
+  const apply = () => {
+    if (!busy && delta) onChoice(decisions);
+  };
   return (
     <Modal
       open={delta !== null}
-      role="alertdialog"
-      scrim={false}
       testId="absorb-pack-prompt"
       title="Custom files changed"
-      description="Update the active profile?"
-      className="fixed top-20 right-5 z-50 w-[min(390px,calc(100vw-2.5rem))]"
-      onClose={onDefer}
-      onDefaultAction={() => onChoice("update")}
+      description={
+        <>
+          Choose what to save in <strong className="break-words">{profileName}</strong>.
+        </>
+      }
+      onClose={() => {
+        if (!busy) onDefer();
+      }}
+      onDefaultAction={apply}
     >
-      {delta && delta.packsAdded.length > 0 ? (
-        <p className="t-meta mt-2">Added: {delta.packsAdded.join(", ")}</p>
-      ) : null}
-      {delta && delta.packsRemoved.length > 0 ? (
-        <p className="t-meta mt-1">Removed: {delta.packsRemoved.join(", ")}</p>
-      ) : null}
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 max-h-[50dvh] space-y-4 overflow-y-auto pr-1">
+        {decisions.map(({ pack, choice }, index) => {
+          const added = delta?.packsAdded.includes(pack) ?? false;
+          return (
+            <div key={pack} className="space-y-2 border-b border-edge pb-4 last:border-0">
+              <p className="t-row break-words">{pack}</p>
+              <p className="t-meta text-ink-faint">{added ? "Added to TF2" : "Missing from TF2"}</p>
+              <Segmented<PackAction>
+                label={`What to do with ${pack}`}
+                size="sm"
+                value={choice}
+                disabled={busy}
+                testIdPrefix={`pack-choice-${index}`}
+                options={
+                  added
+                    ? [
+                        { id: "add", label: "Add to profile" },
+                        { id: "keep", label: "Leave in TF2" },
+                      ]
+                    : [
+                        { id: "remove", label: "Remove from profile" },
+                        { id: "restore", label: "Restore" },
+                        { id: "keep", label: "Keep saved" },
+                      ]
+                }
+                onChange={(next) =>
+                  setDraft({
+                    delta,
+                    decisions: decisions.map((decision) =>
+                      decision.pack === pack ? { pack, choice: next } : decision,
+                    ),
+                  })
+                }
+              />
+              <p className="t-meta text-ink-faint">{packConsequence(choice, added)}</p>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
           data-testid="absorb-pack-update"
           disabled={busy}
-          onClick={() => onChoice("update")}
+          onClick={apply}
           className="btn btn-primary"
         >
-          Update profile
+          Apply choices
         </button>
-        {delta && delta.packsRemoved.length > 0 ? (
-          <button
-            type="button"
-            data-testid="absorb-pack-restore"
-            disabled={busy}
-            onClick={() => onChoice("restore")}
-            className="btn btn-ghost"
-          >
-            Restore removed
-          </button>
-        ) : null}
-        <button
-          type="button"
-          data-testid="absorb-pack-keep"
-          disabled={busy}
-          onClick={() => onChoice("keep")}
-          className="btn btn-ghost"
-        >
-          Keep profile
+        <button type="button" disabled={busy} onClick={onDefer} className="btn btn-ghost">
+          Decide later
+        </button>
+        <button type="button" disabled={busy} onClick={onRefresh} className="btn btn-ghost">
+          Refresh review
         </button>
       </div>
-      <p className="mt-3 text-[12px] text-ink-faint">Escape defers; execs asks again later.</p>
+      <p className="mt-3 t-meta text-ink-faint">
+        Decide later or Escape defers these choices until the next TF2 session or profile switch.
+      </p>
     </Modal>
   );
 }

@@ -102,7 +102,8 @@ pub use apply::{
 };
 pub use catalog::{read_mods_catalog, CatalogAddon, CatalogParticleMod, ModsCatalog};
 pub use gameinfo::{
-    gameinfo_bypass_state, set_gameinfo_bypass, set_gameinfo_bypass_with_sampler, GameinfoBypass,
+    gameinfo_bypass_state, set_gameinfo_bypass, set_gameinfo_bypass_choice_with_sampler,
+    set_gameinfo_bypass_with_sampler, GameinfoBypass,
 };
 pub use state::{preload_is_wanted, PatchedEntry, PreloaderState, SkipNotice};
 pub use transaction::{

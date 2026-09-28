@@ -1,4 +1,4 @@
-import { parseCommands } from "@execs/cfglint";
+import { type Finding, lint, parseCommands } from "@execs/cfglint";
 import { canWrite } from "./write-gate";
 
 export type BindsLayer = "comfig" | "vanilla";
@@ -68,6 +68,51 @@ export const BIND_ACTIONS = [
   { id: "loadout1", label: "Loadout B", command: "load_itempreset 1" },
   { id: "loadout2", label: "Loadout C", command: "load_itempreset 2" },
   { id: "loadout3", label: "Loadout D", command: "load_itempreset 3" },
+  { id: "gogo", label: "Go!", command: "voicemenu 0 2" },
+  { id: "moveup", label: "Move up!", command: "voicemenu 0 3" },
+  { id: "goleft", label: "Go left", command: "voicemenu 0 4" },
+  { id: "goright", label: "Go right", command: "voicemenu 0 5" },
+  { id: "yes", label: "Yes", command: "voicemenu 0 6" },
+  { id: "no", label: "No", command: "voicemenu 0 7" },
+  { id: "passtome", label: "Pass to me!", command: "voicemenu 0 8" },
+  { id: "teleporterhere", label: "Teleporter here!", command: "voicemenu 1 3" },
+  { id: "dispenserhere", label: "Dispenser here!", command: "voicemenu 1 4" },
+  { id: "sentryhere", label: "Sentry here!", command: "voicemenu 1 5" },
+  { id: "chargeready", label: "Charge ready!", command: "voicemenu 1 7" },
+  { id: "cheers", label: "Cheers", command: "voicemenu 2 2" },
+  { id: "jeers", label: "Jeers", command: "voicemenu 2 3" },
+  { id: "positive", label: "Positive", command: "voicemenu 2 4" },
+  { id: "negative", label: "Negative", command: "voicemenu 2 5" },
+  { id: "niceshot", label: "Nice shot!", command: "voicemenu 2 6" },
+  { id: "goodjob", label: "Good job!", command: "voicemenu 2 7" },
+  { id: "kill", label: "Kill", command: "kill" },
+  { id: "explode", label: "Explode", command: "explode" },
+  { id: "build2", label: "Build sentry", command: "build 2 0" },
+  { id: "destroy2", label: "Destroy sentry", command: "destroy 2 0" },
+  { id: "build0", label: "Build dispenser", command: "build 0 0" },
+  { id: "destroy0", label: "Destroy dispenser", command: "destroy 0 0" },
+  { id: "build1", label: "Build teleporter entrance", command: "build 1 0" },
+  { id: "destroy1", label: "Destroy teleporter entrance", command: "destroy 1 0" },
+  { id: "buildexit", label: "Build teleporter exit", command: "build 1 1" },
+  { id: "destroyexit", label: "Destroy teleporter exit", command: "destroy 1 1" },
+  { id: "disguise1team1", label: "Disguise as BLU Scout", command: "disguise 1 1" },
+  { id: "disguise1team2", label: "Disguise as RED Scout", command: "disguise 1 2" },
+  { id: "disguise3team1", label: "Disguise as BLU Soldier", command: "disguise 3 1" },
+  { id: "disguise3team2", label: "Disguise as RED Soldier", command: "disguise 3 2" },
+  { id: "disguise7team1", label: "Disguise as BLU Pyro", command: "disguise 7 1" },
+  { id: "disguise7team2", label: "Disguise as RED Pyro", command: "disguise 7 2" },
+  { id: "disguise4team1", label: "Disguise as BLU Demoman", command: "disguise 4 1" },
+  { id: "disguise4team2", label: "Disguise as RED Demoman", command: "disguise 4 2" },
+  { id: "disguise6team1", label: "Disguise as BLU Heavy", command: "disguise 6 1" },
+  { id: "disguise6team2", label: "Disguise as RED Heavy", command: "disguise 6 2" },
+  { id: "disguise9team1", label: "Disguise as BLU Engineer", command: "disguise 9 1" },
+  { id: "disguise9team2", label: "Disguise as RED Engineer", command: "disguise 9 2" },
+  { id: "disguise5team1", label: "Disguise as BLU Medic", command: "disguise 5 1" },
+  { id: "disguise5team2", label: "Disguise as RED Medic", command: "disguise 5 2" },
+  { id: "disguise2team1", label: "Disguise as BLU Sniper", command: "disguise 2 1" },
+  { id: "disguise2team2", label: "Disguise as RED Sniper", command: "disguise 2 2" },
+  { id: "disguise8team1", label: "Disguise as BLU Spy", command: "disguise 8 1" },
+  { id: "disguise8team2", label: "Disguise as RED Spy", command: "disguise 8 2" },
 ] as const;
 
 export type BindAction = (typeof BIND_ACTIONS)[number];
@@ -107,12 +152,29 @@ export const BIND_GROUPS: ReadonlyArray<{ id: string; title: string; ids: BindAc
       "sentryahead",
       "activatecharge",
       "battlecry",
+      "gogo",
+      "moveup",
+      "goleft",
+      "goright",
+      "yes",
+      "no",
+      "passtome",
+      "teleporterhere",
+      "dispenserhere",
+      "sentryhere",
+      "chargeready",
+      "cheers",
+      "jeers",
+      "positive",
+      "negative",
+      "niceshot",
+      "goodjob",
     ],
   },
   {
     id: "gameplay",
     title: "Gameplay",
-    ids: ["use", "actionslot", "dropitem", "spray", "lastdisguise", "ready"],
+    ids: ["use", "actionslot", "dropitem", "spray", "lastdisguise", "ready", "kill", "explode"],
   },
   {
     id: "menus",
@@ -127,6 +189,44 @@ export const BIND_GROUPS: ReadonlyArray<{ id: string; title: string; ids: BindAc
       "contracts",
       "console",
       "screenshot",
+    ],
+  },
+  {
+    id: "engineer",
+    title: "Engineer",
+    ids: [
+      "build2",
+      "destroy2",
+      "build0",
+      "destroy0",
+      "build1",
+      "destroy1",
+      "buildexit",
+      "destroyexit",
+    ],
+  },
+  {
+    id: "spy",
+    title: "Spy",
+    ids: [
+      "disguise1team1",
+      "disguise1team2",
+      "disguise3team1",
+      "disguise3team2",
+      "disguise7team1",
+      "disguise7team2",
+      "disguise4team1",
+      "disguise4team2",
+      "disguise6team1",
+      "disguise6team2",
+      "disguise9team1",
+      "disguise9team2",
+      "disguise5team1",
+      "disguise5team2",
+      "disguise2team1",
+      "disguise2team2",
+      "disguise8team1",
+      "disguise8team2",
     ],
   },
   {
@@ -573,6 +673,85 @@ function ownedBindLine(raw: string): { actionId: BindActionId; key: string } | n
   return action ? { actionId: action.id, key: command.args[0].toLowerCase() } : null;
 }
 
+export const CUSTOM_BIND_MARKER = "// execs:custom-bind";
+
+function ownedCustomBindLine(raw: string): { key: string; command: string } | null {
+  const commands = parseCommands(raw, "execs_binds.cfg");
+  if (commands.length !== 1) return null;
+  const command = commands[0];
+  if (
+    command.name !== "bind" ||
+    command.args.length !== 2 ||
+    command.tokens.some((token) => !token.closed) ||
+    raw.slice(command.to).trim() !== CUSTOM_BIND_MARKER
+  )
+    return null;
+  return { key: command.args[0].toLowerCase(), command: command.args[1] };
+}
+
+export function ownedCustomBinds(text: string): Array<{ key: string; command: string }> {
+  return fileLines(text).flatMap((line) => {
+    const bind = ownedCustomBindLine(line);
+    return bind ? [bind] : [];
+  });
+}
+
+/** Source cfg quotes do not escape quotes inside a bind payload. */
+export function validateCustomBind(
+  command: string,
+  key = "f12",
+): { problem: string | null; findings: Finding[] } {
+  if (!command.trim()) return { problem: "Enter a command, like say gg.", findings: [] };
+  if (command.length > 1024) return { problem: "Use 1,024 characters or fewer.", findings: [] };
+  if (
+    [...command].some(
+      (char) => char === '"' || char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127,
+    )
+  )
+    return {
+      problem:
+        "Use one line without double quotes or control characters. Edit more complex scripts in Files.",
+      findings: [],
+    };
+  if (parseCommands(command, "custom.cfg").length === 0)
+    return { problem: "Enter a command, not just a comment.", findings: [] };
+  const result = lint([{ path: "autoexec.cfg", text: `bind ${quoteCfgToken(key)} "${command}"` }], {
+    trust: "self",
+  });
+  const problem = !result.safetyComplete
+    ? "This command could not be fully checked. Edit it in Files."
+    : (result.findings.find((finding) => finding.tier === "block")?.message ?? null);
+  return { problem, findings: result.findings };
+}
+
+export function applyCustomBind(text: string, key: string, command: string): string {
+  const wanted = key.trim().toLowerCase();
+  if (
+    !wanted ||
+    wanted === "escape" ||
+    !/^[a-z0-9_`[\]]+$/.test(wanted) ||
+    validateCustomBind(command, wanted).problem
+  )
+    return text;
+  const kept = fileLines(text)
+    .filter(
+      (line) =>
+        ownedBindLine(line)?.key !== wanted &&
+        ownedUnbindLine(line) !== wanted &&
+        ownedCustomBindLine(line)?.key !== wanted,
+    )
+    .join("");
+  return appendManagedLines(kept, [
+    `bind ${quoteCfgToken(wanted)} "${command.trim()}" ${CUSTOM_BIND_MARKER}`,
+  ]);
+}
+
+export function removeOwnedCustomBind(text: string, key: string): string {
+  return fileLines(text)
+    .filter((line) => ownedCustomBindLine(line)?.key !== key.toLowerCase())
+    .join("");
+}
+
 /** A standalone `unbind <key>` line clears one key for the Binds pane. */
 function ownedUnbindLine(raw: string): string | null {
   const commands = parseCommands(raw, "execs_binds.cfg");
@@ -649,7 +828,12 @@ export function clearManagedKey(text: string, key: string): string {
   const wanted = key.trim().toLowerCase();
   if (!wanted) return text;
   const kept = fileLines(text)
-    .filter((line) => ownedBindLine(line)?.key !== wanted && ownedUnbindLine(line) !== wanted)
+    .filter(
+      (line) =>
+        ownedBindLine(line)?.key !== wanted &&
+        ownedUnbindLine(line) !== wanted &&
+        ownedCustomBindLine(line)?.key !== wanted,
+    )
     .join("");
   return appendManagedLines(kept, [`unbind ${quoteCfgToken(wanted)}`]);
 }
@@ -690,7 +874,12 @@ export function applyRecordedBind(
   // the new action, but does not remove the action's other keys.
   // A pane-owned unbind for this key is replaced by the new assignment.
   const withoutClaim = fileLines(currentFile)
-    .filter((line) => ownedBindLine(line)?.key !== key && ownedUnbindLine(line) !== key)
+    .filter(
+      (line) =>
+        ownedBindLine(line)?.key !== key &&
+        ownedUnbindLine(line) !== key &&
+        ownedCustomBindLine(line)?.key !== key,
+    )
     .join("");
   const action = bindActionById(actionId);
   return action
@@ -722,9 +911,25 @@ export function configBindsFromFiles(
 }
 
 export function syncTrackedBindsFromConfig(currentFile: string, configBinds: BindMap): string {
+  // A menu rebind/removal retires our explicit custom override. Unmarked
+  // user-authored custom lines retain their previous byte-preserving policy.
+  currentFile = fileLines(currentFile)
+    .filter((line) => {
+      const custom = ownedCustomBindLine(line);
+      return (
+        !custom ||
+        bindEntries(configBinds).some(
+          ([key, command]) => key.toLowerCase() === custom.key && command === custom.command,
+        )
+      );
+    })
+    .join("");
+  const customKeys = new Set(ownedCustomBinds(currentFile).map((bind) => bind.key));
   const next = bindEntries(configBinds).flatMap(([key, command]) => {
     const action = COMMAND_TO_ACTION.get(normalizeBindCommand(command));
-    return action ? [{ actionId: action.id, key: key.toLowerCase() }] : [];
+    return action && !customKeys.has(key.toLowerCase())
+      ? [{ actionId: action.id, key: key.toLowerCase() }]
+      : [];
   });
   // A key bound again in TF2 after the pane cleared it keeps its new binding.
   const configKeys = new Set(bindEntries(configBinds).map(([key]) => key.toLowerCase()));

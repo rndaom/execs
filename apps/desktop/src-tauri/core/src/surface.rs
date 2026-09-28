@@ -25,6 +25,8 @@ const STOCK_CFG: &[&str] = &[
     "joystick.cfg",
     "mtp.cfg",
     "replay.cfg",
+    "replay_example.cfg",
+    "sixense_bindings.cfg",
     "sourcevr.cfg",
     "sourcevr_tf.cfg",
 ];
@@ -94,45 +96,53 @@ impl InventoryBudget {
         }
     }
 
-    fn enter_dir(&self, depth: usize) -> Result<(), ProfileError> {
+    fn enter_dir(&self, depth: usize, tf2_root: &Path, dir: &Path) -> Result<(), ProfileError> {
         if depth > self.limits.depth {
-            return Err(surface_limit_error("too many nested directories"));
+            return Err(surface_limit_error(
+                "too many nested directories",
+                &dest_rel_or_display(tf2_root, dir),
+            ));
         }
         Ok(())
     }
 
     fn visit_entry(&mut self, tf2_root: &Path, path: &Path) -> Result<(), ProfileError> {
+        let location = dest_rel_or_display(tf2_root, path.parent().unwrap_or(path));
         self.entries = self
             .entries
             .checked_add(1)
-            .ok_or_else(|| surface_limit_error("too many directory entries"))?;
+            .ok_or_else(|| surface_limit_error("too many directory entries", &location))?;
         if self.entries > self.limits.entries {
-            return Err(surface_limit_error("too many directory entries"));
+            return Err(surface_limit_error("too many directory entries", &location));
         }
         let relative = path.strip_prefix(tf2_root).unwrap_or(path);
         self.path_bytes = self
             .path_bytes
             .checked_add(relative.as_os_str().as_encoded_bytes().len())
-            .ok_or_else(|| surface_limit_error("too much path data"))?;
+            .ok_or_else(|| surface_limit_error("too much path data", &location))?;
         if self.path_bytes > self.limits.path_bytes {
-            return Err(surface_limit_error("too much path data"));
+            return Err(surface_limit_error("too much path data", &location));
         }
         Ok(())
     }
 
     fn record_file(&mut self, dest: &str, current_files: usize) -> Result<(), ProfileError> {
+        let location = dest.rsplit_once('/').map_or(dest, |(parent, _)| parent);
         if current_files >= self.limits.files {
-            return Err(surface_limit_error("too many profile files"));
+            return Err(surface_limit_error("too many profile files", location));
         }
         if dest.split('/').count() > self.limits.depth {
-            return Err(surface_limit_error("a profile path is nested too deeply"));
+            return Err(surface_limit_error(
+                "a profile path is nested too deeply",
+                location,
+            ));
         }
         self.path_bytes = self
             .path_bytes
             .checked_add(dest.len())
-            .ok_or_else(|| surface_limit_error("too much path data"))?;
+            .ok_or_else(|| surface_limit_error("too much path data", location))?;
         if self.path_bytes > self.limits.path_bytes {
-            return Err(surface_limit_error("too much path data"));
+            return Err(surface_limit_error("too much path data", location));
         }
         Ok(())
     }
@@ -160,9 +170,9 @@ impl InventoryBudget {
     }
 }
 
-fn surface_limit_error(reason: &str) -> ProfileError {
+fn surface_limit_error(reason: &str, location: &str) -> ProfileError {
     ProfileError::Io(format!(
-        "{SURFACE_LIMIT_PREFIX}{reason}; refusing to build a partial profile."
+        "{SURFACE_LIMIT_PREFIX}{reason} while scanning {location}. Move unused packs out of tf/custom or reduce this folder, then retry. No partial profile was captured."
     ))
 }
 
@@ -438,7 +448,7 @@ fn walk_vanilla_cfgs(
     critical: bool,
     depth: usize,
 ) -> Result<(), ProfileError> {
-    budget.enter_dir(depth)?;
+    budget.enter_dir(depth, tf2_root, dir)?;
     if is_symlink(dir) {
         return Err(ProfileError::InvalidPath);
     }
@@ -638,7 +648,7 @@ fn walk_tree(
     skip_stock_top_level: bool,
     depth: usize,
 ) -> Result<(), ProfileError> {
-    budget.enter_dir(depth)?;
+    budget.enter_dir(depth, tf2_root, dir)?;
     if is_symlink(dir) {
         return Err(ProfileError::InvalidPath);
     }
@@ -840,12 +850,26 @@ fn is_user_cfg(name: &str) -> bool {
     true
 }
 
-fn is_stock_cfg(lower_name: &str) -> bool {
+pub(crate) fn is_stock_cfg(lower_name: &str) -> bool {
     if STOCK_CFG.contains(&lower_name) {
         return true;
     }
     (lower_name.starts_with("chapter") && lower_name.ends_with(".cfg"))
         || (lower_name.starts_with("sourcevr") && lower_name.ends_with(".cfg"))
+        || (lower_name.starts_with("server_") && lower_name.ends_with(".cfg"))
+}
+
+/// Install-owned cfgs, including historical profile entries. config.cfg is
+/// deliberately profile-owned; its special Cloud handling remains unchanged.
+pub(crate) fn is_protected_stock_cfg_path(path: &str) -> bool {
+    let Ok(path) = normalize_rel_path(path) else {
+        return false;
+    };
+    let lower = path.to_ascii_lowercase();
+    lower != "tf/cfg/config.cfg"
+        && lower
+            .strip_prefix("tf/cfg/")
+            .is_some_and(|rest| is_stock_cfg(rest.rsplit('/').next().unwrap_or(rest)))
 }
 
 fn is_junk_name(name: &str) -> bool {
@@ -1145,6 +1169,45 @@ mod tests {
     }
 
     #[test]
+    fn shipped_server_replay_and_engine_cfgs_stay_out_of_both_layers() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("tf2");
+        // Valve's tracked loose cfg names at GameTracking-TF2 f2c334fb;
+        // server_* also protects future shipped server variants.
+        let stock = [
+            "server_casual.cfg",
+            "server_competitive.cfg",
+            "server_custom.cfg",
+            "server_mvm.cfg",
+            "server_net_chan_extend.cfg",
+            "server_future.cfg",
+            "replay_example.cfg",
+            "sixense_bindings.cfg",
+            "SERVER_MANNUP.CFG",
+        ];
+        for name in stock {
+            write_file(&root.join("tf/cfg").join(name), "stock\n");
+            assert!(!crate::profile::is_profile_ownable_rel_path(&format!(
+                "tf/cfg/{name}"
+            )));
+        }
+        write_file(&root.join("tf/cfg/config.cfg"), "engine-managed\n");
+        write_file(&root.join("tf/cfg/autoexec.cfg"), "player\n");
+        for comfig in [false, true] {
+            if comfig {
+                crate::cfg_layer::write_test_base(&root);
+            }
+            let inventory = inventory_live_surface(&root).unwrap();
+            let paths = dests(&inventory);
+            assert!(paths.contains(&"tf/cfg/config.cfg"));
+            assert!(paths.contains(&"tf/cfg/autoexec.cfg"));
+            assert!(!paths
+                .iter()
+                .any(|path| stock.iter().any(|name| path.ends_with(name))));
+        }
+    }
+
+    #[test]
     fn rejects_an_ordinary_tree_deeper_than_the_surface_limit() {
         let dir = crate::test_temp_dir();
         let root = dir.join("Team Fortress 2");
@@ -1182,6 +1245,7 @@ mod tests {
         assert!(matches!(
             error,
             ProfileError::Io(message) if message.contains("too many directory entries")
+                && message.contains("tf/cfg") && message.contains("Move unused packs")
         ));
         cleanup(&dir);
     }

@@ -100,3 +100,22 @@ describe("Gameplay mouse controls", () => {
     expect(field("gameplay-sensitivity").value).toBe("4.2");
   });
 });
+
+describe("World FOV menu range", () => {
+  it("shows 75 for a lower authored FOV and preserves it until that slider changes", async () => {
+    const save = vi.fn(async (_text: string) => undefined);
+    await render({ managedText: "fov_desired 60.125\n", onSave: save });
+    expect(field("gameplay-fov").min).toBe("75");
+    expect(field("gameplay-fov").max).toBe("90");
+    expect(field("gameplay-fov").value).toBe("75");
+    expect(box.textContent).toContain("Your cfg value (60.125) stays");
+    await act(async () => vi.advanceTimersByTimeAsync(701));
+    expect(save).not.toHaveBeenCalled();
+    await type("gameplay-sensitivity", "2.5");
+    await act(async () => vi.advanceTimersByTimeAsync(701));
+    expect(save.mock.calls.at(-1)?.[0]).toContain("fov_desired 60.125\n");
+    await type("gameplay-fov", "80");
+    await act(async () => vi.advanceTimersByTimeAsync(701));
+    expect(save.mock.calls.at(-1)?.[0]).toContain("fov_desired 80\n");
+  });
+});

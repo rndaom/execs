@@ -385,7 +385,13 @@ export function SettingsHost({
       setCopyCfgPathStatus("idle");
       setComfig(
         state
-          ? { preset: state.preset, modules: state.modules, addons: state.addons }
+          ? {
+              preset: state.preset,
+              modules: state.modules,
+              addons: state.addons,
+              supportedLoader: state.supportedLoader,
+              release: state.release,
+            }
           : defaultComfigState(),
       );
       setLaunchSeed(nextLaunch);
@@ -828,6 +834,7 @@ export function SettingsHost({
         <ComfigPane
           detail={detail}
           state={comfig}
+          onCheckRelease={api.checkComfigRelease}
           onApplyPreset={(preset) => {
             return write(async () => {
               await api.setComfigPreset(preset);
@@ -1357,6 +1364,26 @@ export function SettingsHost({
               { success: "Mod removed", failure: "Could not remove", pending: "Removing mod…" },
             );
           }}
+          onSetModEnabled={(id, enabled) => {
+            void write(
+              async () => {
+                await api.setModEnabled(id, enabled);
+                await refreshModsStatus().catch(() => {});
+              },
+              {
+                success: enabled ? "Pack turned on" : "Pack turned off",
+                failure: "Could not change pack",
+              },
+            );
+          }}
+          onCopyMod={(id, targetProfileId) =>
+            write(
+              async () => {
+                await api.copyModToProfile(id, targetProfileId);
+              },
+              { success: "Pack added to profile", failure: "Could not copy pack" },
+            )
+          }
           // Awaited by the card, so "Installing…" lasts exactly as long as the
           // install and the profile reload behind it.
           onInstallGameBananaMod={async (id, fileId) => {
@@ -1428,11 +1455,44 @@ export function SettingsHost({
     return (
       <LaunchPane
         profileId={profileId}
+        active={paneActive}
         value={launch}
         saved={launchSeed}
         steamWrite={steamWrite}
         steamSync={launchSync}
         lastSave={launchSaved}
+        onAdoptSteam={(reviewToken) =>
+          write(async () => {
+            const sent = launchSeed;
+            const result = await api.setProfileLaunchOptions(
+              sent,
+              profileId ?? undefined,
+              reviewToken,
+              true,
+            );
+            if (detailRef.current?.id !== profileId) return;
+            if (launchRef.current === sent) {
+              launchRef.current = result.launchOptions;
+              setLaunch(result.launchOptions);
+            }
+            launchSeedRef.current = result.launchOptions;
+            setLaunchSeed(result.launchOptions);
+            setLaunchSaved(null);
+            setSteamWrite(result.steamWrite);
+            onLaunchOptionsSaved?.();
+          })
+        }
+        onWriteSteam={(reviewToken) =>
+          write(async () => {
+            const result = await api.setProfileLaunchOptions(
+              launchSeed,
+              profileId ?? undefined,
+              reviewToken,
+            );
+            setSteamWrite(result.steamWrite);
+            onLaunchOptionsSaved?.();
+          })
+        }
         onChange={(next) => {
           launchRef.current = next;
           setLaunch(next);

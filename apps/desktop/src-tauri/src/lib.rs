@@ -497,13 +497,53 @@ fn restored_operation(data_dir: &std::path::Path) -> Result<Option<u64>, String>
     Ok(restored)
 }
 
+pub(crate) static LAST_EXPIRED_LAUNCH: AtomicU64 = AtomicU64::new(0);
+const LAUNCH_WAIT_LIMIT: Duration = Duration::from_secs(10 * 60);
+
 fn spawn_launch_monitor(token: OperationToken, data_dir: std::path::PathBuf) {
+    // Marker mtime is the persisted handoff time, including after an app restart.
+    // Legacy numeric markers already have this timestamp. An unreadable timestamp
+    // receives one bounded recovery wait; the marker itself is never overwritten.
+    let started = durable_operation_path(&data_dir, ExclusiveOperation::LaunchingTf2)
+        .and_then(|path| std::fs::metadata(path).ok())
+        .and_then(|meta| meta.modified().ok())
+        .unwrap_or_else(std::time::SystemTime::now);
+    let deadline =
+        std::time::Instant::now() + remaining_launch_wait(started, std::time::SystemTime::now());
     std::thread::spawn(move || loop {
         if let Ok(true) = observe_pending_launch(&data_dir, &token, execs_core::is_tf2_running()) {
             return;
         }
+        if std::time::Instant::now() >= deadline {
+            let completed = release_pending_launch_wait(
+                &data_dir,
+                &token,
+                execs_core::process_lock::live_process_names,
+                || std::thread::sleep(Duration::from_secs(2)),
+            );
+            if matches!(completed, Ok(true)) {
+                LAST_EXPIRED_LAUNCH.store(token.id(), Ordering::Release);
+                return;
+            }
+        }
         std::thread::sleep(Duration::from_secs(5));
     });
+}
+
+pub(crate) fn release_pending_launch_wait(
+    data_dir: &std::path::Path,
+    token: &OperationToken,
+    processes: impl FnMut() -> Vec<String>,
+    wait: impl FnOnce(),
+) -> Result<bool, error::CommandError> {
+    complete_durable_operation(data_dir, token, || {
+        commands::launch::verify_tf2_absent(processes, wait)?;
+        Ok(true)
+    })
+}
+
+fn remaining_launch_wait(started: std::time::SystemTime, now: std::time::SystemTime) -> Duration {
+    LAUNCH_WAIT_LIMIT.saturating_sub(now.duration_since(started).unwrap_or_default())
 }
 
 fn observe_pending_launch(
@@ -690,6 +730,9 @@ pub fn run() {
             commands::app_settings::set_app_preferences,
             commands::app_settings::get_storage_usage,
             commands::app_settings::clear_download_caches,
+            commands::app_settings::get_hud_backups,
+            commands::app_settings::restore_hud_backup,
+            commands::app_settings::delete_hud_backup,
             commands::uninstall::get_uninstall_info,
             commands::uninstall::uninstall_execs,
             commands::library::switch_profile,
@@ -704,6 +747,7 @@ pub fn run() {
             commands::library::repair_custom_folders,
             commands::absorb::absorb_owned,
             commands::absorb::absorb_packs,
+            commands::absorb::resolve_pack_changes,
             commands::first_run::classify_first_run,
             commands::first_run::apply_unused_wizard,
             commands::first_run::create_fresh_profile,
@@ -717,6 +761,7 @@ pub fn run() {
             commands::comfig::set_comfig_modules,
             commands::comfig::set_comfig_addons,
             commands::comfig::update_comfig_vpks,
+            commands::comfig::check_comfig_release,
             commands::comfig::import_comfig_custom,
             commands::launch::recommended_launch_options,
             commands::launch::launch_tf2,
@@ -784,6 +829,9 @@ pub fn run() {
             commands::mod_import::confirm_mod_import,
             commands::mod_import::cancel_mod_import,
             commands::mods::remove_mod,
+            commands::mods::set_mod_enabled,
+            commands::mods::copy_mod_to_profile,
+            commands::mods::check_mod_updates,
             commands::mods::search_gamebanana_mods,
             commands::mods::gamebanana_mod_categories,
             commands::mods::gamebanana_download_variants,
@@ -1105,6 +1153,65 @@ mod startup_tests {
         assert_eq!(restored_operation(&dir).unwrap(), Some(new_value));
         assert!(gate.operation_is(ExclusiveOperation::SteamVerification));
 
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn launch_timeout_keeps_the_original_handoff_time_after_restart() {
+        use super::remaining_launch_wait;
+        let started = std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
+        assert_eq!(
+            remaining_launch_wait(started, started + Duration::from_secs(60)),
+            Duration::from_secs(540)
+        );
+        assert_eq!(
+            remaining_launch_wait(started, started + Duration::from_secs(590)),
+            Duration::from_secs(10)
+        );
+        assert_eq!(
+            remaining_launch_wait(started, started + Duration::from_secs(600)),
+            Duration::ZERO
+        );
+        assert_eq!(
+            remaining_launch_wait(started, started + Duration::from_secs(999)),
+            Duration::ZERO
+        );
+    }
+
+    #[test]
+    fn launch_timeout_releases_only_after_two_absent_samples_and_keeps_late_game_locked() {
+        let dir = temp_dir("timeout-release");
+        let value = 0x900 | ExclusiveOperation::LaunchingTf2 as u64;
+        let gate = WriteGate::from_operation_value(value);
+        let token = gate
+            .current_token(ExclusiveOperation::LaunchingTf2)
+            .unwrap();
+        persist_durable_operation(&dir, &token).unwrap();
+        let mut samples = 0;
+        let refused = super::release_pending_launch_wait(
+            &dir,
+            &token,
+            || {
+                samples += 1;
+                if samples == 1 {
+                    vec![]
+                } else {
+                    vec!["tf.exe".into()]
+                }
+            },
+            || {},
+        );
+        assert_eq!(refused.unwrap_err().code, "GameRunning");
+        assert_eq!(restored_operation(&dir).unwrap(), Some(value));
+        assert!(token.is_current());
+        assert!(
+            super::release_pending_launch_wait(&dir, &token, || vec!["steam".into()], || {})
+                .unwrap()
+        );
+        assert_eq!(restored_operation(&dir).unwrap(), None);
+        assert!(!token.is_current());
+        // A later Steam start is still protected by the ordinary live process guard.
+        assert!(execs_core::refuse_if_running_among(["tf.exe"]).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
 

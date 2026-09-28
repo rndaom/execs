@@ -69,6 +69,28 @@ function button(id: string): HTMLButtonElement {
 }
 
 describe("ModsPane profile particle containment", () => {
+  it("surfaces lost bypass intent and reapplies only on explicit action", async () => {
+    const onToggleBypass = vi.fn();
+    const payload = {
+      ...PREVIEW_MODS_STATUS,
+      status: {
+        ...PREVIEW_MODS_STATUS.status,
+        gameinfoFound: true,
+        gameinfoBypassed: false,
+        gameinfoBypassWanted: true,
+      },
+    };
+    await act(async () => root.render(createElement(ModsPane, props({ payload, onToggleBypass }))));
+    expect(document.body.textContent).toContain("Material bypass is off");
+    expect(onToggleBypass).not.toHaveBeenCalled();
+    await act(async () => document.getElementById("mods-task-casual")?.click());
+    const restore = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (entry) => entry.textContent === "Turn it back on",
+    );
+    expect(restore?.disabled).toBe(false);
+    await act(async () => restore?.click());
+    expect(onToggleBypass).toHaveBeenCalledWith(true);
+  });
   it("explains unsupported particles before selection and still lets a saved choice be removed", async () => {
     const mod = { ...PREVIEW_PROFILE_MODS[1], id: "gory-gibbing", name: "Gory Gibbing" };
     const unavailableReason = "blood_trail_new.pcf has no supported stock particle carrier.";

@@ -511,6 +511,9 @@ pub struct ProfileManifest {
     #[serde(default = "default_true")]
     pub launch_sync_pending: bool,
     pub files: Vec<ProfileFile>,
+    /// Official package release and hashes, written with the package bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comfig_release: Option<crate::comfig::ComfigRelease>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hud: Option<HudRecord>,
     /// Validated UI-version-3 roots. None is an older manifest awaiting local
@@ -1089,26 +1092,6 @@ pub fn portable_path_key(path: &str) -> Result<String, ProfileError> {
     Ok(normalize_rel_path(path)?.to_lowercase())
 }
 
-fn is_stock_cfg_name(name: &str) -> bool {
-    matches!(
-        name,
-        "config.cfg"
-            | "config_default.cfg"
-            | "360controller.cfg"
-            | "360controller-linux.cfg"
-            | "undo360controller.cfg"
-            | "valve.rc"
-            | "skill.cfg"
-            | "skill_manifest.cfg"
-            | "joystick.cfg"
-            | "mtp.cfg"
-            | "replay.cfg"
-            | "sourcevr.cfg"
-            | "sourcevr_tf.cfg"
-    ) || (name.starts_with("chapter") && name.ends_with(".cfg"))
-        || (name.starts_with("sourcevr") && name.ends_with(".cfg"))
-}
-
 fn is_profile_junk_path(path: &str) -> bool {
     path.split('/').any(is_profile_junk_name)
 }
@@ -1151,7 +1134,7 @@ pub fn is_profile_ownable_rel_path(path: &str) -> bool {
     }
     if let Some(rest) = lower.strip_prefix("tf/cfg/") {
         let name = rest.rsplit('/').next().unwrap_or(rest);
-        if is_stock_cfg_name(name) {
+        if crate::surface::is_stock_cfg(name) {
             return lower == "tf/cfg/config.cfg";
         }
     }
@@ -1395,6 +1378,7 @@ where
             launch_options: String::new(),
             launch_sync_pending: false,
             files,
+            comfig_release: None,
             hud: None,
             hud_roots: None,
             hud_selected_root: None,
@@ -1922,6 +1906,12 @@ where
     let mut index = usable_index(profiles_dir, tf2_root)?;
     let mut manifest = load_manifest_raw(profiles_dir, profile_id)?;
     let old_manifest = manifest.clone();
+    // Stop projecting historical Valve cfg entries without deleting their
+    // library copies or live bytes. Recovery still compares the original raw
+    // manifest identity, and these metadata-only removals have no file delta.
+    manifest
+        .files
+        .retain(|file| !crate::surface::is_protected_stock_cfg_path(&file.path));
     let old_index = index.clone();
     let transaction_id = crate::hash::random_token();
 
@@ -2088,6 +2078,7 @@ where
     let old_by_key: HashMap<String, &ProfileFile> = old_manifest
         .files
         .iter()
+        .filter(|file| !crate::surface::is_protected_stock_cfg_path(&file.path))
         .map(|file| Ok((portable_path_key(&file.path)?, file)))
         .collect::<Result<_, ProfileError>>()?;
     let new_by_key: HashMap<String, &ProfileFile> = manifest
@@ -3574,7 +3565,8 @@ where
     }
     let mut seen = HashSet::new();
     cleanup_files.retain(|file| {
-        file.sha256.len() == 64
+        is_profile_ownable_rel_path(&file.path)
+            && file.sha256.len() == 64
             && file.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
             && portable_path_key(&file.path)
                 .ok()
@@ -3641,6 +3633,9 @@ pub fn load_manifest(
         ));
     }
     let mut manifest = load_manifest_raw(profiles_dir, profile_id)?;
+    manifest
+        .files
+        .retain(|file| !crate::surface::is_protected_stock_cfg_path(&file.path));
     if manifest.hud_roots.is_none() {
         manifest.hud_roots = Some(crate::hud::inspect_profile_hud_roots(
             profiles_dir,
@@ -3739,11 +3734,13 @@ fn derived_profile_file_changes(
     let old_by_key: HashMap<String, &ProfileFile> = old_manifest
         .files
         .iter()
+        .filter(|file| !crate::surface::is_protected_stock_cfg_path(&file.path))
         .map(|file| Ok((portable_path_key(&file.path)?, file)))
         .collect::<Result<_, ProfileError>>()?;
     let new_by_key: HashMap<String, &ProfileFile> = new_manifest
         .files
         .iter()
+        .filter(|file| !crate::surface::is_protected_stock_cfg_path(&file.path))
         .map(|file| Ok((portable_path_key(&file.path)?, file)))
         .collect::<Result<_, ProfileError>>()?;
     let keys: BTreeSet<String> = old_by_key
@@ -3850,8 +3847,18 @@ fn read_validated_profile_mutation(
             "Interrupted profile-update journal belongs to another TF2 root.".into(),
         ));
     }
-    validate_manifest_files(&journal.old_manifest)?;
-    validate_manifest_files(&journal.new_manifest)?;
+    // Old library identities may contain now-protected Valve cfgs. They are
+    // retained only for exact recovery identity, never as transaction targets.
+    let mut old_owned = journal.old_manifest.clone();
+    old_owned
+        .files
+        .retain(|file| !crate::surface::is_protected_stock_cfg_path(&file.path));
+    validate_manifest_files(&old_owned)?;
+    let mut new_owned = journal.new_manifest.clone();
+    new_owned
+        .files
+        .retain(|file| !crate::surface::is_protected_stock_cfg_path(&file.path));
+    validate_manifest_files(&new_owned)?;
     validate_journal_file_delta(&journal)?;
     validate_live_rename_plan(&journal.live_renames)?;
 
@@ -4944,7 +4951,7 @@ pub(crate) fn utc_rfc3339() -> String {
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 
-fn unix_to_ymd_hms(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
+pub(crate) fn unix_to_ymd_hms(secs: u64) -> (i32, u32, u32, u32, u32, u32) {
     let days = (secs / 86400) as i64;
     let rem = secs % 86400;
     let (year, month, day) = civil_from_unix_days(days);
@@ -6152,6 +6159,125 @@ mod tests {
             Some(vec!["legacy".into()])
         );
         cleanup(&dir);
+    }
+
+    #[test]
+    fn previous_version_metadata_journal_with_stock_cfgs_remains_recoverable() {
+        let dir = tempfile::tempdir().unwrap();
+        let profiles = dir.path().join("profiles");
+        let root = dir.path().join("tf2");
+        let id = create_profile_record_to(&profiles, &root, "Old name", unlocked())
+            .unwrap()
+            .profiles[0]
+            .id
+            .clone();
+        let rel = "tf/cfg/server_casual.cfg";
+        let mut old = load_manifest_raw(&profiles, &id).unwrap();
+        old.files.push(ProfileFile {
+            path: rel.into(),
+            sha256: sha256_hex(b"Valve"),
+            storage: FileStorage::Exclusive,
+        });
+        write_atomic_within(
+            &profiles,
+            &exclusive_file_path(&profiles, &id, rel),
+            b"Valve",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        fs::write(root.join(rel), b"live Valve").unwrap();
+        let mut new = old.clone();
+        new.name = "New name".into();
+        for committed in [false, true] {
+            write_json(
+                &manifest_file(&profiles, &id),
+                if committed { &new } else { &old },
+            )
+            .unwrap();
+            let journal = ProfileMutationJournal {
+                transaction_id: "0123456789abcdef0123456789abcdef".into(),
+                profile_id: id.clone(),
+                old_manifest: old.clone(),
+                new_manifest: new.clone(),
+                file_changes: Vec::new(),
+                live_changes: Vec::new(),
+                live_renames: Vec::new(),
+                old_index: None,
+                new_index: None,
+                touched_paths: Vec::new(),
+                committed,
+            };
+            write_json(&mutation_journal_file(&profiles, &id), &journal).unwrap();
+            recover_profile_mutation_to(&profiles, &root, &id).unwrap();
+            assert_eq!(
+                load_manifest_raw(&profiles, &id).unwrap(),
+                if committed { new.clone() } else { old.clone() }
+            );
+            assert_eq!(fs::read(root.join(rel)).unwrap(), b"live Valve");
+        }
+    }
+
+    #[test]
+    fn legacy_stock_cfg_cleanup_recovers_using_original_manifest_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let profiles = dir.path().join("profiles");
+        let root = dir.path().join("tf2");
+        let id = create_profile_record_to(&profiles, &root, "Legacy", unlocked())
+            .unwrap()
+            .profiles[0]
+            .id
+            .clone();
+        let rel = "tf/cfg/server_casual.cfg";
+        let mut old = load_manifest_raw(&profiles, &id).unwrap();
+        old.files.push(ProfileFile {
+            path: rel.into(),
+            sha256: sha256_hex(b"Valve"),
+            storage: FileStorage::Exclusive,
+        });
+        write_json(&manifest_file(&profiles, &id), &old).unwrap();
+        write_atomic_within(
+            &profiles,
+            &exclusive_file_path(&profiles, &id, rel),
+            b"Valve",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("tf/cfg")).unwrap();
+        fs::write(root.join(rel), b"new Valve bytes").unwrap();
+        let mut new = old.clone();
+        new.files.clear();
+        let journal = ProfileMutationJournal {
+            transaction_id: "0123456789abcdef0123456789abcdef".into(),
+            profile_id: id.clone(),
+            old_manifest: old.clone(),
+            new_manifest: new.clone(),
+            file_changes: Vec::new(),
+            live_changes: Vec::new(),
+            live_renames: Vec::new(),
+            old_index: None,
+            new_index: None,
+            touched_paths: Vec::new(),
+            committed: false,
+        };
+        write_json(&mutation_journal_file(&profiles, &id), &journal).unwrap();
+        recover_profile_mutation_to(&profiles, &root, &id).unwrap();
+        assert_eq!(load_manifest_raw(&profiles, &id).unwrap(), old);
+        assert!(load_manifest(&profiles, &id).unwrap().files.is_empty());
+        write_json(&manifest_file(&profiles, &id), &new).unwrap();
+        write_json(
+            &mutation_journal_file(&profiles, &id),
+            &ProfileMutationJournal {
+                committed: true,
+                ..journal
+            },
+        )
+        .unwrap();
+        recover_profile_mutation_to(&profiles, &root, &id).unwrap();
+        assert_eq!(load_manifest_raw(&profiles, &id).unwrap(), new);
+        assert_eq!(fs::read(root.join(rel)).unwrap(), b"new Valve bytes");
+        assert_eq!(
+            fs::read(exclusive_file_path(&profiles, &id, rel)).unwrap(),
+            b"Valve"
+        );
     }
 
     #[test]

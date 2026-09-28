@@ -9,6 +9,7 @@ import {
 import {
   addonsFromFilePaths,
   canUseTransparentViewmodels,
+  comfigUpdateAvailable,
   defaultComfigState,
   inferComfigState,
   setModuleLevel,
@@ -16,6 +17,12 @@ import {
 } from "./comfig-ui";
 
 describe("comfig module overrides", () => {
+  it("offers only a newer stable release as an update", () => {
+    expect(comfigUpdateAvailable("9.99.9", "9.100.1")).toBe(true);
+    expect(comfigUpdateAvailable("9.100.1", "9.100.1")).toBe(false);
+    expect(comfigUpdateAvailable("9.101.0", "9.100.1")).toBe(false);
+    expect(comfigUpdateAvailable("custom", "9.100.1")).toBe(false);
+  });
   it("clears a module override when the level is empty", () => {
     expect(setModuleLevel({ texture_quality: "high" }, "texture_quality", "")).toEqual({});
     expect(setModuleLevel({}, "shadows", "off")).toEqual({ shadows: "off" });

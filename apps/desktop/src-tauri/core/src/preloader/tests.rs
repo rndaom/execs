@@ -1912,6 +1912,71 @@ fn gameinfo_toggle_roundtrips() {
 }
 
 #[test]
+fn wanted_bypass_survives_an_update_and_repairs_only_the_new_type_line() {
+    let (root, data) = fake_root();
+    set_gameinfo_bypass_choice_with_sampler(&root, &data, true, &[], &Vec::new).unwrap();
+    assert!(
+        preloader_status(&root, &data)
+            .unwrap()
+            .gameinfo_bypass_wanted
+    );
+    assert!(preload_is_wanted(&data, &root).unwrap());
+    let updated = b"\"GameInfo\"\r\n{\r\n\ttype multiplayer_only\r\n\tNewValveSetting 1\r\n}\r\n";
+    std::fs::write(root.join("tf/gameinfo.txt"), updated).unwrap();
+    let state = preloader_status(&root, &data).unwrap();
+    assert!(state.gameinfo_bypass_wanted);
+    assert!(!state.gameinfo_bypassed);
+    set_gameinfo_bypass_choice_with_sampler(&root, &data, true, &[], &Vec::new).unwrap();
+    let state = preloader_status(&root, &data).unwrap();
+    assert!(state.gameinfo_bypass_wanted && state.gameinfo_bypassed);
+    set_gameinfo_bypass_choice_with_sampler(&root, &data, false, &[], &Vec::new).unwrap();
+    assert_eq!(
+        std::fs::read(root.join("tf/gameinfo.txt")).unwrap(),
+        updated
+    );
+    assert!(
+        !preloader_status(&root, &data)
+            .unwrap()
+            .gameinfo_bypass_wanted
+    );
+}
+
+#[test]
+fn bypass_intent_is_install_bound_and_running_refusal_keeps_previous_choice() {
+    let (root, data) = fake_root();
+    set_gameinfo_bypass_choice_with_sampler(&root, &data, true, &[], &Vec::new).unwrap();
+    let before = load_state(&data).unwrap();
+    assert!(set_gameinfo_bypass_choice_with_sampler(
+        &root,
+        &data,
+        false,
+        &["tf.exe".into()],
+        &Vec::new
+    )
+    .is_err());
+    assert_eq!(load_state(&data).unwrap(), before);
+    assert!(
+        set_gameinfo_bypass_choice_with_sampler(
+            &root,
+            &data,
+            false,
+            &[],
+            &|| vec!["tf.exe".into()]
+        )
+        .is_err()
+    );
+    assert_eq!(load_state(&data).unwrap(), before);
+    let (other, _) = fake_root();
+    assert!(
+        !preloader_status(&other, &data)
+            .unwrap()
+            .gameinfo_bypass_wanted
+    );
+    revert_preloader_with_sampler(&root, &data, &[], &Vec::new).unwrap();
+    assert!(!load_state(&data).unwrap().gameinfo_bypass_wanted);
+}
+
+#[test]
 fn gameinfo_reads_and_writes_refuse_a_linked_tf_parent() {
     let dir = test_temp_dir();
     let root = dir.join("game");
@@ -2393,11 +2458,23 @@ fn a_prepared_plan_is_reused_only_for_the_state_it_was_derived_from() {
         &Vec::new,
     )
     .unwrap();
-    let expected = installed_bytes(&fresh_root, &fresh_data);
+    let mut expected = installed_bytes(&fresh_root, &fresh_data);
 
     let (root, data) = fake_root();
     let zip = fake_mods_zip(&root);
     let stock_misc = std::fs::read(root.join("tf/tf2_misc_000.vpk")).unwrap();
+    // Installation-bound preference metadata deliberately differs between
+    // these two otherwise equivalent fixture installs. Assert both identities
+    // rather than weakening the exact-byte recovery comparisons elsewhere.
+    let mut expected_state: PreloaderState =
+        serde_json::from_slice(expected.state.as_ref().unwrap()).unwrap();
+    assert_eq!(
+        expected_state.gameinfo_bypass_root,
+        Some(std::fs::canonicalize(&fresh_root).unwrap())
+    );
+    assert!(expected_state.gameinfo_bypass_wanted);
+    expected_state.gameinfo_bypass_root = Some(std::fs::canonicalize(&root).unwrap());
+    expected.state = Some(serde_json::to_vec_pretty(&expected_state).unwrap());
     let owner = plan_owner(&data);
     let plan = current_plan(&root, &data, &zip, &selected, &owner);
     let before = plan_derivations();

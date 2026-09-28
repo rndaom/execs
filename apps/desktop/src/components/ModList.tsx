@@ -1,11 +1,12 @@
 import { ArrowSquareOut, Package } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
-import type { ModRecord } from "../lib/bridge";
+import type { ModRecord, ModUpdateStatus, ProfileSummary } from "../lib/bridge";
 import { openExternal } from "../lib/bridge";
 import { formatModBytes, modDomId, modMetaLine, modSourceUrl } from "../lib/mods-ui";
 import { ModImport } from "./ModImport";
 import { Modal } from "./ui/Modal";
 import { PaneSection } from "./ui/PaneSection";
+import { Switch } from "./ui/Switch";
 
 /**
  * The packs the user brought in themselves, and the two ways to add another.
@@ -26,6 +27,13 @@ export function ModList({
   onImportFolder,
   onRemove,
   casualNotes,
+  onSetEnabled,
+  onCopy,
+  profiles = [],
+  updates = [],
+  checking = false,
+  managementError,
+  onCheckUpdates,
 }: {
   mods: ModRecord[];
   /** TF2 is running or a write is in flight. */
@@ -41,11 +49,24 @@ export function ModList({
   onImportFolder: () => void;
   onRemove: (id: string) => void;
   casualNotes?: Record<string, string>;
+  onSetEnabled?: (id: string, enabled: boolean) => void;
+  onCopy?: (id: string, targetProfileId: string) => Promise<boolean>;
+  profiles?: ProfileSummary[];
+  updates?: ModUpdateStatus[];
+  checking?: boolean;
+  managementError?: string | null;
+  onCheckUpdates?: () => void;
 }) {
   const [confirming, setConfirming] = useState<ModRecord | null>(null);
+  const [copying, setCopying] = useState<string | null>(null);
+  const [copyBusy, setCopyBusy] = useState(false);
   useEffect(() => {
-    if (!active) setConfirming(null);
+    if (!active) {
+      setConfirming(null);
+      setCopying(null);
+    }
   }, [active]);
+  const copyMod = mods.find((mod) => mod.id === copying);
   // A status refresh may protect or remove a pack while its dialog is open.
   const current = confirming ? mods.find((mod) => mod.id === confirming.id) : undefined;
   const removalBlocked = locked || !current || selectedParticleMods.includes(current.id);
@@ -72,6 +93,24 @@ export function ModList({
         ) : undefined
       }
     >
+      {onCheckUpdates ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="t-meta" role="status">
+            {managementError ??
+              (checking
+                ? "Checking GameBanana…"
+                : "Turn a pack off to keep it saved without loading it in TF2.")}
+          </p>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={checking}
+            onClick={onCheckUpdates}
+          >
+            Check for updates
+          </button>
+        </div>
+      ) : null}
       {locked ? (
         <p className="t-meta mt-3">
           {running ? "Close TF2 to add mods." : "Finish the current task first."}
@@ -99,6 +138,7 @@ export function ModList({
           {mods.map((mod) => {
             const url = modSourceUrl(mod.source);
             const selected = selectedParticleMods.includes(mod.id);
+            const update = updates.find((entry) => entry.id === mod.id);
             return (
               <li
                 key={mod.id}
@@ -114,15 +154,48 @@ export function ModList({
                 <span className="min-w-48 flex-1">
                   <span className="t-row block break-words">{mod.name}</span>
                   <span className="t-meta mt-0.5 block">{modMetaLine(mod)}</span>
-                  {casualNotes?.[mod.id] ? (
+                  {mod.inactivePack ? (
+                    <span className="t-meta mt-1 block">Off · saved in this profile</span>
+                  ) : null}
+                  {update?.updateAvailable ? (
+                    <span className="t-meta mt-1 block text-accent">
+                      Update available on GameBanana
+                    </span>
+                  ) : null}
+                  {update?.error ? (
+                    <span className="t-meta mt-1 block">
+                      Update check unavailable: {update.error}
+                    </span>
+                  ) : null}
+                  {!mod.inactivePack && casualNotes?.[mod.id] ? (
                     <span className="t-meta mt-1 block">{casualNotes[mod.id]}</span>
                   ) : null}
                   {selected ? (
                     <span id={`mods-protected-${modDomId(mod.id)}`} className="t-meta mt-1 block">
-                      Used by Casual setup. Change the particle selection before removing.
+                      Used by Casual setup. Change the particle selection before turning off or
+                      removing.
                     </span>
                   ) : null}
                 </span>
+                {onSetEnabled ? (
+                  <Switch
+                    label={`Enable ${mod.name}`}
+                    checked={!mod.inactivePack}
+                    disabled={locked || selected}
+                    onChange={(enabled) => onSetEnabled(mod.id, enabled)}
+                  />
+                ) : null}
+                {onCopy ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={locked}
+                    aria-label={`Add ${mod.name} to another profile`}
+                    onClick={() => setCopying(mod.id)}
+                  >
+                    Add to another profile…
+                  </button>
+                ) : null}
                 {selected && onManageParticles ? (
                   <button type="button" className="btn btn-ghost" onClick={onManageParticles}>
                     Change selection
@@ -156,6 +229,60 @@ export function ModList({
           })}
         </ul>
       )}
+
+      {copyMod && active && onCopy ? (
+        <Modal
+          open
+          title={`Add ${copyMod.name} to another profile`}
+          description="Copies the saved pack without downloading it again. Its on/off setting is kept. The current TF2 setup stays as it is."
+          onClose={() => {
+            if (!copyBusy) setCopying(null);
+          }}
+        >
+          <div className="mt-4 max-h-64 overflow-auto">
+            {profiles.length === 0 ? (
+              <p className="t-meta">
+                {checking ? "Loading profiles…" : "Create another profile first, then try again."}
+              </p>
+            ) : (
+              profiles.map((profile) => (
+                <div
+                  key={profile.id}
+                  className="flex items-center justify-between gap-3 border-b border-edge py-3"
+                >
+                  <span className="t-row min-w-0 break-words">{profile.name}</span>
+                  <button
+                    type="button"
+                    className="btn btn-primary shrink-0"
+                    disabled={locked || copyBusy}
+                    aria-label={`Add to ${profile.name}`}
+                    onClick={async () => {
+                      setCopyBusy(true);
+                      try {
+                        if (await onCopy(copyMod.id, profile.id)) setCopying(null);
+                      } finally {
+                        setCopyBusy(false);
+                      }
+                    }}
+                  >
+                    Add pack
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="mt-5 flex justify-end border-t border-edge pt-4">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={copyBusy}
+              onClick={() => setCopying(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      ) : null}
 
       {confirming && active ? (
         <Modal

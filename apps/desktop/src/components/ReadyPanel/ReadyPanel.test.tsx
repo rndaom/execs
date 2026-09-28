@@ -46,6 +46,7 @@ beforeEach(() => {
       packPrompt: null,
       packPromptDeferred: false,
       deferPackPrompt: vi.fn(),
+      refreshPackPrompt: vi.fn(),
       bindSyncRequest: null,
       refreshKey: "fixture",
       onBindSyncHandled: vi.fn(),

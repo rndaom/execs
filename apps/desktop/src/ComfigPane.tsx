@@ -1,5 +1,5 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { Disclosure } from "./components/ui/Disclosure";
 import { OptionTile } from "./components/ui/OptionTile";
@@ -25,6 +25,7 @@ import {
 import {
   type ComfigUiState,
   canUseTransparentViewmodels,
+  comfigUpdateAvailable,
   hasBaseVpk,
   hasComfigCustom,
   OFFICIAL_ADDON_DETAILS,
@@ -123,6 +124,7 @@ export function ComfigPane({
   onToggleAddon,
   onUpdatePackages,
   onImportCustom,
+  onCheckRelease,
 }: {
   detail: ProfileDetail | null;
   state: ComfigUiState;
@@ -131,6 +133,7 @@ export function ComfigPane({
   onToggleAddon: (id: OfficialAddon) => Promise<boolean>;
   onUpdatePackages: () => void;
   onImportCustom: () => void;
+  onCheckRelease?: (profileId: string) => Promise<string>;
 }) {
   const { running, busy } = useAppStatus();
   // These are explicit writes. Keep the selected controls and preview on the
@@ -141,7 +144,45 @@ export function ComfigPane({
   const [moduleSearch, setModuleSearch] = useState("");
   const [showAllModules, setShowAllModules] = useState(false);
 
-  const locked = !canWriteSettings(running, busy);
+  const supported = detail?.layer === "comfig" && state.supportedLoader !== false;
+  const locked = !supported || !canWriteSettings(running, busy);
+  const [releaseCheck, setReleaseCheck] = useState<{
+    key: string;
+    latest?: string;
+    error?: string;
+  } | null>(null);
+  const [checkAttempt, setCheckAttempt] = useState(0);
+  const checkRelease = useRef(onCheckRelease);
+  checkRelease.current = onCheckRelease;
+  const releaseKey = JSON.stringify([
+    detail?.id,
+    state.release,
+    detail?.files.filter((file) => /^tf\/custom\/mastercomfig-[^/]+\.vpk$/i.test(file.path)),
+    checkAttempt,
+  ]);
+  useEffect(() => {
+    if (!supported || !detail?.id || !checkRelease.current) return;
+    let cancelled = false;
+    const key = releaseKey;
+    setReleaseCheck({ key });
+    void checkRelease.current(detail.id).then(
+      (latest) => {
+        if (!cancelled) setReleaseCheck({ key, latest });
+      },
+      (error: unknown) => {
+        if (!cancelled)
+          setReleaseCheck({
+            key,
+            error: error instanceof Error ? error.message : "Could not check mastercomfig updates.",
+          });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [supported, detail?.id, releaseKey]);
+  const checkedRelease = releaseCheck?.key === releaseKey ? releaseCheck : null;
+  const installedVersion = state.release?.version;
   const paths = detail?.files.map((file) => file.path) ?? [];
   const packagesInstalled = hasBaseVpk(paths);
   const customImported = hasComfigCustom(paths);
@@ -195,6 +236,14 @@ export function ComfigPane({
         }
       />
 
+      {detail && !supported ? (
+        <p data-testid="comfig-vanilla-gate" className="pane-note mb-5">
+          This profile does not use mastercomfig. Installing it needs a review of your autoexec,
+          class cfgs and managed settings before moving them into tf/cfg/overrides/. Comfig changes
+          are unavailable here so your current setup keeps working.
+        </p>
+      ) : null}
+
       <section aria-labelledby="comfig-preset-heading">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <h2 id="comfig-preset-heading" className="t-section">
@@ -231,7 +280,7 @@ export function ComfigPane({
               value={item.id}
               title={item.label}
               description={item.description}
-              selected={state.preset === item.id}
+              selected={supported && state.preset === item.id}
               disabled={locked}
               onSelect={() => {
                 void onApplyPreset(item.id);
@@ -277,7 +326,9 @@ export function ComfigPane({
           <span className="flex min-w-0 flex-1 items-center justify-between gap-4">
             <span>Fine-tune modules</span>
             <span data-testid="comfig-modules-summary" className="t-meta tnum">
-              {comfigModulesSummary(state.preset, selectedPresetLabel, moduleOverrideCount)}
+              {supported
+                ? comfigModulesSummary(state.preset, selectedPresetLabel, moduleOverrideCount)
+                : "Requires mastercomfig"}
             </span>
           </span>
         }
@@ -374,22 +425,54 @@ export function ComfigPane({
           <div className="min-w-0">
             <h2 className="t-section">Packages and extras</h2>
             <p className="t-meta mt-1">
-              {packagesInstalled
-                ? "Changes save as you make them."
-                : "No mastercomfig packages installed yet."}
+              {installedVersion
+                ? `mastercomfig ${installedVersion}`
+                : packagesInstalled
+                  ? "mastercomfig version unknown"
+                  : "No mastercomfig packages installed."}
             </p>
+            {supported ? (
+              <p data-testid="comfig-release-status" className="t-meta mt-1" aria-live="polite">
+                {checkedRelease?.error
+                  ? checkedRelease.error
+                  : checkedRelease?.latest
+                    ? installedVersion === checkedRelease.latest
+                      ? "Packages are up to date."
+                      : installedVersion
+                        ? comfigUpdateAvailable(installedVersion, checkedRelease.latest)
+                          ? `Update available: ${checkedRelease.latest}.`
+                          : `Latest release: ${checkedRelease.latest}.`
+                        : `Latest release: ${checkedRelease.latest}. Update packages before adding addons.`
+                    : onCheckRelease
+                      ? "Checking for updates…"
+                      : "Updates have not been checked."}
+              </p>
+            ) : null}
+            {supported ? <p className="t-meta mt-1">Updates apply only to this profile.</p> : null}
           </div>
 
           <div className="pane-actions">
             <button
               type="button"
               data-testid="comfig-update"
-              disabled={running || busy}
+              disabled={locked}
               onClick={onUpdatePackages}
               className="btn btn-primary"
             >
-              {busy ? "Working…" : packagesInstalled ? "Update packages" : "Install packages"}
+              {busy ? "Working…" : "Update packages"}
             </button>
+            {supported && onCheckRelease ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={
+                  checkedRelease !== null && !checkedRelease.latest && !checkedRelease.error
+                }
+                onClick={() => setCheckAttempt((value) => value + 1)}
+              >
+                Check for updates
+              </button>
+            ) : null}
             <button
               type="button"
               data-testid="comfig-import"

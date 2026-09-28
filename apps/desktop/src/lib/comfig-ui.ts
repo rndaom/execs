@@ -1,4 +1,4 @@
-import type { ComfigPreset, OfficialAddon, ProfileDetail } from "./bridge";
+import type { ComfigPreset, ComfigRelease, OfficialAddon, ProfileDetail } from "./bridge";
 import { toggleAddon } from "./first-run-ui";
 
 const ADDON_FILE = /^mastercomfig-addon-(.+)\.vpk$/i;
@@ -10,6 +10,8 @@ export type ComfigUiState = {
   preset: ComfigPreset;
   modules: Record<string, string>;
   addons: OfficialAddon[];
+  supportedLoader?: boolean;
+  release?: ComfigRelease | null;
 };
 
 export const PREVIEW_COMFIG_STATE: ComfigUiState = {
@@ -42,6 +44,19 @@ export function defaultComfigState(): ComfigUiState {
     modules: {},
     addons: [],
   };
+}
+
+/** Only a strictly newer stable numeric release is an update; unusual tags stay explicit. */
+export function comfigUpdateAvailable(installed: string, latest: string): boolean {
+  const parse = (value: string) =>
+    /^v?\d+\.\d+\.\d+$/.test(value) ? value.replace(/^v/, "").split(".").map(BigInt) : null;
+  const current = parse(installed);
+  const candidate = parse(latest);
+  if (!current || !candidate) return false;
+  for (let index = 0; index < 3; index++) {
+    if (candidate[index] !== current[index]) return candidate[index] > current[index];
+  }
+  return false;
 }
 
 export function setModuleLevel(

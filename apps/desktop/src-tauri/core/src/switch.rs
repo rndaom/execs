@@ -22,11 +22,11 @@ use crate::launch::LaunchWriteReason;
 use crate::process_lock::refuse_if_running_among;
 use crate::profile::profile_live_process_names as live_process_names;
 use crate::profile::{
-    begin_switch_to, clear_launch_sync_pending_if_matches, exclusive_file_path,
-    is_profile_ownable_rel_path, is_shared_rel_path, load_library_from, load_manifest,
-    mark_launch_sync_pending, pending_live_handoff_to, pending_switch_to, portable_path_key,
-    profiles_dir, recover_profile_mutation_to, set_active_profile_to, FileStorage, ProfileError,
-    ProfileFile, ProfileLibrary, ProfileManifest, SwitchCleanupFile,
+    begin_switch_to, exclusive_file_path, is_profile_ownable_rel_path, is_shared_rel_path,
+    load_library_from, load_manifest, mark_launch_sync_pending, pending_live_handoff_to,
+    pending_switch_to, portable_path_key, profiles_dir, recover_profile_mutation_to,
+    set_active_profile_to, FileStorage, ProfileError, ProfileFile, ProfileLibrary, ProfileManifest,
+    SwitchCleanupFile,
 };
 use crate::surface::is_stock_custom_entry;
 use crate::vpk::list_vpk_member_paths_filtered;
@@ -223,22 +223,8 @@ where
             progress(SwitchProgress::new(SwitchStep::Write));
             preloader.apply(tf2_root, &running)?;
         }
-        let (steam_write, steam_write_error) = if target.launch_sync_pending {
-            let steam_roots = match options.steam_roots {
-                Some(roots) => roots.to_vec(),
-                None => crate::finder::discover_steam_roots(),
-            };
-            sync_switch_launch_options(
-                profiles_dir,
-                tf2_root,
-                profile_id,
-                &target.launch_options,
-                &steam_roots,
-                &running,
-            )
-        } else {
-            (Some(LaunchWriteReason::Written), None)
-        };
+        // Switching files never authorizes replacing Steam's independently edited options.
+        let (steam_write, steam_write_error) = (Some(LaunchWriteReason::NotRequested), None);
         let library = load_library_from(profiles_dir, Some(tf2_root))?;
         progress(SwitchProgress::new(SwitchStep::Done));
         return Ok(SwitchOutcome {
@@ -341,18 +327,8 @@ where
     refuse_if_running_among(live_process_names())?;
     set_active_profile_to(profiles_dir, tf2_root, profile_id, &running)
         .map_err(|err| mid_switch_error(&err))?;
-    let steam_roots = match options.steam_roots {
-        Some(roots) => roots.to_vec(),
-        None => crate::finder::discover_steam_roots(),
-    };
-    let (steam_write, steam_write_error) = sync_switch_launch_options(
-        profiles_dir,
-        tf2_root,
-        profile_id,
-        &target.launch_options,
-        &steam_roots,
-        &running,
-    );
+    let steam_write = Some(LaunchWriteReason::NotRequested);
+    let steam_write_error: Option<String> = None;
     let library = load_library_from(profiles_dir, Some(tf2_root))?;
     progress(SwitchProgress::with_detail(
         SwitchStep::Done,
@@ -412,61 +388,6 @@ fn refuse_kept_live_packs(
     }
 }
 
-fn sync_switch_launch_options(
-    profiles_dir: &Path,
-    tf2_root: &Path,
-    profile_id: &str,
-    launch_options: &str,
-    steam_roots: &[PathBuf],
-    running_names: &[String],
-) -> (Option<LaunchWriteReason>, Option<String>) {
-    match write_switch_launch_options(steam_roots, launch_options, running_names) {
-        Ok(result) => {
-            if result.reason == LaunchWriteReason::Written
-                && !matches!(
-                    clear_launch_sync_pending_if_matches(
-                        profiles_dir,
-                        tf2_root,
-                        profile_id,
-                        launch_options,
-                        running_names,
-                    ),
-                    Ok(true)
-                )
-            {
-                // Steam already has the correct value. Retain the durable
-                // pending marker and retry idempotently rather than making
-                // the completed profile switch look rolled back.
-                return (Some(LaunchWriteReason::WriteFailed), None);
-            }
-            (Some(result.reason), None)
-        }
-        Err(_) => (Some(LaunchWriteReason::WriteFailed), None),
-    }
-}
-
-#[cfg(not(test))]
-fn write_switch_launch_options(
-    steam_roots: &[PathBuf],
-    launch_options: &str,
-    _test_running: &[String],
-) -> Result<crate::launch::LaunchWriteResult, ProfileError> {
-    crate::launch::write_launch_options_to_localconfig(steam_roots, launch_options)
-}
-
-#[cfg(test)]
-fn write_switch_launch_options(
-    steam_roots: &[PathBuf],
-    launch_options: &str,
-    test_running: &[String],
-) -> Result<crate::launch::LaunchWriteResult, ProfileError> {
-    crate::launch::write_launch_options_to_localconfig_from(
-        steam_roots,
-        launch_options,
-        test_running,
-    )
-}
-
 fn launch_write_detail(reason: Option<LaunchWriteReason>, error: Option<&str>) -> String {
     if let Some(error) = error {
         return error.to_string();
@@ -480,6 +401,7 @@ fn launch_write_detail(reason: Option<LaunchWriteReason>, error: Option<&str>) -
         Some(LaunchWriteReason::NoAccount) => {
             "No Steam account config was found, so the launch options were not written.".into()
         }
+        Some(LaunchWriteReason::NotRequested) => "Launch options not written to Steam; review them in Launch before updating Steam.".into(),
         Some(LaunchWriteReason::WriteFailed) => {
             "Launch options are saved to the profile, but Steam sync is still pending.".into()
         }
@@ -1215,7 +1137,7 @@ mod tests {
 
         // No Steam account exists under this root, so the write is skipped —
         // reported, not swallowed.
-        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::NoAccount));
+        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::NotRequested));
         assert_eq!(outcome.steam_write_error, None);
         let done = steps.last().unwrap();
         assert_eq!(done.step, SwitchStep::Done);
@@ -1227,7 +1149,7 @@ mod tests {
     }
 
     #[test]
-    fn same_active_switch_retries_and_clears_pending_launch_sync() {
+    fn same_active_switch_preserves_external_steam_options_pending_review() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -1265,18 +1187,18 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::Written));
+        assert_eq!(outcome.steam_write, Some(LaunchWriteReason::NotRequested));
         assert_eq!(steps_of(&steps), vec![SwitchStep::Closed, SwitchStep::Done]);
         assert_eq!(
             crate::launch::read_launch_options_from(std::slice::from_ref(&steam)),
-            "-novid -console"
+            "-old"
         );
-        assert!(!load_manifest(&profiles, &a).unwrap().launch_sync_pending);
+        assert!(load_manifest(&profiles, &a).unwrap().launch_sync_pending);
         cleanup(&dir);
     }
 
     #[test]
-    fn full_switch_keeps_launch_sync_pending_until_same_active_retry() {
+    fn full_switch_and_retry_keep_launch_sync_pending_until_review() {
         let dir = crate::test_temp_dir();
         let profiles = dir.join("execs").join("profiles");
         let root = dir.join("Team Fortress 2");
@@ -1310,7 +1232,7 @@ mod tests {
             |_| {},
         )
         .unwrap();
-        assert_eq!(switched.steam_write, Some(LaunchWriteReason::NoAccount));
+        assert_eq!(switched.steam_write, Some(LaunchWriteReason::NotRequested));
         assert_eq!(
             switched.library.active_profile_id.as_deref(),
             Some(b.as_str())
@@ -1338,12 +1260,12 @@ mod tests {
             |_| {},
         )
         .unwrap();
-        assert_eq!(retried.steam_write, Some(LaunchWriteReason::Written));
+        assert_eq!(retried.steam_write, Some(LaunchWriteReason::NotRequested));
         assert_eq!(
             crate::launch::read_launch_options_from(std::slice::from_ref(&steam)),
-            "-console"
+            "-old"
         );
-        assert!(!load_manifest(&profiles, &b).unwrap().launch_sync_pending);
+        assert!(load_manifest(&profiles, &b).unwrap().launch_sync_pending);
         cleanup(&dir);
     }
 
