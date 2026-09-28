@@ -101,7 +101,7 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
                     return gtk::glib::Propagation::Proceed;
                 };
                 if first {
-                    let _ = press_output.eval(&format!(
+                    let _ = press_output.eval(format!(
                         "window.dispatchEvent(new MouseEvent('mousedown',{{button:{button},bubbles:true,cancelable:true}}))"
                     ));
                 }
@@ -116,7 +116,7 @@ pub fn install(app: &tauri::App) -> tauri::Result<()> {
                 // release. Still consume this one release, never a later click.
                 // Always deliver the matching release so the renderer can
                 // retire its gesture guard after it has disabled recording.
-                let _ = output.eval(&format!(
+                let _ = output.eval(format!(
                     "window.dispatchEvent(new MouseEvent('mouseup',{{button:{button},bubbles:true,cancelable:true}}))"
                 ));
                 gtk::glib::Propagation::Stop
