@@ -1404,6 +1404,21 @@ export function InventoryPane({
             <span className="sr-only">Updating backpack</span>
           </span>
         ) : null}
+        <button
+          type="button"
+          className="inventory-icon-button"
+          aria-label="Refresh backpack"
+          title={
+            running
+              ? "Close TF2 to refresh the backpack."
+              : "Refresh backpack. Steam briefly shows you playing TF2 while it reads."
+          }
+          data-testid="inventory-refresh"
+          disabled={loading || running || busy}
+          onClick={() => void refresh()}
+        >
+          <ArrowClockwise size={16} aria-hidden="true" />
+        </button>
         <div ref={about} className="relative">
           <button
             type="button"
@@ -1430,8 +1445,14 @@ export function InventoryPane({
                   ? "Updating…"
                   : updatedAt === null
                     ? "Not read yet."
-                    : `Updated ${new Date(updatedAt).toLocaleTimeString()}. Refreshes while execs is focused; Steam may briefly show TF2 while connecting.`}
+                    : `Updated ${new Date(updatedAt).toLocaleTimeString()}. Reads again after TF2 closes, or when you refresh.`}
               </p>
+              {capability?.organizer === "simulation" ? null : (
+                <p className="mt-2">
+                  Reading your backpack briefly runs TF2's Steam connection, so Steam may show you
+                  playing TF2 for a few seconds.
+                </p>
+              )}
               <button
                 type="button"
                 className="mt-2 underline hover:text-ink"

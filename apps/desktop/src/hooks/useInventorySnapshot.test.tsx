@@ -3,7 +3,10 @@ import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Api } from "../lib/api";
-import { INVENTORY_REFRESH_MS, useInventorySnapshot } from "./useInventorySnapshot";
+import { useInventorySnapshot } from "./useInventorySnapshot";
+
+/** Longer than any earlier automatic refresh period. */
+const LONG_WAIT_MS = 600_000;
 
 let root: ReturnType<typeof createRoot>;
 let box: HTMLDivElement;
@@ -52,15 +55,16 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-it("loads once even in Strict Mode and schedules successive quiet refreshes", async () => {
+it("loads once even in Strict Mode and never re-reads on a timer", async () => {
   await render();
   expect(getInventory).toHaveBeenCalledTimes(1);
-  await advance(INVENTORY_REFRESH_MS - 1);
+  await advance(LONG_WAIT_MS);
+  await act(async () => window.dispatchEvent(new Event("focus")));
   expect(getInventory).toHaveBeenCalledTimes(1);
-  await advance(1);
+  await act(async () => void result.refresh());
   expect(getInventory).toHaveBeenCalledTimes(2);
-  await advance(INVENTORY_REFRESH_MS);
-  expect(getInventory).toHaveBeenCalledTimes(3);
+  await advance(LONG_WAIT_MS);
+  expect(getInventory).toHaveBeenCalledTimes(2);
 });
 
 it("does not let an older in-flight read overwrite an operation snapshot", async () => {
@@ -89,7 +93,7 @@ it("does not let an older in-flight read overwrite an operation snapshot", async
 it("sleeps when hidden, unfocused, inactive, busy or running and catches up on return", async () => {
   props.active = false;
   await render();
-  await advance(INVENTORY_REFRESH_MS);
+  await advance(LONG_WAIT_MS);
   expect(getInventory).not.toHaveBeenCalled();
   props.active = true;
   props.busy = true;
@@ -112,11 +116,11 @@ it("sleeps when hidden, unfocused, inactive, busy or running and catches up on r
   expect(getInventory).toHaveBeenCalledTimes(1);
   focused = false;
   await act(async () => window.dispatchEvent(new Event("blur")));
-  await advance(INVENTORY_REFRESH_MS * 3);
-  expect(getInventory).toHaveBeenCalledTimes(1);
+  await advance(LONG_WAIT_MS);
   focused = true;
   await act(async () => window.dispatchEvent(new Event("focus")));
-  expect(getInventory).toHaveBeenCalledTimes(2);
+  // A completed read is not repeated just because execs is focused again.
+  expect(getInventory).toHaveBeenCalledTimes(1);
 });
 
 it("coalesces focus events and retries, then backs off failures while retaining the last snapshot", async () => {
@@ -128,7 +132,7 @@ it("coalesces focus events and retries, then backs off failures while retaining 
         reject = failure;
       }),
   );
-  await advance(INVENTORY_REFRESH_MS);
+  await advance(LONG_WAIT_MS);
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
     void result.refresh();
@@ -157,6 +161,6 @@ it("refreshes after the game closes with a reconnect cooldown and stops after un
   await advance(30_000);
   expect(result.snapshot?.steamId).toBe("two");
   await act(async () => root.unmount());
-  await advance(INVENTORY_REFRESH_MS * 3);
+  await advance(LONG_WAIT_MS);
   expect(getInventory).toHaveBeenCalledTimes(2);
 });

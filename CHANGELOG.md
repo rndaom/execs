@@ -27,6 +27,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Inventory no longer re-reads your backpack every two minutes, which kept making Steam show you
+  as playing TF2. It reads when you open it, after TF2 closes and when you press the new Refresh
+  button, and explains the brief Steam status.
 - Switching to a profile saved by an older version installs the current Casual preload hook, which
   keeps TF2's console and its engine errors instead of clearing them and running a menu-music
   script. Only an unchanged execs hook is replaced; edited hooks stay as you left them.
