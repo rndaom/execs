@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "exporterTag": "v0.2.0",
+  "exporterRevision": "486070f6e60bbcb5879acb5ae527d659d9d60ac1",
+  "provenance": "Actual unmodified public v0.2.0 core exporter, isolated synthetic profiles; see README.md and harness. Library identity/settings are authored by package-smoke-fixture.mjs.",
+  "release": {
+    "publishedAt": "2026-09-28T01:03:28Z",
+    "artifact": {
+      "name": "execs_0.2.0_x64-setup.exe",
+      "bytes": 7294618,
+      "sha256": "617a0a08a34c27d53617a5e74ebc7242de6e96266ac18de3b18a69e8b884d4c7"
+    },
+    "signature": {
+      "name": "execs_0.2.0_x64-setup.exe.sig",
+      "bytes": 416,
+      "sha256": "1eba4b7c7227b484e55093f51524a4ef048676e632bb141322bbc809cf72a573"
+    }
+  },
+  "sources": [
+    {
+      "case": "no-hud",
+      "archiveSha256": "306ae6236a8b79465c6aca6fea64dbdd56c06f447f789e28c8c6d62e8dcdcde1",
+      "manifest": {
+        "schema": 1,
+        "name": "Actual public v0.2.0 export",
+        "launchOptions": "-novid -nojoy",
+        "files": [
+          {
+            "path": "tf/cfg/config.cfg",
+            "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/cfg/overrides/compat.cfg",
+            "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/custom/compat-pack.vpk",
+            "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/custom/mastercomfig-base.vpk",
+            "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+            "storage": "shared"
+          }
+        ],
+        "mods": [
+          {
+            "id": "compat-pack",
+            "name": "Compatibility pack",
+            "source": {
+              "kind": "local"
+            },
+            "pack": "compat-pack.vpk",
+            "files": 1,
+            "bytes": 170,
+            "installedAt": "2026-09-20T00:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "case": "single-hud",
+      "archiveSha256": "c0488c9bd2d45f949741219f48e58f02ad6aeeb796fb5273195e9274df62a6af",
+      "manifest": {
+        "schema": 1,
+        "name": "Actual public v0.2.0 export",
+        "launchOptions": "-novid -nojoy",
+        "files": [
+          {
+            "path": "tf/cfg/config.cfg",
+            "sha256": "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/cfg/overrides/autoexec.cfg",
+            "sha256": "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/cfg/overrides/compat.cfg",
+            "sha256": "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/cfg/overrides/execs_hud_fixture.cfg",
+            "sha256": "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/custom/compat-pack.vpk",
+            "sha256": "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/custom/fixturehud/info.vdf",
+            "sha256": "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/custom/fixturehud/resource/ui/layout.res",
+            "sha256": "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388",
+            "storage": "exclusive"
+          },
+          {
+            "path": "tf/custom/mastercomfig-base.vpk",
+            "sha256": "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7",
+            "storage": "shared"
+          }
+        ],
+        "hud": {
+          "id": "fixturehud",
+          "source": "local",
+          "options": {
+            "compact": "1"
+          }
+        },
+        "mods": [
+          {
+            "id": "compat-pack",
+            "name": "Compatibility pack",
+            "source": {
+              "kind": "local"
+            },
+            "pack": "compat-pack.vpk",
+            "files": 1,
+            "bytes": 170,
+            "installedAt": "2026-09-20T00:00:00Z"
+          }
+        ]
+      }
+    }
+  ],
+  "payloads": {
+    "53c7675e94164580863502aa86b63fa40f97c3311e2b8865a1c8eeaa9352ee42": "dW5iaW5kYWxsCmJpbmQgdyArZm9yd2FyZApzZW5zaXRpdml0eSAyLjUKY29uX2VuYWJsZSAxCg==",
+    "f7eb300c9ac50115770d3fe42e21b0c00b5bd301ade525fef359fa3dbb4e916b": "Ly8gdW5jaGFuZ2VkIGhhbmR3cml0dGVuIHNldHRpbmdzCmZvdl9kZXNpcmVkIDkwCg==",
+    "351bc47c2d89705e0ef6b4bdef6c568722d8abd3230c97d3ef636698b461f145": "NBKqVQIAAAAvAAAALwAAAAAAAAAwAAAAAAAAAHZtdABtYXRlcmlhbHMvdmd1aQBjb21wYXQApjG7HgAA/38AAAAALwAAAP//AAAAIlVubGl0R2VuZXJpYyIgeyAiJGJhc2V0ZXh0dXJlIiAidmd1aS93aGl0ZSIgfQpJ7opJ2aL/kYQiu9VyddNp1B2M2Y8AsgTpgAmY7PhCfgN/hOIeIAclhCnCmRj3x3A=",
+    "ec5533edf34c665da9ff4be240472c1e0eb30532f15d55f304037a9173a74fb7": "NBKqVQIAAAAxAAAAGAAAAAAAAAAwAAAAAAAAAGNmZwBjZmcvbWFzdGVyY29tZmlnAGNvbXBhdABkURp8AAD/fwAAAAAYAAAA//8AAABlY2hvIGNvbXBhdGliaWxpdHlfYmFzZQrfgLzMm0Drrp3N0NRQwnB31B2M2Y8AsgTpgAmY7PhCfkOlfBLuH1Rge5rONtROKQU=",
+    "961a4ef6e4780df60386e092d63eb87adb65cffa753cdcabc398b29f77ef56e4": "Ly8gYXV0aG9yJ3Mgb3JpZ2luYWwgc3RhcnR1cCBieXRlcwpleGVjIG92ZXJyaWRlcy9leGVjc19odWRfZml4dHVyZQpjbF9hdXRvcmVsb2FkIDEK",
+    "2cb46d2ff86cf7b64cfdbffb7834a423539f2a65f2ef25eb849354329668f0a2": "Y2xfaHVkX21pbm1vZGUgMQo=",
+    "d7fb73f2d549c176ee27fc70d38bd136984f3268a7f82d255896ea1fd958d6b8": "Ly8gb3JpZ2luYWwgVUkzIG1ldGFkYXRhCiJGaXh0dXJlIEhVRCIgeyAidWlfdmVyc2lvbiIgIjMiIH0K",
+    "0f43d579ca286b3103b6cbdbd11182a8f726b8931feb18022f0a0a627cde2388": "ImZpeHR1cmUiIHsgInhwb3MiICIxNyIgfQo="
+  }
+}

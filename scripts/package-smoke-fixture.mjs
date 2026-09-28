@@ -108,14 +108,19 @@ export function assertNoSteamDirectories(candidates) {
   }
 }
 
-export function seedPackageFixture(scratch, windows, previousVersion) {
+export function seedPackageFixture(
+  scratch,
+  windows,
+  previousVersion,
+  sourceFixture = publicProfileFixture,
+) {
   assert.equal(
-    publicProfileFixture.exporterTag,
+    sourceFixture.exporterTag,
     `v${previousVersion}`,
     "Refresh the tagged-export fixture for the immediately previous public release",
   );
-  assert.equal(publicProfileFixture.schema, 1);
-  assert.equal(publicProfileFixture.sources.length, 2);
+  assert.equal(sourceFixture.schema, 1);
+  assert.equal(sourceFixture.sources.length, 2);
   assert.equal(realpathSync(scratch), resolve(scratch), "Fixture scratch must not be a link");
   const childEnv = {
     APPDATA: join(scratch, "roaming"),
@@ -135,7 +140,7 @@ export function seedPackageFixture(scratch, windows, previousVersion) {
   put(tf2Root, "tf/steam.inf", "ProductName=tf\nappID=440\n");
   put(tf2Root, "tf/cfg/config_default.cfg", "// synthetic package smoke install\nsensitivity 3\n");
   const summaries = [];
-  for (const [index, source] of publicProfileFixture.sources.entries()) {
+  for (const [index, source] of sourceFixture.sources.entries()) {
     const id = profileIds[index];
     const name = index === 0 ? "Package smoke - active" : "Package smoke - saved HUD";
     const manifest = { ...structuredClone(source.manifest), id, name, tf2Root };
@@ -144,7 +149,7 @@ export function seedPackageFixture(scratch, windows, previousVersion) {
     for (const file of manifest.files) {
       assert.match(file.sha256, /^[0-9a-f]{64}$/);
       assert.ok(["exclusive", "shared"].includes(file.storage));
-      const bytes = Buffer.from(publicProfileFixture.payloads[file.sha256], "base64");
+      const bytes = Buffer.from(sourceFixture.payloads[file.sha256], "base64");
       assert.equal(sha256(bytes), file.sha256, `Tagged payload changed: ${file.path}`);
       const path =
         file.storage === "shared"
@@ -174,9 +179,9 @@ export function seedPackageFixture(scratch, windows, previousVersion) {
     libraryHashes: regularTree(library),
     liveHashes: regularTree(tf2Root),
     provenance: {
-      exporterTag: publicProfileFixture.exporterTag,
-      exporterRevision: publicProfileFixture.exporterRevision,
-      archives: publicProfileFixture.sources.map(({ case: name, archiveSha256 }) => ({
+      exporterTag: sourceFixture.exporterTag,
+      exporterRevision: sourceFixture.exporterRevision,
+      archives: sourceFixture.sources.map(({ case: name, archiveSha256 }) => ({
         name,
         archiveSha256,
       })),
