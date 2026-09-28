@@ -1060,6 +1060,7 @@ name = "execs-core"
 version = "0.2.0"
 dependencies = [
  "crc32fast",
+ "libc",
  "same-file",
  "serde",
  "serde_json",
@@ -1070,6 +1071,7 @@ dependencies = [
  "tempfile",
  "unrar-ng-sys",
  "uuid",
+ "windows 0.57.0",
  "winreg 0.52.0",
  "zip 2.4.2",
 ]

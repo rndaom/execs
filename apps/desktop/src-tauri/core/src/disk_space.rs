@@ -1,5 +1,9 @@
 //! Free space checks before large writes, and one plain message for a full disk.
 //!
+//! Only the volume holding the path is asked (`GetDiskFreeSpaceExW` or
+//! `statvfs`), never every mount, so an unreachable network mount elsewhere
+//! cannot stall a switch.
+//!
 //! A switch, import or install that runs out of space partway leaves work to
 //! recover, and retrying on the same full drive fails the same way. Checking
 //! first refuses early with the drive, what is needed and what is free. The
@@ -35,18 +39,40 @@ pub fn available_bytes(path: &Path) -> Option<(String, u64)> {
         return Some((drive_label(path, Path::new("/")), bytes));
     }
     let target = existing_ancestor(path)?;
-    let disks = sysinfo::Disks::new_with_refreshed_list();
-    disks
-        .list()
-        .iter()
-        .filter(|disk| target.starts_with(disk.mount_point()))
-        .max_by_key(|disk| disk.mount_point().as_os_str().len())
-        .map(|disk| {
-            (
-                drive_label(&target, disk.mount_point()),
-                disk.available_space(),
-            )
-        })
+    let free = free_bytes(&target)?;
+    Some((drive_label(&target, &target), free))
+}
+
+#[cfg(windows)]
+fn free_bytes(path: &Path) -> Option<u64> {
+    let mut available = 0u64;
+    let wide = windows::core::HSTRING::from(path.as_os_str());
+    // SAFETY: a valid wide path and one out-pointer; the other totals are not requested.
+    unsafe {
+        windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(
+            &wide,
+            Some(&mut available),
+            None,
+            None,
+        )
+    }
+    .ok()?;
+    Some(available)
+}
+
+#[cfg(unix)]
+#[allow(clippy::unnecessary_cast)] // statvfs field widths differ between platforms.
+fn free_bytes(path: &Path) -> Option<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut stat = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    // SAFETY: a NUL-terminated path and a buffer statvfs fills on success.
+    if unsafe { libc::statvfs(c_path.as_ptr(), stat.as_mut_ptr()) } != 0 {
+        return None;
+    }
+    // SAFETY: statvfs returned 0, so the buffer is initialized.
+    let stat = unsafe { stat.assume_init() };
+    Some((stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64))
 }
 
 /// The nearest existing folder, canonicalized so it matches mount points.
@@ -70,14 +96,14 @@ fn strip_verbatim(path: PathBuf) -> PathBuf {
     }
 }
 
-/// `H:` on Windows, the mount point elsewhere.
-fn drive_label(path: &Path, mount: &Path) -> String {
+/// `H:` on Windows, otherwise the drive holding the folder.
+fn drive_label(path: &Path, folder: &Path) -> String {
     let text = path.to_string_lossy();
     let bytes = text.as_bytes();
     if bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic() {
         return text[..2].to_ascii_uppercase();
     }
-    mount.to_string_lossy().into_owned()
+    format!("the drive holding {}", folder.display())
 }
 
 /// Sizes the way players read them: "1.2 GB", "300 MB".
