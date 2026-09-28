@@ -729,6 +729,7 @@ export function lint(files: CfgFile[], opts: LintOptions = {}): LintResult {
           takeExec: (at) => takeWork("exec", at),
           incomplete: (rule, message, at) => report("warn", rule, message, at),
           allowMalformedBinds: trust === "self",
+          isEngineManagedFile: (file) => engineManagedConfigPaths.has(normalizePath(file)),
         });
   const { effective, binds, bindSources, executionComplete } = execution;
 

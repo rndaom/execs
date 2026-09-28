@@ -26,6 +26,25 @@ describe("startup execution is separate from safety scanning", () => {
     ).toContain("did you mean `viewmodel_fov`");
   });
 
+  it("accepts archived cvars TF2 wrote into config.cfg that the pinned dump lacks", () => {
+    const result = profile([
+      {
+        path: "tf/cfg/config.cfg",
+        text: 'bind "w" "+forward"\ntf_armory_page_skip "10"\nviewmodel_fov "70"',
+      },
+      autoexec("viewmodel_fov 90"),
+    ]);
+    expect(result.executionComplete).toBe(true);
+    expect(result.binds.get("w")).toBe("+forward");
+    expect(result.effective.get("viewmodel_fov")?.value).toBe("90");
+    // Only the engine's own settings snapshot gets this; other files stay strict.
+    expect(profile([autoexec('tf_armory_page_skip "10"')]).executionComplete).toBe(false);
+    // An uncatalogued command with no value is not a settings line.
+    expect(profile([{ path: "tf/cfg/config.cfg", text: "plugin_action" }]).executionComplete).toBe(
+      false,
+    );
+  });
+
   it("refuses unknown control flow and unknown assignments", () => {
     expect(profile([autoexec("viewmodel_fov 90\nplugin_action")]).executionComplete).toBe(false);
     expect(profile([autoexec("viewmodel_fov 90\nplugin_setting 1")]).executionComplete).toBe(false);

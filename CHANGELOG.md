@@ -27,6 +27,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Settings panes no longer stop with "Cannot derive startup settings" when TF2 writes a newer
+  setting (such as `tf_armory_page_skip`) into `config.cfg`.
 - Profiles leave Valve's shipped cfgs and game-owned Sixense bindings alone, including files
   captured by older versions. Unchanged large custom packs avoid repeated absorb hashing;
   writes and switches still verify full file contents, and scan-limit errors name the folder.
