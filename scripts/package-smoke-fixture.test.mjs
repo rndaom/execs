@@ -26,7 +26,7 @@ function withFixture(callback, windows = process.platform === "win32") {
   const parent = realpathSync(mkdtempSync(join(tmpdir(), "execs-package-fixture-test-")));
   try {
     const scratch = createSmokeScratch(parent);
-    const fixture = seedPackageFixture(scratch, windows, "0.2.0");
+    const fixture = seedPackageFixture(scratch, windows, "0.2.1");
     callback(fixture, scratch, parent);
   } finally {
     // Verify the exact disposable target before recursive removal on Windows.
@@ -96,14 +96,14 @@ function editJson(path, change) {
   writeFileSync(path, JSON.stringify(value));
 }
 
-test("package fixture retains tagged v0.2.0 cfg and valid Source VPK bytes with provenance", () => {
-  assert.equal(publicProfileFixture.exporterTag, "v0.2.0");
-  assert.equal(publicProfileFixture.exporterRevision, "486070f6e60bbcb5879acb5ae527d659d9d60ac1");
+test("package fixture retains tagged v0.2.1 cfg and valid Source VPK bytes with provenance", () => {
+  assert.equal(publicProfileFixture.exporterTag, "v0.2.1");
+  assert.equal(publicProfileFixture.exporterRevision, "ebb2d507635f314675a481a0c8b5d683fb4502cf");
   assert.deepEqual(
     publicProfileFixture.sources.map((source) => source.archiveSha256),
     [
-      "306ae6236a8b79465c6aca6fea64dbdd56c06f447f789e28c8c6d62e8dcdcde1",
-      "c0488c9bd2d45f949741219f48e58f02ad6aeeb796fb5273195e9274df62a6af",
+      "b35ab9654f6a9bd7c8b2f0b2c368454d42df2ccf8b572b4f505165ffe7e03370",
+      "e9063318d60b8d650ccb3ec0cecb37080847b6b1618906839309faefc421f522",
     ],
   );
   const bytes = (hash) => Buffer.from(publicProfileFixture.payloads[hash], "base64");

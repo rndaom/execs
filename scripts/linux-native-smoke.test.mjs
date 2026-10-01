@@ -55,7 +55,7 @@ test("native fixture is a fresh inactive six-profile library with owned payloads
     assert.notEqual(seedLinuxNativeFixture(parent).scratch, fixture.scratch);
     assert.equal(fixture.metadata["index.json"].activeProfileId, null);
     assert.equal(new Set(fixture.metadata["index.json"].profiles.map(({ id }) => id)).size, 6);
-    assert.equal(fixture.provenance.exporterTag, "v0.2.0");
+    assert.equal(fixture.provenance.exporterTag, "v0.2.1");
     assert.match(fixture.provenance.authored, /not an upgrade test/);
     assert.equal(fixture.settings.preferences.checkForUpdatesOnStartup, false);
     for (const path of Object.values(fixture.childEnv))
