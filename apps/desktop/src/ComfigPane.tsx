@@ -234,24 +234,15 @@ export function ComfigPane({
         <PaneHeader title="Comfig" />
         <div data-testid="comfig-vanilla-gate" className="comfig-empty">
           <h2 className="t-section">This profile doesn't use mastercomfig</h2>
-          <p className="t-body mt-1 max-w-[60ch] text-ink-muted">
-            mastercomfig is a popular set of performance and graphics settings for TF2. execs leaves
-            this profile's configs exactly as they are.
-          </p>
           {onTryComfig ? (
-            <>
-              <button
-                type="button"
-                data-testid="comfig-try-new-profile"
-                className="btn btn-primary mt-4"
-                onClick={onTryComfig}
-              >
-                Try mastercomfig in a new profile
-              </button>
-              <p className="t-meta mt-2">
-                Your current profile stays as it is. Switch back to it any time.
-              </p>
-            </>
+            <button
+              type="button"
+              data-testid="comfig-try-new-profile"
+              className="btn btn-primary mt-4"
+              onClick={onTryComfig}
+            >
+              Try mastercomfig in a new profile
+            </button>
           ) : null}
         </div>
       </section>

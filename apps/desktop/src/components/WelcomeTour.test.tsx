@@ -41,8 +41,7 @@ describe("welcome tour copy", () => {
   it("names the saved profile and never runs past either end", () => {
     const steps = welcomeSteps("Laptop current", "saved");
     expect(steps.map((step) => step.id)).toEqual(["saved", "sidebar", "profiles", "closed"]);
-    expect(steps[0].body).toContain("“Laptop current”");
-    expect(steps[0].body).toContain("Nothing in TF2 changed");
+    expect(steps[0].body).toBe("Saved as “Laptop current”. Nothing in TF2 changed.");
     expect(welcomeSteps(null, "created")[0].title).toBe("Your profile is ready");
     expect(welcomeStepAfter(0, -1, 4)).toBe(0);
     expect(welcomeStepAfter(3, 1, 4)).toBe(3);
@@ -55,11 +54,11 @@ describe("WelcomeTour", () => {
     expect(title()).toBe("Your setup is saved");
     expect(q("welcome-back")).toBeNull();
     await act(async () => q("welcome-next")?.click());
-    expect(title()).toBe("Change things from the sidebar");
+    expect(title()).toBe("Everything is in the sidebar");
     await act(async () => q("welcome-back")?.click());
     expect(title()).toBe("Your setup is saved");
     for (let step = 0; step < 3; step += 1) await act(async () => q("welcome-next")?.click());
-    expect(title()).toBe("Change things while TF2 is closed");
+    expect(title()).toBe("Changes wait while TF2 is running");
     expect(q("welcome-skip")).toBeNull();
     await act(async () => q("welcome-done")?.click());
     expect(props.onClose).toHaveBeenCalledOnce();
@@ -88,7 +87,7 @@ describe("WelcomeTour", () => {
     await act(async () =>
       body?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })),
     );
-    expect(title()).toBe("Change things from the sidebar");
+    expect(title()).toBe("Everything is in the sidebar");
     await act(async () =>
       body?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })),
     );
