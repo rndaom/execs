@@ -108,6 +108,9 @@ export type GameplaySettings = {
   tf_dingaling_lasthit_pitchmindmg: number;
   tf_dingaling_lasthit_pitchmaxdmg: number;
   tf_dingalingaling_last_effect: number;
+  /** TF2's Game volume and Music volume options, 0–1 at full precision. */
+  volume: number;
+  snd_musicvolume: number;
 };
 
 const CROSSHAIR_FILE_SET = new Set<string>(CROSSHAIR_FILES);
@@ -176,6 +179,8 @@ export function defaultGameplay(): GameplaySettings {
     tf_dingaling_lasthit_pitchmindmg: corpusNumber("tf_dingaling_lasthit_pitchmindmg", 100),
     tf_dingaling_lasthit_pitchmaxdmg: corpusNumber("tf_dingaling_lasthit_pitchmaxdmg", 100),
     tf_dingalingaling_last_effect: corpusNumber("tf_dingalingaling_last_effect", 0),
+    volume: corpusFloat("volume", 1),
+    snd_musicvolume: corpusFloat("snd_musicvolume", 1),
   };
 }
 
@@ -185,6 +190,11 @@ export function clampFloat(value: number, min: number, max: number): number {
     return min;
   }
   return Math.round(Math.min(max, Math.max(min, value)) * 100) / 100;
+}
+
+/** 0–1 without rounding: a volume TF2 saved as 0.015 stays 0.015. */
+function clampUnit(value: number, fallback: number): number {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
 }
 
 export function clampInt(value: number, min: number, max: number): number {
@@ -245,6 +255,8 @@ export function clampGameplay(settings: GameplaySettings): GameplaySettings {
       0,
       HITSOUND_EFFECT_MAX,
     ),
+    volume: clampUnit(settings.volume, 1),
+    snd_musicvolume: clampUnit(settings.snd_musicvolume, 1),
   };
 }
 
@@ -315,6 +327,8 @@ export function serializeGameplay(settings: GameplaySettings): string {
     `tf_dingaling_lasthit_pitchmindmg ${next.tf_dingaling_lasthit_pitchmindmg}`,
     `tf_dingaling_lasthit_pitchmaxdmg ${next.tf_dingaling_lasthit_pitchmaxdmg}`,
     `tf_dingalingaling_last_effect ${next.tf_dingalingaling_last_effect}`,
+    `volume ${formatCvarNumber(next.volume)}`,
+    `snd_musicvolume ${formatCvarNumber(next.snd_musicvolume)}`,
     "",
   ].join("\n");
 }
@@ -346,11 +360,18 @@ export const VIEWMODEL_SCOPE_CVARS: ReadonlySet<string> = new Set([
   "cl_flipviewmodels",
 ]);
 
+/**
+ * TF2's Game volume and Music volume. The Sounds pane writes them so a profile
+ * keeps its own levels even when config.cfg is replaced (the native scope agrees).
+ */
+export const GAME_VOLUME_CVARS = ["volume", "snd_musicvolume"] as const;
+
 /** Which pane writes a managed cvar, or null when none of them does. */
 export function managedCfgScopeOf(name: string): ManagedCfgScope | null {
   const cvar = name.toLowerCase();
   if (cvar.startsWith("cl_crosshair_")) return "crosshair";
   if (cvar.startsWith("tf_dingaling")) return "sounds";
+  if ((GAME_VOLUME_CVARS as readonly string[]).includes(cvar)) return "sounds";
   if (VIEWMODEL_SCOPE_CVARS.has(cvar)) return "viewmodels";
   if (GAMEPLAY_SCOPE_CVARS.has(cvar)) return "gameplay";
   return null;
@@ -473,7 +494,7 @@ function applyCvars(base: GameplaySettings, values: Record<string, string>): Gam
   const floats: Array<
     "tf_dingaling_volume" | "tf_dingaling_lasthit_volume" | "tf_dingalingaling_repeat_delay"
   > = ["tf_dingaling_volume", "tf_dingaling_lasthit_volume", "tf_dingalingaling_repeat_delay"];
-  for (const name of floats) {
+  for (const name of [...floats, ...GAME_VOLUME_CVARS]) {
     const raw = read(name);
     if (raw !== undefined) {
       const value = Number(String(raw).trim());
@@ -528,6 +549,7 @@ export const MENU_SYNC_CVARS = {
     "tf_dingaling_lasthit_pitchmaxdmg",
     "tf_dingalingaling_effect",
     "tf_dingalingaling_last_effect",
+    ...GAME_VOLUME_CVARS,
   ],
   crosshair: [
     "cl_crosshair_file",
@@ -551,7 +573,8 @@ function gameOptionValue(name: string, raw: string): string | null {
   else if (name === "hud_fastswitch") valid = Number.isInteger(value);
   else if (name === "fov_desired") valid = inRange(FOV_MIN, FOV_MAX, true);
   else if (name === "viewmodel_fov") valid = inRange(54, 70);
-  else if (name.endsWith("_volume")) valid = inRange(0, 1);
+  else if (name.endsWith("_volume") || name === "volume" || name === "snd_musicvolume")
+    valid = inRange(0, 1);
   else if (name.includes("_pitch")) valid = inRange(1, 255, true);
   else if (name.endsWith("_effect")) valid = inRange(0, HITSOUND_EFFECT_MAX, true);
   else if (name === "cl_crosshair_scale") valid = inRange(CROSSHAIR_SCALE_MIN, CROSSHAIR_SCALE_MAX);

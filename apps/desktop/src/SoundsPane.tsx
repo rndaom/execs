@@ -430,6 +430,37 @@ export function SoundsPane({
         }
       />
 
+      <section data-testid="sounds-volume" aria-labelledby="sounds-volume-title" className="mb-6">
+        <h2 id="sounds-volume-title" className="eyebrow mb-1">
+          Game audio
+        </h2>
+        <div className="pane-split gap-y-0">
+          <Slider
+            id="sounds-game-volume"
+            label="Game volume"
+            value={Math.round(draft.gameVolume * 100)}
+            min={0}
+            max={100}
+            disabled={locked}
+            format={(value) => `${value}%`}
+            onChange={(value) => setDraft((current) => ({ ...current, gameVolume: value / 100 }))}
+          />
+          <Slider
+            id="sounds-music-volume"
+            label="Music volume"
+            value={Math.round(draft.musicVolume * 100)}
+            min={0}
+            max={100}
+            disabled={locked}
+            format={(value) => `${value}%`}
+            onChange={(value) => setDraft((current) => ({ ...current, musicVolume: value / 100 }))}
+          />
+        </div>
+        <p className="t-meta mt-1">
+          Saved with this profile. Changes you make in TF2's options are kept after the game closes.
+        </p>
+      </section>
+
       <div className="pane-split gap-y-6">
         {(["hit", "kill"] as const).map((kind) => (
           <SoundSlot

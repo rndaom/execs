@@ -59,6 +59,10 @@ impl ManagedCfgScope {
                     | b"tf_dingaling_volume"
                     | b"tf_dingaling_lasthit_volume"
                     | b"tf_dingalingaling_repeat_delay"
+                    // TF2's Game volume and Music volume, kept per profile so
+                    // a replaced config.cfg cannot reset them.
+                    | b"volume"
+                    | b"snd_musicvolume"
             ),
         }
     }
@@ -388,6 +392,36 @@ tf_dingaling_volume 0.8
             )
             .unwrap();
             assert_eq!(scalar(&changed, "sensitivity").as_deref(), Some("3"));
+        }
+    }
+
+    #[test]
+    fn game_and_music_volume_belong_to_the_sounds_scope_only() {
+        let original = b"sensitivity 3\nvolume 0.4\nsnd_musicvolume 0.2\n";
+        let changed = merge_scope(
+            original,
+            b"sensitivity 9\nvolume 0.015\nsnd_musicvolume 0\n",
+            ManagedCfgScope::Sounds,
+        )
+        .unwrap();
+        assert_eq!(scalar(&changed, "volume").as_deref(), Some("0.015"));
+        assert_eq!(scalar(&changed, "snd_musicvolume").as_deref(), Some("0"));
+        assert_eq!(scalar(&changed, "sensitivity").as_deref(), Some("3"));
+
+        // Gameplay, Crosshair and Viewmodels saves never touch the volumes.
+        for scope in [
+            ManagedCfgScope::Gameplay,
+            ManagedCfgScope::Crosshair,
+            ManagedCfgScope::Viewmodels,
+        ] {
+            let changed = merge_scope(
+                original,
+                b"volume 1\nsnd_musicvolume 1\nsensitivity 2\nviewmodel_fov 70\ncl_crosshair_scale 40\n",
+                scope,
+            )
+            .unwrap();
+            assert_eq!(scalar(&changed, "volume").as_deref(), Some("0.4"));
+            assert_eq!(scalar(&changed, "snd_musicvolume").as_deref(), Some("0.2"));
         }
     }
 

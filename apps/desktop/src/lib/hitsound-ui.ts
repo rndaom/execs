@@ -64,6 +64,9 @@ export type SoundsDraft = {
   kill: SlotDraft;
   /** Seconds between hit sounds; 0 plays every damage instance. */
   repeatDelay: number;
+  /** TF2's Game volume and Music volume, 0–1 as the cvars store them. */
+  gameVolume: number;
+  musicVolume: number;
 };
 
 function stockEffect(index: number): number {
@@ -103,6 +106,8 @@ export function seedSoundsDraft(
     hit: slot("hit"),
     kill: slot("kill"),
     repeatDelay: cvars.tf_dingalingaling_repeat_delay,
+    gameVolume: cvars.volume,
+    musicVolume: cvars.snd_musicvolume,
   };
 }
 
@@ -122,6 +127,8 @@ export function soundsToCvars(draft: SoundsDraft, base: GameplaySettings): Gamep
     tf_dingaling_lasthit_pitchmindmg: draft.kill.pitchMin,
     tf_dingaling_lasthit_pitchmaxdmg: draft.kill.pitchMax,
     tf_dingalingaling_last_effect: effectOf(draft.kill),
+    volume: draft.gameVolume,
+    snd_musicvolume: draft.musicVolume,
   };
 }
 
@@ -285,5 +292,11 @@ export function serializeSoundsDraft(draft: SoundsDraft): string {
       value.pitchMin,
       value.pitchMax,
     ]);
-  return JSON.stringify([slot(draft.hit), slot(draft.kill), draft.repeatDelay]);
+  return JSON.stringify([
+    slot(draft.hit),
+    slot(draft.kill),
+    draft.repeatDelay,
+    draft.gameVolume,
+    draft.musicVolume,
+  ]);
 }
