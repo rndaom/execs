@@ -272,11 +272,6 @@ export function GameBananaBrowser({
             browser.setSection(next);
           }}
         />
-        {browser.section === "sound" ? (
-          <p className="t-meta">
-            Hit and kill sounds open in Sounds; other sounds install as custom packs.
-          </p>
-        ) : null}
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         {categories.length > 0 ? (
@@ -347,12 +342,6 @@ export function GameBananaBrowser({
             onChange={(next) => browser.setCategory(Number(next))}
           />
         </div>
-      ) : null}
-      {["downloads", "likes", "views"].includes(browser.sort) ? (
-        <p className="t-meta mt-2">
-          Ordered by GameBanana’s all-time{" "}
-          {browser.sort === "downloads" ? "downloads" : browser.sort}.
-        </p>
       ) : null}
 
       {browser.categories.status === "error" ? (
@@ -617,7 +606,7 @@ export function GameBananaBrowser({
       ) : null}
 
       <p className="t-meta mt-6 text-ink-faint">
-        Listings and files from{" "}
+        From{" "}
         <button
           type="button"
           className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
@@ -625,7 +614,7 @@ export function GameBananaBrowser({
         >
           GameBanana
         </button>
-        . Every mod belongs to its author.
+        . Mods belong to their authors.
       </p>
     </div>
   );

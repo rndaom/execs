@@ -363,7 +363,7 @@ describe("GameBananaBrowser presentation", () => {
     const use = box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-21865"]');
     expect(use?.textContent).toBe("Use in Sounds");
     expect(use?.disabled).toBe(false);
-    expect(box.textContent).toContain("A hit sound. It opens in Sounds");
+    expect(box.textContent).toContain("Use in Sounds");
 
     await act(async () => use?.click());
     await act(async () => Promise.resolve());

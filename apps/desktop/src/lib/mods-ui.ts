@@ -478,8 +478,7 @@ export const PREVIEW_PROFILE_MODS: ModRecord[] = [
 export const GAMEBANANA_MAPS_CATEGORY = 5371;
 
 /** How to play a map once it is in the profile; shown on map cards. */
-export const GAMEBANANA_MAP_NOTE =
-  "Maps play offline or on a server you host: open TF2's console and type map, then the map's name.";
+export const GAMEBANANA_MAP_NOTE = "Play it with map and the map's name in the console.";
 
 export const PREVIEW_GAMEBANANA_CATEGORIES: GameBananaCategory[] = [
   { id: 5371, name: "Maps" },
