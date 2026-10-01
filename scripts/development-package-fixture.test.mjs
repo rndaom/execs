@@ -51,7 +51,7 @@ function modelAbsorbCache(fixture, profileId) {
 function withFixture(callback) {
   const parent = realpathSync(mkdtempSync(join(tmpdir(), "execs-development-package-test-")));
   try {
-    callback(seedDevelopmentPackageFixture(parent, "0.2.0"), parent);
+    callback(seedDevelopmentPackageFixture(parent, "0.2.1"), parent);
   } finally {
     assert.equal(dirname(parent), realpathSync(tmpdir()));
     assert.ok(basename(parent).startsWith("execs-development-package-test-"));
@@ -172,7 +172,7 @@ test("development fixture retains tagged payloads and adds a fully private Linux
       fixture.expectedConfigText,
       "unbindall\nbind w +forward\nsensitivity 2.5\ncon_enable 1\n",
     );
-    assert.equal(fixture.provenance.exporterRevision, "486070f6e60bbcb5879acb5ae527d659d9d60ac1");
+    assert.equal(fixture.provenance.exporterRevision, "ebb2d507635f314675a481a0c8b5d683fb4502cf");
     assert.equal(fixture.settings.preferences.checkForUpdatesOnStartup, false);
     const checkpoint = assertDevelopmentPackagePreserved(fixture, "original");
     assert.equal(
@@ -193,8 +193,8 @@ test("development fixture retains tagged payloads and adds a fully private Linux
     assert.equal(env.DISPLAY, ":99");
     for (const key of ["GH_TOKEN", "LD_PRELOAD", "WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS"])
       assert.equal(Object.hasOwn(env, key), false);
-    assert.throws(() => seedDevelopmentPackageFixture("relative", "0.2.0"), /absolute/);
-    assert.throws(() => seedDevelopmentPackageFixture(parent, "0.1.9"), /previous public/);
+    assert.throws(() => seedDevelopmentPackageFixture("relative", "0.2.1"), /absolute/);
+    assert.throws(() => seedDevelopmentPackageFixture(parent, "0.2.0"), /previous public/);
   });
   assert.equal(process.env.HOME, home);
 });
@@ -218,15 +218,15 @@ test("export proof validates the exact portable metadata and all four bounded pa
   });
 });
 
-test("inspector reads the unchanged actual v0.2.0 exporter archive", () => {
+test("inspector reads the unchanged actual v0.2.1 exporter archive", () => {
   withFixture((fixture) => {
-    const archive = new URL("./fixtures/windows-package-v020/no-hud.zip", import.meta.url);
-    const expectedHash = "306ae6236a8b79465c6aca6fea64dbdd56c06f447f789e28c8c6d62e8dcdcde1";
+    const archive = new URL("./fixtures/windows-package-v021/no-hud.zip", import.meta.url);
+    const expectedHash = "b35ab9654f6a9bd7c8b2f0b2c368454d42df2ccf8b572b4f505165ffe7e03370";
     const source = developmentPublicFixture.sources.find((entry) => entry.case === "no-hud");
-    assert.equal(developmentPublicFixture.exporterTag, "v0.2.0");
+    assert.equal(developmentPublicFixture.exporterTag, "v0.2.1");
     assert.equal(
       developmentPublicFixture.exporterRevision,
-      "486070f6e60bbcb5879acb5ae527d659d9d60ac1",
+      "ebb2d507635f314675a481a0c8b5d683fb4502cf",
     );
     assert.equal(source.archiveSha256, expectedHash);
     const bytes = readFileSync(archive);
@@ -474,7 +474,7 @@ test("archive replacement, alternate Save destination and proof from another cas
       Buffer.concat([readFileSync(fixture.exportPath), Buffer.from("extra")]),
     );
     assert.throws(() => assertDevelopmentPackagePreserved(fixture, "changed-export", proof));
-    const other = seedDevelopmentPackageFixture(parent, "0.2.0");
+    const other = seedDevelopmentPackageFixture(parent, "0.2.1");
     assert.throws(
       () => assertDevelopmentPackagePreserved(other, "foreign-proof", proof),
       /another case/,
