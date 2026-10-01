@@ -1061,10 +1061,10 @@ mod tests {
         assert!(pack.join("sound/sound.cache").is_file());
     }
 
-    /// Never `AbsorbOptions::default()` in a test: `steam_roots: None`
-    /// discovers the developer's real Steam install, and the dual write and
-    /// launch-options write then land in their actual Steam Cloud
-    /// `config.cfg` and `localconfig.vdf`. An empty slice means no Steam.
+    /// Name the Steam roots explicitly. `AbsorbOptions::default()` means
+    /// "discover the real Steam install", which `discover_steam_roots`
+    /// refuses under test so a fixture can never reach the developer's Steam
+    /// Cloud `config.cfg` or `localconfig.vdf`. An empty slice means no Steam.
     fn no_steam() -> AbsorbOptions<'static> {
         static NO_STEAM: [PathBuf; 0] = [];
         AbsorbOptions {

@@ -58,7 +58,8 @@ const MAX_MOD_ID: usize = 48;
 /// Top-level folders that make a directory a TF2 content root. `cfg` and
 /// `resource` are here too: a pack that is really a HUD or a config still
 /// installs, it is just named after the archive rather than after its content.
-pub const MOD_CONTENT_ROOTS: [&str; 8] = [
+/// `media` holds TF2's startup videos, which intro-replacement mods ship.
+pub const MOD_CONTENT_ROOTS: [&str; 9] = [
     "materials",
     "models",
     "sound",
@@ -67,6 +68,7 @@ pub const MOD_CONTENT_ROOTS: [&str; 8] = [
     "resource",
     "cfg",
     "maps",
+    "media",
 ];
 
 /// Names this app owns for itself, plus mastercomfig's. A mod may never take

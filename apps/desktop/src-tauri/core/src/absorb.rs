@@ -1700,10 +1700,10 @@ mod tests {
         library.profiles[0].id.clone()
     }
 
-    /// Never `steam_roots: None` in a test: that discovers the developer's
-    /// real Steam install, and every dual write then lands in their actual
-    /// Steam Cloud `config.cfg` (and the launch-options path in their real
-    /// `localconfig.vdf`). An empty slice means "no Steam here".
+    /// Name the Steam roots explicitly. `steam_roots: None` means "discover
+    /// the real Steam install", which `discover_steam_roots` refuses under
+    /// test so a fixture can never reach the developer's Steam Cloud
+    /// `config.cfg` or `localconfig.vdf`. An empty slice means "no Steam here".
     fn opts<'a>(steam: Option<&'a [PathBuf]>) -> AbsorbOptions<'a> {
         static NO_STEAM: [PathBuf; 0] = [];
         AbsorbOptions {

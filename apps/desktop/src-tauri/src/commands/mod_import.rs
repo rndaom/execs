@@ -184,11 +184,12 @@ pub async fn prepare_gamebanana_mod(
         let profile = gamebanana::mod_profile(id)?;
         let pick = gamebanana::download_file(id, file_id)?;
         let bytes = gamebanana::download_pick(&pick)?;
-        let prepared = if gamebanana::is_bare_vpk(&pick.file_name, &bytes) {
+        let mut prepared = if gamebanana::is_bare_vpk(&pick.file_name, &bytes) {
             PreparedModImport::from_vpk(&format!("{}.vpk", profile.name), bytes)?
         } else {
             PreparedModImport::from_archive(&profile.name, &bytes)?
         };
+        prepared.name_single_choice(&profile.name);
         Ok(PendingImport {
             context: ActiveContext::capture(&root, &profile_id),
             revision: baseline,

@@ -67,3 +67,14 @@ Linux was not run locally: WSL is not installed. The same portable tests must
 pass in Linux CI before this change is considered verified on both supported
 platforms. No live TF2, profile or Steam files were changed by these tests.
 No release or version change is part of this work.
+
+## Later change: Quick Open (September 30, 2026)
+
+WinRAR adds a Quick Open record by default, so the refusal above blocked most
+RAR mods on GameBanana (38 of 86 sampled). The vendored `dll.cpp` now sets
+`QOpenMode=QOPEN_NONE`, so UnRAR never substitutes cached headers, and the
+preflight skips the Quick Open, archive comment and recovery record service
+headers (RAR5 `QO`/`CMT`/`RR`, RAR4 `CMT`/`RR`). Every other service record is
+still refused. `rar5-quickopen.rar` now extracts in the tests, and the
+whole-archive 200x ratio check was removed in favour of the existing byte and
+count ceilings. RAR7 compression is still refused.
