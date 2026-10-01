@@ -62,6 +62,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- On a PC where TF2 has not been played for a while, every settings pane stopped with "Could not
+  read settings: tf/cfg/config.cfg" right after Save current setup, and Files showed config.cfg
+  empty. TF2's settings were only in the Steam Cloud copy; execs now reads that copy until TF2
+  writes its own file. Nothing was lost.
 - RAR mods saved with WinRAR's default settings install instead of failing with "uses Quick Open
   header caching".
 - Mods with large single-colour textures, such as crosshair packs, install instead of failing with
