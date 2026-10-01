@@ -211,7 +211,10 @@ impl PreparedModImport {
         }
         packs.sort_by(|a, b| a.0.cmp(&b.0));
         if packs.is_empty() {
-            if names.iter().any(|path| path.ends_with(".vmf")) {
+            if names
+                .iter()
+                .any(|path| path.to_ascii_lowercase().ends_with(".vmf"))
+            {
                 return Err(ProfileError::Io(
                     "This archive has only Hammer source files (.vmf), not a playable map (.bsp)."
                         .into(),
@@ -306,9 +309,14 @@ impl PreparedModImport {
     }
 
     /// A download with one installable choice installs under the mod's own
-    /// title, not a wrapper folder such as `team fortress 2/tf`.
+    /// title, not a wrapper folder such as `team fortress 2/tf`. Greyed-out
+    /// choices beside it (a leftover split-VPK piece) do not count.
     pub fn name_single_choice(&mut self, title: &str) {
-        if let [only] = self.choices.as_mut_slice() {
+        let mut installable = self
+            .choices
+            .iter_mut()
+            .filter(|choice| choice.disabled_reason.is_none());
+        if let (Some(only), None) = (installable.next(), installable.next()) {
             only.name = title.to_string();
         }
     }
@@ -436,11 +444,13 @@ fn vpk_chunk(path: &str) -> bool {
         .is_some_and(|(_, tail)| tail.len() == 3 && tail.bytes().all(|c| c.is_ascii_digit()))
 }
 fn vpk_label(path: &str) -> String {
-    let file = path.rsplit('/').next().unwrap_or(path);
-    file.strip_suffix(".vpk")
-        .or_else(|| file.strip_suffix(".VPK"))
-        .unwrap_or(file)
-        .to_string()
+    let file = file_name(path);
+    match file.len().checked_sub(4) {
+        Some(stem) if file.is_char_boundary(stem) && file[stem..].eq_ignore_ascii_case(".vpk") => {
+            file[..stem].to_string()
+        }
+        _ => file.to_string(),
+    }
 }
 fn split_archive(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
@@ -745,14 +755,48 @@ mod tests {
     }
 
     #[test]
+    fn a_greyed_out_sibling_does_not_stop_the_title_rename() {
+        let mut prepared = PreparedModImport::from_entries(
+            "download",
+            vec![
+                (
+                    "Team Fortress 2/tf/maps/tr_aim.bsp".into(),
+                    b"VBSP".to_vec(),
+                ),
+                ("pack_000.vpk".into(), vec![1, 2, 3]),
+            ],
+        )
+        .unwrap();
+        assert_eq!(prepared.choices.len(), 2);
+        prepared.name_single_choice("tr_aim_training");
+        let installable: Vec<_> = prepared
+            .choices
+            .iter()
+            .filter(|choice| choice.disabled_reason.is_none())
+            .collect();
+        assert_eq!(installable.len(), 1);
+        assert_eq!(installable[0].name, "tr_aim_training");
+        assert!(prepared.choices.iter().any(|c| c.name == "pack_000"));
+    }
+
+    #[test]
+    fn vpk_labels_drop_the_extension_in_any_case() {
+        assert_eq!(vpk_label("dir/Clean Rockets.Vpk"), "Clean Rockets");
+        assert_eq!(vpk_label("a.VPK"), "a");
+        assert_eq!(vpk_label("odd"), "odd");
+    }
+
+    #[test]
     fn hammer_sources_alone_explain_that_there_is_no_playable_map() {
-        let err = PreparedModImport::from_entries("src", vec![("well.vmf".into(), b"x".to_vec())])
-            .unwrap_err();
-        assert!(
-            err.message().contains("Hammer source files"),
-            "{}",
-            err.message()
-        );
+        for name in ["well.vmf", "CP_WELL.VMF"] {
+            let err = PreparedModImport::from_entries("src", vec![(name.into(), b"x".to_vec())])
+                .unwrap_err();
+            assert!(
+                err.message().contains("Hammer source files"),
+                "{}",
+                err.message()
+            );
+        }
     }
 
     #[test]
