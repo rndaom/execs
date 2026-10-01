@@ -11,7 +11,7 @@ unrar-ng-sys = { path = "vendor/unrar-ng-sys" }
 
 [package]
 name = "execs"
-version = "0.2.1"
+version = "0.2.2"
 description = "TF2 desktop companion"
 authors = ["rndaom"]
 edition = "2021"

@@ -5,6 +5,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-01
+
 ### Added
 
 - Mods can browse GameBanana's Sounds section too: voice packs, announcers, music, weapon and taunt
