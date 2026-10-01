@@ -36,6 +36,18 @@ scope.
   asked for them before release after TF2 kept starting at full volume whenever
   `config.cfg` was replaced (Steam's Cloud log showed Valve's default config and the
   old test fixture written over it).
+- [#161](https://github.com/rndaom/execs/pull/161) reads the Steam Cloud copy of
+  `config.cfg` when TF2's own file is missing, so a PC that hasn't run TF2 in a
+  while no longer stops every settings pane with "Could not read settings" (found by
+  the owner on a laptop during testing).
+- [#162](https://github.com/rndaom/execs/pull/162) a short, skippable welcome tour
+  after first-run setup, and a Comfig page for profiles without mastercomfig that
+  offers Try mastercomfig in a new profile instead of greyed-out controls.
+- [#163](https://github.com/rndaom/execs/pull/163) longer PowerShell limits in the
+  Windows package contract tests, which timed out on busy CI runners (tests only).
+- [#164](https://github.com/rndaom/execs/pull/164) short labels throughout the app;
+  explanations moved into `docs/guide/`, opened from a new Guide button in the
+  sidebar for the installed version's tag.
 
 ## Pre-release audit
 
@@ -71,7 +83,7 @@ GitHub issue or Linear item targets this release.
 
 ## Checks before the tag
 
-- PR checks on #154, #155, #158, #160 and the release PR, and a private candidate run
+- PR checks on #154, #155, #158 and #160–#164 and the release PR, and a private candidate run
   (`workflow_dispatch` with `release_tag=v0.2.2`) that builds signed Windows and
   Linux installers into a private draft and upgrades public 0.2.1 on both
   platforms with the profile library preserved.
@@ -89,6 +101,9 @@ must be tried in the installed candidate before the tag:
 - Use a GameBanana hit or kill sound through Use in Sounds and hear it in game.
 - Install a RAR mod saved with WinRAR's default settings.
 - Linux in person (CI covers the Linux builds, the native smoke and packages).
+- The welcome tour and the Comfig page on a profile without mastercomfig.
+- The Guide button opens the guide at the `v0.2.2` tag, so in the private candidate
+  it shows GitHub's not-found page until the tag exists; check the pages on `main`.
 
 ## Candidate
 

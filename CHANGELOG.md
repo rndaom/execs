@@ -9,8 +9,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
-- A Guide button in the sidebar opens the [execs guide](docs/guide/README.md) page for the pane
-  you're on, for your version of execs.
+- A Guide button in the sidebar opens the
+  [execs guide](https://github.com/rndaom/execs/blob/v0.2.2/docs/guide/README.md) page for the
+  pane you're on, for your version of execs.
 - A short welcome tour after first-run setup explains profiles: your setup is saved, change
   things from the sidebar, try ideas in a new profile and switch back, and close TF2 before
   changing things. Skip it at any step; App settings can show it again.
