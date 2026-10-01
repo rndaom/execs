@@ -2138,6 +2138,30 @@ a:focus-visible,
     max-width: 34rem;
     border-color: color-mix(in srgb, var(--color-error) 60%, transparent);
   }
+
+  /* A real target, not a glyph: the whole strip used to be the button and
+     read as a tiny X. */
+  .save-alert-dismiss {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    margin: -6px -8px -6px 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    color: var(--color-ink-muted);
+    cursor: pointer;
+    transition:
+      background-color 150ms,
+      color 150ms;
+  }
+
+  .save-alert-dismiss:hover,
+  .save-alert-dismiss:focus-visible {
+    background: color-mix(in srgb, var(--color-error) 16%, transparent);
+    color: var(--color-ink);
+  }
 }
 
 @layer components {

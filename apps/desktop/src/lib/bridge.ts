@@ -1441,8 +1441,8 @@ export type GameBananaMod = {
   category: string;
   categoryId: number;
   subCategory: string | null;
-  /** GUI listings route to HUD or manual import, never generic Mods install. */
-  route: "mod" | "hud" | "manual";
+  /** A HUD submission routes to the HUD pane; everything else installs as a mod. */
+  route: "mod" | "hud";
   /** Listing metrics are absent on some index records. */
   likes: number | null;
   views: number | null;

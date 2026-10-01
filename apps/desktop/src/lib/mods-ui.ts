@@ -11,8 +11,12 @@ import type {
   PreloaderStatusPayload,
 } from "./bridge";
 
-/** Handled native review and obsolete profile results do not offer a card retry. */
-export type ModInstallResult = boolean | "review-required" | "superseded";
+/**
+ * Handled native review and obsolete profile results do not offer a card retry.
+ * A failure carries its reason so the card can keep saying why after the
+ * header notice fades.
+ */
+export type ModInstallResult = boolean | "review-required" | "superseded" | { failed: string };
 
 /** Credit shown on the pane; the mechanism and default library come from
  * cueki's casual-pre-loader, rebuilt natively for execs. */
@@ -448,7 +452,15 @@ export const PREVIEW_PROFILE_MODS: ModRecord[] = [
   },
 ];
 
+/** GameBanana's TF2 Maps root. Maps install into a pack's `maps` folder. */
+export const GAMEBANANA_MAPS_CATEGORY = 5371;
+
+/** How to play a map once it is in the profile; shown on map cards. */
+export const GAMEBANANA_MAP_NOTE =
+  "Maps play offline or on a server you host: open TF2's console and type map, then the map's name.";
+
 export const PREVIEW_GAMEBANANA_CATEGORIES: GameBananaCategory[] = [
+  { id: 5371, name: "Maps" },
   { id: 7951, name: "Skins" },
   { id: 1090, name: "Effects" },
   { id: 2774, name: "Game files" },
@@ -596,7 +608,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     category: "GUIs",
     categoryId: 1644,
     subCategory: "Menus",
-    route: "manual",
+    route: "mod",
     likes: 70,
     views: 3_000,
     downloads: 540,
@@ -605,6 +617,24 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     modifiedAt: null,
     thumb: null,
     url: "https://gamebanana.com/mods/700101",
+    mature: false,
+  },
+  {
+    id: 700_102,
+    name: "koth_harvest_night",
+    author: "mapper",
+    category: "Maps",
+    categoryId: GAMEBANANA_MAPS_CATEGORY,
+    subCategory: "King of the Hill",
+    route: "mod",
+    likes: 210,
+    views: 12_400,
+    downloads: 3_100,
+    addedAt: Math.floor(Date.UTC(2026, 7, 4) / 1000),
+    updatedAt: null,
+    modifiedAt: null,
+    thumb: null,
+    url: "https://gamebanana.com/mods/700102",
     mature: false,
   },
   ...Array.from({ length: 18 }, (_, index): GameBananaMod => {

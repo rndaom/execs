@@ -5,8 +5,26 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Added
+
+- Maps from GameBanana install in one click, ready to play offline or on a server you host
+  (console: `map` and the map's name). Bot navigation files and MvM missions that come with a map
+  are put where TF2 looks for them, and archives with several maps let you pick.
+- TF2's own crosshairs (including each weapon's default) can be used per weapon alongside custom
+  ones.
+- The crosshair designer adds rotation, smooth edges, square and triangle shapes, a gap that turns
+  a square into corner brackets, a square centre dot, and share codes you can copy and paste.
+- Import several PNG images and VTF crosshairs, each kept under its own name. Large PNGs are
+  fitted into the 64 × 64 sprite on request.
+- Quick colour swatches and a size reset in the Crosshair pane.
+
 ### Changed
 
+- GUI mods from GameBanana, such as menus, icons, fonts and loading screens, install in one click
+  like other mods. Only HUDs still go to the HUD pane.
+- Error notices fade on their own after you have had time to read them (hover over one to keep it)
+  and have a proper Dismiss button. A GameBanana mod that failed to install keeps the reason on its
+  card.
 - The Crosshair pane is rebuilt around one picture gallery: TF2's own crosshairs, execs shapes and
   your designs and imports sit together, with no In-game / Custom switch. TF2's own crosshairs
   apply as soon as you pick them; anything else, or a different crosshair for some weapons, shows
@@ -25,18 +43,23 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- RAR mods saved with WinRAR's default settings install instead of failing with "uses Quick Open
+  header caching".
+- Mods with large single-colour textures, such as crosshair packs, install instead of failing with
+  "decompresses more than 200x". Profiles that contain them export and import again.
+- ZIP files made with Windows' built-in compression for large files (Deflate64) and 7z files packed
+  at 7-Zip's highest settings install.
+- One leftover or unreadable VPK in a mod archive no longer fails the whole import: that option is
+  greyed out with the reason and the others still install. Intro-video mods (`media` folder) are
+  recognised.
+- A GameBanana mod whose files sit inside extra folders installs under the mod's own name instead of
+  a folder name such as "team fortress 2/tf".
+- Crosshair weapon overrides for "PDA" on every class save again. The Red-Tape Recorder entry
+  pointed at a weapon script TF2 does not have; it uses the Sapper's. The Flying Guillotine is now
+  listed for Scout.
+- 7z errors read as plain sentences instead of internal names such as `Other("...")`.
 - After Build crosshair pack succeeded, the Crosshair pane could keep saying the changes were not
   in TF2 yet, however many times it was built.
-
-### Added
-
-- TF2's own crosshairs (including each weapon's default) can be used per weapon alongside custom
-  ones.
-- The crosshair designer adds rotation, smooth edges, square and triangle shapes, a gap that turns
-  a square into corner brackets, a square centre dot, and share codes you can copy and paste.
-- Import several PNG images and VTF crosshairs, each kept under its own name. Large PNGs are
-  fitted into the 64 × 64 sprite on request.
-- Quick colour swatches and a size reset in the Crosshair pane.
 
 ## [0.2.1] - 2026-09-28
 

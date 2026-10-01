@@ -44,7 +44,6 @@ export function GameBananaBrowser({
   previewData = false,
   onInstall,
   onOpenHud,
-  onManualImport,
   onManageInstalled,
 }: {
   api: Api;
@@ -58,7 +57,6 @@ export function GameBananaBrowser({
   /** Resolves after both the install and profile reload complete. */
   onInstall: (id: number, fileId: number) => Promise<ModInstallResult>;
   onOpenHud?: () => void;
-  onManualImport?: () => void;
   onManageInstalled?: () => void;
 }) {
   const browser = useGameBananaBrowser({ api, active });
@@ -67,6 +65,7 @@ export function GameBananaBrowser({
   const [install, setInstall] = useState<{
     id: number;
     state: GameBananaInstallState;
+    reason?: string;
   } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [chooser, setChooser] = useState<{
@@ -110,7 +109,10 @@ export function GameBananaBrowser({
     } catch {
       result = false;
     }
-    if (result === "review-required" || result === "superseded") {
+    if (typeof result === "object") {
+      setInstall({ id, state: "failed", reason: result.failed });
+      setAnnouncement(`${name} could not be installed: ${result.failed}`);
+    } else if (result === "review-required" || result === "superseded") {
       setInstall(null);
       setAnnouncement(result === "review-required" ? `Review HUDs before installing ${name}.` : "");
     } else if (result) {
@@ -399,13 +401,11 @@ export function GameBananaBrowser({
                 locked={locked || install?.state === "installing"}
                 running={running}
                 installState={install?.id === mod.id ? install.state : "idle"}
+                failureReason={install?.id === mod.id ? install.reason : undefined}
                 onView={() => void openExternal(mod.url)}
                 onInstall={() => void prepareInstall(mod)}
                 onManage={onManageInstalled}
-                onRoute={() => {
-                  if (mod.route === "hud") onOpenHud?.();
-                  else onManualImport?.();
-                }}
+                onOpenHud={() => onOpenHud?.()}
               />
             ))}
           </div>

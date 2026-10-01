@@ -75,11 +75,12 @@ pub enum ProfileExportPackKind {
 /// unchecked OOM-kills the app before a single byte is validated.
 const MAX_TOTAL_UNCOMPRESSED: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_ENTRY_UNCOMPRESSED: u64 = 1024 * 1024 * 1024;
-/// Real game content does not deflate anywhere near this well.
-const MAX_COMPRESSION_RATIO: u64 = 200;
-// Small neutral textures can legitimately compress beyond 200x. Match the
-// bounded floor used by HUD/mod archives; byte ceilings still apply, and the
-// aggregate check below prevents many small entries from bypassing the ratio.
+/// Above deflate's own ceiling (about 1032x), so no deflated entry, including a
+/// flat single-colour texture a mod ships, can trip it; it still stops a bomb
+/// built with another compression method. Byte ceilings apply regardless.
+const MAX_COMPRESSION_RATIO: u64 = 1100;
+// Below this size an entry is never refused on ratio alone; byte ceilings still
+// apply, and the aggregate check below keeps many entries from adding up.
 const COMPRESSION_RATIO_FLOOR: u64 = 8 * 1024 * 1024;
 /// The manifest is the one entry we keep in memory.
 const MAX_MANIFEST_BYTES: u64 = 32 * 1024 * 1024;
@@ -3487,38 +3488,29 @@ mod tests {
         cleanup(&dir);
     }
 
-    /// The importer must not `read_to_end` every entry into RAM before a single
-    /// byte is validated: a deflate bomb OOM-kills the app.
+    /// A flat texture deflates about 1000x (a mod's `rainbow.vtf` was refused at
+    /// the old 200x limit). Deflate cannot reach the ratio guard, so a profile
+    /// carrying one exports and imports again; see the round-trip test below.
     #[test]
-    fn import_refuses_an_absurd_compression_ratio() {
-        let dir = crate::test_temp_dir();
-        let profiles = dir.join("execs").join("profiles");
-        let root = dir.join("Team Fortress 2");
-        init_library_to(&profiles, &root, unlocked()).unwrap();
-        let zip_path = dir.join("bomb.zip");
-        // Anything above the bounded floor still trips the ratio guard before
-        // the stream can consume an attacker-controlled amount of disk.
-        let zeros = vec![0u8; COMPRESSION_RATIO_FLOOR as usize + 1];
-        write_raw_zip(
-            &zip_path,
-            &[
-                ("execs-profile.json", RAW_MANIFEST),
-                ("files/tf/cfg/bomb.cfg", &zeros),
-            ],
-        );
-
-        let err = import_profile_from(&profiles, &root, &zip_path, unlocked()).unwrap_err();
-        assert!(
-            matches!(err, ProfileError::Io(ref msg) if msg.contains("decompresses more than")),
-            "{err:?}"
-        );
-        // The staging tree is removed however the import returns.
-        assert!(!profiles.join(IMPORT_STAGING_DIR).exists());
-        assert!(load_library_from(&profiles, Some(&root))
-            .unwrap()
-            .profiles
-            .is_empty());
-        cleanup(&dir);
+    fn deflates_best_ratio_never_trips_the_guard() {
+        let zeros = vec![0u8; 4 * COMPRESSION_RATIO_FLOOR as usize];
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("flat.vtf", file_options()).unwrap();
+        zip.write_all(&zeros).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+        let mut archive = ZipArchive::new(Cursor::new(bytes.as_slice())).unwrap();
+        let entry = archive.by_index(0).unwrap();
+        assert!(entry.size() > entry.compressed_size() * 900);
+        check_entry_budget(entry.size(), entry.compressed_size(), "flat.vtf", 0).unwrap();
+        check_actual_entry_budget(
+            entry.size(),
+            entry.size(),
+            entry.compressed_size(),
+            "flat.vtf",
+            0,
+        )
+        .unwrap();
+        check_total_compression_ratio(entry.size(), bytes.len() as u64).unwrap();
     }
 
     #[test]
@@ -3536,6 +3528,10 @@ mod tests {
         // Small repetitive assets are allowed, but the exemption is bounded.
         assert!(check_entry_budget(COMPRESSION_RATIO_FLOOR, 1, "x", 0).is_ok());
         assert!(check_entry_budget(COMPRESSION_RATIO_FLOOR + 1, 1, "x", 0).is_err());
+        // Deflate's best case (about 1032x) is always allowed.
+        let deflated = COMPRESSION_RATIO_FLOOR * 4;
+        assert!(check_entry_budget(deflated, deflated / 1032, "x", 0).is_ok());
+        assert!(check_entry_budget(deflated, deflated / 2000, "x", 0).is_err());
         assert!(check_entry_budget(1, 0, "x", 0).is_err());
         assert!(check_total_compression_ratio(COMPRESSION_RATIO_FLOOR, 1).is_ok());
         assert!(check_total_compression_ratio(COMPRESSION_RATIO_FLOOR + 1, 1).is_err());
@@ -3690,7 +3686,8 @@ mod tests {
         let rel = "tf/custom/repetitive/materials/vgui/refract.vtf";
         let source = root.join(rel);
         fs::create_dir_all(source.parent().unwrap()).unwrap();
-        let mut texture = vec![0u8; 262_352];
+        // Larger than the ratio floor, like a flat 16 MiB crosshair texture.
+        let mut texture = vec![0u8; 16 * 1024 * 1024];
         texture[..4].copy_from_slice(b"VTF\0");
         fs::write(&source, &texture).unwrap();
 
@@ -3711,8 +3708,8 @@ mod tests {
 
         let mut archive = ZipArchive::new(fs::File::open(&zip_path).unwrap()).unwrap();
         let entry = archive.by_name(&format!("files/{rel}")).unwrap();
-        assert!(entry.size() > entry.compressed_size() * MAX_COMPRESSION_RATIO);
-        assert!(entry.size() <= COMPRESSION_RATIO_FLOOR);
+        assert!(entry.size() > entry.compressed_size() * 900);
+        assert!(entry.size() > COMPRESSION_RATIO_FLOOR);
         drop(entry);
         drop(archive);
 

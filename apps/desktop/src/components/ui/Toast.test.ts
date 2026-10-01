@@ -2,7 +2,7 @@
 import { act, createElement as h } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { TOAST_SAVED_MS, TOAST_SAVING_DELAY_MS } from "../../lib/toast-ui";
+import { TOAST_SAVED_MS, TOAST_SAVING_DELAY_MS, toastLingerMs } from "../../lib/toast-ui";
 import { type ToastApi, ToastProvider, useToast } from "./Toast";
 
 let root: Root;
@@ -53,15 +53,30 @@ describe("ToastProvider completion lifetime", () => {
     expect(visible()).toBeNull();
   });
 
-  it("never lets an older success timer dismiss a newer persistent failure", async () => {
+  it("never lets an older success timer dismiss a newer failure", async () => {
     await act(async () => toast.finishSave());
     await advance(1500);
     await act(async () =>
       toast.failSave(new Error("file missing"), "Could not save HUD options", "hud"),
     );
-    await advance(20_000);
+    await advance(TOAST_SAVED_MS);
     expect(visible()?.textContent).toBe("Could not save HUD options — file missing");
     await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    expect(visible()).toBeNull();
+  });
+
+  it("fades a failure after its reading time, holding it while the pointer rests on it", async () => {
+    await act(async () => toast.failSave("disk full", "Could not save Sounds", "sounds"));
+    const linger = toastLingerMs({ kind: "error", message: "Could not save Sounds — disk full" });
+    if (linger === null) throw new Error("failures fade");
+    const strip = visible()?.parentElement;
+    await act(async () => strip?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+    await advance(linger + 1000);
+    expect(visible()?.textContent).toBe("Could not save Sounds — disk full");
+    await act(async () => strip?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true })));
+    await advance(linger - 1);
+    expect(visible()).not.toBeNull();
+    await advance(1);
     expect(visible()).toBeNull();
   });
 
@@ -74,7 +89,7 @@ describe("ToastProvider completion lifetime", () => {
     expect(visible()?.textContent).toContain("Could not save Sounds");
     await act(async () => toast.finishSave("Sounds saved", "A:sounds:save"));
     expect(visible()?.textContent).toContain("Could not save HUD options");
-    await act(async () => visible()?.click());
+    await act(async () => box.querySelector<HTMLElement>('[data-testid="toast-dismiss"]')?.click());
     expect(visible()).toBeNull();
   });
 

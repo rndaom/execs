@@ -15,7 +15,7 @@ same-file = "1"
 sha2 = "0.10"
 sysinfo = "0.33"
 uuid = { version = "1", features = ["v4"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "2", default-features = false, features = ["deflate", "deflate64"] }
 # Dropbox-hosted HUDs in hud-db are 7z archives without exception. This is the
 # maintained fork; recent releases bound attacker-controlled header counts and
 # fixed malformed-archive panics in the abandoned original.

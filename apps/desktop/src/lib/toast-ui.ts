@@ -7,7 +7,8 @@
  * message appears and what it may replace have to live in one place too.
  *
  * Precedence, in order:
- *  - failures stand until their own operation succeeds or is dismissed;
+ *  - a failure stands until its own operation succeeds, it is dismissed, or it
+ *    has been on screen long enough to read (its draft stays tracked either way);
  *  - other completions cannot hide an outstanding failure;
  *  - "Saving…" and "Draft kept until TF2 closes" are only shown when nothing
  *    more important is on screen, and the draft notice is said once per locked
@@ -21,6 +22,13 @@ export const TOAST_SAVING_DELAY_MS = 400;
 export const TOAST_SAVED_MS = 1600;
 /** A locked draft remains pending after this brief notice disappears. */
 export const TOAST_DEFERRED_MS = 2400;
+/**
+ * A failure stays long enough to read, then fades. Longer reasons get longer,
+ * up to the ceiling. Hovering or focusing it holds it (see the provider).
+ */
+export const TOAST_ERROR_MIN_MS = 8000;
+export const TOAST_ERROR_MAX_MS = 20_000;
+const TOAST_ERROR_MS_PER_CHAR = 50;
 
 export type ToastKind = "saving" | "saved" | "error" | "deferred";
 
@@ -145,10 +153,20 @@ export function toastStep(state: ToastState, event: ToastEvent): ToastState {
   }
 }
 
-/** Success and deferred-draft notices fade; failures wait for an action. */
+/**
+ * Every notice fades except "Saving…", which ends with its work. A failure
+ * fading does not resolve anything: its pane keeps the unsaved draft and the
+ * sidebar dot, and the next attempt reports again.
+ */
 export function toastLingerMs(toast: Toast | null): number | null {
   if (toast?.kind === "saved") return TOAST_SAVED_MS;
   if (toast?.kind === "deferred") return TOAST_DEFERRED_MS;
+  if (toast?.kind === "error") {
+    return Math.min(
+      TOAST_ERROR_MAX_MS,
+      TOAST_ERROR_MIN_MS + toast.message.length * TOAST_ERROR_MS_PER_CHAR,
+    );
+  }
   return null;
 }
 

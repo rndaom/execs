@@ -13,8 +13,9 @@ const LIMITS: ArchiveLimits = ArchiveLimits::new(20_000, MAX_MOD_BYTES, MAX_MOD_
 const MAX_CHOICES: usize = 256;
 const MAX_READMES: usize = 8;
 const MAX_README_BYTES: usize = 16 * 1024;
-const SPLIT_VPK: &str =
-    "Split VPK sets cannot be installed as one pack. Extract the complete set first.";
+const SPLIT_VPK: &str = "This VPK is split into several files, which execs can't install yet.";
+const SPLIT_VPK_PIECE: &str = "This is one piece of a split VPK, which execs can't install yet.";
+const VPK_SIGNATURE: [u8; 4] = [0x34, 0x12, 0xaa, 0x55];
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -116,6 +117,8 @@ impl PreparedModImport {
         }
         let mut trees: BTreeMap<String, Vec<(String, Vec<u8>)>> =
             roots.values().map(|r| (r.clone(), Vec::new())).collect();
+        let map_files = loose_map_files(&entries, &roots);
+        let mut map_trees: BTreeMap<String, Vec<(String, Vec<u8>)>> = BTreeMap::new();
         let mut packs = Vec::new();
         let mut disabled_metadata = BTreeMap::new();
         let mut readmes = Vec::new();
@@ -128,27 +131,33 @@ impl PreparedModImport {
                     truncated: bytes.len() > shown.len(),
                 });
             }
-            if is_vpk(&path) {
+            if let Some((group, rel)) = map_files.get(&path) {
+                match group {
+                    MapGroup::Root(root) => trees.get_mut(root).expect("known root"),
+                    MapGroup::Map(bsp) => map_trees.entry(bsp.clone()).or_default(),
+                }
+                .push((rel.clone(), bytes));
+            } else if is_vpk(&path) && vpk_chunk(&path) && !bytes.starts_with(&VPK_SIGNATURE) {
+                // A numbered data file of a split set: a choice to show, never
+                // a reason to refuse the rest of the archive.
+                disabled_metadata.insert(path.clone(), (1, bytes.len() as u64));
+                packs.push((
+                    path.clone(),
+                    vpk_label(&path),
+                    None,
+                    Some(SPLIT_VPK_PIECE.into()),
+                ));
+            } else if is_vpk(&path) {
                 let disabled = split_vpk(&path, &names).then(|| SPLIT_VPK.to_string());
                 if disabled.is_some() {
                     disabled_metadata.insert(path.clone(), (1, bytes.len() as u64));
                 }
-                let content = if disabled.is_none() || bytes.starts_with(&[0x34, 0x12, 0xaa, 0x55])
-                {
+                let content = if disabled.is_none() || bytes.starts_with(&VPK_SIGNATURE) {
                     Some(ModContent::Vpk(bytes))
                 } else {
                     None
                 };
-                packs.push((
-                    path.clone(),
-                    path.rsplit('/')
-                        .next()
-                        .unwrap_or(&path)
-                        .trim_end_matches(".vpk")
-                        .to_string(),
-                    content,
-                    disabled,
-                ));
+                packs.push((path.clone(), vpk_label(&path), content, disabled));
             } else if split_archive(&path) {
                 disabled_metadata.insert(path.clone(), (1, bytes.len() as u64));
                 packs.push((path.clone(), path.clone(), None, Some("Split archive volumes cannot be installed. Extract the complete archive first.".into())));
@@ -167,7 +176,7 @@ impl PreparedModImport {
         }
         for (root, files) in trees {
             let label = if root.is_empty() {
-                name.to_string()
+                archive_label(name)
             } else {
                 root.clone()
             };
@@ -178,8 +187,18 @@ impl PreparedModImport {
                 None,
             ));
         }
+        for (bsp, files) in map_trees {
+            let label = file_stem(&bsp).to_string();
+            packs.push((bsp, label, Some(ModContent::Tree(files)), None));
+        }
         packs.sort_by(|a, b| a.0.cmp(&b.0));
         if packs.is_empty() {
+            if names.iter().any(|path| path.ends_with(".vmf")) {
+                return Err(ProfileError::Io(
+                    "This archive has only Hammer source files (.vmf), not a playable map (.bsp)."
+                        .into(),
+                ));
+            }
             return Err(ProfileError::Io(
                 "This selection has no TF2 content or VPKs.".into(),
             ));
@@ -208,26 +227,36 @@ impl PreparedModImport {
                     )
                 }
                 Some(ModContent::Vpk(bytes)) => {
-                    let (summary, external) =
-                        crate::vpk::review_vpk_dir_bytes(bytes, &mut |path| {
-                            if let Some((root, _)) = path.split_once('/') {
-                                content_roots.insert(root.to_string());
+                    match crate::vpk::review_vpk_dir_bytes(bytes, &mut |path| {
+                        if let Some((root, _)) = path.split_once('/') {
+                            content_roots.insert(root.to_string());
+                        }
+                        Ok(())
+                    }) {
+                        Ok((summary, external)) => {
+                            if external {
+                                disabled_reason = Some(SPLIT_VPK.into());
                             }
-                            Ok(())
-                        })
-                        .map_err(|e| ProfileError::Io(e.message()))?;
-                    if external {
-                        disabled_reason = Some(SPLIT_VPK.into());
+                            (summary.files, bytes.len() as u64)
+                        }
+                        // One unreadable VPK greys out that choice only.
+                        Err(err) => {
+                            content_roots.clear();
+                            disabled_reason = Some(format!(
+                                "execs can't read this VPK: {}",
+                                err.message().trim_end_matches('.')
+                            ));
+                            (0, bytes.len() as u64)
+                        }
                     }
-                    (summary.files, bytes.len() as u64)
                 }
                 None => disabled_metadata[&path],
             };
-            if let Some(content) = &content {
-                budget.add(content)?;
-            }
             if disabled_reason.is_some() {
                 content = None;
+            }
+            if let Some(content) = &content {
+                budget.add(content)?;
             }
             choices.push(ModImportChoice {
                 id: index.to_string(),
@@ -246,6 +275,14 @@ impl PreparedModImport {
             fingerprint,
             payloads,
         })
+    }
+
+    /// A download with one installable choice installs under the mod's own
+    /// title, not a wrapper folder such as `team fortress 2/tf`.
+    pub fn name_single_choice(&mut self, title: &str) {
+        if let [only] = self.choices.as_mut_slice() {
+            only.name = title.to_string();
+        }
     }
 
     /// IDs only select native-owned payloads. Validate the entire batch before returning any bytes.
@@ -283,6 +320,99 @@ impl PreparedModImport {
 
 fn is_vpk(path: &str) -> bool {
     path.to_ascii_lowercase().ends_with(".vpk")
+}
+enum MapGroup {
+    /// The map sits beside content folders and joins that pack.
+    Root(String),
+    /// A map of its own, keyed by its `.bsp` path.
+    Map(String),
+}
+
+/// An archive's file name without its extension, as a pack label.
+fn archive_label(name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    [".zip", ".7z", ".rar"]
+        .iter()
+        .find(|ext| lower.ends_with(*ext))
+        .map_or(name, |ext| &name[..name.len() - ext.len()])
+        .to_string()
+}
+
+fn file_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+fn file_stem(path: &str) -> &str {
+    let name = file_name(path);
+    name.rsplit_once('.').map_or(name, |(stem, _)| stem)
+}
+
+fn parent(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(dir, _)| dir)
+}
+
+/// Maps are uploaded as a bare `.bsp`; TF2 loads them from a pack's `maps`
+/// folder. A `.bsp` outside any content folder takes along the files beside it
+/// named after it (`.nav` bot navigation, `<map>_particles.txt`,
+/// `<map>_level_sounds.txt`) into `maps`, and MvM missions named after it
+/// (`<map>_<mission>.pop`) into `scripts/population`. Returns each moved entry's
+/// group and its path inside the pack.
+fn loose_map_files(
+    entries: &[(String, Vec<u8>)],
+    roots: &BTreeMap<String, String>,
+) -> BTreeMap<String, (MapGroup, String)> {
+    let in_content_root = |path: &str| {
+        parent(path)
+            .split('/')
+            .any(|part| MOD_CONTENT_ROOTS.contains(&part.to_ascii_lowercase().as_str()))
+    };
+    let mut moved = BTreeMap::new();
+    for (bsp, _) in entries {
+        if !bsp.to_ascii_lowercase().ends_with(".bsp") || in_content_root(bsp) {
+            continue;
+        }
+        let dir = parent(bsp);
+        let stem = file_stem(bsp).to_ascii_lowercase();
+        let group = || match roots.values().find(|root| root.as_str() == dir) {
+            Some(root) => MapGroup::Root(root.clone()),
+            None => MapGroup::Map(bsp.clone()),
+        };
+        for (path, _) in entries {
+            if parent(path) != dir || moved.contains_key(path) {
+                continue;
+            }
+            let name = file_name(path);
+            let lower = name.to_ascii_lowercase();
+            let target = if path == bsp
+                || lower == format!("{stem}.nav")
+                || (lower.starts_with(&format!("{stem}_")) && lower.ends_with(".txt"))
+            {
+                format!("maps/{name}")
+            } else if lower.starts_with(&format!("{stem}_")) && lower.ends_with(".pop") {
+                format!("scripts/population/{name}")
+            } else {
+                continue;
+            };
+            moved.insert(path.clone(), (group(), target));
+        }
+    }
+    moved
+}
+
+/// `name_000.vpk`: a numbered data file of a split VPK set.
+fn vpk_chunk(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower
+        .strip_suffix(".vpk")
+        .and_then(|stem| stem.rsplit_once('_'))
+        .is_some_and(|(_, tail)| tail.len() == 3 && tail.bytes().all(|c| c.is_ascii_digit()))
+}
+fn vpk_label(path: &str) -> String {
+    let file = path.rsplit('/').next().unwrap_or(path);
+    file.strip_suffix(".vpk")
+        .or_else(|| file.strip_suffix(".VPK"))
+        .unwrap_or(file)
+        .to_string()
 }
 fn split_archive(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
@@ -435,6 +565,154 @@ mod tests {
         );
         assert!(prepared.choices.iter().all(|c| c.bytes > 0 && c.files > 0));
         assert!(prepared.select(&["0".into()]).is_err());
+    }
+
+    #[test]
+    fn an_unreadable_or_split_vpk_greys_out_only_that_choice() {
+        // Real GameBanana uploads: a leftover `_000.vpk` beside a complete VPK,
+        // and a VPK whose data runs past its end, used to fail the whole import.
+        let prepared = PreparedModImport::from_entries(
+            "pack",
+            vec![
+                ("oldschool mod v3.vpk".into(), vpk()),
+                ("oldschool_pack_000.vpk".into(), vec![1, 2, 3]),
+                ("broken.vpk".into(), vec![0x34, 0x12, 0xaa, 0x55, 9, 9]),
+            ],
+        )
+        .unwrap();
+        let by_name = |name: &str| {
+            prepared
+                .choices
+                .iter()
+                .find(|c| c.name == name)
+                .unwrap_or_else(|| panic!("{name}"))
+                .clone()
+        };
+        assert!(by_name("oldschool mod v3").disabled_reason.is_none());
+        assert!(by_name("oldschool_pack_000")
+            .disabled_reason
+            .unwrap()
+            .contains("piece of a split VPK"));
+        assert!(by_name("broken")
+            .disabled_reason
+            .unwrap()
+            .contains("can't read this VPK"));
+        let id = by_name("oldschool mod v3").id;
+        assert_eq!(prepared.select(&[id]).unwrap().len(), 1);
+    }
+
+    fn tree_paths(content: &ModContent) -> Vec<String> {
+        match content {
+            ModContent::Tree(files) => files.iter().map(|(path, _)| path.clone()).collect(),
+            ModContent::Vpk(_) => panic!("expected a folder pack"),
+        }
+    }
+
+    #[test]
+    fn loose_maps_install_into_maps_with_their_bot_files_and_missions() {
+        let prepared = PreparedModImport::from_entries(
+            "map",
+            vec![
+                ("mapzip/mvm_rock.bsp".into(), b"VBSP".to_vec()),
+                ("mapzip/mvm_rock.nav".into(), b"nav".to_vec()),
+                ("mapzip/mvm_rock_particles.txt".into(), b"p".to_vec()),
+                ("mapzip/mvm_rock_advanced.pop".into(), b"pop".to_vec()),
+                ("mapzip/mvm_rock.vmf".into(), b"source".to_vec()),
+                ("mapzip/readme.txt".into(), b"Have fun".to_vec()),
+            ],
+        )
+        .unwrap();
+        assert_eq!(prepared.choices.len(), 1);
+        assert_eq!(prepared.choices[0].name, "mvm_rock");
+        assert_eq!(prepared.choices[0].content_roots, ["maps", "scripts"]);
+        let packs = prepared.select(&["0".into()]).unwrap();
+        assert_eq!(
+            tree_paths(&packs[0].1),
+            [
+                "maps/mvm_rock.bsp",
+                "maps/mvm_rock.nav",
+                "scripts/population/mvm_rock_advanced.pop",
+                "maps/mvm_rock_particles.txt",
+            ]
+        );
+    }
+
+    #[test]
+    fn several_maps_are_separate_choices_and_a_map_joins_its_content_folders() {
+        let two = PreparedModImport::from_entries(
+            "gorge",
+            vec![
+                ("cp_gorge_night_final.bsp".into(), b"VBSP".to_vec()),
+                ("cp_gorge_night_custom_final.bsp".into(), b"VBSP".to_vec()),
+            ],
+        )
+        .unwrap();
+        assert_eq!(two.choices.len(), 2);
+
+        let with_assets = PreparedModImport::from_entries(
+            "koth_x",
+            vec![
+                ("koth_x/koth_x.bsp".into(), b"VBSP".to_vec()),
+                ("koth_x/materials/x.vtf".into(), b"VTF".to_vec()),
+            ],
+        )
+        .unwrap();
+        assert_eq!(with_assets.choices.len(), 1);
+        let packs = with_assets.select(&["0".into()]).unwrap();
+        assert_eq!(
+            tree_paths(&packs[0].1),
+            ["maps/koth_x.bsp", "materials/x.vtf"]
+        );
+    }
+
+    #[test]
+    fn a_single_choice_takes_the_mods_title_and_archive_names_lose_their_extension() {
+        let mut wrapped = PreparedModImport::from_entries(
+            "tr_aim_training.zip",
+            vec![(
+                "Team Fortress 2/tf/maps/tr_aim.bsp".into(),
+                b"VBSP".to_vec(),
+            )],
+        )
+        .unwrap();
+        assert_eq!(wrapped.choices[0].name, "Team Fortress 2/tf");
+        wrapped.name_single_choice("tr_aim_training");
+        assert_eq!(
+            wrapped.select(&["0".into()]).unwrap()[0].0,
+            "tr_aim_training"
+        );
+
+        let rooted = PreparedModImport::from_entries(
+            "trade_complex.ZIP",
+            vec![("maps/trade_complex.bsp".into(), b"VBSP".to_vec())],
+        )
+        .unwrap();
+        assert_eq!(rooted.choices[0].name, "trade_complex");
+    }
+
+    #[test]
+    fn hammer_sources_alone_explain_that_there_is_no_playable_map() {
+        let err = PreparedModImport::from_entries("src", vec![("well.vmf".into(), b"x".to_vec())])
+            .unwrap_err();
+        assert!(
+            err.message().contains("Hammer source files"),
+            "{}",
+            err.message()
+        );
+    }
+
+    #[test]
+    fn startup_video_mods_are_tf2_content() {
+        let prepared = PreparedModImport::from_entries(
+            "intro",
+            vec![
+                ("hl2/media/valve.webm".into(), b"webm".to_vec()),
+                ("readme.txt".into(), b"Put media in custom".to_vec()),
+            ],
+        )
+        .unwrap();
+        assert_eq!(prepared.choices.len(), 1);
+        assert_eq!(prepared.choices[0].content_roots, ["media"]);
     }
 
     #[test]

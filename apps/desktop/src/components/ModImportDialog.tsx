@@ -34,7 +34,7 @@ export function ModImportDialog({
     <Modal
       open
       title="Choose mod files"
-      description="Choose the options you want. Each selection installs as its own custom pack. Follow the author's instructions when options are alternatives."
+      description="Pick the parts you want. Each one installs as its own custom pack. When the author offers alternatives (for example, colors of the same thing), pick only one."
       onClose={onClose}
       className="w-[min(60rem,calc(100vw-2rem))]"
     >
