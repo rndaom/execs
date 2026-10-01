@@ -301,7 +301,6 @@ export function HudPane({
       <PaneHeader
         compact
         title="HUD"
-        lede="One HUD per profile."
         actions={
           <>
             {previewData ? <span className="badge">Preview data</span> : null}
@@ -459,9 +458,7 @@ export function HudPane({
                         section.controls.some((control) => control.controlType === "crosshair"),
                       ) ? (
                         <p className="t-meta pt-3">
-                          HUD overlay crosshairs are drawn by the HUD and may appear alongside TF2’s
-                          crosshair. A glyph choice selects a shape in the installed HUD font; the
-                          character shown here is not a visual preview.
+                          This HUD draws its own crosshair, on top of TF2’s.
                         </p>
                       ) : null}
                       <div className="grid gap-x-6 pt-1">
@@ -734,9 +731,6 @@ export function HudPane({
                   >
                     <HudPreview src={installedEntry.banner} name={hudDisplayName(installedEntry)} />
                   </button>
-                  <figcaption className="t-meta mt-2">
-                    Author’s screenshot. Open TF2 to see your saved options.
-                  </figcaption>
                 </figure>
               ) : null}
             </section>
@@ -815,17 +809,15 @@ export function HudPane({
             </Alert>
           ) : null}
 
-          {sort !== "name" && matching.length > 0 ? (
+          {sort !== "name" && matching.length > 0 && missingStats > 0 ? (
             <div
               data-testid="hud-ranking-coverage"
               className="t-meta mt-3 flex flex-wrap items-baseline gap-x-2 gap-y-1"
             >
               <p>
-                Ranking {paged.total} of {matching.length} {query.trim() ? "matching " : ""}HUD
-                {matching.length === 1 ? "" : "s"} with {metric}.
-                {missingStats > 0
-                  ? ` ${missingStats} ${missingStats === 1 ? "has" : "have"} no ${metric} available${statsLoading ? " yet" : ""}.`
-                  : ""}
+                {missingStats} {missingStats === 1 ? "HUD has" : "HUDs have"} no {metric}
+                {statsLoading ? " yet" : ""}, so {missingStats === 1 ? "it is" : "they are"} left
+                out.
               </p>
               {missingStats > 0 ? (
                 <button
@@ -838,9 +830,6 @@ export function HudPane({
                 </button>
               ) : null}
             </div>
-          ) : null}
-          {sort === "updated" ? (
-            <p className="t-meta mt-2">Activity dates describe changes to tf2huds.dev listings.</p>
           ) : null}
 
           {paged.total > 0 ? (
@@ -1055,42 +1044,32 @@ export function HudPane({
         </section>
       </div>
 
-      <p className="t-meta mt-4">Custom materials may not work on Valve Casual servers.</p>
-
       <p className="section t-meta text-ink-faint">
-        Catalog from{" "}
+        Catalog by{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://github.com/mastercomfig/hud-db")}
           className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
-          mastercomfig hud-db
+          hud-db
         </button>{" "}
-        (MIT) and{" "}
-        <button
-          type="button"
-          onClick={() => void openExternal("https://comfig.app/huds")}
-          className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
-        >
-          comfig.app
-        </button>
-        . Popularity and listing activity from{" "}
+        · stats by{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://tf2huds.dev/huds")}
           className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
           TF2 HUDs
-        </button>
-        . Option schemas from{" "}
+        </button>{" "}
+        · options by{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://github.com/CriticalFlaw/TF2HUD.Editor")}
           className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
           TF2HUD.Editor
-        </button>{" "}
-        (MIT), applied by execs. Each HUD belongs to its author. Not affiliated with Valve or Steam.
+        </button>
+        . HUDs belong to their authors.
       </p>
 
       {detailsEntry ? (
@@ -1183,10 +1162,7 @@ export function HudPane({
               <p className="t-meta mt-1">{hudAuthorCopy(currentReplacement.entry)}</p>
             </div>
           </div>
-          <p className="t-meta mt-4">
-            The previous HUD folder is preserved outside TF2’s mounted HUD folders. Your other
-            profile settings stay the same.
-          </p>
+          <p className="t-meta mt-4">Your current HUD is kept as a backup.</p>
           {dirty ? (
             <p className="t-meta mt-3">
               Wait for your HUD options to finish saving before replacing it.
@@ -1284,10 +1260,7 @@ export function HudPane({
               className="btn btn-ghost justify-start gap-3 px-3 py-3 text-left"
             >
               <UploadSimple size={20} />
-              <span>
-                <span className="block">Choose ZIP, 7z or RAR…</span>
-                <span className="t-meta mt-1 block">Downloaded archive. No need to unzip it.</span>
-              </span>
+              <span>Choose ZIP, 7z or RAR…</span>
             </button>
             <button
               type="button"
@@ -1301,15 +1274,9 @@ export function HudPane({
               className="btn btn-ghost justify-start gap-3 px-3 py-3 text-left"
             >
               <FolderOpen size={20} />
-              <span>
-                <span className="block">Choose folder…</span>
-                <span className="t-meta mt-1 block">For a HUD you already extracted.</span>
-              </span>
+              <span>Choose folder…</span>
             </button>
           </div>
-          <p className="t-meta mt-4">
-            The package is checked before import. In-game compatibility depends on the HUD.
-          </p>
           <div className="mt-5 flex justify-end">
             <button type="button" className="btn btn-quiet" onClick={() => setImportOpen(false)}>
               Cancel

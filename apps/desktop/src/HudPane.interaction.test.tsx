@@ -338,7 +338,7 @@ describe("HUD workspace interactions", () => {
     };
     await render({ schema });
     await surface("installed");
-    expect(element("hud-options").textContent).toContain("HUD overlay crosshairs");
+    expect(element("hud-options").textContent).toContain("This HUD draws its own crosshair");
     expect(element("hud-options").textContent).toContain("Menu Background - Unavailable");
     expect(container.querySelector('[data-testid="hud-opt-rh_val_main_menu_bg"]')).toBeNull();
     const select = element("hud-opt-rh_val_xhair_style") as HTMLSelectElement;

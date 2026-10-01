@@ -175,7 +175,7 @@ describe("Viewmodels source-derived draft", () => {
       false,
     );
     await click('[data-testid="viewmodel-review-build"]');
-    expect(box.textContent).toContain("Replaces this profile's viewmodel pack");
+    expect(box.textContent).toContain("Build pack");
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(false);
     expect(box.querySelector("img")).toBeNull();
     await click('[data-testid="viewmodel-import"]');
@@ -212,7 +212,7 @@ describe("Viewmodels source-derived draft", () => {
     };
     await render();
     expect(element('[data-testid="viewmodel-source-changed"]').textContent).toContain(
-      "saved viewmodel pack was changed outside execs",
+      "This pack was changed outside execs",
     );
     expect(box.textContent).toContain("Replace with VPK");
     expect(element('[data-testid="viewmodel-pack-status"]').textContent).toContain("Imported");
@@ -285,7 +285,7 @@ describe("Viewmodels source-derived draft", () => {
       sourceFingerprints: [{ id: "models/weapons/c_models/c_scout_animations.mdl", sha256: "new" }],
     });
     await click('[data-testid="viewmodel-catalog-refresh"]');
-    expect(box.textContent).toContain("Your unbuilt choices are kept below");
+    expect(box.textContent).toContain("these choices can't be built");
     expect(
       element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-full"]').checked,
     ).toBe(true);
@@ -441,7 +441,7 @@ describe("Viewmodels source-derived draft", () => {
     await render(true);
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     await click('[data-testid="viewmodel-review-build"]');
-    expect(box.textContent).toContain("Replaces this profile's viewmodel pack");
+    expect(box.textContent).toContain("Build pack");
     const build = element<HTMLButtonElement>('[data-testid="viewmodel-build"]');
     expect(build.disabled).toBe(false);
     await act(async () => build.click());

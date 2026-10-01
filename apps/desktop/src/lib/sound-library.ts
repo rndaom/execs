@@ -204,19 +204,15 @@ export type IncomingSounds = GameBananaSounds & { key: number };
 
 /** What a GameBanana handoff added to the library, in plain words. */
 export function gameBananaAddedNote(added: GameBananaSounds): string {
-  const slot = added.slot === "hit" ? "hits" : "kills";
   const count = added.sounds.length;
   const parts = [
     count === 1
-      ? `Added “${added.title}” from GameBanana, made for ${slot}. Preview it below, then choose Use.`
-      : `Added ${count} sounds from “${added.title}” on GameBanana, made for ${slot}. Preview them below, then choose Use.`,
+      ? `Added “${added.title}” from GameBanana.`
+      : `Added ${count} sounds from “${added.title}”.`,
   ];
-  if (added.skipped > 0) {
-    parts.push(
-      `${added.skipped} other ${added.skipped === 1 ? "file" : "files"} in the download could not be used.`,
-    );
-  }
-  if (added.truncated) parts.push("The download has more sounds than the library lists at once.");
+  if (added.skipped > 0)
+    parts.push(`${added.skipped} ${added.skipped === 1 ? "file" : "files"} couldn't be used.`);
+  if (added.truncated) parts.push("Only the first ones are listed.");
   return parts.join(" ");
 }
 

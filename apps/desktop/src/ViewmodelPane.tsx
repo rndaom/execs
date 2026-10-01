@@ -57,8 +57,7 @@ export function ViewmodelPane({
       />
       {record?.sourceChanged ? (
         <p data-testid="viewmodel-source-changed" role="alert" className="t-meta mb-4 text-warn">
-          The saved viewmodel pack was changed outside execs. Replace or remove it to get back to a
-          known state.
+          This pack was changed outside execs. Replace or remove it.
         </p>
       ) : null}
       {settings ? (

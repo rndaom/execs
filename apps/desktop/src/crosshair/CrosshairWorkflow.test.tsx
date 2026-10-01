@@ -529,7 +529,7 @@ describe("older packs and notices", () => {
       library: { venom_circle: "vtf", venom_dot: "vtf" },
     };
     await render();
-    expect(box.textContent).toContain("New Venom downloads are no longer offered");
+    expect(box.textContent).toContain("Earlier Venom Crosshairs by HbiVnm");
     expect(checked("venom_circle")).toBe(true);
     expect(maybe('[data-testid="crosshair-shape-venom_dot"]')).not.toBeNull();
     await click('[data-testid="crosshair-shape-shape-dot"]');
@@ -590,12 +590,12 @@ describe("older packs and notices", () => {
   it("links to HUD controls when a HUD overlay can add another crosshair", async () => {
     hudOverlayState = "enabled";
     await render();
-    expect(box.textContent).toContain("Example HUD has a crosshair overlay selected");
+    expect(box.textContent).toContain("Example HUD's crosshair overlay is on");
     await click('[data-testid="crosshair-hud-overlay-notice"] button');
     expect(openHud).toHaveBeenCalledTimes(1);
     hudOverlayState = "possible";
     await render();
-    expect(box.textContent).toContain("in-game state cannot be confirmed");
+    expect(box.textContent).toContain("has its own crosshair overlay options");
   });
 
   it("identifies a modded stock sprite without treating Valve's preview as final", async () => {
@@ -614,8 +614,8 @@ describe("older packs and notices", () => {
     await render();
     expect(maybe('[data-testid="crosshair-stock-art-notice"]')).toBeNull();
     await click('[data-testid="crosshair-shape-tf-crosshair3"]');
-    expect(box.textContent).toContain("Alternate.vpk also supplies");
-    expect(box.textContent).toContain("preview uses Valve's original sprite");
+    expect(box.textContent).toContain("Alternate.vpk also replaces");
+    expect(box.textContent).toContain("so TF2 may show different art");
     await click('[data-testid="crosshair-stock-art-notice"] button');
     expect(openMods).toHaveBeenCalledTimes(1);
   });
@@ -631,10 +631,10 @@ describe("older packs and notices", () => {
   it("warns when TF2 updates the scripts used to build a live pack", async () => {
     sourceStatus = { state: "changed" };
     await render();
-    expect(box.textContent).toContain("TF2's weapon scripts changed since this pack was built");
+    expect(box.textContent).toContain("TF2's weapon scripts changed. Rebuild");
     sourceStatus = { state: "unverified" };
     await render();
-    expect(box.textContent).toContain("no recorded TF2 weapon-script version");
+    expect(box.textContent).toContain("Rebuild to check this pack against the current game");
     record = { ...saved(), inactive: true };
     await render();
     expect(maybe('[data-testid="crosshair-script-source-status"]')).toBeNull();
