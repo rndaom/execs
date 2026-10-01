@@ -5,6 +5,8 @@ import {
   SAVED_MESSAGE,
   SAVING_MESSAGE,
   TOAST_DEFERRED_MS,
+  TOAST_ERROR_MAX_MS,
+  TOAST_ERROR_MIN_MS,
   TOAST_SAVED_MS,
   type Toast,
   toastDismissible,
@@ -130,10 +132,17 @@ describe("toastLingerMs", () => {
     expect(toastLingerMs({ kind: "deferred", message: DEFERRED_MESSAGE })).toBe(TOAST_DEFERRED_MS);
   });
 
-  it("leaves saving and failures waiting for an event", () => {
+  it("leaves saving waiting for its work", () => {
     expect(toastLingerMs(null)).toBeNull();
     expect(toastLingerMs(SAVING)).toBeNull();
-    expect(toastLingerMs(ERROR)).toBeNull();
+  });
+
+  it("gives a failure time to be read, longer for longer reasons, then fades it", () => {
+    const short = toastLingerMs({ kind: "error", message: "x" }) ?? 0;
+    const long = toastLingerMs({ kind: "error", message: "x".repeat(200) }) ?? 0;
+    expect(short).toBeGreaterThanOrEqual(TOAST_ERROR_MIN_MS);
+    expect(long).toBeGreaterThan(short);
+    expect(toastLingerMs({ kind: "error", message: "x".repeat(5000) })).toBe(TOAST_ERROR_MAX_MS);
   });
 });
 

@@ -29,12 +29,22 @@ extraction entry points; it only tests archives (see `core/src/archive_rar.rs`).
 and `scripts/third-party-notices.mjs` still verifies both hashes. `.gitattributes`
 keeps these files byte-exact.
 
+## execs change
+
+`vendor/unrar/dll.cpp` sets `Data->Cmd.QOpenMode=QOPEN_NONE` in
+`RAROpenArchiveEx` (five lines, marked `execs:`). UnRAR otherwise reads file
+headers from a Quick Open cache record when an archive has one, which WinRAR
+adds by default, and `core/src/archive_rar.rs` validates only the real headers.
+With this line the decoder reads the real headers too, so such archives import
+instead of being refused. Carry it over on every update.
+
 ## Updating
 
 1. Download a stable `unrarsrc-*.tar.gz` from RARLAB and check `RARVER_BETA 0`
    in `unrar/version.hpp`.
 2. Replace `vendor/unrar/` with it and apply `execs-crate-changes.patch` inside
-   that folder (`patch -p1`), resolving any rejected hunk by hand.
+   that folder (`patch -p1`), resolving any rejected hunk by hand. Then add the
+   `QOpenMode` line described above.
 3. Rebuild, run the RAR tests (`cargo test -p execs-core --lib archive`) and
    `node scripts/third-party-notices.mjs --check`, then update this file, the
    notice title in that script, `THIRD_PARTY.md` and the RAR audit notes.

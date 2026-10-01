@@ -281,7 +281,7 @@ it("clears a discarded draft's failure while preserving an unrelated pane's fail
   expect(launch().disabled).toBe(false);
   const feedback = element('[data-testid="toast"]');
   expect(feedback.textContent).toContain("sounds refused");
-  await act(async () => feedback.click());
+  await act(async () => element('[data-testid="toast-dismiss"]').click());
   expect(box.querySelector('[data-testid="toast"]')).toBeNull();
 });
 

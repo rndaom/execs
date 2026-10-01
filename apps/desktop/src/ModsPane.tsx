@@ -529,7 +529,6 @@ export function ModsPane({
             previewData={previewData}
             onInstall={onInstallGameBananaMod}
             onOpenHud={onReviewHudImport}
-            onManualImport={onImportArchive}
             onManageInstalled={() => setTask("installed")}
           />
         </div>

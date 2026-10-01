@@ -62,6 +62,11 @@ HANDLE PASCAL RAROpenArchiveEx(struct RAROpenArchiveDataEx *r)
     Data->Cmd.AddArcName(ArcName);
     Data->Cmd.Overwrite=OVERWRITE_ALL;
     Data->Cmd.VersionControl=1;
+#ifdef USE_QOPEN
+    // execs: never substitute headers cached in a Quick Open record for the
+    // real ones; the Rust preflight validates the real headers only.
+    Data->Cmd.QOpenMode=QOPEN_NONE;
+#endif
 
     Data->Cmd.Callback=r->Callback;
     Data->Cmd.UserData=r->UserData;

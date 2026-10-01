@@ -60,7 +60,7 @@ import { blockingFindingsForFile, cfgFileMeta, hitAnalysisLimit } from "./lib/fi
 import { gameplayPath } from "./lib/gameplay-ui";
 import { hudOverlayCrosshairState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
-import { type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
+import { type ModInstallResult, type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
 import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import { createSettingsDraftStore, type SettingsDraftStore } from "./lib/settings-drafts";
 import { type CfgText, readSettingsSnapshot } from "./lib/settings-loading";
@@ -571,6 +571,8 @@ export function SettingsHost({
       quiet?: boolean;
       filesRecovery?: string;
       onHandledFailure?: (reason: "review-required" | "superseded") => void;
+      /** The reason an unhandled failure reported, for callers that show it too. */
+      onFailure?: (message: string) => void;
     },
   ): Promise<boolean> {
     // The queue already serializes settings work — refusing a second write
@@ -578,6 +580,7 @@ export function SettingsHost({
     // applied optimistically. Only an *external* operation still blocks, and
     // it says so instead of no-oping.
     if (externalBusy || (loadBlocked.current && !options?.filesRecovery)) {
+      options?.onFailure?.("Another change is still saving. Try again in a moment.");
       toast.failSave("another change is still saving", copy?.failure, copy?.source, false);
       return false;
     }
@@ -642,6 +645,7 @@ export function SettingsHost({
         options?.onHandledFailure?.("review-required");
         return false;
       }
+      options?.onFailure?.(failure.message);
       toast.failSave(err, copy?.failure, copy?.source, started);
       return false;
     }
@@ -818,8 +822,12 @@ export function SettingsHost({
       request: () => Promise<ModImportReview | null>,
       copy: { success: string; failure: string; pending: string },
       options?: { picker?: boolean },
-    ): Promise<boolean | "review-required" | "superseded"> {
+    ): Promise<ModInstallResult> {
       let handled: "review-required" | "superseded" | null = null;
+      let failed: string | null = null;
+      const onFailure = (message: string) => {
+        failed = message;
+      };
       const prepared: { review: ModImportReview | null; done: boolean } = {
         review: null,
         done: false,
@@ -840,16 +848,26 @@ export function SettingsHost({
           onHandledFailure: (reason) => {
             handled = reason;
           },
+          onFailure,
         },
       );
       // A cancelled picker or superseded download stays quiet; failures were reported.
-      if (!prepared.review) return handled ?? (prepared.done ? "superseded" : false);
+      if (!prepared.review) {
+        if (handled) return handled;
+        if (failed !== null) return { failed };
+        return prepared.done ? "superseded" : false;
+      }
       const chosen = await modImport.choose(prepared.review, started);
       if (!chosen) return "superseded";
-      return write(async () => {
-        await api.confirmModImport(chosen.token, chosen.ids);
-        await refreshModsStatus().catch(() => {});
-      }, copy);
+      const installed = await write(
+        async () => {
+          await api.confirmModImport(chosen.token, chosen.ids);
+          await refreshModsStatus().catch(() => {});
+        },
+        copy,
+        { onFailure },
+      );
+      return installed || failed === null ? installed : { failed };
     }
 
     function write(
@@ -860,6 +878,7 @@ export function SettingsHost({
         picker?: boolean;
         quiet?: boolean;
         onHandledFailure?: (reason: "review-required" | "superseded") => void;
+        onFailure?: (message: string) => void;
       },
     ) {
       if (usesCfgState(tab) && !cfgComplete.current) {

@@ -274,7 +274,7 @@ describe("retained settings feedback", () => {
     running = false;
     await render();
     expect(toast()).toContain("Could not save HUD options");
-    await click("toast");
+    await click("toast-dismiss");
     expect(toast()).toBeNull();
     expect(pending).toBe(true);
     expect(element<HTMLButtonElement>("launch-tf2").disabled).toBe(true);

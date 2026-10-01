@@ -7,10 +7,10 @@ describe("GameBanana preview bridge", () => {
     const first = await api.searchGameBananaMods("", "new", null, 1, false);
     const second = await api.searchGameBananaMods("", "new", null, 2, false);
     expect(first.records).toHaveLength(20);
-    expect(first.total).toEqual({ kind: "estimated", value: 24 });
+    expect(first.total).toEqual({ kind: "estimated", value: 25 });
     expect(first.complete).toBe(false);
     expect(first.filters.installability).toBe("page");
-    expect(second.records).toHaveLength(4);
+    expect(second.records).toHaveLength(5);
     expect(second.complete).toBe(true);
   });
 

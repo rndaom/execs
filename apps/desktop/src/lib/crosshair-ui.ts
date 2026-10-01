@@ -73,6 +73,7 @@ export const WEAPON_CATALOG: WeaponCatalogEntry[] = [
     slot: "secondary",
   },
   { script: "tf_weapon_jar_milk", label: "Mad Milk", classId: "scout", slot: "secondary" },
+  { script: "tf_weapon_cleaver", label: "Flying Guillotine", classId: "scout", slot: "secondary" },
   {
     script: "tf_weapon_handgun_scout_secondary",
     label: "Winger / Pocket Pistol",
@@ -217,8 +218,8 @@ export const WEAPON_CATALOG: WeaponCatalogEntry[] = [
   { script: "tf_weapon_knife", label: "Knife", classId: "spy", slot: "melee" },
   { script: "tf_weapon_pda_spy", label: "Disguise Kit", classId: "spy", slot: "pda" },
   { script: "tf_weapon_invis", label: "Invis Watch", classId: "spy", slot: "pda" },
-  { script: "tf_weapon_sapper", label: "Sapper", classId: "spy", slot: "pda" },
-  { script: "tf_weapon_builder_spy", label: "Red-Tape Recorder", classId: "spy", slot: "pda" },
+  // The Red-Tape Recorder is a Sapper too; TF2 has no separate script for it.
+  { script: "tf_weapon_sapper", label: "Sapper / Red-Tape Recorder", classId: "spy", slot: "pda" },
 ];
 
 export const CROSSHAIR_CASUAL_COPY = "Custom crosshairs usually work on Valve Casual.";

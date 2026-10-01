@@ -1,7 +1,9 @@
 //! Bounded, extraction-only RAR adapter. UnRAR receives a private copy of the
 //! archive and runs TEST, never EXTRACT: member paths never reach the filesystem.
 //! Raw headers are checked first because native processing can consume service
-//! records without returning them through RARReadHeaderEx.
+//! records without returning them through RARReadHeaderEx. The vendored DLL is
+//! built never to use a Quick Open header cache (`dll.cpp`), so the headers it
+//! decodes are the same raw headers checked here.
 //!
 //! UnRAR source code may be used in any software to handle RAR archives without
 //! limitations free of charge, but cannot be used to develop RAR (WinRAR)
@@ -17,13 +19,18 @@ use std::sync::Mutex;
 
 use unrar_ng_sys as ffi;
 
-use super::{compression_ratio_exceeded, keep_entry, ArchiveLimits, MIB};
+use super::{keep_entry, ArchiveLimits, MIB};
 use crate::profile::{portable_path_key, ProfileError};
 
 const MAGIC4: &[u8] = b"Rar!\x1a\x07\x00";
 const MAGIC5: &[u8] = b"Rar!\x1a\x07\x01\x00";
 const MAX_DICTIONARY: u64 = 128 * MIB;
 const MAX_METADATA: usize = 16 * 1024 * 1024;
+/// Archive-level service records WinRAR adds on its own: the Quick Open header
+/// cache, an archive comment and a recovery record. None of them is a member,
+/// and native member processing skips them. Anything else (NTFS streams,
+/// ACLs, unknown records) is still refused.
+const SKIPPED_SERVICES: [&[u8]; 3] = [b"QO", b"CMT", b"RR"];
 // UnRAR has process-global error state. Keep calls serialized, including close.
 static DECODER: Mutex<()> = Mutex::new(());
 
@@ -140,11 +147,6 @@ fn preflight(bytes: &[u8], limits: ArchiveLimits) -> Result<Vec<Member>, Profile
                 }
             }
         }
-        // A solid member may use preceding members' dictionary; apply ratio
-        // to the complete archive, not a member's compressed byte count.
-    }
-    if compression_ratio_exceeded(total, bytes.len() as u64) {
-        return Err(unsupported("decompresses more than 200x"));
     }
     Ok(members)
 }
@@ -245,6 +247,21 @@ fn headers4(bytes: &[u8], limits: ArchiveLimits) -> Result<Vec<Member>, ProfileE
                     packed,
                     directory,
                 });
+            }
+            0x7a if main => {
+                p.take(4)?; // Unpacked size.
+                p.byte()?; // Host OS.
+                p.take(8)?; // CRC32 and DOS time.
+                p.take(2)?; // Version and method.
+                let name_len = usize::from(p.u16()?);
+                p.take(4)?; // Attributes.
+                if flags & 0x100 != 0 {
+                    packed |= u64::from(p.u32()?) << 32;
+                    p.take(4)?;
+                }
+                if flags & 4 != 0 || !SKIPPED_SERVICES.contains(&p.take(name_len)?) {
+                    return Err(unsupported("contains unsupported service records"));
+                }
             }
             0x7b if main => {
                 if flags & 1 != 0 {
@@ -368,6 +385,24 @@ fn headers5(bytes: &[u8], limits: ArchiveLimits) -> Result<Vec<Member>, ProfileE
                     directory: file_flags & 1 != 0,
                 });
             }
+            3 if main => {
+                // Same layout as a file header; only the name matters here.
+                let service_flags = p.vint()?;
+                p.vint()?; // Unpacked size.
+                p.vint()?; // Attributes.
+                if service_flags & 2 != 0 {
+                    p.take(4)?;
+                }
+                if service_flags & 4 != 0 {
+                    p.take(4)?;
+                }
+                p.vint()?; // Compression information.
+                p.vint()?; // Host OS.
+                let len = p.length()?;
+                if !SKIPPED_SERVICES.contains(&p.take(len)?) {
+                    return Err(unsupported("contains unsupported service records"));
+                }
+            }
             4 => return Err(unsupported("is password protected")),
             5 if main => {
                 if p.vint()? & 1 != 0 {
@@ -391,14 +426,9 @@ fn headers5(bytes: &[u8], limits: ArchiveLimits) -> Result<Vec<Member>, ProfileE
                 at: 0,
             };
             let kind_extra = field.vint()?;
-            if kind == 1 && kind_extra == 1 {
-                // Native Quick Open substitutes cached file headers. Until the
-                // DLL can disable it, refuse rather than validate different bytes.
-                if field.vint()? & 1 != 0 && field.vint()? != 0 {
-                    return Err(unsupported("uses Quick Open header caching"));
-                }
-            }
-            if kind == 2 && kind_extra == 1 {
+            // A Quick Open locator in the main header (kind 1, extra 1) is
+            // accepted: the vendored DLL never reads the cache it points to.
+            if matches!(kind, 2 | 3) && kind_extra == 1 {
                 return Err(unsupported("is password protected"));
             }
             if kind == 2 && matches!(kind_extra, 4 | 5 | 7) {
@@ -654,13 +684,16 @@ mod tests {
                 .message()
                 .contains("volumes"));
         }
-        assert!(preflight(
-            include_bytes!("../fixtures/rar/rar5-quickopen.rar"),
-            limits()
-        )
-        .unwrap_err()
-        .message()
-        .contains("Quick Open"));
+    }
+
+    #[test]
+    fn quick_open_archives_extract_from_their_real_headers() {
+        // WinRAR adds a Quick Open record by default; it used to be refused
+        // ("uses Quick Open header caching").
+        let bytes = include_bytes!("../fixtures/rar/rar5-quickopen.rar");
+        let result = extract(bytes, limits()).unwrap_or_else(|e| panic!("{}", e.message()));
+        assert!(!result.is_empty());
+        assert!(result.iter().all(|(_, data)| !data.is_empty()));
     }
 
     #[test]
@@ -733,13 +766,9 @@ mod tests {
             .unwrap_err()
             .message()
             .contains("larger"));
+        // Flat textures compress beyond any fixed ratio; only byte caps apply.
         let expansion = header_fixture(&[("x", 9 * MIB, 0)]);
-        assert!(
-            preflight(&expansion, ArchiveLimits::new(10, 16 * MIB, 32 * MIB))
-                .unwrap_err()
-                .message()
-                .contains("200x")
-        );
+        assert!(preflight(&expansion, ArchiveLimits::new(10, 16 * MIB, 32 * MIB)).is_ok());
         let collision = header_fixture(&[("pack/Foo", 1, 0), ("pack/foo", 1, 0)]);
         assert!(preflight(&collision, limits())
             .unwrap_err()
@@ -752,10 +781,43 @@ mod tests {
         let mut service = MAGIC5.to_vec();
         block5(&[1, 0, 0], &mut service);
         block5(&[3, 0], &mut service);
-        assert!(preflight(&service, limits())
+        assert!(preflight(&service, limits()).is_err());
+        // Unknown header kinds are still refused by name.
+        let mut unknown = MAGIC5.to_vec();
+        block5(&[1, 0, 0], &mut unknown);
+        block5(&[9, 0], &mut unknown);
+        assert!(preflight(&unknown, limits())
             .unwrap_err()
             .message()
             .contains("service"));
+    }
+
+    fn with_service(kind: u8, name: &str) -> Vec<u8> {
+        let mut out = header_fixture(&[("pack/x.vtf", 1, 0)]);
+        let end = out.len() - 8; // The end-of-archive block is last.
+        let tail = out.split_off(end);
+        let mut body = vec![kind, 2, 3, 0, 3, 0, 0, 0, name.len() as u8];
+        body.extend_from_slice(name.as_bytes());
+        block5(&body, &mut out);
+        out.extend_from_slice(&[0, 0, 0]);
+        out.extend_from_slice(&tail);
+        out
+    }
+
+    #[test]
+    fn winrar_archive_records_are_skipped_but_other_services_refused() {
+        for name in ["QO", "CMT", "RR"] {
+            let members = preflight(&with_service(3, name), limits())
+                .unwrap_or_else(|e| panic!("{name}: {}", e.message()));
+            assert_eq!(members.len(), 1, "{name}");
+            assert_eq!(members[0].name, "pack/x.vtf");
+        }
+        for name in ["STM", "ACL", "QOX"] {
+            assert!(preflight(&with_service(3, name), limits())
+                .unwrap_err()
+                .message()
+                .contains("service"));
+        }
     }
 
     #[test]

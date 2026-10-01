@@ -333,7 +333,8 @@ describe("gamebanana browser", () => {
   });
 
   it("folds a long category list behind More", () => {
-    expect(foldCategories(PREVIEW_GAMEBANANA_CATEGORIES).hidden).toEqual([]);
+    // Six preview categories (Maps included) fold the last two behind More.
+    expect(foldCategories(PREVIEW_GAMEBANANA_CATEGORIES).hidden).toHaveLength(2);
     const many = Array.from({ length: 7 }, (_, index) => ({ id: index, name: `c${index}` }));
     expect(foldCategories(many).shown).toHaveLength(4);
     expect(foldCategories(many).hidden).toHaveLength(3);
