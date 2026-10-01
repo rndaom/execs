@@ -31,6 +31,11 @@ scope.
   one gallery and a true-size preview.
 - [#158](https://github.com/rndaom/execs/pull/158) fixes from the pre-release audit
   of everything since v0.2.1.
+- [#160](https://github.com/rndaom/execs/pull/160) Game volume and Music volume
+  sliders in Sounds, saved per profile in the `sounds` managed-cfg scope. The owner
+  asked for them before release after TF2 kept starting at full volume whenever
+  `config.cfg` was replaced (Steam's Cloud log showed Valve's default config and the
+  old test fixture written over it).
 
 ## Pre-release audit
 
@@ -66,7 +71,7 @@ GitHub issue or Linear item targets this release.
 
 ## Checks before the tag
 
-- PR checks on #154, #155, #158 and the release PR, and a private candidate run
+- PR checks on #154, #155, #158, #160 and the release PR, and a private candidate run
   (`workflow_dispatch` with `release_tag=v0.2.2`) that builds signed Windows and
   Linux installers into a private draft and upgrades public 0.2.1 on both
   platforms with the profile library preserved.
