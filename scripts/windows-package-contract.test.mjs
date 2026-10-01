@@ -15,6 +15,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { Writable } from "node:stream";
 import { finished } from "node:stream/promises";
 import test from "node:test";
+import { fixtureCacheSources } from "./absorb-cache-fixture.mjs";
 import {
   assertHostObservation,
   assertNormalExit,
@@ -676,6 +677,50 @@ test("actual public v0.2.1 HUD export retains all eight manifest payloads and HU
     assert.equal(proof.manifest.files.length, 8);
     assert.deepEqual(proof.manifest.hud.options, { compact: "1" });
     assert.equal(sha256(readFileSync(archive)), hash);
+  }));
+
+test("public app startup and close output is validated, never hiding other data changes", () =>
+  withFixture((fixture) => {
+    const files = fixture.metadata[`${fixture.activeProfileId}/manifest.json`].files;
+    const stamps = fixtureCacheSources(fixture.tf2Root, files);
+    const cache = (sha) => ({
+      entries: Object.fromEntries(
+        files
+          .filter((file) => Object.hasOwn(stamps, join(fixture.tf2Root, file.path)))
+          .map((file) => [
+            join(fixture.tf2Root, file.path),
+            { stamp: stamps[join(fixture.tf2Root, file.path)], sha256: sha ?? file.sha256 },
+          ]),
+      ),
+    });
+    const cachePath = join(fixture.library, fixture.activeProfileId, "absorb-cache.json");
+    const settingsPath = join(fixture.data, "settings.json");
+    const window = { x: 0, y: 0, width: 1200, height: 800, maximized: false };
+    mkdirSync(join(fixture.data, "logs"));
+    mkdirSync(join(fixture.data, "maintenance"));
+    writeFileSync(
+      join(fixture.data, "logs", "activity.log"),
+      "2026-09-28T13:40:22Z tidy: Tidy-up: 0 sound caches removed\n",
+    );
+    writeFileSync(
+      join(fixture.data, "maintenance", "tidy-up.json"),
+      '{"version":1,"incompleteRuns":0}',
+    );
+    writeFileSync(cachePath, JSON.stringify(cache()));
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window }));
+    assert.equal(assertWindowsFixturePreserved(fixture).originalBytesPreserved, true);
+
+    writeFileSync(join(fixture.data, "maintenance", "other.json"), "{}");
+    assert.throws(() => assertWindowsFixturePreserved(fixture), /app-data bytes/);
+    rmSync(join(fixture.data, "maintenance", "other.json"));
+    writeFileSync(cachePath, JSON.stringify(cache("0".repeat(64))));
+    assert.throws(() => assertWindowsFixturePreserved(fixture), /absorb cache hash/);
+    writeFileSync(cachePath, JSON.stringify(cache()));
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window, schema: 2 }));
+    assert.throws(
+      () => assertWindowsFixturePreserved(fixture),
+      /settings changed beyond the window placement/,
+    );
   }));
 
 function alteredArchive(fixture, change) {

@@ -42,8 +42,10 @@ signature, or publication time.
 The Windows capability probe is independent of the development app version.
 It installs only the current public build on an isolated GitHub-hosted worker,
 checks genuine profile-menu input, reviews both custom packs, exports via the
-native Save dialog, and verifies normal close and exact preservation. It does
-not build or publish a release. The historical release-upgrade fixture
+native Save dialog, and verifies normal close and exact preservation. Public
+v0.2.1 writes its activity log, tidy-up record, absorb hint and window placement
+on start and close; the check validates and sets those aside as the Linux checks
+do, and compares every other byte exactly. It does not build or publish a release. The historical release-upgrade fixture
 (`package-smoke-v020.json`, from [windows-package-v020](../windows-package-v020/README.md))
 and its guards remain unchanged. Local unit and fixture checks do not substitute
 for the complete hosted installer/WebView2 run.

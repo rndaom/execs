@@ -65,7 +65,9 @@ installer and the signed AppImage/Debian pins are in
 [windows-package-v021](../../../scripts/fixtures/windows-package-v021/README.md) and
 [development-package-v021](../../../scripts/fixtures/development-package-v021.md); all three
 updater signatures verified locally. The development version is 0.2.1, so the Linux job again
-records a same-version replacement. The release-upgrade fixture (`package-smoke-v020.json`) and
+records a same-version replacement. The first hosted Windows run showed that public 0.2.1 writes
+its activity log, tidy-up record and absorb hint; the Windows preservation check now validates and
+sets these and the saved window placement aside, using the Linux checks' helpers. The release-upgrade fixture (`package-smoke-v020.json`) and
 its v0.2.0 source are unchanged. Both hosted package checks on the PR remain the integration proof.
 
 Per-workstream evidence: [mouse recording](binds.md), [RAR decoding and licensing](rar.md),

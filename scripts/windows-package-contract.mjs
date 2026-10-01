@@ -3,6 +3,8 @@ import { spawnSync } from "node:child_process";
 import { lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertFixtureAbsorbCache } from "./absorb-cache-fixture.mjs";
+import { acceptWindowPlacement, setAsideAppMaintenance } from "./app-maintenance-fixture.mjs";
 import { regularFile, sha256, verifyPublicPackage } from "./development-package-guard.mjs";
 import { seedPackageFixture } from "./package-smoke-fixture.mjs";
 import { releaseInstallerName } from "./release-version.mjs";
@@ -193,6 +195,33 @@ export function assertWindowsFixturePreserved(fixture, proof = null) {
   assert.equal(fixture.data, join(fixture.childEnv.APPDATA, "execs"));
   const data = snapshotTree(fixture.data);
   const live = snapshotTree(fixture.tf2Root);
+  // The public app's own startup and close output, validated and then set aside
+  // exactly as in the Linux checks; every other data byte is compared exactly.
+  const cachePath = `profiles/${fixture.activeProfileId}/absorb-cache.json`;
+  if (Object.hasOwn(data.files, cachePath)) {
+    assertFixtureAbsorbCache(
+      fixture.library,
+      fixture.tf2Root,
+      fixture.activeProfileId,
+      fixture.metadata[`${fixture.activeProfileId}/manifest.json`].files,
+      "windows-preservation",
+      fixture.cacheSourceStamps,
+    );
+    delete data.files[cachePath];
+  }
+  setAsideAppMaintenance(
+    fixture.data,
+    data,
+    fixture.baseline.data.directories,
+    "windows-preservation",
+  );
+  acceptWindowPlacement(
+    fixture.data,
+    data,
+    fixture.settings,
+    fixture.baseline.data.files["settings.json"],
+    "windows-preservation",
+  );
   assert.deepEqual(data, fixture.baseline.data, "Original app-data bytes/inventory changed");
   assert.deepEqual(live, fixture.baseline.live, "Original live bytes/inventory changed");
   const exported = snapshotTree(dirname(fixture.exportPath));
