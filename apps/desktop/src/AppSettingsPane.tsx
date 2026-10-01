@@ -38,6 +38,8 @@ export type AppSettingsPaneProps = {
   ready?: boolean;
   /** Absent in contexts that cannot uninstall (tests, first-run shells). */
   onUninstall?: (deleteData: boolean, onError: (message: string) => void) => void;
+  /** Replays the first-run welcome tour; absent before a profile is active. */
+  onShowWelcome?: () => void;
   uninstallBlockedReason?: string | null;
 };
 
@@ -80,6 +82,7 @@ export function AppSettingsPane({
   backAction,
   ready = true,
   onUninstall,
+  onShowWelcome,
   uninstallBlockedReason = null,
 }: AppSettingsPaneProps) {
   const installation = useCopyFeedback();
@@ -177,10 +180,6 @@ export function AppSettingsPane({
               onChange={(motion) => savePreferences({ motion })}
             />
           </div>
-          <p className="t-meta mt-2">
-            Follow system respects your device’s reduced motion setting. Reduce turns off
-            transitions in execs.
-          </p>
         </SettingsSection>
 
         <SettingsSection id="app-updates" title="Updates">
@@ -257,11 +256,7 @@ export function AppSettingsPane({
           ) : null}
         </SettingsSection>
 
-        <SettingsSection
-          id="app-storage"
-          title="App data"
-          description="Profiles, preferences and logs."
-        >
+        <SettingsSection id="app-storage" title="App data">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <p className="t-body min-w-0 break-all text-ink-muted" data-testid="app-data-location">
               {settings.data?.dataDirectory ??
@@ -291,11 +286,7 @@ export function AppSettingsPane({
           />
         </SettingsSection>
 
-        <SettingsSection
-          id="app-health"
-          title="Health"
-          description="What execs can check on this computer, without changing anything."
-        >
+        <SettingsSection id="app-health" title="Health">
           <InstallHealthPanel api={api} />
         </SettingsSection>
 
@@ -321,10 +312,18 @@ export function AppSettingsPane({
             >
               Report a bug <ArrowSquareOut size={15} aria-hidden="true" />
             </button>
+            {onShowWelcome ? (
+              <button
+                type="button"
+                data-testid="app-show-welcome"
+                className="btn btn-ghost"
+                onClick={onShowWelcome}
+              >
+                Show the welcome tour
+              </button>
+            ) : null}
           </div>
-          <p className="t-meta mt-2">
-            Diagnostics include your install path and active profile name.
-          </p>
+          <p className="t-meta mt-2">Diagnostics include your install path and profile name.</p>
           <Disclosure
             profileId={null}
             storageKey="app-credits"
@@ -353,11 +352,7 @@ export function AppSettingsPane({
         </SettingsSection>
 
         {onUninstall ? (
-          <SettingsSection
-            id="app-uninstall"
-            title="Uninstall"
-            description="Remove execs from this computer."
-          >
+          <SettingsSection id="app-uninstall" title="Uninstall">
             <UninstallSection
               api={api}
               blockedReason={!ready ? "Wait for execs to finish starting." : uninstallBlockedReason}
@@ -367,8 +362,7 @@ export function AppSettingsPane({
         ) : null}
       </div>
       <p className="t-meta mt-6">
-        execs is a fan project and is not affiliated with Valve Corporation or Steam. Team Fortress
-        and Steam are trademarks of Valve Corporation.
+        Not affiliated with Valve. Team Fortress and Steam are trademarks of Valve Corporation.
       </p>
     </div>
   );

@@ -1,4 +1,4 @@
-import { ArrowLeft, GearSix } from "@phosphor-icons/react";
+import { ArrowLeft, BookOpen, GearSix } from "@phosphor-icons/react";
 import {
   useCallback,
   useEffect,
@@ -23,6 +23,7 @@ import { Modal } from "./components/ui/Modal";
 import { Loading } from "./components/ui/Spinner";
 import { ToastProvider } from "./components/ui/Toast";
 import { Wordmark } from "./components/ui/Wordmark";
+import { WelcomeTour } from "./components/WelcomeTour";
 import { WriteLockBanner } from "./components/WriteLockBanner";
 import { FirstRunExisting } from "./FirstRunExisting";
 import { useAppPreferences } from "./hooks/useAppPreferences";
@@ -46,11 +47,12 @@ import {
   CONFIRM_HOLD_MS,
   CONFIRM_MAX_MS,
 } from "./lib/boot-ui";
-import { invokeErrorMessage, isTauri, type LaunchSyncStatus } from "./lib/bridge";
+import { invokeErrorMessage, isTauri, type LaunchSyncStatus, openExternal } from "./lib/bridge";
 import { motionHold, revealPane, revealScreen } from "./lib/entrance";
 import { createFilesDraftStore } from "./lib/files-drafts";
 import { confirmEnabled } from "./lib/finder-ui";
 import { firstRunSurface, showStartFromChoice } from "./lib/first-run-ui";
+import { guideUrl } from "./lib/guide";
 import { launchSyncAction, launchSyncWarning } from "./lib/launch-ui";
 import { previewSwitchStep } from "./lib/library-ui";
 import {
@@ -58,6 +60,7 @@ import {
   previewCreating,
   previewSettingsTab,
   previewUpdateProgress,
+  previewWelcome,
 } from "./lib/preview";
 import { createSettingsDraftStore } from "./lib/settings-drafts";
 import {
@@ -68,6 +71,7 @@ import {
   showSettingsChrome,
   writeLastPane,
 } from "./lib/settings-ui";
+import type { WelcomeOrigin } from "./lib/welcome-tour";
 import { SettingsHost } from "./SettingsHost";
 import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard } from "./SetupWizard";
@@ -321,10 +325,41 @@ export function App({
 
   const creating = firstRun.creating;
 
+  // The welcome tour opens once, when first-run setup finishes, and again
+  // from App settings. Nothing about it is stored.
+  const [welcome, setWelcome] = useState<WelcomeOrigin | null>(() =>
+    previewWelcome(preview) ? "saved" : null,
+  );
+  const [welcomeOffersComfig, setWelcomeOffersComfig] = useState(false);
+  useEffect(() => {
+    if (welcome === null) return;
+    let cancelled = false;
+    void api
+      .getActiveProfileDetail()
+      .then((detail) => {
+        if (!cancelled) setWelcomeOffersComfig(detail !== null && detail.layer !== "comfig");
+      })
+      .catch(() => {
+        if (!cancelled) setWelcomeOffersComfig(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, welcome]);
+
+  // From Comfig or the welcome tour: a new profile from the current setup,
+  // named for what it is for. The player's own profile is never converted.
+  const tryComfig = useCallback(() => {
+    setWelcome(null);
+    setDraftName((name) => name || "Trying mastercomfig");
+    filesExit.request(firstRun.openCreate);
+  }, [filesExit, firstRun.openCreate]);
+
   const onSaveCurrent = useCallback(async () => {
     if (await profiles.saveCurrent(draftName)) {
       firstRun.clear();
       setDraftName("");
+      setWelcome("saved");
     }
   }, [profiles, firstRun, draftName]);
 
@@ -372,8 +407,11 @@ export function App({
   }, [api, setLibrary, setError]);
 
   const onApplyWizard = useCallback(async () => {
+    // A later "Create new profile" uses the same wizard; only first run welcomes.
+    const firstProfile = !firstRun.creating;
     if (await firstRun.applyWizard(draftName)) {
       setDraftName("");
+      if (firstProfile) setWelcome("created");
     }
   }, [firstRun, draftName]);
 
@@ -522,6 +560,14 @@ export function App({
             setAppSettingsOpen(false);
             install.change();
           })
+        }
+        onShowWelcome={
+          settingsOpen
+            ? () => {
+                closeAppSettings();
+                setWelcome("saved");
+              }
+            : undefined
         }
         onUninstall={(deleteData, onError) =>
           filesExit.request(async () => {
@@ -699,18 +745,38 @@ export function App({
               onTab={navigateSettings}
               scrollIdentity={`${path}:${profiles.library?.activeProfileId ?? "none"}`}
               utility={
-                <button
-                  ref={appSettingsButton}
-                  type="button"
-                  data-testid="app-settings-open"
-                  aria-current={appSettingsOpen ? "page" : undefined}
-                  data-active={appSettingsOpen ? "true" : "false"}
-                  className="settings-nav-item"
-                  onClick={openAppSettings}
-                >
-                  <GearSix size={16} aria-hidden="true" />
-                  <span className="settings-nav-label">App settings</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    data-testid="guide-open"
+                    className="settings-nav-item"
+                    title={`Guide for ${appSettingsOpen ? "App settings" : SETTINGS_TAB_LABELS[settingsTab]}`}
+                    onClick={() =>
+                      void openExternal(
+                        guideUrl(
+                          appSettingsOpen ? "app-settings" : settingsTab,
+                          update.version,
+                          import.meta.env.DEV,
+                        ),
+                      ).catch(() => {})
+                    }
+                  >
+                    <BookOpen size={16} aria-hidden="true" />
+                    <span className="settings-nav-label">Guide</span>
+                  </button>
+                  <button
+                    ref={appSettingsButton}
+                    type="button"
+                    data-testid="app-settings-open"
+                    aria-current={appSettingsOpen ? "page" : undefined}
+                    data-active={appSettingsOpen ? "true" : "false"}
+                    className="settings-nav-item"
+                    onClick={openAppSettings}
+                  >
+                    <GearSix size={16} aria-hidden="true" />
+                    <span className="settings-nav-label">App settings</span>
+                  </button>
+                </>
               }
             >
               <div ref={profileSettings} hidden={appSettingsOpen}>
@@ -729,6 +795,7 @@ export function App({
                     )?.name ?? null
                   }
                   onNavigate={navigateSettings}
+                  onTryComfig={tryComfig}
                   running={lock.running}
                   externalBusy={
                     busy ||
@@ -774,6 +841,18 @@ export function App({
       }}
     >
       <ToastProvider>
+        <WelcomeTour
+          open={welcome !== null && settingsOpen && !progress.state.active}
+          profileName={
+            profiles.library?.profiles.find(
+              (profile) => profile.id === profiles.library?.activeProfileId,
+            )?.name ?? null
+          }
+          origin={welcome ?? "saved"}
+          offerComfig={welcomeOffersComfig}
+          onClose={() => setWelcome(null)}
+          onTryComfig={tryComfig}
+        />
         <HudOwnershipDialog
           api={api}
           profile={

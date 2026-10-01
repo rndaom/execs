@@ -1,7 +1,6 @@
 import { Check, CheckCircle, Copy, Info, Plus, WarningCircle, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "./components/ui/Alert";
-import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Loading, Spinner } from "./components/ui/Spinner";
@@ -286,9 +285,7 @@ export function LaunchPane({
           </div>
           {remembered.length > 0 ? (
             <p className="t-meta mt-2" data-testid="launch-remembered">
-              {remembered.join(", ")} {remembered.length === 1 ? "stays" : "stay"} in effect after
-              you remove {remembered.length === 1 ? "it" : "them"} or switch profiles, because TF2
-              saves {remembered.length === 1 ? "it" : "them"} in its own settings. Change{" "}
+              TF2 remembers {remembered.join(", ")} after removal. Change{" "}
               {remembered.length === 1 ? "it" : "them"} back in TF2.
             </p>
           ) : null}
@@ -435,8 +432,7 @@ export function LaunchPane({
                     ))}
                   </div>
                   <p className="t-meta mt-2">
-                    Use TF2 Video settings for normal resolution changes. Launch flags can create an
-                    improper video mode.{" "}
+                    Prefer TF2&apos;s video settings; these flags can set an unsupported mode.{" "}
                     {allowSmallResolution
                       ? "With -small, heights from 360 px are available."
                       : "Add -small first for heights below 480 px."}
@@ -622,23 +618,6 @@ export function LaunchPane({
             </div>
           </section>
         ) : null}
-        <Disclosure
-          profileId={profileId}
-          storageKey="launch-removed-options"
-          summary="Options execs removes"
-          className="mt-5"
-        >
-          <p className="t-meta mt-2">
-            Reset flags: <code className="text-ink-muted">-autoconfig</code>,{" "}
-            <code className="text-ink-muted">-default</code>,{" "}
-            <code className="text-ink-muted">-dxlevel</code> and{" "}
-            <code className="text-ink-muted">+quit</code>. Anything before{" "}
-            <code className="text-ink-muted">%command%</code>, such as{" "}
-            <code className="text-ink-muted">gamemoderun</code>,{" "}
-            <code className="text-ink-muted">mangohud</code> or an environment variable, is kept
-            exactly as written.
-          </p>
-        </Disclosure>
       </div>
     </div>
   );

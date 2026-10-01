@@ -1,5 +1,6 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
+import { PresetSummary } from "./components/PresetSummary";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { Disclosure } from "./components/ui/Disclosure";
 import { OptionTile } from "./components/ui/OptionTile";
@@ -95,11 +96,6 @@ function ModuleControl({
           );
         })}
       </fieldset>
-      {module.levels.includes("default") ? (
-        <p className="t-meta mt-1">
-          Use preset inherits its value; Module default writes an explicit override.
-        </p>
-      ) : null}
     </article>
   );
 }
@@ -125,6 +121,7 @@ export function ComfigPane({
   onUpdatePackages,
   onImportCustom,
   onCheckRelease,
+  onTryComfig,
 }: {
   detail: ProfileDetail | null;
   state: ComfigUiState;
@@ -134,6 +131,8 @@ export function ComfigPane({
   onUpdatePackages: () => void;
   onImportCustom: () => void;
   onCheckRelease?: (profileId: string) => Promise<string>;
+  /** Opens New profile, starting from the current setup, to try mastercomfig. */
+  onTryComfig?: () => void;
 }) {
   const { running, busy } = useAppStatus();
   // These are explicit writes. Keep the selected controls and preview on the
@@ -223,6 +222,29 @@ export function ComfigPane({
         ? "Packages not installed"
         : null;
 
+  // A profile without mastercomfig keeps its own configs. Offer a safe way to
+  // try it instead of a page of controls that cannot be used.
+  if (detail && detail.layer !== "comfig") {
+    return (
+      <section data-testid="settings-comfig" className="min-w-0 text-left">
+        <PaneHeader title="Comfig" />
+        <div data-testid="comfig-vanilla-gate" className="comfig-empty">
+          <h2 className="t-section">This profile doesn't use mastercomfig</h2>
+          {onTryComfig ? (
+            <button
+              type="button"
+              data-testid="comfig-try-new-profile"
+              className="btn btn-primary mt-4"
+              onClick={onTryComfig}
+            >
+              Try mastercomfig in a new profile
+            </button>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section data-testid="settings-comfig" className="min-w-0 text-left">
       <PaneHeader
@@ -238,9 +260,8 @@ export function ComfigPane({
 
       {detail && !supported ? (
         <p data-testid="comfig-vanilla-gate" className="pane-note mb-5">
-          This profile does not use mastercomfig. Installing it needs a review of your autoexec,
-          class cfgs and managed settings before moving them into tf/cfg/overrides/. Comfig changes
-          are unavailable here so your current setup keeps working.
+          This profile's mastercomfig files were changed outside execs, so execs leaves them as they
+          are.
         </p>
       ) : null}
 
@@ -279,7 +300,6 @@ export function ComfigPane({
               name="comfig-preset"
               value={item.id}
               title={item.label}
-              description={item.description}
               selected={supported && state.preset === item.id}
               disabled={locked}
               onSelect={() => {
@@ -288,6 +308,7 @@ export function ComfigPane({
             />
           ))}
         </div>
+        {supported ? <PresetSummary preset={state.preset} /> : null}
       </section>
 
       <PaneSection
@@ -448,7 +469,6 @@ export function ComfigPane({
                       : "Updates have not been checked."}
               </p>
             ) : null}
-            {supported ? <p className="t-meta mt-1">Updates apply only to this profile.</p> : null}
           </div>
 
           <div className="pane-actions">
@@ -496,23 +516,22 @@ export function ComfigPane({
       </section>
 
       <p className="pane-note mt-6">
-        Uses official mastercomfig packages. execs is not affiliated with mastercomfig or{" "}
+        Packages by{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://comfig.app")}
           className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
-          comfig.app
+          mastercomfig
         </button>
-        . Support the project through its{" "}
+        , not affiliated with execs ·{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://docs.comfig.app/latest/support_me/")}
           className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
-          donate page
+          Donate
         </button>
-        .
       </p>
     </section>
   );

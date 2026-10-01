@@ -1065,8 +1065,7 @@ function ProfileFilesPane({
                         />
                         {findingType === "catalog" && (
                           <p className="t-meta mt-2">
-                            These commands are absent from the offline reference. That does not mean
-                            the cfg is invalid.
+                            Not in the offline reference. That alone doesn&apos;t make them wrong.
                           </p>
                         )}
                       </>

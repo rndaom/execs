@@ -59,29 +59,28 @@ describe("comfigModulesSummary", () => {
 });
 
 describe("ComfigPane workspaces", () => {
-  it("does not select a preset or offer writes for a vanilla profile", async () => {
+  it("offers a new profile instead of unusable controls for a vanilla profile", async () => {
     const update = vi.fn();
+    const tryComfig = vi.fn();
     await act(async () =>
       render(undefined, PREVIEW_COMFIG_STATE, {
         detail: { id: "vanilla", name: "Default", layer: "vanilla", launchOptions: "", files: [] },
         onUpdatePackages: update,
+        onTryComfig: tryComfig,
       }),
     );
     expect(document.querySelector('[data-testid="comfig-vanilla-gate"]')?.textContent).toContain(
-      "overrides/",
+      "This profile doesn't use mastercomfig",
     );
-    expect(document.querySelectorAll('input[type="radio"]:checked')).toHaveLength(0);
-    expect(
-      document.querySelector<HTMLButtonElement>('[data-testid="comfig-update"]')?.disabled,
-    ).toBe(true);
+    // Nothing on the page can write to this profile.
+    expect(document.querySelectorAll('input[type="radio"]')).toHaveLength(0);
+    expect(document.querySelector('[data-testid="comfig-update"]')).toBeNull();
     for (const addon of OFFICIAL_ADDONS)
-      expect(
-        document.querySelector<HTMLButtonElement>(`[data-testid="comfig-addon-${addon.id}"]`)
-          ?.disabled,
-      ).toBe(true);
+      expect(document.querySelector(`[data-testid="comfig-addon-${addon.id}"]`)).toBeNull();
     await act(async () =>
-      document.querySelector<HTMLButtonElement>('[data-testid="comfig-update"]')?.click(),
+      document.querySelector<HTMLButtonElement>('[data-testid="comfig-try-new-profile"]')?.click(),
     );
+    expect(tryComfig).toHaveBeenCalledOnce();
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -95,7 +94,6 @@ describe("ComfigPane workspaces", () => {
     );
     expect(document.body.textContent).toContain("mastercomfig 9.100.0");
     expect(document.body.textContent).toContain("Update available: 9.100.1");
-    expect(document.body.textContent).toContain("Updates apply only to this profile");
   });
 
   it("keeps an unknown version explicit and reports a failed check", async () => {
@@ -214,6 +212,5 @@ describe("ComfigPane workspaces", () => {
     expect(labels).toContain("Use preset");
     expect(labels).toContain("Module default");
     expect(labels.filter((label) => label === "Default")).toHaveLength(0);
-    expect(document.body.textContent).toContain("Use preset inherits its value");
   });
 });

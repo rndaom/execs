@@ -277,8 +277,8 @@ export function ViewmodelBuilder({
       {state.replacement ? (
         <div role="note" data-testid="viewmodel-catalog-changed" className="pane-note mb-4">
           <p>
-            TF2's files changed. Your unbuilt choices are kept below, but cannot be built against
-            the updated files. Discard them to load the new weapon choices.
+            TF2's files changed, so these choices can't be built. Discard them to load the new
+            weapons.
           </p>
           <button
             type="button"
@@ -557,8 +557,8 @@ function ViewmodelCatalogChoices({
             <div className="pane-note mb-4" data-testid="viewmodel-draft-notice">
               <p>
                 {selected.length === 0 && Object.keys(saved).length > 0
-                  ? "To show every weapon, remove the saved pack below. These choices have not been applied."
-                  : "These choices have not been built. Review and build to apply them; leaving this pane keeps your draft."}
+                  ? "To show every weapon, remove the saved pack below."
+                  : "Not built yet."}
               </p>
               <button
                 type="button"
@@ -643,9 +643,6 @@ function ViewmodelCatalogChoices({
             Some weapons share animations with a melee weapon. Make them match before building.
           </p>
         ) : null}
-        <p className="t-meta mt-3">
-          Only your first-person view changes. Nothing is written until you build the pack.
-        </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button type="button" className="btn btn-ghost" onClick={() => setPresetOpen(false)}>
             Cancel
@@ -689,9 +686,7 @@ function ViewmodelCatalogChoices({
             <Loading>Building from your TF2 files…</Loading>
           ) : locked ? (
             "Close TF2 before building."
-          ) : (
-            "Replaces this profile's viewmodel pack with one built from your TF2 files."
-          )}
+          ) : null}
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button
@@ -798,9 +793,7 @@ function ViewmodelClassChoices({
           <div className="min-w-0 flex-1">
             <p className="t-row">Inspect</p>
             <p className="t-meta">
-              {inspect === "mixed"
-                ? "Some inspect animations are hidden."
-                : "Inspect animations for every weapon."}
+              {inspect === "mixed" ? "Some inspect animations are hidden." : null}
             </p>
           </div>
           <Segmented<"shown" | "full">

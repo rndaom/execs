@@ -104,12 +104,14 @@ export function StorageUsage({
               >
                 <span className="min-w-0">
                   <span className="t-row block">{STORAGE_GROUP_COPY[group.id].label}</span>
-                  <span className="t-meta block">
-                    {STORAGE_GROUP_COPY[group.id].detail}
-                    {group.unreadable > 0
-                      ? ` ${group.unreadable} ${group.unreadable === 1 ? "item" : "items"} could not be read.`
-                      : ""}
-                  </span>
+                  {STORAGE_GROUP_COPY[group.id].detail || group.unreadable > 0 ? (
+                    <span className="t-meta block">
+                      {STORAGE_GROUP_COPY[group.id].detail}
+                      {group.unreadable > 0
+                        ? ` ${group.unreadable} ${group.unreadable === 1 ? "item" : "items"} could not be read.`
+                        : ""}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="t-row shrink-0 tabular-nums">
                   {group.unreadable > 0 ? "At least " : ""}

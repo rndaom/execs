@@ -4,7 +4,6 @@ import { useHudOwnershipReview } from "../hooks/useHudOwnershipReview";
 import type { Api } from "../lib/api";
 import { invokeErrorMessage, type ProfileDetail } from "../lib/bridge";
 import { Alert } from "./ui/Alert";
-import { Disclosure } from "./ui/Disclosure";
 import { Modal } from "./ui/Modal";
 import { OptionTile } from "./ui/OptionTile";
 import { Loading } from "./ui/Spinner";
@@ -162,20 +161,8 @@ function HudOwnershipReview({
 
         <div className="mt-5 flex items-start gap-2 border-t border-edge pt-4">
           <Info size={17} aria-hidden="true" className="mt-0.5 shrink-0 text-ink-muted" />
-          <p className="t-meta">Original HUD copies are kept for recovery.</p>
+          <p className="t-meta">The other HUDs are kept as copies, but not selectable here.</p>
         </div>
-        <Disclosure
-          profileId={profile.id}
-          storageKey="hud-ownership-originals"
-          summary="What happens to the other HUDs"
-          className="mt-3"
-        >
-          <p className="t-meta mt-3">
-            The chosen HUD keeps its contents. Other HUDs move out of the active setup and are kept
-            as original copies for manual recovery; they will not stay selectable inside this
-            profile.
-          </p>
-        </Disclosure>
 
         {running ? (
           <p className="t-meta mt-4" role="status">

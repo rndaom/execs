@@ -46,11 +46,11 @@ export function ModContentAudit({
         }
       >
         <div className="space-y-4 pt-3">
-          <p className="t-meta">
-            {casual
-              ? "Worked out from the files in each pack. Community servers set their own rules."
-              : "When two packs have the same file, TF2 uses the pack whose name comes first alphabetically. Worked out from the files; maps and servers can still change what you see in game."}
-          </p>
+          {casual ? null : (
+            <p className="t-meta">
+              When packs share a file, TF2 uses the one first alphabetically.
+            </p>
+          )}
           {casual ? (
             <ul className="space-y-3">
               {audit.packs.map((pack) => {
@@ -88,10 +88,7 @@ export function ModContentAudit({
               {audit.splitModels.map((model) => (
                 <div key={model.model}>
                   <p className="t-row break-all">Model parts from different packs: {model.model}</p>
-                  <p className="t-meta">
-                    Parts of one model from different packs may not fit together, for example
-                    causing broken ragdolls.
-                  </p>
+                  <p className="t-meta">These parts may not fit together.</p>
                   <ul className="mt-1 space-y-1">
                     {model.components.map((component) => (
                       <li className="t-meta break-all" key={component.path}>
@@ -108,8 +105,8 @@ export function ModContentAudit({
             <div key={pack.pack}>
               <p className="t-row break-words">{pack.pack} replaces TF2's sound scripts</p>
               <p className="t-meta break-words">
-                {pack.soundScripts.join(", ")}. After a TF2 update an old copy can leave newer
-                weapons silent, and execs can't tell whether this copy is current.
+                {pack.soundScripts.join(", ")}. An old copy can silence newer weapons after a TF2
+                update.
               </p>
             </div>
           ))}

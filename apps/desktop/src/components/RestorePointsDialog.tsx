@@ -163,8 +163,7 @@ export function RestorePointsDialog({
       onClose={onClose}
     >
       <p className="t-meta mt-1">
-        A restore point keeps a copy of a saved profile on this computer. Restoring adds it as a new
-        profile; nothing in TF2 changes until you switch to it.
+        Restoring adds a point as a new profile. TF2 doesn&apos;t change until you switch.
       </p>
 
       {selected ? (

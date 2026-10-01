@@ -112,13 +112,6 @@ export function GameBananaCard({
             <span className="t-row">
               {installing ? (soundSlot ? "Preparing sounds" : "Installing") : "Loading files"}
             </span>
-            <span className="t-meta">
-              {installing
-                ? soundSlot
-                  ? "Downloading from GameBanana and getting its sounds ready for Sounds."
-                  : "Downloading from GameBanana and adding it to this profile."
-                : "Reading the author's file list."}
-            </span>
           </div>
         ) : null}
       </div>
@@ -137,14 +130,7 @@ export function GameBananaCard({
           <p className="t-meta mt-0.5 break-words">by {mod.author} · GameBanana</p>
         </div>
         <p className="t-meta tnum">{meta}</p>
-        {mod.route === "hud" ? (
-          <p className="t-meta">This is a HUD. Import the author's archive in HUD.</p>
-        ) : soundSlot ? (
-          <p className="t-meta">
-            A {soundSlot === "hit" ? "hit" : "kill"} sound. It opens in Sounds, where you can
-            preview it and choose it for either slot.
-          </p>
-        ) : mod.section === "mod" && mod.categoryId === GAMEBANANA_MAPS_CATEGORY ? (
+        {mod.section === "mod" && mod.categoryId === GAMEBANANA_MAPS_CATEGORY ? (
           <p className="t-meta">{GAMEBANANA_MAP_NOTE}</p>
         ) : null}
         {failed ? (

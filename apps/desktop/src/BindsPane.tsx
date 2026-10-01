@@ -536,7 +536,7 @@ export function BindsPane({
                 className="field mt-2 block w-full px-3 py-2"
                 value={customCommand}
                 maxLength={1024}
-                placeholder="say gg"
+                placeholder="say gg; voicemenu 2 6"
                 aria-describedby="bind-custom-feedback"
                 aria-invalid={customCommand.length > 0 && customValidation.problem !== null}
                 onChange={(event) => {
@@ -547,12 +547,7 @@ export function BindsPane({
               <div id="bind-custom-feedback" className="t-meta mt-2" aria-live="polite">
                 {customCommand && customValidation.problem ? (
                   <p className="text-warn">{customValidation.problem}</p>
-                ) : (
-                  <p>
-                    Enter the command, then record a key. Separate multiple commands with a
-                    semicolon.
-                  </p>
-                )}
+                ) : null}
                 {customValidation.findings
                   .filter((finding) => finding.tier !== "block")
                   .slice(0, 5)
@@ -620,13 +615,6 @@ export function BindsPane({
           </section>
         ) : null}
       </div>
-
-      <p className="t-meta mt-8 px-2 text-ink-faint">
-        {canRecord
-          ? "Click an action, then press a key or mouse button. "
-          : "Finish the current task first. "}
-        Keys you add save to <span className="text-ink-muted">{path}</span>.
-      </p>
     </section>
   );
 }

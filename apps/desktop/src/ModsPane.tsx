@@ -387,10 +387,7 @@ export function ModsPane({
         <Alert tone="warn" testId="mods-hud-import-required" className="mt-4">
           <span className="block font-medium">This pack needs HUD review</span>
           <span className="mt-1 block">{hudImportRequired}</span>
-          <span className="t-meta mt-1 block">
-            Open HUD, then choose Import HUD and select the intended source again to review the
-            replacement.
-          </span>
+          <span className="t-meta mt-1 block">Import it again from HUD.</span>
           <span className="mt-3 flex flex-wrap gap-2">
             {onReviewHudImport ? (
               <button type="button" className="btn btn-ghost" onClick={onReviewHudImport}>
@@ -614,7 +611,7 @@ export function ModsPane({
                 id="mods-profile-preload"
                 testId="mods-profile-preload"
                 label="Preload on launch"
-                description="Opens the offline itemtest map, then returns to the menu. Saves immediately."
+                description="Loads itemtest once at startup."
                 checked={payload?.profilePreload ?? false}
                 disabled={locked || !payload}
                 onChange={onTogglePreload}
@@ -623,7 +620,7 @@ export function ModsPane({
                 id="mods-bypass-toggle"
                 testId="mods-bypass-toggle"
                 label="Material bypass"
-                description="Keeps preloaded materials live on sv_pure; edits one line in gameinfo.txt, backed up first."
+                description="Edits one line in gameinfo.txt."
                 checked={status?.gameinfoBypassed ?? false}
                 disabled={locked || !status?.gameinfoFound}
                 onChange={onToggleBypass}
@@ -631,20 +628,12 @@ export function ModsPane({
             </div>
           </section>
 
-          <PaneSection title="Casual selection" description="Choose sources, then Apply mods.">
+          <PaneSection title="Casual selection">
             {savedLibraryAddons.length + savedLibraryParticles.length > 0 ? (
               <p className="t-meta mt-4">
-                Your saved cueki library choices still show here and can be removed. They can be
-                reapplied only while their original download is still on this device. New library
-                choices are no longer offered.
+                Saved cueki choices reapply only while their download is still on this PC.
               </p>
-            ) : (
-              <p className="t-meta mt-4">
-                Flat Textures, Developer Textures, and the two overlay choices download their
-                verified author files on Apply. Particle sources from your installed mods remain
-                available.
-              </p>
-            )}
+            ) : null}
             {loading && !catalog ? (
               <p className="t-meta mt-4" role="status">
                 <Loading>Loading library…</Loading>
@@ -666,35 +655,30 @@ export function ModsPane({
                     >
                       <div>
                         <p className="t-meta mt-2">
-                          Flat Textures v1 uses the{" "}
                           <button
                             type="button"
                             className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
                             onClick={() => void openExternal("https://gamebanana.com/mods/295065")}
                           >
-                            original GameBanana file
+                            Flat Textures
                           </button>{" "}
-                          by flewvar, with textures credited to JarateKing. Developer Textures
-                          Overhaul v2 uses the{" "}
+                          by flewvar (textures by JarateKing) ·{" "}
                           <button
                             type="button"
                             className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
                             onClick={() => void openExternal("https://gamebanana.com/mods/336110")}
                           >
-                            original GameBanana file
+                            Developer Textures Overhaul
                           </button>{" "}
-                          as an FPS_Engineer rework of an earlier pack reuploaded by ayrtonSilna;
-                          the original maker is unidentified. No Burning Overlay and No Sentry
-                          Shield Overlay use the{" "}
+                          by FPS_Engineer, from ayrtonSilna&apos;s reupload ·{" "}
                           <button
                             type="button"
                             className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
                             onClick={() => void openExternal("https://gamebanana.com/mods/435309")}
                           >
-                            original Square Series GameBanana file
+                            Square Series
                           </button>{" "}
-                          submitted by ghytd. Previously saved cueki choices use only the verified
-                          local cache. Selected files are packed into your local preload addon.
+                          overlays by ghytd
                         </p>
                         <ul className="mt-3 list-none p-0">
                           {[...directAddons, ...savedLibraryAddons].map((addon) => (
@@ -732,7 +716,6 @@ export function ModsPane({
                       }
                     >
                       <div>
-                        <p className="t-meta mt-2">Stock files are backed up before patching.</p>
                         <ul className="mt-3 list-none p-0">
                           {savedLibraryParticles.map((mod) => (
                             <ParticleRow
@@ -794,9 +777,6 @@ export function ModsPane({
                 {particleOverlaps.length > 0 ? (
                   <div data-testid="mods-particle-conflicts" className="mt-6">
                     <h3 className="eyebrow">Overlapping files</h3>
-                    <p className="t-meta mt-1">
-                      Each particle file comes whole from one mod; overlapping files are not merged.
-                    </p>
                     <ul className="mt-3 list-none p-0">
                       {particleOverlaps.map((conflict) => {
                         const others = conflict.providers.filter(
@@ -838,7 +818,7 @@ export function ModsPane({
                             </div>
                             {blocked ? (
                               <p className="t-meta mt-1">
-                                Particles from your own mods always win over library particles.
+                                Your own mod&apos;s particles always win.
                               </p>
                             ) : null}
                           </li>
@@ -924,9 +904,7 @@ export function ModsPane({
                   >
                     Restore stock files
                   </button>
-                  <p className="t-meta">
-                    Applying turns Preload on. Restore keeps your installed mod packs.
-                  </p>
+                  <p className="t-meta">Apply turns Preload on.</p>
                 </div>
               </aside>
             </div>
@@ -982,7 +960,7 @@ export function ModsPane({
         role="alertdialog"
         testId="mods-restore-confirm"
         title="Restore stock files?"
-        description="This restores the original particle files, reverses the material bypass and removes the Casual addon pack. Your installed mods remain in this profile."
+        description="Puts back the original particle files and gameinfo.txt, and removes the Casual addon pack. Your mods stay."
         className="fixed top-24 left-1/2 z-50 w-[min(460px,calc(100vw-2.5rem))] -translate-x-1/2"
         onClose={() => setConfirmRestore(false)}
       >

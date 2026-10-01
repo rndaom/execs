@@ -56,7 +56,7 @@ it("retries a failed stock read and offers comfig.app but not the retired TF2Hit
     expect(box.textContent).toContain("Game archive unavailable");
     const stockBoost = box.querySelector<HTMLInputElement>('[data-testid="sounds-hit-boost-6"]');
     expect(stockBoost?.disabled).toBe(true);
-    expect(box.textContent).toContain("Choose your own sound file to boost it.");
+    expect(box.textContent).toContain("Needs your own file.");
     const retry = () =>
       [...box.querySelectorAll("button")].find((button) =>
         button.textContent?.includes("Retry sources"),
@@ -168,7 +168,7 @@ it("keeps a retired TF2Hitsounds sound playable without offering its catalog", a
     expect(hitsoundBytes).toHaveBeenLastCalledWith({ kind: "installed", slot: "hit" });
     const customBoost = box.querySelector<HTMLInputElement>('[data-testid="sounds-hit-boost-6"]');
     expect(customBoost?.disabled).toBe(true);
-    expect(box.textContent).toContain("Saved catalog sounds keep their boost.");
+    expect(box.textContent).toContain("This sound's boost can't change.");
   } finally {
     await act(async () => root.unmount());
     box.remove();
@@ -224,12 +224,12 @@ it("discloses competing mounted sound paths without claiming a playback winner",
     const panel = box.querySelector('[data-testid="sounds-source-conflicts"]');
     expect(panel?.textContent).toContain("tf/custom/other-hits.vpk → sound/ui/hitsound.wav");
     expect(panel?.textContent).toContain("tf/custom/creator/sound/ui/killsound.wav");
-    expect(panel?.textContent).toContain("in-game source depends on TF2's mount order");
+    expect(panel?.textContent).toContain("so TF2 may play theirs");
     expect(box.querySelector('[data-testid="sounds-source-incomplete"]')?.textContent).toContain(
       "Could not inspect unreadable.vpk",
     );
     expect(box.querySelector('[data-testid="sounds-source-changed"]')?.textContent).toContain(
-      "Its saved name and source may no longer describe the installed audio",
+      "A sound file changed outside execs",
     );
     expect(box.querySelector('[data-testid="sounds-hit-name"]')?.textContent).toBe("my hit");
   } finally {
@@ -628,8 +628,8 @@ it("lists a GameBanana kill sound once, aimed at its slot, without saving anythi
       true,
     );
     const note = box.querySelector('[data-testid="sounds-gamebanana-added"]')?.textContent;
-    expect(note).toContain("Added 2 sounds from “Oof pack” on GameBanana, made for kills.");
-    expect(note).toContain("1 other file in the download could not be used.");
+    expect(note).toContain("Added 2 sounds from “Oof pack”.");
+    expect(note).toContain("1 file couldn't be used.");
     const row = box.querySelector('[data-testid="sounds-row-own:t2"]');
     expect(row?.textContent).toContain("From GameBanana");
     expect(row?.textContent).not.toContain("Your file");

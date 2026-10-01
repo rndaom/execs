@@ -9,6 +9,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- A Guide button in the sidebar opens the [execs guide](docs/guide/README.md) page for the pane
+  you're on, for your version of execs.
+- A short welcome tour after first-run setup explains profiles: your setup is saved, change
+  things from the sidebar, try ideas in a new profile and switch back, and close TF2 before
+  changing things. Skip it at any step; App settings can show it again.
 - Sounds has Game volume and Music volume sliders. Once you set them, the profile keeps its own
   levels, so switching profiles or a replaced `config.cfg` no longer resets TF2 to full volume, and
   changes you make in TF2's own options are kept after the game closes.
@@ -28,6 +33,12 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Changed
 
+- Panes, dialogs and first-run screens keep to short labels: explanations of how things work moved
+  into the guide, and warnings and errors are one line each. The "where these values come from"
+  and "class cfgs and launch options" folds are gone.
+- Comfig on a profile that doesn't use mastercomfig shows one plain explanation and a Try
+  mastercomfig in a new profile button, instead of a page of greyed-out controls. Your own
+  profile is never converted.
 - A mod that also replaces TF2's hit or kill sound says so before you install it, and is not
   selected for you, because it can override the sound you chose in Sounds.
 - GUI mods from GameBanana, such as menus, icons, fonts and loading screens, install in one click
@@ -53,6 +64,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- On a PC where TF2 has not been played for a while, every settings pane stopped with "Could not
+  read settings: tf/cfg/config.cfg" right after Save current setup, and Files showed config.cfg
+  empty. TF2's settings were only in the Steam Cloud copy; execs now reads that copy until TF2
+  writes its own file. Nothing was lost.
 - RAR mods saved with WinRAR's default settings install instead of failing with "uses Quick Open
   header caching".
 - Mods with large single-colour textures, such as crosshair packs, install instead of failing with

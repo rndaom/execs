@@ -58,7 +58,7 @@ describe("GameplayPane weapon controls", () => {
     await act(async () => render(props));
     expect(control("gameplay-autoreload")?.disabled).toBe(false);
     expect(control("gameplay-fastswitch")?.getAttribute("aria-checked")).toBe("true");
-    expect(document.body.textContent).toContain("weapon selection mode 2");
+    expect(document.body.textContent).toContain("Your cfg uses mode 2");
     expect(document.querySelector('[data-testid="gameplay-viewmodel-fov"]')).toBeNull();
     expect(document.body.textContent).toContain("54.12345°");
     await act(async () => control("gameplay-autoreload")?.click());
@@ -95,14 +95,13 @@ describe("GameplayPane weapon controls", () => {
     expect(control("gameplay-flip")).toBeNull();
     expect(control("gameplay-transparent-viewmodels")).toBeNull();
     expect(control("gameplay-draw-viewmodel")).toBeNull();
-    expect(
-      document.querySelector<HTMLDetailsElement>('[data-testid="gameplay-advanced"]')?.open,
-    ).toBe(true);
+    // Tracers sit with the weapon switches; there is no Advanced fold for one switch.
+    expect(document.querySelector('[data-testid="gameplay-advanced"]')).toBeNull();
     await act(async () => control("gameplay-open-viewmodels")?.click());
     expect(onOpenViewmodels).toHaveBeenCalledOnce();
-    expect(document.querySelector('[aria-label="Field of view values"]')?.textContent).toContain(
-      "These values describe the cfg settings",
-    );
+    expect(
+      document.querySelector('[aria-label="Field of view values"]')?.textContent,
+    ).not.toContain("These values describe the cfg settings");
   });
 
   it("shows existing comfort values and autosaves a changed one", async () => {
@@ -116,10 +115,10 @@ describe("GameplayPane weapon controls", () => {
     expect(control("gameplay-medigun-autoheal")?.getAttribute("aria-checked")).toBe("true");
     expect(control("gameplay-combattext")?.getAttribute("aria-checked")).toBe("false");
     expect(control("gameplay-combattext-healing")?.getAttribute("aria-checked")).toBe("false");
-    expect(document.body.textContent).toContain("Applies when damage numbers are on.");
+    expect(document.body.textContent).toContain("Needs damage numbers.");
 
     await act(async () => control("gameplay-combattext")?.click());
-    expect(document.body.textContent).not.toContain("Applies when damage numbers are on.");
+    expect(document.body.textContent).not.toContain("Needs damage numbers.");
     await act(async () => vi.runAllTimersAsync());
     expect(save).toHaveBeenCalledTimes(1);
     const text = save.mock.calls[0][0];

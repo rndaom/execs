@@ -49,7 +49,6 @@ import {
   boostOf,
   choiceLabel,
   choiceSourceLabel,
-  HITSOUND_CASUAL_COPY,
   packChangeNeeded,
   pickForChoice,
   type SlotDraft,
@@ -456,9 +455,6 @@ export function SoundsPane({
             onChange={(value) => setDraft((current) => ({ ...current, musicVolume: value / 100 }))}
           />
         </div>
-        <p className="t-meta mt-1">
-          Saved with this profile. Changes you make in TF2's options are kept after the game closes.
-        </p>
       </section>
 
       <div className="pane-split gap-y-6">
@@ -511,8 +507,7 @@ export function SoundsPane({
 
       {hasSavedCatalogSound ? (
         <section data-testid="sounds-retired-source" className="pane-note mt-4">
-          A sound here comes from a catalog execs no longer offers. It still plays; choosing another
-          sound replaces it.
+          A sound here is from a retired catalog. It still plays.
         </section>
       ) : null}
 
@@ -520,9 +515,7 @@ export function SoundsPane({
         <section data-testid="sounds-source-changed" role="alert" className="surface mt-4 p-3">
           <h2 className="t-row">Saved sound source changed</h2>
           <p className="t-meta mt-1">
-            A managed WAV changed outside execs. Its saved name and source may no longer describe
-            the installed audio. Reselect both sounds from the library below, or use Remove sound
-            files to return to TF2&apos;s default paths.
+            A sound file changed outside execs. Pick both sounds again, or use Remove sound files.
           </p>
         </section>
       ) : null}
@@ -537,9 +530,7 @@ export function SoundsPane({
           ) : null}
           {hitSources.length || killSources.length ? (
             <p className="t-meta mt-1">
-              These packs also provide TF2&apos;s canonical sound paths. A saved sound in execs
-              describes its managed file; the in-game source depends on TF2&apos;s mount order and
-              has not been verified here.
+              These packs also replace TF2&apos;s hit or kill sound, so TF2 may play theirs.
             </p>
           ) : null}
           {(
@@ -567,9 +558,7 @@ export function SoundsPane({
           )}
           {sourceIssues.length ? (
             <div data-testid="sounds-source-incomplete" className="t-meta mt-2 text-warn">
-              <p>
-                Some installed packs could not be inspected, so this source list may be incomplete.
-              </p>
+              <p>Some packs couldn&apos;t be checked.</p>
               <ul className="mt-1 list-disc pl-5">
                 {sourceIssues.map((issue) => (
                   <li key={issue}>{issue}</li>
@@ -600,7 +589,7 @@ export function SoundsPane({
                 <Slider
                   id={`sounds-${kind}-pitch-min`}
                   label="Pitch at 10 damage"
-                  hint="100 is unchanged; lower is deeper."
+                  hint="100 is normal."
                   value={draft[kind].pitchMin}
                   min={PITCH_MIN}
                   max={PITCH_MAX}
@@ -610,7 +599,6 @@ export function SoundsPane({
                 <Slider
                   id={`sounds-${kind}-pitch-max`}
                   label="Pitch at 150 damage"
-                  hint="Rises with damage when above the 10-damage pitch."
                   value={draft[kind].pitchMax}
                   min={PITCH_MIN}
                   max={PITCH_MAX}
@@ -623,7 +611,7 @@ export function SoundsPane({
               <Slider
                 id="sounds-repeat-delay"
                 label="Hit sound repeat delay"
-                hint="0 plays one per damage tick; miniguns get loud."
+                hint="0 plays every hit."
                 value={Math.round(draft.repeatDelay * 100)}
                 min={0}
                 max={100}
@@ -884,22 +872,18 @@ export function SoundsPane({
       </section>
 
       <p className="pane-note mt-6">
-        {HITSOUND_CASUAL_COPY} comfig.app sounds are community uploads from the{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://comfig.app/hits/")}
           className="underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
-          comfig.app hits library
-        </button>
-        ; each clip belongs to its creator.
+          comfig.app
+        </button>{" "}
+        sounds belong to their creators.
       </p>
 
       {/* Stays in reach at any scroll position: previews are often loud. */}
-      <fieldset
-        className="sound-preview-dock"
-        title="Only for previews in execs. TF2 plays each sound at its slot's Volume."
-      >
+      <fieldset className="sound-preview-dock" title="Preview volume only">
         <legend className="sr-only">Sound previews</legend>
         <button
           type="button"
@@ -1141,10 +1125,10 @@ function SoundSlot({
           <p className="t-row">Boost</p>
           <p className="t-meta">
             {slot.choice.kind === "stock"
-              ? "Choose your own sound file to boost it."
+              ? "Needs your own file."
               : retiredBoost
-                ? "Saved catalog sounds keep their boost."
-                : "Makes the custom file itself louder."}
+                ? "This sound's boost can't change."
+                : null}
           </p>
         </div>
         <Segmented
