@@ -107,4 +107,8 @@ must be tried in the installed candidate before the tag:
 
 ## Candidate
 
-Not run yet.
+Private candidate run [36912018399](https://github.com/rndaom/execs/actions/runs/36912018399)
+on `63c67d39` passed every job: CI gate, Windows and Linux builds, and the verify job
+(signed updater feed for both platforms and the upgrade from public 0.2.1 with the
+profile library preserved). Its installers sit in the private v0.2.2 draft for the
+owner's hands-on test pass.
