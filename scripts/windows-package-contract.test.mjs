@@ -710,6 +710,21 @@ test("public app startup and close output is validated, never hiding other data 
     writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window }));
     assert.equal(assertWindowsFixturePreserved(fixture).originalBytesPreserved, true);
 
+    // v0.2.1 writes every preference when it saves; the seed already holds the defaults.
+    assert.deepEqual(fixture.settings.preferences, {
+      checkForUpdatesOnStartup: true,
+      motion: "system",
+    });
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({ ...fixture.settings, window, preferences: { motion: "reduce" } }),
+    );
+    assert.throws(
+      () => assertWindowsFixturePreserved(fixture),
+      /settings changed beyond the window placement/,
+    );
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window }));
+
     writeFileSync(join(fixture.data, "maintenance", "other.json"), "{}");
     assert.throws(() => assertWindowsFixturePreserved(fixture), /app-data bytes/);
     rmSync(join(fixture.data, "maintenance", "other.json"));

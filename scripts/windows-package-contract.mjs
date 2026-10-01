@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import {
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertFixtureAbsorbCache } from "./absorb-cache-fixture.mjs";
@@ -142,7 +149,15 @@ export function selectPreviousNsis(release, version) {
 }
 
 export function seedWindowsFixture(scratch, version) {
-  const fixture = seedPackageFixture(scratch, true, version, windowsPublicFixture);
+  const base = seedPackageFixture(scratch, true, version, windowsPublicFixture);
+  // The public app's default preferences, written out: closing saves the whole
+  // settings file with its window placement, which is the only change accepted.
+  const settings = {
+    ...base.settings,
+    preferences: { checkForUpdatesOnStartup: true, motion: "system" },
+  };
+  writeFileSync(join(base.data, "settings.json"), `${JSON.stringify(settings, null, 2)}\n`);
+  const fixture = { ...base, settings };
   for (const name of ["tmp", "webview", "exports"]) mkdirSync(join(scratch, name));
   const index = fixture.metadata["index.json"];
   const activeProfileId = index.activeProfileId;
