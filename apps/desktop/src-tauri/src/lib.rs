@@ -830,8 +830,6 @@ pub fn run() {
             commands::preloader::set_profile_preload,
             commands::hud::import_hud_archive,
             commands::hud::import_hud_folder,
-            commands::mods::import_mod_archive,
-            commands::mods::import_mod_folder,
             commands::mod_import::prepare_import_mod_archive,
             commands::mod_import::prepare_import_mod_folder,
             commands::mod_import::prepare_gamebanana_mod,
@@ -844,7 +842,6 @@ pub fn run() {
             commands::mods::search_gamebanana_mods,
             commands::mods::gamebanana_mod_categories,
             commands::mods::gamebanana_download_variants,
-            commands::mods::install_gamebanana_mod,
         ])
         .on_window_event(|window, event| {
             // Save before the close guard decides; a cancelled close only

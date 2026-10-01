@@ -674,13 +674,9 @@ fn is_hud_category(category: &CategoryRow) -> bool {
 }
 
 /// Name and page URL, so an install can record what the user actually chose
-/// rather than trusting a name passed across the bridge.
-pub fn mod_profile(id: u64) -> Result<GameBananaProfile, String> {
-    submission_profile(GameBananaSection::Mod, id)
-}
-
-/// [`mod_profile`] for either section. The route says whether the submission
-/// is a hit or kill sound, which only the Sounds pane uses.
+/// rather than trusting a name passed across the bridge. The route says
+/// whether a Sounds submission is a hit or kill sound, which only the Sounds
+/// pane uses.
 pub fn submission_profile(
     section: GameBananaSection,
     id: u64,
@@ -891,10 +887,6 @@ fn variants_from_files(
             split_part: is_split_part(&file),
         })
         .collect())
-}
-
-pub fn download_file(id: u64, file_id: u64) -> Result<DownloadPick, String> {
-    download_file_in(GameBananaSection::Mod, id, file_id, FileUse::Pack)
 }
 
 pub fn download_file_in(
@@ -2187,6 +2179,7 @@ mod tests {
             .iter()
             .find(|record| record.route == GameBananaModRoute::Mod)
             .unwrap();
+        let mod_profile = |id| submission_profile(GameBananaSection::Mod, id);
         let profile = mod_profile(mod_record.id).unwrap();
         println!("profile: {profile:?}");
         // Maps install like other mods (tr_walkway); a HUD goes to the HUD pane.

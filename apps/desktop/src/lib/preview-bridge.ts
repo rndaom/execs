@@ -1363,12 +1363,6 @@ export function createPreviewApi(state: PreviewState): Api {
     async cancelModImport(token: string) {
       if (pendingModImport?.token === token) pendingModImport = null;
     },
-    async importModArchive() {
-      throw notInPreview("Importing a mod archive");
-    },
-    async importModFolder() {
-      throw notInPreview("Importing a mod folder");
-    },
     async removeMod(id: string) {
       mods = mods.filter((mod) => mod.id !== id);
       modsPayload = {
@@ -1529,9 +1523,6 @@ export function createPreviewApi(state: PreviewState): Api {
         });
       }
       return files;
-    },
-    async installGameBananaMod(id: number, fileId: number) {
-      return previewInstallGameBanana(id, fileId, "mod");
     },
 
     // --- preloader ----------------------------------------------------------

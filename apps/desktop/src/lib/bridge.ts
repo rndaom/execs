@@ -1559,15 +1559,6 @@ export async function cancelModImport(token: string): Promise<void> {
   return call("cancel_mod_import", { token });
 }
 
-export async function importModArchive(): Promise<ProfileDetail | null> {
-  return call<ProfileDetail | null>("import_mod_archive");
-}
-
-/** Pick a folder and install it into the active profile. Null = cancelled. */
-export async function importModFolder(): Promise<ProfileDetail | null> {
-  return call<ProfileDetail | null>("import_mod_folder");
-}
-
 export async function removeMod(id: string): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_mod", { id });
 }
@@ -1635,10 +1626,6 @@ export async function gameBananaDownloadVariants(
     section,
     forSounds,
   });
-}
-
-export async function installGameBananaMod(id: number, fileId: number): Promise<ProfileDetail> {
-  return call<ProfileDetail>("install_gamebanana_mod", { id, fileId });
 }
 
 // ---------------------------------------------------------------------------
