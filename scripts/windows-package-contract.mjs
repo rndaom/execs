@@ -9,7 +9,7 @@ import { releaseInstallerName } from "./release-version.mjs";
 
 // Independent of candidate versions: this capability probe runs only the current public installer.
 export const windowsPublicFixture = JSON.parse(
-  readFileSync(new URL("./fixtures/windows-package-v020/fixture.json", import.meta.url), "utf8"),
+  readFileSync(new URL("./fixtures/windows-package-v021/fixture.json", import.meta.url), "utf8"),
 );
 
 export function selectCurrentPublicNsis(release) {
