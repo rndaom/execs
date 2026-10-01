@@ -18,6 +18,8 @@ import type { Api } from "./lib/api";
 import type {
   CatalogAddon,
   CatalogParticleMod,
+  GameBananaMod,
+  GameBananaSection,
   ModRecord,
   ModsCatalog,
   ParticleSource,
@@ -89,7 +91,13 @@ export type ModsPaneProps = {
   onSetModEnabled?: (id: string, enabled: boolean) => void;
   onCopyMod?: (id: string, targetProfileId: string) => Promise<boolean>;
   /** Resolves once the install and the profile reload behind it finished. */
-  onInstallGameBananaMod: (id: number, fileId: number) => Promise<ModInstallResult>;
+  onInstallGameBananaMod: (
+    id: number,
+    fileId: number,
+    section: GameBananaSection,
+  ) => Promise<ModInstallResult>;
+  /** Prepares a GameBanana hit or kill sound and opens it in Sounds. */
+  onUseGameBananaSound?: (mod: GameBananaMod, fileId: number) => Promise<true | { failed: string }>;
   /** A refused mod payload that must use the HUD replacement review. */
   hudImportRequired?: string | null;
   onReviewHudImport?: () => void;
@@ -126,6 +134,7 @@ export function ModsPane({
   onSetModEnabled,
   onCopyMod,
   onInstallGameBananaMod,
+  onUseGameBananaSound,
   hudImportRequired,
   onReviewHudImport,
   onDismissHudImport,
@@ -528,6 +537,7 @@ export function ModsPane({
             running={running}
             previewData={previewData}
             onInstall={onInstallGameBananaMod}
+            onUseInSounds={onUseGameBananaSound}
             onOpenHud={onReviewHudImport}
             onManageInstalled={() => setTask("installed")}
           />

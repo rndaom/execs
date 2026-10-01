@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../lib/api";
-import type { GameBananaCategory, GameBananaPage, GameBananaSort } from "../lib/bridge";
+import type {
+  GameBananaCategory,
+  GameBananaPage,
+  GameBananaSection,
+  GameBananaSort,
+} from "../lib/bridge";
 import {
   GAMEBANANA_DEFAULT_SORT,
   GAMEBANANA_SEARCH_DEBOUNCE_MS,
@@ -36,6 +41,9 @@ export type GameBananaCategoriesResource =
   | { status: "error"; records: GameBananaCategory[]; message: string };
 
 export type GameBananaBrowserModel = {
+  /** GameBanana's Mods or Sounds section; each has its own categories. */
+  section: GameBananaSection;
+  setSection: (section: GameBananaSection) => void;
   query: string;
   setQuery: (query: string) => void;
   submitSearch: () => void;
@@ -79,6 +87,7 @@ export function useGameBananaBrowser({
   /** Injectable monotonic-enough wall clock for deterministic cache tests. */
   now?: () => number;
 }): GameBananaBrowserModel {
+  const [section, setSectionValue] = useState<GameBananaSection>("mod");
   const [query, setQueryValue] = useState("");
   const [term, setTerm] = useState("");
   const [sort, setSortValue] = useState<GameBananaSort>(GAMEBANANA_DEFAULT_SORT);
@@ -95,6 +104,10 @@ export function useGameBananaBrowser({
   const requestSequence = useRef(0);
   const categorySequence = useRef(0);
   const categoryPending = useRef<number | null>(null);
+  // Each section keeps its own categories, so switching back costs nothing.
+  const categoriesBySection = useRef(new Map<GameBananaSection, GameBananaCategoriesResource>());
+  const sectionRef = useRef(section);
+  sectionRef.current = section;
   const mounted = useRef(true);
   const categoriesRef = useRef(categories);
   const nowRef = useRef(now);
@@ -111,12 +124,12 @@ export function useGameBananaBrowser({
   }, []);
 
   const request = useMemo(
-    () => identity({ query: term, sort, category, page: pageNumber, includeMature }),
-    [term, sort, category, pageNumber, includeMature],
+    () => identity({ section, query: term, sort, category, page: pageNumber, includeMature }),
+    [section, term, sort, category, pageNumber, includeMature],
   );
   const desiredRequest = useMemo(
-    () => identity({ query, sort, category, page: pageNumber, includeMature }),
-    [query, sort, category, pageNumber, includeMature],
+    () => identity({ section, query, sort, category, page: pageNumber, includeMature }),
+    [section, query, sort, category, pageNumber, includeMature],
   );
 
   const loadRequest = useCallback(
@@ -144,6 +157,7 @@ export function useGameBananaBrowser({
           next.page,
           next.includeMature,
           refreshNative,
+          next.section,
         );
         if (!mounted.current || token !== requestSequence.current) return;
         const snapshot = writeGameBananaPageCache(
@@ -185,23 +199,29 @@ export function useGameBananaBrowser({
     return () => window.clearTimeout(timer);
   }, [query, term]);
 
-  const publishCategories = useCallback((next: GameBananaCategoriesResource) => {
-    categoriesRef.current = next;
-    setCategoriesValue(next);
-  }, []);
+  const publishCategories = useCallback(
+    (owner: GameBananaSection, next: GameBananaCategoriesResource) => {
+      categoriesBySection.current.set(owner, next);
+      if (owner !== sectionRef.current) return;
+      categoriesRef.current = next;
+      setCategoriesValue(next);
+    },
+    [],
+  );
 
   const loadCategories = useCallback(
     async (refresh: boolean) => {
+      const owner = sectionRef.current;
       const token = ++categorySequence.current;
       categoryPending.current = token;
-      publishCategories({ status: "loading", records: categoriesRef.current.records });
+      publishCategories(owner, { status: "loading", records: categoriesRef.current.records });
       try {
-        const records = await api.gameBananaModCategories(refresh);
+        const records = await api.gameBananaModCategories(refresh, owner);
         if (!mounted.current || token !== categorySequence.current) return;
-        publishCategories({ status: "ready", records });
+        publishCategories(owner, { status: "ready", records });
       } catch (error) {
         if (!mounted.current || token !== categorySequence.current) return;
-        publishCategories({
+        publishCategories(owner, {
           status: "error",
           records: categoriesRef.current.records,
           message: errorMessage(error),
@@ -213,10 +233,12 @@ export function useGameBananaBrowser({
     [api, publishCategories],
   );
 
-  // Intentionally depends on activation, not category status: a failure stays
-  // visible until Retry, while a hide/reopen starts one new attempt. Successful
-  // completion after hiding remains publishable because hiding is not unmounting.
+  // Intentionally depends on activation and section, not category status: a
+  // failure stays visible until Retry, while a hide/reopen starts one new
+  // attempt. Successful completion after hiding remains publishable because
+  // hiding is not unmounting.
   useEffect(() => {
+    void section;
     if (
       active &&
       (categoriesRef.current.status === "idle" ||
@@ -225,8 +247,21 @@ export function useGameBananaBrowser({
     ) {
       void loadCategories(categoriesRef.current.status === "error");
     }
-  }, [active, loadCategories]);
+  }, [active, section, loadCategories]);
 
+  const setSection = useCallback((next: GameBananaSection) => {
+    if (next === sectionRef.current) return;
+    // Show what this section already has; the effect above loads the rest.
+    sectionRef.current = next;
+    const known = categoriesBySection.current.get(next) ?? { status: "idle", records: [] };
+    categoriesRef.current = known;
+    setCategoriesValue(known);
+    categorySequence.current += 1;
+    categoryPending.current = null;
+    setSectionValue(next);
+    setCategoryValue(null);
+    setPageNumber(1);
+  }, []);
   const setQuery = useCallback((next: string) => {
     setQueryValue(next);
     setPageNumber(1);
@@ -291,6 +326,8 @@ export function useGameBananaBrowser({
   }
 
   return {
+    section,
+    setSection,
     query,
     setQuery,
     submitSearch,

@@ -1433,16 +1433,26 @@ export async function openEmbeddedPage(page: EmbeddedPage): Promise<void> {
 // Your mods (bring your own) and the GameBanana browser
 // ---------------------------------------------------------------------------
 
+/**
+ * GameBanana's Mods or Sounds section. Each numbers its submissions on its own,
+ * so an id means nothing without its section.
+ */
+export type GameBananaSection = "mod" | "sound";
+
 /** One listing from GameBanana's TF2 section. */
 export type GameBananaMod = {
   id: number;
+  section: GameBananaSection;
   name: string;
   author: string;
   category: string;
   categoryId: number;
   subCategory: string | null;
-  /** A HUD submission routes to the HUD pane; everything else installs as a mod. */
-  route: "mod" | "hud";
+  /**
+   * A HUD submission routes to the HUD pane, a hit or kill sound upload to the
+   * Sounds pane; everything else installs as a mod.
+   */
+  route: "mod" | "hud" | "hitSound" | "killSound";
   /** Listing metrics are absent on some index records. */
   likes: number | null;
   views: number | null;
@@ -1520,6 +1530,8 @@ export type ModImportReview = {
     bytes: number;
     contentRoots: string[];
     disabledReason: string | null;
+    /** TF2's hit or kill sound paths this choice ships, which compete with Sounds. */
+    soundSlots: HitsoundKind[];
   }[];
   readmes: { path: string; text: string; truncated: boolean }[];
 };
@@ -1532,8 +1544,32 @@ export async function prepareImportModFolder(): Promise<ModImportReview | null> 
   return call("prepare_import_mod_folder");
 }
 
-export async function prepareGameBananaMod(id: number, fileId: number): Promise<ModImportReview> {
-  return call("prepare_gamebanana_mod", { id, fileId });
+export async function prepareGameBananaMod(
+  id: number,
+  fileId: number,
+  section: GameBananaSection = "mod",
+): Promise<ModImportReview> {
+  return call("prepare_gamebanana_mod", { id, fileId, section });
+}
+
+/** Sounds from one GameBanana hit or kill sound upload, ready for the Sounds library. */
+export type GameBananaSounds = {
+  /** The slot the upload was made for; either slot accepts it. */
+  slot: HitsoundKind;
+  title: string;
+  sounds: PickedHitsound[];
+  /** Audio files that were too large, too long or unreadable. */
+  skipped: number;
+  /** More usable sounds than the library lists for one upload. */
+  truncated: boolean;
+};
+
+/** Download a hit or kill sound upload and prepare its sounds. Nothing is installed. */
+export async function prepareGameBananaHitsounds(
+  id: number,
+  fileId: number,
+): Promise<GameBananaSounds> {
+  return call<GameBananaSounds>("prepare_gamebanana_hitsounds", { id, fileId });
 }
 
 export async function confirmModImport(token: string, choices: string[]): Promise<ProfileDetail> {
@@ -1542,15 +1578,6 @@ export async function confirmModImport(token: string, choices: string[]): Promis
 
 export async function cancelModImport(token: string): Promise<void> {
   return call("cancel_mod_import", { token });
-}
-
-export async function importModArchive(): Promise<ProfileDetail | null> {
-  return call<ProfileDetail | null>("import_mod_archive");
-}
-
-/** Pick a folder and install it into the active profile. Null = cancelled. */
-export async function importModFolder(): Promise<ProfileDetail | null> {
-  return call<ProfileDetail | null>("import_mod_folder");
 }
 
 export async function removeMod(id: string): Promise<ProfileDetail> {
@@ -1589,8 +1616,10 @@ export async function searchGameBananaMods(
   page: number,
   includeMature = false,
   refresh = false,
+  section: GameBananaSection = "mod",
 ): Promise<GameBananaPage> {
   return call<GameBananaPage>("search_gamebanana_mods", {
+    section,
     query,
     sort,
     category,
@@ -1600,16 +1629,24 @@ export async function searchGameBananaMods(
   });
 }
 
-export async function gameBananaModCategories(refresh = false): Promise<GameBananaCategory[]> {
-  return call<GameBananaCategory[]>("gamebanana_mod_categories", { refresh });
+export async function gameBananaModCategories(
+  refresh = false,
+  section: GameBananaSection = "mod",
+): Promise<GameBananaCategory[]> {
+  return call<GameBananaCategory[]>("gamebanana_mod_categories", { refresh, section });
 }
 
-export async function gameBananaDownloadVariants(id: number): Promise<GameBananaDownloadVariant[]> {
-  return call<GameBananaDownloadVariant[]>("gamebanana_download_variants", { id });
-}
-
-export async function installGameBananaMod(id: number, fileId: number): Promise<ProfileDetail> {
-  return call<ProfileDetail>("install_gamebanana_mod", { id, fileId });
+/** `forSounds` marks loose WAV/MP3/Ogg files usable for a hit or kill sound. */
+export async function gameBananaDownloadVariants(
+  id: number,
+  section: GameBananaSection = "mod",
+  forSounds = false,
+): Promise<GameBananaDownloadVariant[]> {
+  return call<GameBananaDownloadVariant[]>("gamebanana_download_variants", {
+    id,
+    section,
+    forSounds,
+  });
 }
 
 // ---------------------------------------------------------------------------

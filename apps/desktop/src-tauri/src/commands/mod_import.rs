@@ -9,6 +9,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use super::shared::{blocking, with_profile, ActiveContext};
 use crate::error::CommandError;
+use crate::gamebanana::{FileUse, GameBananaSection};
 use crate::{gamebanana, WriteGate};
 
 #[derive(Default)]
@@ -175,14 +176,17 @@ pub async fn prepare_gamebanana_mod(
     pending: tauri::State<'_, PendingModImport>,
     id: u64,
     file_id: u64,
+    section: Option<String>,
 ) -> Result<ModImportReview, CommandError> {
+    let section = GameBananaSection::parse(section.as_deref())?;
     let mut slot = pending.0.lock().await;
     *slot = None;
     let prepared = with_profile(move |root, profile_id| {
         execs_core::refuse_if_running()?;
         let baseline = revision(&profile_id)?;
-        let profile = gamebanana::mod_profile(id)?;
-        let pick = gamebanana::download_file(id, file_id)?;
+        let profile = gamebanana::submission_profile(section, id)?;
+        profile.require_pack()?;
+        let pick = gamebanana::download_file_in(section, id, file_id, FileUse::Pack)?;
         let bytes = gamebanana::download_pick(&pick)?;
         let mut prepared = if gamebanana::is_bare_vpk(&pick.file_name, &bytes) {
             PreparedModImport::from_vpk(&format!("{}.vpk", profile.name), bytes)?

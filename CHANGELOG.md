@@ -7,6 +7,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- Mods can browse GameBanana's Sounds section too: voice packs, announcers, music, weapon and taunt
+  sounds install like other mods. Hit and kill sounds open in Sounds instead, where you can preview
+  every sound in the download and choose one for either slot.
 - Maps from GameBanana install in one click, ready to play offline or on a server you host
   (console: `map` and the map's name). Bot navigation files and MvM missions that come with a map
   are put where TF2 looks for them, and archives with several maps let you pick.
@@ -20,6 +23,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Changed
 
+- A mod that also replaces TF2's hit or kill sound says so before you install it, and is not
+  selected for you, because it can override the sound you chose in Sounds.
 - GUI mods from GameBanana, such as menus, icons, fonts and loading screens, install in one click
   like other mods. Only HUDs still go to the HUD pane.
 - Error notices fade on their own after you have had time to read them (hover over one to keep it)

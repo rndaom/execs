@@ -65,6 +65,8 @@ import { copySettingsBlocked } from "./lib/settings-ui";
 import {
   comfigEntries,
   filterSoundLibrary,
+  gameBananaAddedNote,
+  type IncomingSounds,
   ownEntry,
   pageSoundLibrary,
   parseSoundPageJump,
@@ -73,12 +75,12 @@ import {
   SOUND_FILTERS,
   SOUND_LIBRARY_PAGE_SIZE,
   SOUND_SORTS,
-  SOUND_SOURCE_LABELS,
   type SoundFilter,
   type SoundLibraryEntry,
   type SoundSort,
   soundAccessibleNames,
   soundPageLinks,
+  soundSourceLabel,
   stockEntries,
   writeSoundFavorites,
   writeSoundPreviewLevel,
@@ -115,6 +117,8 @@ export function SoundsPane({
   onSave,
   onRemove,
   copySettings,
+  incoming,
+  onIncomingHandled,
 }: {
   api: Api;
   /** The profile this draft belongs to; a switch discards it. */
@@ -137,6 +141,13 @@ export function SoundsPane({
   onRemove: () => void;
   /** Copy the saved sounds to other profiles; offered only when provided. */
   copySettings?: CopySettingsSource;
+  /**
+   * Sounds prepared from a GameBanana hit or kill sound upload. They join the
+   * library like an added file; nothing is installed until Use.
+   */
+  incoming?: IncomingSounds | null;
+  /** Called once the incoming sounds are in the library. */
+  onIncomingHandled?: (key: number) => void;
 }) {
   const { running, busy } = useAppStatus();
   // Picking a sound is a draft; only removing the installed files waits on the
@@ -160,7 +171,9 @@ export function SoundsPane({
   const [target, setTarget] = useState<HitsoundKind>("hit");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
-  const [picked, setPicked] = useState<PickedHitsound | null>(null);
+  // Your added file, or every sound from one GameBanana upload.
+  const [picked, setPicked] = useState<{ files: PickedHitsound[]; from?: string }>({ files: [] });
+  const [added, setAdded] = useState<IncomingSounds | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [stockStems, setStockStems] = useState<string[] | null>(null);
@@ -269,7 +282,7 @@ export function SoundsPane({
 
   const library = useMemo<SoundLibraryEntry[]>(
     () => [
-      ...(picked ? [ownEntry(picked)] : []),
+      ...picked.files.map((file) => ownEntry(file, picked.from)),
       ...stockEntries(),
       ...comfigEntries(comfigIndex ?? []),
     ],
@@ -340,10 +353,8 @@ export function SoundsPane({
     try {
       const next = await api.pickHitsoundFile();
       if (next) {
-        if (picked) {
-          forgetSoundUrl({ kind: "file", token: picked.token, name: picked.name });
-        }
-        setPicked(next);
+        replacePicked({ files: [next] });
+        setAdded(null);
         setQuery("");
         setPage(0);
       }
@@ -353,6 +364,33 @@ export function SoundsPane({
       setPicking(false);
     }
   }
+
+  function replacePicked(next: { files: PickedHitsound[]; from?: string }) {
+    for (const file of picked.files) {
+      forgetSoundUrl({ kind: "file", token: file.token, name: file.name });
+    }
+    setPicked(next);
+  }
+
+  // A GameBanana hit or kill sound arrives once: it replaces the added files,
+  // aims the library at its slot and shows only those sounds' source.
+  const handledIncoming = useRef<number | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once per handoff key; replacePicked reads the files it replaces at that moment.
+  useEffect(() => {
+    if (!incoming || handledIncoming.current === incoming.key) return;
+    handledIncoming.current = incoming.key;
+    replacePicked({ files: incoming.sounds, from: "GameBanana" });
+    setAdded(incoming);
+    setTarget(incoming.slot);
+    setFilter("all");
+    setSort("suggested");
+    setQuery("");
+    setPage(0);
+    onIncomingHandled?.(incoming.key);
+    document
+      .getElementById("sound-library")
+      ?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+  }, [incoming, onIncomingHandled]);
 
   function save() {
     const next = clampGameplay(soundsToCvars(draft, cvars));
@@ -617,6 +655,14 @@ export function SoundsPane({
             {pickError}
           </p>
         ) : null}
+        {added ? (
+          <p data-testid="sounds-gamebanana-added" role="status" className="t-meta mt-2">
+            {gameBananaAddedNote(added)}{" "}
+            <button type="button" className="underline" onClick={() => setAdded(null)}>
+              Dismiss
+            </button>
+          </p>
+        ) : null}
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Segmented
@@ -720,7 +766,7 @@ export function SoundsPane({
                     {entry.label}
                   </span>
                   <span className="t-meta truncate">
-                    {SOUND_SOURCE_LABELS[entry.source]}
+                    {soundSourceLabel(entry)}
                     {entry.meta ? ` · ${entry.meta}` : ""}
                     {entry.madeFor && entry.madeFor !== target
                       ? ` · uploaded as a ${entry.madeFor} sound`

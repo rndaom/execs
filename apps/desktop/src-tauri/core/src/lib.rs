@@ -123,9 +123,8 @@ pub use launch::{
     set_profile_launch_options, LaunchSyncStatus, LaunchWriteReason, SetLaunchResult,
 };
 pub use mods::{
-    install_mod, mod_content_from_archive, mod_content_from_dir, mod_content_from_vpk_file,
-    mod_id_from_name, profile_particle_sources, remove_mod, ModBatchBudget, ModContent, ModRecord,
-    ModSource, ParticleSource,
+    install_mod, mod_id_from_name, profile_particle_sources, remove_mod, ModBatchBudget,
+    ModContent, ModRecord, ModSource, ParticleSource,
 };
 pub use process_lock::{
     is_tf2_running, os_description, refuse_if_running, refuse_if_running_among, write_lock_status,

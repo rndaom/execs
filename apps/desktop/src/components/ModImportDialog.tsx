@@ -16,6 +16,18 @@ export function modChoiceDescription(choice: ModImportReview["choices"][number])
   ].join(" · ");
 }
 
+/**
+ * Why a choice that ships TF2's hit or kill sound needs a second look: those
+ * files compete with the ones Sounds manages.
+ */
+export function modChoiceSoundNote(choice: ModImportReview["choices"][number]): string | null {
+  const slots = choice.soundSlots ?? [];
+  if (slots.length === 0) return null;
+  const what =
+    slots.length === 2 ? "hit and kill sounds" : slots[0] === "hit" ? "hit sound" : "kill sound";
+  return `Also replaces TF2's ${what}, which can override what you chose in Sounds. To use only those sounds, choose them in Sounds instead.`;
+}
+
 /** The native review owns the payload; this dialog returns only selected opaque IDs. */
 export function ModImportDialog({
   review,
@@ -26,9 +38,10 @@ export function ModImportDialog({
   onClose: () => void;
   onConfirm: (choices: string[]) => void;
 }) {
+  // A lone choice starts selected, unless it would replace a Sounds file.
   const [selected, setSelected] = useState<string[]>(() => {
     const available = review.choices.filter((choice) => !choice.disabledReason);
-    return available.length === 1 ? [available[0].id] : [];
+    return available.length === 1 && !modChoiceSoundNote(available[0]) ? [available[0].id] : [];
   });
   return (
     <Modal
@@ -46,7 +59,7 @@ export function ModImportDialog({
               id={`mod-choice-${choice.id}`}
               label={choice.name}
               description={modChoiceDescription(choice)}
-              note={choice.disabledReason ?? undefined}
+              note={choice.disabledReason ?? modChoiceSoundNote(choice) ?? undefined}
               disabled={!!choice.disabledReason}
               checked={selected.includes(choice.id)}
               onChange={(checked) =>

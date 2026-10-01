@@ -32,11 +32,70 @@ const MAX_DOWNLOAD_VARIANTS: usize = 128;
 /// A mod archive ceiling matching the one core enforces on a pack.
 pub const MOD_MAX_BYTES: u64 = 512 * MIB;
 
+/// The GameBanana sections Browse reads. Each numbers its submissions on its
+/// own, so Sound 21865 and Mod 21865 are unrelated: every id travels with the
+/// section it belongs to.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum GameBananaSection {
+    #[default]
+    Mod,
+    Sound,
+}
+
+impl GameBananaSection {
+    /// The API model name (`Mod/Index`, `Sound/Index`).
+    fn model(self) -> &'static str {
+        match self {
+            Self::Mod => "Mod",
+            Self::Sound => "Sound",
+        }
+    }
+
+    /// The site path segment (`/mods/7`, `/sounds/cats/381`).
+    fn path(self) -> &'static str {
+        match self {
+            Self::Mod => "mods",
+            Self::Sound => "sounds",
+        }
+    }
+
+    /// `"mod"` or `"sound"` from the bridge; anything else is refused.
+    pub fn parse(value: Option<&str>) -> Result<Self, String> {
+        match value {
+            None | Some("mod") => Ok(Self::Mod),
+            Some("sound") => Ok(Self::Sound),
+            Some(other) => Err(format!("Unknown GameBanana section: {other}")),
+        }
+    }
+
+    /// The section a saved record's page URL names. Records written before
+    /// sounds existed always name `/mods/`.
+    pub fn of_page_url(url: &str) -> Self {
+        match reqwest::Url::parse(url.trim()) {
+            Ok(parsed) if parsed.path().starts_with("/sounds/") => Self::Sound,
+            _ => Self::Mod,
+        }
+    }
+
+    pub fn page_url(self, id: u64) -> String {
+        format!("https://gamebanana.com/{}/{id}", self.path())
+    }
+}
+
+/// Sound categories whose uploads are TF2's hit or kill sound. They belong to
+/// the Sounds pane, which owns `sound/ui/hitsound.wav` and `killsound.wav`.
+const HITSOUND_CATEGORY: u64 = 381;
+const KILLSOUND_CATEGORY: u64 = 2630;
+
 /// One mod as the browse UI needs it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GameBananaMod {
     pub id: u64,
+    pub section: GameBananaSection,
     pub name: String,
     pub author: String,
     pub category: String,
@@ -63,6 +122,10 @@ pub struct GameBananaMod {
 pub enum GameBananaModRoute {
     Mod,
     Hud,
+    /// A hit or kill sound upload: chosen in the Sounds pane, never installed
+    /// as a custom pack.
+    HitSound,
+    KillSound,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -260,6 +323,21 @@ pub struct GameBananaProfile {
     pub name: String,
     pub url: String,
     pub updated_at: Option<i64>,
+    /// `Mod`, or the Sounds slot a hit or kill sound upload is made for.
+    pub route: GameBananaModRoute,
+}
+
+impl GameBananaProfile {
+    /// Mods installs refuse hit and kill sounds: those files belong to the
+    /// Sounds pane, which owns TF2's two canonical sound paths.
+    pub fn require_pack(&self) -> Result<(), String> {
+        match self.route {
+            GameBananaModRoute::HitSound | GameBananaModRoute::KillSound => Err(
+                "That GameBanana upload is a hit or kill sound. Use it in Sounds instead.".into(),
+            ),
+            GameBananaModRoute::Mod | GameBananaModRoute::Hud => Ok(()),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -280,15 +358,16 @@ fn index_sort(sort: &str) -> Result<&'static str, String> {
     })
 }
 
-/// One page of TF2 mods.
+/// One page of TF2 mods or sounds.
 ///
-/// Browse and search both use `Mod/Index`. `Generic_Name=contains,...`, the
+/// Browse and search both use `<Section>/Index`. `Generic_Name=contains,...`, the
 /// optional category and the unrated sentinel are server-side filters, so the
 /// returned total and order describe the whole filtered result set. The
 /// installability allow-list still has to be checked page by page when no one
 /// installable category is selected because the API rejects a multi-category
 /// filter.
 pub fn search_mods(
+    section: GameBananaSection,
     query: &str,
     sort: &str,
     category: Option<u64>,
@@ -296,12 +375,19 @@ pub fn search_mods(
     include_mature: bool,
     refresh: bool,
 ) -> Result<GameBananaPage, String> {
-    let url = search_url(query, sort, category, page, include_mature)?;
+    let url = search_url(section, query, sort, category, page, include_mature)?;
     let (response, cache): (IndexResponse, _) = fetch_json(&url, LIST_TTL, refresh)?;
-    Ok(page_from(response, category, include_mature, cache))
+    Ok(page_from(
+        section,
+        response,
+        category,
+        include_mature,
+        cache,
+    ))
 }
 
 fn search_url(
+    section: GameBananaSection,
     query: &str,
     sort: &str,
     category: Option<u64>,
@@ -312,7 +398,8 @@ fn search_url(
         return Err("GameBanana pages start at 1.".into());
     }
     let mut url = format!(
-        "{API}/Mod/Index?_nPage={}&_nPerpage={PAGE_SIZE}&_aFilters[Generic_Game]={TF2_GAME_ID}&_sSort={}",
+        "{API}/{}/Index?_nPage={}&_nPerpage={PAGE_SIZE}&_aFilters[Generic_Game]={TF2_GAME_ID}&_sSort={}",
+        section.model(),
         page,
         index_sort(sort)?
     );
@@ -337,6 +424,7 @@ fn search_url(
 }
 
 fn page_from(
+    section: GameBananaSection,
     response: IndexResponse,
     category: Option<u64>,
     include_mature: bool,
@@ -348,8 +436,8 @@ fn page_from(
     let records = response
         .records
         .iter()
-        .filter(|record| record.model.is_empty() || record.model == "Mod")
-        .map(record_to_mod)
+        .filter(|record| record.model.is_empty() || record.model == section.model())
+        .map(|record| record_to_mod(section, record))
         .filter(|record| category.is_none_or_matches(record))
         .filter(|record| is_browsable_category(&record.category))
         .filter(|record| include_mature || !record.mature)
@@ -402,16 +490,18 @@ impl CategoryFilter for Option<u64> {
     }
 }
 
-fn record_to_mod(record: &RawRecord) -> GameBananaMod {
+fn record_to_mod(section: GameBananaSection, record: &RawRecord) -> GameBananaMod {
     let category = record.root_category.as_ref();
     let sub_category = record.sub_category.as_ref();
     let category_id = category
-        .and_then(|row| category_id_from_url(&row.profile_url))
+        .and_then(|row| category_id_from_url(&row.profile_url, section))
         .unwrap_or(0);
-    let is_gui =
-        category_id == 1644 || category.is_some_and(|row| row.name.eq_ignore_ascii_case("GUIs"));
+    let is_gui = section == GameBananaSection::Mod
+        && (category_id == 1644
+            || category.is_some_and(|row| row.name.eq_ignore_ascii_case("GUIs")));
     GameBananaMod {
         id: record.id,
+        section,
         name: record.name.clone(),
         author: record
             .submitter
@@ -426,7 +516,7 @@ fn record_to_mod(record: &RawRecord) -> GameBananaMod {
         route: if is_gui && sub_category.is_some_and(is_hud_category) {
             GameBananaModRoute::Hud
         } else {
-            GameBananaModRoute::Mod
+            sound_slot_route(section, category_id).unwrap_or(GameBananaModRoute::Mod)
         },
         likes: record.likes,
         views: record.views,
@@ -435,9 +525,18 @@ fn record_to_mod(record: &RawRecord) -> GameBananaMod {
         updated_at: valid_timestamp(record.updated),
         modified_at: valid_timestamp(record.modified),
         thumb: record.preview.as_ref().and_then(thumb_url),
-        url: validated_mod_page(&record.profile_url, record.id)
-            .unwrap_or_else(|| format!("https://gamebanana.com/mods/{}", record.id)),
+        url: validated_mod_page(&record.profile_url, record.id, section)
+            .unwrap_or_else(|| section.page_url(record.id)),
         mature: record.has_content_ratings,
+    }
+}
+
+/// Hit and kill sound uploads go to the Sounds pane.
+fn sound_slot_route(section: GameBananaSection, category_id: u64) -> Option<GameBananaModRoute> {
+    match (section, category_id) {
+        (GameBananaSection::Sound, HITSOUND_CATEGORY) => Some(GameBananaModRoute::HitSound),
+        (GameBananaSection::Sound, KILLSOUND_CATEGORY) => Some(GameBananaModRoute::KillSound),
+        _ => None,
     }
 }
 
@@ -445,8 +544,9 @@ fn valid_timestamp(value: Option<i64>) -> Option<i64> {
     value.filter(|timestamp| *timestamp > 0)
 }
 
-/// `https://gamebanana.com/mods/cats/7951` → `7951`.
-fn category_id_from_url(url: &str) -> Option<u64> {
+/// `https://gamebanana.com/mods/cats/7951` → `7951` (or `/sounds/cats/381`
+/// for the Sound section).
+fn category_id_from_url(url: &str, section: GameBananaSection) -> Option<u64> {
     let parsed = reqwest::Url::parse(url.trim()).ok()?;
     if parsed.scheme() != "https"
         || !matches!(
@@ -464,7 +564,7 @@ fn category_id_from_url(url: &str) -> Option<u64> {
         .filter(|part| !part.is_empty())
         .collect();
     match parts.as_slice() {
-        ["mods", "cats", id] => id.parse().ok(),
+        [path, "cats", id] if *path == section.path() => id.parse().ok(),
         _ => None,
     }
 }
@@ -499,7 +599,11 @@ fn thumb_url(preview: &PreviewMedia) -> Option<String> {
     .then(|| url.to_string())
 }
 
-fn validated_mod_page(candidate: &str, expected_id: u64) -> Option<String> {
+fn validated_mod_page(
+    candidate: &str,
+    expected_id: u64,
+    section: GameBananaSection,
+) -> Option<String> {
     let parsed = reqwest::Url::parse(candidate.trim()).ok()?;
     if parsed.scheme() != "https"
         || !matches!(
@@ -513,7 +617,7 @@ fn validated_mod_page(candidate: &str, expected_id: u64) -> Option<String> {
         return None;
     }
     let mut segments = parsed.path_segments()?;
-    if segments.next()? != "mods" || segments.next()?.parse::<u64>().ok()? != expected_id {
+    if segments.next()? != section.path() || segments.next()?.parse::<u64>().ok()? != expected_id {
         return None;
     }
     if segments.any(|part| !part.is_empty()) {
@@ -527,12 +631,18 @@ fn validated_mod_page(candidate: &str, expected_id: u64) -> Option<String> {
 /// roots are Hammer or server material, not something a player's game loads.
 const EXCLUDED_CATEGORIES: [&str; 3] = ["decal tool", "prefabs", "serverside weapons"];
 
-/// The installable root categories, cached for ten minutes.
+/// The installable root categories of one section, cached for ten minutes.
 ///
 /// The endpoint refuses a request with no `_sSort`, so `a_to_z` is passed
 /// explicitly rather than left to a default that does not exist.
-pub fn categories(refresh: bool) -> Result<Vec<GameBananaCategory>, String> {
-    let url = format!("{API}/Mod/Categories?_idGameRow={TF2_GAME_ID}&_sSort=a_to_z");
+pub fn categories(
+    section: GameBananaSection,
+    refresh: bool,
+) -> Result<Vec<GameBananaCategory>, String> {
+    let url = format!(
+        "{API}/{}/Categories?_idGameRow={TF2_GAME_ID}&_sSort=a_to_z",
+        section.model()
+    );
     let (raw, _): (Vec<RawCategory>, _) = fetch_json(&url, CATEGORY_TTL, refresh)?;
     Ok(raw
         .into_iter()
@@ -555,30 +665,40 @@ fn is_browsable_category(name: &str) -> bool {
 
 fn is_gui_category(category: &CategoryRow) -> bool {
     category.name.eq_ignore_ascii_case("GUIs")
-        || category_id_from_url(&category.profile_url) == Some(1644)
+        || category_id_from_url(&category.profile_url, GameBananaSection::Mod) == Some(1644)
 }
 
 fn is_hud_category(category: &CategoryRow) -> bool {
     category.name.eq_ignore_ascii_case("HUDs")
-        || category_id_from_url(&category.profile_url) == Some(1649)
+        || category_id_from_url(&category.profile_url, GameBananaSection::Mod) == Some(1649)
 }
 
 /// Name and page URL, so an install can record what the user actually chose
-/// rather than trusting a name passed across the bridge.
-pub fn mod_profile(id: u64) -> Result<GameBananaProfile, String> {
+/// rather than trusting a name passed across the bridge. The route says
+/// whether a Sounds submission is a hit or kill sound, which only the Sounds
+/// pane uses.
+pub fn submission_profile(
+    section: GameBananaSection,
+    id: u64,
+) -> Result<GameBananaProfile, String> {
     // ProfilePage exposes the immediate category (e.g. Training or HUDs),
     // not its root. Request the root explicitly so descendants cannot bypass
     // the same install policy applied to All and search results.
     let url = format!(
-        "{API}/Mod/{id}?_csvProperties=_idRow,_sName,_sProfileUrl,_aRootCategory,_aCategory,_aGame,_tsDateUpdated"
+        "{API}/{}/{id}?_csvProperties=_idRow,_sName,_sProfileUrl,_aRootCategory,_aCategory,_aGame,_tsDateUpdated",
+        section.model()
     );
     let page: ProfilePage =
         net::get_json_for(&net::api_client()?, &url, RemoteSource::GameBananaApi)
             .map_err(|err| format!("Could not read that GameBanana mod ({err})"))?;
-    profile_from(page, id)
+    profile_from(page, id, section)
 }
 
-fn profile_from(page: ProfilePage, id: u64) -> Result<GameBananaProfile, String> {
+fn profile_from(
+    page: ProfilePage,
+    id: u64,
+    section: GameBananaSection,
+) -> Result<GameBananaProfile, String> {
     if page.id != id {
         return Err("GameBanana returned a different mod than the one requested.".into());
     }
@@ -601,16 +721,30 @@ fn profile_from(page: ProfilePage, id: u64) -> Result<GameBananaProfile, String>
             return Err("That GameBanana mod is a HUD. Install it from the HUD pane.".into());
         }
     }
+    let route = match category_id_from_url(&category.profile_url, section) {
+        Some(category_id) => {
+            sound_slot_route(section, category_id).unwrap_or(GameBananaModRoute::Mod)
+        }
+        // A sound whose category cannot be verified might be a hit or kill
+        // sound, so it is neither installed as a pack nor offered to Sounds.
+        None if section == GameBananaSection::Sound => {
+            return Err(
+                "Could not verify that sound's GameBanana category. Try again later.".into(),
+            )
+        }
+        None => GameBananaModRoute::Mod,
+    };
     Ok(GameBananaProfile {
         updated_at: valid_timestamp(page.updated),
         name: if page.name.is_empty() {
-            format!("GameBanana mod {id}")
+            format!("GameBanana {} {id}", section.model().to_ascii_lowercase())
         } else {
             page.name
         },
-        url: validated_mod_page(&page.profile_url, id)
-            .unwrap_or_else(|| format!("https://gamebanana.com/mods/{id}")),
+        url: validated_mod_page(&page.profile_url, id, section)
+            .unwrap_or_else(|| section.page_url(id)),
         id,
+        route,
     })
 }
 
@@ -688,8 +822,16 @@ pub fn mod_id_from_url(url: &str) -> Option<u64> {
     (!segments.any(|part| !part.is_empty())).then_some(id)
 }
 
-fn download_files(id: u64) -> Result<Vec<DownloadFile>, String> {
-    let url = format!("{API}/Mod/{id}/DownloadPage");
+/// What a downloaded file is for: a custom pack (VPK or archive), or a hit
+/// or kill sound the Sounds pane prepares (an archive or one audio file).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileUse {
+    Pack,
+    Sound,
+}
+
+fn download_files(section: GameBananaSection, id: u64) -> Result<Vec<DownloadFile>, String> {
+    let url = format!("{API}/{}/{id}/DownloadPage", section.model());
     let page: DownloadPage =
         net::get_json_for(&net::api_client()?, &url, RemoteSource::GameBananaApi)
             .map_err(|err| format!("Could not read the GameBanana listing ({err})"))?;
@@ -699,11 +841,20 @@ fn download_files(id: u64) -> Result<Vec<DownloadFile>, String> {
 /// Author names and descriptions are shown before choosing a file. The
 /// download URL stays native-side and is rechecked when the selection is used.
 pub fn download_variants(id: u64) -> Result<Vec<GameBananaDownloadVariant>, String> {
-    variants_from_files(download_files(id)?)
+    download_variants_in(GameBananaSection::Mod, id, FileUse::Pack)
+}
+
+pub fn download_variants_in(
+    section: GameBananaSection,
+    id: u64,
+    file_use: FileUse,
+) -> Result<Vec<GameBananaDownloadVariant>, String> {
+    variants_from_files(download_files(section, id)?, file_use)
 }
 
 fn variants_from_files(
     mut files: Vec<DownloadFile>,
+    file_use: FileUse,
 ) -> Result<Vec<GameBananaDownloadVariant>, String> {
     if files.len() > MAX_DOWNLOAD_VARIANTS {
         return Err(
@@ -732,14 +883,19 @@ fn variants_from_files(
             description: file.description.trim().chars().take(1000).collect(),
             size_bytes: file.size_bytes,
             added_at: (file.added > 0).then_some(file.added),
-            supported: mod_file_is_supported(&file) && !is_split_part(&file),
+            supported: file_is_supported(&file, file_use) && !is_split_part(&file),
             split_part: is_split_part(&file),
         })
         .collect())
 }
 
-pub fn download_file(id: u64, file_id: u64) -> Result<DownloadPick, String> {
-    pick_file_by_id(download_files(id)?, file_id)
+pub fn download_file_in(
+    section: GameBananaSection,
+    id: u64,
+    file_id: u64,
+    file_use: FileUse,
+) -> Result<DownloadPick, String> {
+    pick_file_by_id(download_files(section, id)?, file_id, file_use)
 }
 
 /// hud-db's GameBanana entries have no file-choice UI. Only a single listed
@@ -747,12 +903,16 @@ pub fn download_file(id: u64, file_id: u64) -> Result<DownloadPick, String> {
 /// the author page and an explicit manual HUD import.
 pub fn download_url_for_page(page_url: &str) -> Result<String, String> {
     let id = mod_id_from_url(page_url).ok_or("That GameBanana link has no mod id.")?;
-    pick_hud_archive(download_files(id)?)
+    pick_hud_archive(download_files(GameBananaSection::Mod, id)?)
 }
 
-fn pick_file_by_id(files: Vec<DownloadFile>, file_id: u64) -> Result<DownloadPick, String> {
+fn pick_file_by_id(
+    files: Vec<DownloadFile>,
+    file_id: u64,
+    file_use: FileUse,
+) -> Result<DownloadPick, String> {
     // Recheck the page rather than accepting a stale or caller-supplied URL.
-    variants_from_files(files.clone())?;
+    variants_from_files(files.clone(), file_use)?;
     let chosen = files
         .iter()
         .find(|file| file.id == file_id && validated_download_url(file).is_some())
@@ -763,8 +923,12 @@ fn pick_file_by_id(files: Vec<DownloadFile>, file_id: u64) -> Result<DownloadPic
     if chosen.size_bytes.is_some_and(|size| size > MOD_MAX_BYTES) {
         return Err(execs_core::mods::oversized_mod_message(chosen.size_bytes));
     }
-    if !mod_file_is_supported(chosen) {
-        return Err("That GameBanana file is not a VPK, ZIP, 7z or RAR.".into());
+    if !file_is_supported(chosen, file_use) {
+        return Err(match file_use {
+            FileUse::Pack => "That GameBanana file is not a VPK, ZIP, 7z or RAR.",
+            FileUse::Sound => "That GameBanana file is not a ZIP, 7z, RAR, WAV, MP3 or Ogg file.",
+        }
+        .into());
     }
     Ok(DownloadPick {
         url: validated_download_url(chosen).expect("validated above"),
@@ -773,7 +937,7 @@ fn pick_file_by_id(files: Vec<DownloadFile>, file_id: u64) -> Result<DownloadPic
 }
 
 fn pick_hud_archive(files: Vec<DownloadFile>) -> Result<String, String> {
-    variants_from_files(files.clone())?;
+    variants_from_files(files.clone(), FileUse::Pack)?;
     if files.len() > 1 {
         return Err(
             "That HUD offers multiple files. Choose one on the author's page, then import it in HUD."
@@ -862,9 +1026,21 @@ fn download_failure(file_name: &str, status: reqwest::StatusCode) -> String {
     }
 }
 
-fn mod_file_is_supported(file: &DownloadFile) -> bool {
-    (is_archive_file(&file.file) || file.file.to_ascii_lowercase().ends_with(".vpk"))
-        && file.size_bytes.is_none_or(|size| size <= MOD_MAX_BYTES)
+fn file_is_supported(file: &DownloadFile, file_use: FileUse) -> bool {
+    let lower = file.file.to_ascii_lowercase();
+    let kind = match file_use {
+        FileUse::Pack => is_archive_file(&lower) || lower.ends_with(".vpk"),
+        FileUse::Sound => is_archive_file(&lower) || is_audio_file(&lower),
+    };
+    kind && file.size_bytes.is_none_or(|size| size <= MOD_MAX_BYTES)
+}
+
+/// A sound file the Sounds pane can prepare: WAV, MP3 or Ogg Vorbis.
+pub fn is_audio_file(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    [".wav", ".mp3", ".ogg", ".oga"]
+        .iter()
+        .any(|extension| lower.ends_with(extension))
 }
 
 /// Whether a downloaded file is a bare VPK rather than an archive: by the
@@ -1041,7 +1217,15 @@ mod tests {
 
     #[test]
     fn index_urls_apply_search_and_supported_filters_globally() {
-        let url = search_url(" blue scout ", "likes", Some(1090), 1, false).unwrap();
+        let url = search_url(
+            GameBananaSection::Mod,
+            " blue scout ",
+            "likes",
+            Some(1090),
+            1,
+            false,
+        )
+        .unwrap();
         assert!(url.starts_with("https://gamebanana.com/apiv11/Mod/Index?"));
         assert!(url.contains("_nPage=1&_nPerpage=20"));
         assert!(url.contains("_aFilters[Generic_Game]=297"));
@@ -1050,17 +1234,33 @@ mod tests {
         assert!(url.contains("_aFilters[Generic_Category]=1090"));
         assert!(url.contains("_aFilters[Generic_ContentRatings]=-"));
 
-        let mature = search_url("", "new", None, 2, true).unwrap();
+        let mature = search_url(GameBananaSection::Mod, "", "new", None, 2, true).unwrap();
         assert!(mature.contains("_nPage=2"));
         assert!(!mature.contains("Generic_Name"));
         assert!(!mature.contains("Generic_Category"));
         assert!(!mature.contains("Generic_ContentRatings"));
         assert_eq!(encode_query("uber ü"), "uber%20%C3%BC");
 
-        assert!(search_url("", "new", None, 0, false).is_err());
-        assert!(search_url("comma,term", "new", None, 1, false).is_err());
-        assert!(search_url(&"é".repeat(128), "new", None, 1, false).is_ok());
-        assert!(search_url(&"é".repeat(129), "new", None, 1, false).is_err());
+        assert!(search_url(GameBananaSection::Mod, "", "new", None, 0, false).is_err());
+        assert!(search_url(GameBananaSection::Mod, "comma,term", "new", None, 1, false).is_err());
+        assert!(search_url(
+            GameBananaSection::Mod,
+            &"é".repeat(128),
+            "new",
+            None,
+            1,
+            false
+        )
+        .is_ok());
+        assert!(search_url(
+            GameBananaSection::Mod,
+            &"é".repeat(129),
+            "new",
+            None,
+            1,
+            false
+        )
+        .is_err());
     }
 
     #[test]
@@ -1080,7 +1280,13 @@ mod tests {
                 "_aRootCategory": { "_sName": "Effects", "_sProfileUrl": "https://gamebanana.com/mods/cats/1090" } }
             ] }"#;
         let response: IndexResponse = serde_json::from_str(raw).unwrap();
-        let page = page_from(response, None, true, network_cache_info());
+        let page = page_from(
+            GameBananaSection::Mod,
+            response,
+            None,
+            true,
+            network_cache_info(),
+        );
         assert_eq!(page.per_page, 20);
         assert_eq!(page.total, GameBananaTotal::Estimated { value: 1000 });
         assert!(!page.complete);
@@ -1124,7 +1330,13 @@ mod tests {
             { "_idRow": 2, "_sModelName": "Mod", "_aRootCategory": { "_sName": "Effects", "_sProfileUrl": "https://gamebanana.com/mods/cats/1090" } }
         ] }"#;
         let response: IndexResponse = serde_json::from_str(raw).unwrap();
-        let page = page_from(response, Some(1090), true, network_cache_info());
+        let page = page_from(
+            GameBananaSection::Mod,
+            response,
+            Some(1090),
+            true,
+            network_cache_info(),
+        );
         assert_eq!(
             page.records.iter().map(|r| r.id).collect::<Vec<_>>(),
             vec![2]
@@ -1137,7 +1349,13 @@ mod tests {
     #[test]
     fn totals_have_explicit_semantics_and_missing_counts_stay_unknown() {
         let response: IndexResponse = serde_json::from_str(r#"{"_aRecords": []}"#).unwrap();
-        let page = page_from(response, Some(1090), false, network_cache_info());
+        let page = page_from(
+            GameBananaSection::Mod,
+            response,
+            Some(1090),
+            false,
+            network_cache_info(),
+        );
         assert_eq!(page.total, GameBananaTotal::Unknown);
         assert_eq!(page.per_page, PAGE_SIZE);
 
@@ -1214,6 +1432,7 @@ mod tests {
         });
         for mature in [false, true] {
             let page = page_from(
+                GameBananaSection::Mod,
                 serde_json::from_value(response.clone()).unwrap(),
                 None,
                 mature,
@@ -1249,7 +1468,13 @@ mod tests {
             ]
         }))
         .unwrap();
-        let page = page_from(response, Some(1644), false, network_cache_info());
+        let page = page_from(
+            GameBananaSection::Mod,
+            response,
+            Some(1644),
+            false,
+            network_cache_info(),
+        );
         assert_eq!(page.records.len(), 2);
         assert_eq!(page.records[0].route, GameBananaModRoute::Hud);
         assert_eq!(page.records[0].sub_category.as_deref(), Some("HUDs"));
@@ -1264,37 +1489,59 @@ mod tests {
             "_aCategory": { "_sName": "Child category" },
             "_aRootCategory": { "_sName": "Skins" }
         });
-        let profile = profile_from(serde_json::from_value(valid.clone()).unwrap(), 7).unwrap();
+        let profile = profile_from(
+            serde_json::from_value(valid.clone()).unwrap(),
+            7,
+            GameBananaSection::Mod,
+        )
+        .unwrap();
         assert_eq!(profile.name, "A skin");
         assert_eq!(profile.url, "https://gamebanana.com/mods/7");
         assert_eq!(profile.updated_at, None);
         let mut dated = valid.clone();
         dated["_tsDateModified"] = 1_900_000_000.into();
         assert_eq!(
-            profile_from(serde_json::from_value(dated.clone()).unwrap(), 7)
-                .unwrap()
-                .updated_at,
+            profile_from(
+                serde_json::from_value(dated.clone()).unwrap(),
+                7,
+                GameBananaSection::Mod
+            )
+            .unwrap()
+            .updated_at,
             None
         );
         dated["_tsDateUpdated"] = 1_700_000_000.into();
         assert_eq!(
-            profile_from(serde_json::from_value(dated.clone()).unwrap(), 7)
-                .unwrap()
-                .updated_at,
+            profile_from(
+                serde_json::from_value(dated.clone()).unwrap(),
+                7,
+                GameBananaSection::Mod
+            )
+            .unwrap()
+            .updated_at,
             Some(1_700_000_000)
         );
         dated["_tsDateUpdated"] = (-1).into();
         assert_eq!(
-            profile_from(serde_json::from_value(dated).unwrap(), 7)
-                .unwrap()
-                .updated_at,
+            profile_from(
+                serde_json::from_value(dated).unwrap(),
+                7,
+                GameBananaSection::Mod
+            )
+            .unwrap()
+            .updated_at,
             None
         );
         for name in EXCLUDED_CATEGORIES.into_iter().chain([""]) {
             let mut page = valid.clone();
             page["_aRootCategory"]["_sName"] = name.into();
             assert!(
-                profile_from(serde_json::from_value(page).unwrap(), 7).is_err(),
+                profile_from(
+                    serde_json::from_value(page).unwrap(),
+                    7,
+                    GameBananaSection::Mod
+                )
+                .is_err(),
                 "{name}"
             );
         }
@@ -1306,28 +1553,58 @@ mod tests {
             "_sProfileUrl": "https://gamebanana.com/mods/cats/1644"
         });
         menu["_aCategory"] = serde_json::json!({ "_sName": "Icons" });
-        assert!(profile_from(serde_json::from_value(menu.clone()).unwrap(), 7).is_ok());
+        assert!(profile_from(
+            serde_json::from_value(menu.clone()).unwrap(),
+            7,
+            GameBananaSection::Mod
+        )
+        .is_ok());
         for hud in [
             serde_json::json!({ "_sName": "HUDs" }),
             serde_json::json!({ "_sName": "Renamed", "_sProfileUrl": "https://gamebanana.com/mods/cats/1649" }),
         ] {
             let mut page = menu.clone();
             page["_aCategory"] = hud;
-            let err = profile_from(serde_json::from_value(page).unwrap(), 7).unwrap_err();
+            let err = profile_from(
+                serde_json::from_value(page).unwrap(),
+                7,
+                GameBananaSection::Mod,
+            )
+            .unwrap_err();
             assert!(err.contains("HUD pane"), "{err}");
         }
         let mut unknown = menu.clone();
         unknown.as_object_mut().unwrap().remove("_aCategory");
-        assert!(profile_from(serde_json::from_value(unknown).unwrap(), 7).is_err());
+        assert!(profile_from(
+            serde_json::from_value(unknown).unwrap(),
+            7,
+            GameBananaSection::Mod
+        )
+        .is_err());
         for field in ["_aRootCategory", "_aGame"] {
             let mut page = valid.clone();
             page.as_object_mut().unwrap().remove(field);
-            assert!(profile_from(serde_json::from_value(page).unwrap(), 7).is_err());
+            assert!(profile_from(
+                serde_json::from_value(page).unwrap(),
+                7,
+                GameBananaSection::Mod
+            )
+            .is_err());
         }
         let mut other_game = valid.clone();
         other_game["_aGame"]["_idRow"] = 1.into();
-        assert!(profile_from(serde_json::from_value(other_game).unwrap(), 7).is_err());
-        assert!(profile_from(serde_json::from_value(valid).unwrap(), 8).is_err());
+        assert!(profile_from(
+            serde_json::from_value(other_game).unwrap(),
+            7,
+            GameBananaSection::Mod
+        )
+        .is_err());
+        assert!(profile_from(
+            serde_json::from_value(valid).unwrap(),
+            8,
+            GameBananaSection::Mod
+        )
+        .is_err());
     }
 
     #[test]
@@ -1354,7 +1631,7 @@ mod tests {
             { "_idRow": 2, "_sFile": "middle.vpk", "_sDownloadUrl": "https://gamebanana.com/dl/2", "_tsDateAdded": 20 }
         ]))
         .unwrap();
-        let variants = variants_from_files(files.clone()).unwrap();
+        let variants = variants_from_files(files.clone(), FileUse::Pack).unwrap();
         assert_eq!(
             variants.iter().map(|file| file.id).collect::<Vec<_>>(),
             vec![3, 2, 1]
@@ -1365,21 +1642,21 @@ mod tests {
         assert!(variants[1].supported);
         assert!(variants[2].supported);
         assert_eq!(
-            pick_file_by_id(files.clone(), 2).unwrap(),
+            pick_file_by_id(files.clone(), 2, FileUse::Pack).unwrap(),
             DownloadPick {
                 url: "https://gamebanana.com/dl/2".into(),
                 file_name: "middle.vpk".into(),
             }
         );
-        assert!(pick_file_by_id(files.clone(), 1).is_ok());
-        assert!(pick_file_by_id(files, 999).is_err());
+        assert!(pick_file_by_id(files.clone(), 1, FileUse::Pack).is_ok());
+        assert!(pick_file_by_id(files, 999, FileUse::Pack).is_err());
 
         let hostile: Vec<DownloadFile> = serde_json::from_value(serde_json::json!([
             { "_idRow": 4, "_sFile": "looks-safe.zip", "_sDownloadUrl": "https://127.0.0.1/private.zip" },
             { "_idRow": 5, "_sFile": "mismatch.zip", "_sDownloadUrl": "https://gamebanana.com/dl/6" }
         ]))
         .unwrap();
-        assert!(variants_from_files(hostile).is_err());
+        assert!(variants_from_files(hostile, FileUse::Pack).is_err());
     }
 
     #[test]
@@ -1395,14 +1672,14 @@ mod tests {
               "_sDownloadUrl": "https://gamebanana.com/dl/597824", "_tsDateAdded": 10 }
         ]))
         .unwrap();
-        let variants = variants_from_files(files.clone()).unwrap();
+        let variants = variants_from_files(files.clone(), FileUse::Pack).unwrap();
         assert!(variants[0].split_part && !variants[0].supported);
         assert!(variants[1].split_part && !variants[1].supported);
         assert!(!variants[2].split_part && variants[2].supported);
-        assert!(pick_file_by_id(files.clone(), 1559476)
+        assert!(pick_file_by_id(files.clone(), 1559476, FileUse::Pack)
             .unwrap_err()
             .contains("split download"));
-        assert!(pick_file_by_id(files, 597824).is_ok());
+        assert!(pick_file_by_id(files, 597824, FileUse::Pack).is_ok());
 
         let named = |file: &str, description: &str| {
             is_split_part(&DownloadFile {
@@ -1479,16 +1756,35 @@ mod tests {
 
     #[test]
     fn untrusted_profile_and_thumbnail_metadata_is_not_exposed_to_the_ui() {
-        assert!(validated_mod_page("https://gamebanana.com/mods/7", 7).is_some());
-        assert!(validated_mod_page("https://gamebanana.com.evil.test/mods/7", 7).is_none());
-        assert!(validated_mod_page("http://gamebanana.com/mods/7", 7).is_none());
-        assert!(validated_mod_page("https://gamebanana.com/mods/8", 7).is_none());
+        assert!(
+            validated_mod_page("https://gamebanana.com/mods/7", 7, GameBananaSection::Mod)
+                .is_some()
+        );
+        assert!(validated_mod_page(
+            "https://gamebanana.com.evil.test/mods/7",
+            7,
+            GameBananaSection::Mod
+        )
+        .is_none());
+        assert!(
+            validated_mod_page("http://gamebanana.com/mods/7", 7, GameBananaSection::Mod).is_none()
+        );
+        assert!(
+            validated_mod_page("https://gamebanana.com/mods/8", 7, GameBananaSection::Mod)
+                .is_none()
+        );
         assert_eq!(
-            category_id_from_url("https://gamebanana.com/mods/cats/7951"),
+            category_id_from_url(
+                "https://gamebanana.com/mods/cats/7951",
+                GameBananaSection::Mod
+            ),
             Some(7951)
         );
         assert_eq!(
-            category_id_from_url("https://gamebanana.com.evil.test/mods/cats/7951"),
+            category_id_from_url(
+                "https://gamebanana.com.evil.test/mods/cats/7951",
+                GameBananaSection::Mod
+            ),
             None
         );
 
@@ -1658,6 +1954,165 @@ mod tests {
         );
     }
 
+    #[test]
+    fn sections_keep_their_own_ids_urls_and_categories() {
+        assert_eq!(GameBananaSection::parse(None), Ok(GameBananaSection::Mod));
+        assert_eq!(
+            GameBananaSection::parse(Some("mod")),
+            Ok(GameBananaSection::Mod)
+        );
+        assert_eq!(
+            GameBananaSection::parse(Some("sound")),
+            Ok(GameBananaSection::Sound)
+        );
+        assert!(GameBananaSection::parse(Some("spray")).is_err());
+
+        // Saved records name their section in the page URL; older records
+        // and anything unreadable stay mods.
+        for (url, section) in [
+            (
+                "https://gamebanana.com/sounds/21865",
+                GameBananaSection::Sound,
+            ),
+            ("https://gamebanana.com/mods/21865", GameBananaSection::Mod),
+            ("not a url", GameBananaSection::Mod),
+        ] {
+            assert_eq!(GameBananaSection::of_page_url(url), section, "{url}");
+        }
+        assert_eq!(
+            GameBananaSection::Sound.page_url(7),
+            "https://gamebanana.com/sounds/7"
+        );
+
+        let url = search_url(
+            GameBananaSection::Sound,
+            "quake",
+            "views",
+            Some(381),
+            1,
+            false,
+        )
+        .unwrap();
+        assert!(url.starts_with("https://gamebanana.com/apiv11/Sound/Index?"));
+        assert!(url.contains("_aFilters[Generic_Category]=381"));
+
+        // A category or page URL from the other section is not this section's.
+        let sounds = GameBananaSection::Sound;
+        assert_eq!(
+            category_id_from_url("https://gamebanana.com/sounds/cats/381", sounds),
+            Some(381)
+        );
+        assert_eq!(
+            category_id_from_url("https://gamebanana.com/mods/cats/381", sounds),
+            None
+        );
+        assert!(validated_mod_page("https://gamebanana.com/sounds/7", 7, sounds).is_some());
+        assert!(validated_mod_page("https://gamebanana.com/mods/7", 7, sounds).is_none());
+    }
+
+    #[test]
+    fn hit_and_kill_sound_uploads_route_to_sounds_and_other_sounds_install() {
+        let raw = r#"{ "_aMetadata": { "_nRecordCount": 4 }, "_aRecords": [
+            { "_idRow": 1, "_sModelName": "Sound", "_sName": "Quake hit",
+              "_sProfileUrl": "https://gamebanana.com/sounds/1",
+              "_aRootCategory": { "_sName": "Hitsound", "_sProfileUrl": "https://gamebanana.com/sounds/cats/381" } },
+            { "_idRow": 2, "_sModelName": "Sound", "_sName": "Roblox death",
+              "_aRootCategory": { "_sName": "Killsound", "_sProfileUrl": "https://gamebanana.com/sounds/cats/2630" } },
+            { "_idRow": 3, "_sModelName": "Sound", "_sName": "Announcer pack",
+              "_aRootCategory": { "_sName": "Sound Packs", "_sProfileUrl": "https://gamebanana.com/sounds/cats/1947" } },
+            { "_idRow": 4, "_sModelName": "Mod", "_sName": "Not a sound",
+              "_aRootCategory": { "_sName": "Skins", "_sProfileUrl": "https://gamebanana.com/mods/cats/7951" } }
+        ] }"#;
+        let response: IndexResponse = serde_json::from_str(raw).unwrap();
+        let page = page_from(
+            GameBananaSection::Sound,
+            response,
+            None,
+            false,
+            network_cache_info(),
+        );
+        let routes: Vec<_> = page
+            .records
+            .iter()
+            .map(|record| (record.id, record.route, record.section))
+            .collect();
+        assert_eq!(
+            routes,
+            [
+                (1, GameBananaModRoute::HitSound, GameBananaSection::Sound),
+                (2, GameBananaModRoute::KillSound, GameBananaSection::Sound),
+                (3, GameBananaModRoute::Mod, GameBananaSection::Sound),
+            ],
+            "a Mod record cannot appear in the Sound section"
+        );
+        assert_eq!(page.records[0].url, "https://gamebanana.com/sounds/1");
+        assert_eq!(page.records[1].url, "https://gamebanana.com/sounds/2");
+        assert_eq!(page.records[2].category_id, 1947);
+
+        let profile = |category: serde_json::Value| -> Result<GameBananaProfile, String> {
+            profile_from(
+                serde_json::from_value(serde_json::json!({
+                    "_idRow": 7,
+                    "_sName": "A sound",
+                    "_sProfileUrl": "https://gamebanana.com/sounds/7",
+                    "_aRootCategory": category,
+                    "_aGame": { "_idRow": 297 }
+                }))
+                .unwrap(),
+                7,
+                GameBananaSection::Sound,
+            )
+        };
+        let hit = profile(serde_json::json!({
+            "_sName": "Hitsound", "_sProfileUrl": "https://gamebanana.com/sounds/cats/381"
+        }))
+        .unwrap();
+        assert_eq!(hit.route, GameBananaModRoute::HitSound);
+        assert_eq!(hit.url, "https://gamebanana.com/sounds/7");
+        assert!(hit.require_pack().unwrap_err().contains("Sounds"));
+        let pack = profile(serde_json::json!({
+            "_sName": "Announcer", "_sProfileUrl": "https://gamebanana.com/sounds/cats/3532"
+        }))
+        .unwrap();
+        assert_eq!(pack.route, GameBananaModRoute::Mod);
+        assert!(pack.require_pack().is_ok());
+        // An unverifiable sound category could be a hit sound: refused.
+        assert!(profile(serde_json::json!({
+            "_sName": "Hitsound", "_sProfileUrl": "https://gamebanana.com/mods/cats/381"
+        }))
+        .is_err());
+    }
+
+    #[test]
+    fn sound_files_accept_loose_audio_but_packs_do_not() {
+        let files: Vec<DownloadFile> = serde_json::from_value(serde_json::json!([
+            { "_idRow": 1, "_sFile": "hit.wav", "_sDownloadUrl": "https://gamebanana.com/dl/1" },
+            { "_idRow": 2, "_sFile": "hits.zip", "_sDownloadUrl": "https://gamebanana.com/dl/2" },
+            { "_idRow": 3, "_sFile": "pack.vpk", "_sDownloadUrl": "https://gamebanana.com/dl/3" },
+            { "_idRow": 4, "_sFile": "kill.MP3", "_sDownloadUrl": "https://gamebanana.com/dl/4" }
+        ]))
+        .unwrap();
+        let supported = |file_use| {
+            let mut ids: Vec<_> = variants_from_files(files.clone(), file_use)
+                .unwrap()
+                .into_iter()
+                .filter(|variant| variant.supported)
+                .map(|variant| variant.id)
+                .collect();
+            ids.sort();
+            ids
+        };
+        assert_eq!(supported(FileUse::Pack), [2, 3]);
+        assert_eq!(supported(FileUse::Sound), [1, 2, 4]);
+        assert!(pick_file_by_id(files.clone(), 1, FileUse::Sound).is_ok());
+        assert!(pick_file_by_id(files.clone(), 1, FileUse::Pack)
+            .unwrap_err()
+            .contains("VPK"));
+        assert!(pick_file_by_id(files, 3, FileUse::Sound)
+            .unwrap_err()
+            .contains("WAV"));
+    }
+
     /// Hits the live API. Ignored so CI stays offline:
     /// `cargo test -p execs -- --ignored gamebanana`.
     #[test]
@@ -1665,7 +2120,7 @@ mod tests {
     fn smoke_the_live_api() {
         let mut pages = Vec::new();
         for sort in ["new", "updated", "downloads", "likes", "views"] {
-            let page = search_mods("", sort, None, 1, false, true).unwrap();
+            let page = search_mods(GameBananaSection::Mod, "", sort, None, 1, false, true).unwrap();
             assert!(!page.records.is_empty(), "{sort}");
             assert_eq!(page.ordering, GameBananaOrdering::Server);
             pages.push(page);
@@ -1696,13 +2151,22 @@ mod tests {
             page.total, page.per_page, page.complete
         );
 
-        let categories = categories(true).unwrap();
+        let categories = categories(GameBananaSection::Mod, true).unwrap();
         println!("categories: {categories:?}");
         assert!(categories.iter().any(|category| category.name == "Skins"));
         assert!(categories.iter().any(|category| category.name == "Maps"));
         assert!(!categories.iter().any(|category| category.name == "Prefabs"));
 
-        let found = search_mods("scout", "likes", None, 1, false, true).unwrap();
+        let found = search_mods(
+            GameBananaSection::Mod,
+            "scout",
+            "likes",
+            None,
+            1,
+            false,
+            true,
+        )
+        .unwrap();
         println!(
             "search perPage={} total={:?} first={:?}",
             found.per_page,
@@ -1715,10 +2179,32 @@ mod tests {
             .iter()
             .find(|record| record.route == GameBananaModRoute::Mod)
             .unwrap();
+        let mod_profile = |id| submission_profile(GameBananaSection::Mod, id);
         let profile = mod_profile(mod_record.id).unwrap();
         println!("profile: {profile:?}");
-        // A Training map and HUD cannot enter the generic Mods installer.
-        assert!(mod_profile(74812).unwrap_err().contains("category"));
-        assert!(mod_profile(26852).unwrap_err().contains("category"));
+        // Maps install like other mods (tr_walkway); a HUD goes to the HUD pane.
+        assert!(mod_profile(74812).is_ok());
+        assert!(mod_profile(26852).unwrap_err().contains("HUD"));
+
+        let sounds =
+            search_mods(GameBananaSection::Sound, "", "views", None, 1, false, true).unwrap();
+        assert!(!sounds.records.is_empty());
+        assert!(sounds
+            .records
+            .iter()
+            .all(|record| record.section == GameBananaSection::Sound
+                && record.url.starts_with("https://gamebanana.com/sounds/")));
+        let sound_categories = super::categories(GameBananaSection::Sound, true).unwrap();
+        assert!(sound_categories
+            .iter()
+            .any(|category| category.id == HITSOUND_CATEGORY));
+        assert!(sound_categories
+            .iter()
+            .any(|category| category.id == KILLSOUND_CATEGORY));
+        // Quake III Arena hit indicator: a hit sound with one RAR.
+        let quake = submission_profile(GameBananaSection::Sound, 21865).unwrap();
+        assert_eq!(quake.route, GameBananaModRoute::HitSound);
+        let files = download_variants_in(GameBananaSection::Sound, 21865, FileUse::Sound).unwrap();
+        assert!(files.iter().any(|file| file.supported));
     }
 }

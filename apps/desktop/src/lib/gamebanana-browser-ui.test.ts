@@ -19,6 +19,7 @@ import {
 
 const mod = (over: Partial<GameBananaMod> = {}): GameBananaMod => ({
   id: 1,
+  section: "mod",
   name: "A mod",
   author: "Author",
   category: "Skins",
@@ -56,6 +57,7 @@ const page = (over: Partial<GameBananaPage> = {}): GameBananaPage => ({
 describe("GameBanana browser UI model", () => {
   it("keys every effective request field and normalizes harmless query whitespace", () => {
     const base = {
+      section: "mod" as const,
       query: "  rocket   trail ",
       sort: "new" as const,
       category: null,
@@ -71,6 +73,7 @@ describe("GameBanana browser UI model", () => {
       { ...base, category: 7951 },
       { ...base, page: 2 },
       { ...base, includeMature: true },
+      { ...base, section: "sound" as const },
     ]) {
       expect(gameBananaRequestKey(changed)).not.toBe(gameBananaRequestKey(base));
     }

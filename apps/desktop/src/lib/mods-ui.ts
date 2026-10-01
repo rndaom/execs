@@ -3,6 +3,7 @@ import type {
   CatalogParticleMod,
   GameBananaCategory,
   GameBananaMod,
+  GameBananaSection,
   ModRecord,
   ModSource,
   ModsCatalog,
@@ -378,9 +379,30 @@ export function gameBananaIdOf(mod: ModRecord): number | null {
   return mod.source.kind === "gamebanana" ? mod.source.id : null;
 }
 
-/** Whether one GameBanana listing is already installed in this profile. */
-export function isGameBananaInstalled(mods: ModRecord[], id: number): boolean {
-  return mods.some((mod) => gameBananaIdOf(mod) === id);
+/** The section a saved GameBanana record came from, read from its page URL. */
+export function gameBananaSectionOf(url: string): GameBananaSection {
+  try {
+    return new URL(url).pathname.startsWith("/sounds/") ? "sound" : "mod";
+  } catch {
+    return "mod";
+  }
+}
+
+/**
+ * Whether one GameBanana listing is already installed in this profile. Sounds
+ * and mods number their listings separately, so the section must match too.
+ */
+export function isGameBananaInstalled(
+  mods: ModRecord[],
+  id: number,
+  section: GameBananaSection = "mod",
+): boolean {
+  return mods.some(
+    (mod) =>
+      mod.source.kind === "gamebanana" &&
+      mod.source.id === id &&
+      gameBananaSectionOf(mod.source.url) === section,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -477,6 +499,7 @@ const HOUR = 3_600;
 export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
   {
     id: 618_734,
+    section: "mod",
     name: "Clean Rocket Trails",
     author: "sparkplug",
     category: "Effects",
@@ -495,6 +518,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
   },
   {
     id: 602_110,
+    section: "mod",
     name: "Flat Scattergun",
     author: "beancan",
     category: "Skins",
@@ -513,6 +537,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
   },
   {
     id: 590_884,
+    section: "mod",
     name: "Muted Hit Markers",
     author: "quietkid",
     category: "Sounds",
@@ -531,6 +556,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
   },
   {
     id: 577_301,
+    section: "mod",
     name: "No Explosion Smoke",
     author: "sparkplug",
     category: "Effects",
@@ -549,6 +575,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
   },
   {
     id: 561_442,
+    section: "mod",
     name: "Vintage Sniper Rifle",
     author: "oldworks",
     category: "Skins",
@@ -567,6 +594,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
   },
   {
     id: 540_019,
+    section: "mod",
     name: "Softer Footsteps",
     author: "quietkid",
     category: "Sounds",
@@ -585,6 +613,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
   },
   {
     id: 700_100,
+    section: "mod",
     name: "Copper HUD",
     author: "hudmaker",
     category: "GUIs",
@@ -603,6 +632,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
   },
   {
     id: 700_101,
+    section: "mod",
     name: "Class menu backgrounds",
     author: "menuartist",
     category: "GUIs",
@@ -621,6 +651,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
   },
   {
     id: 700_102,
+    section: "mod",
     name: "koth_harvest_night",
     author: "mapper",
     category: "Maps",
@@ -648,6 +679,7 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
     const addedAt = Math.floor(Date.UTC(2026, 8, 19 - index) / 1000);
     return {
       id: 700_000 + index,
+      section: "mod",
       name: `Preview mod ${String(index + 1).padStart(2, "0")}`,
       author: `creator${(index % 5) + 1}`,
       category: category.name,
@@ -665,6 +697,79 @@ export const PREVIEW_GAMEBANANA_RECORDS: GameBananaMod[] = [
       mature: false,
     };
   }),
+];
+
+/** GameBanana's TF2 sound categories for hit and kill sounds. */
+export const GAMEBANANA_HITSOUND_CATEGORY = 381;
+export const GAMEBANANA_KILLSOUND_CATEGORY = 2630;
+
+export const PREVIEW_GAMEBANANA_SOUND_CATEGORIES: GameBananaCategory[] = [
+  { id: GAMEBANANA_HITSOUND_CATEGORY, name: "Hitsound" },
+  { id: GAMEBANANA_KILLSOUND_CATEGORY, name: "Killsound" },
+  { id: 425, name: "Character Voice" },
+  { id: 3532, name: "Announcer" },
+  { id: 2035, name: "Main Menu Music" },
+  { id: 1947, name: "Sound Packs" },
+];
+
+export const PREVIEW_GAMEBANANA_SOUND_RECORDS: GameBananaMod[] = [
+  {
+    id: 21_865,
+    section: "sound",
+    name: "Quake III Arena hit indicator",
+    author: "kexe",
+    category: "Hitsound",
+    categoryId: GAMEBANANA_HITSOUND_CATEGORY,
+    subCategory: null,
+    route: "hitSound",
+    likes: 77,
+    views: 289_253,
+    downloads: null,
+    addedAt: Math.floor(Date.UTC(2014, 1, 4) / 1000),
+    updatedAt: Math.floor(Date.UTC(2014, 1, 4) / 1000),
+    modifiedAt: null,
+    thumb: null,
+    url: "https://gamebanana.com/sounds/21865",
+    mature: false,
+  },
+  {
+    id: 37_285,
+    section: "sound",
+    name: "Classic oof",
+    author: "soundsmith",
+    category: "Killsound",
+    categoryId: GAMEBANANA_KILLSOUND_CATEGORY,
+    subCategory: null,
+    route: "killSound",
+    likes: 41,
+    views: 120_400,
+    downloads: null,
+    addedAt: Math.floor(Date.UTC(2017, 3, 2) / 1000),
+    updatedAt: null,
+    modifiedAt: null,
+    thumb: null,
+    url: "https://gamebanana.com/sounds/37285",
+    mature: false,
+  },
+  {
+    id: 27_865,
+    section: "sound",
+    name: "Retro announcer pack",
+    author: "voicebox",
+    category: "Sound Packs",
+    categoryId: 1947,
+    subCategory: null,
+    route: "mod",
+    likes: 230,
+    views: 410_000,
+    downloads: null,
+    addedAt: Math.floor(Date.UTC(2016, 6, 11) / 1000),
+    updatedAt: Math.floor(Date.UTC(2023, 0, 9) / 1000),
+    modifiedAt: null,
+    thumb: null,
+    url: "https://gamebanana.com/sounds/27865",
+    mature: false,
+  },
 ];
 
 export const PREVIEW_PARTICLE_SOURCES: ParticleSource[] = [

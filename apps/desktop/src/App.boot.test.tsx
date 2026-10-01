@@ -27,6 +27,12 @@ afterEach(async () => {
 });
 
 it("holds the startup screen over an inert app until the first pane has loaded", async () => {
+  // Startup caps its hold at BOOT_MAX_MS from page start, which performance.now()
+  // measures in a webview. Here it counts from the worker's start instead, so a
+  // slow cold import would already be past the cap; start the page clock now.
+  const pageStart = performance.now();
+  const now = performance.now.bind(performance);
+  vi.spyOn(performance, "now").mockImplementation(() => now() - pageStart);
   const api = createPreviewApi("settings-comfig");
   const read = api.getActiveProfileDetail.bind(api);
   const waiting: (() => void)[] = [];
