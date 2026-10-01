@@ -66,58 +66,50 @@ describe("crosshair settings placement", () => {
     expect(markup).not.toMatch(/data-testid="gameplay-fov"[^>]*disabled=""/);
   });
 
-  it("shows only the active in-game mode with one color owner", () => {
+  it("offers every crosshair as a picture with one size and color owner", () => {
     const markup = renderCrosshair();
-    const stockStart = markup.indexOf('data-testid="stock-crosshair-settings"');
-    const builderStart = markup.indexOf("Custom crosshairs");
-
-    expect(stockStart).toBeGreaterThanOrEqual(0);
-    expect(builderStart).toBe(-1);
-    expect(markup).toContain('data-testid="stock-crosshair-file"');
-    // Every stock file is a picture, not a dropdown line.
-    expect(markup).toContain('data-testid="stock-crosshair-file-crosshair7"');
+    expect(markup).toContain('data-testid="crosshair-shape-tf-default"');
+    expect(markup).toContain('data-testid="crosshair-shape-tf-crosshair7"');
+    expect(markup).toContain('data-testid="crosshair-shape-shape-gap-dot"');
+    // Retired execs shapes stay out of the gallery unless a profile uses one.
+    expect(markup).not.toContain('data-testid="crosshair-shape-execs-chevron"');
     expect(markup).not.toContain("<select");
-    expect(markup).not.toContain('data-testid="crosshair-preview"');
-    expect(markup).toContain("Hex color");
-    expect(markup).toContain("Weapon default");
+    expect(markup.match(/ id="stock-crosshair-scale"/g)).toHaveLength(1);
+    expect(markup.match(/Hex color/g)).toHaveLength(1);
+    // No mode switch: TF2's own sprites and custom ones are one choice.
+    expect(markup).not.toContain("crosshair-mode-");
   });
 
-  it("renders the selected stock crosshair shape in the live preview", () => {
-    // The picker grid draws every file, so judge the hero preview alone.
-    const hero = (markup: string) => {
-      const start = markup.indexOf('data-testid="stock-crosshair-preview"');
-      const end = markup.indexOf("Live preview", start);
-      return markup.slice(start, end);
-    };
-    const markup = hero(renderCrosshair());
-    // cl_crosshair_file crosshair3 = open circle: the SVG carries the file id
-    // and circle geometry, not a hardcoded plus.
-    expect(markup).toContain('data-testid="stock-crosshair-shape"');
-    expect(markup).toContain('data-file="crosshair3"');
-    expect(markup).toContain("<circle");
-    const crosshair7 = hero(renderCrosshair(false, "cl_crosshair_file crosshair7\n"));
-    expect(crosshair7).toContain('data-file="crosshair7"');
-    expect(crosshair7).toContain("<rect");
-    expect(crosshair7).not.toContain("<circle");
+  it("selects and previews TF2's live crosshair when no pack runs", () => {
+    const markup = renderCrosshair();
+    expect(markup).toMatch(/data-testid="crosshair-shape-tf-crosshair3"[^>]*checked/);
+    expect(markup).toContain('data-testid="crosshair-stage-label">Open circle<');
+    // cl_crosshair_file draws 2 × scale pixels: scale 40 is 80 px.
+    expect(markup).toContain("80 × 80 px");
+    const solid = renderCrosshair(false, "cl_crosshair_file crosshair7\n");
+    expect(solid).toContain('data-testid="crosshair-stage-label">Solid plus<');
   });
 
-  it("offers an all-classes tab with per-slot assignment in Custom", () => {
+  it("lays per-weapon crosshairs out on the page with class tabs", () => {
     const markup = renderCrosshair(false, undefined, true);
     expect(markup).toContain('id="crosshair-class-tab-all"');
-    expect(markup).toContain('data-testid="crosshair-all-classes"');
+    expect(markup).toContain('id="crosshair-class-tab-scout"');
     expect(markup).toContain('data-testid="crosshair-slot-primary"');
     expect(markup).toContain('data-testid="crosshair-slot-melee"');
+    expect(markup).toContain("Every weapon uses the main crosshair.");
+    // Choices are pictures beside the list, not a menu.
+    expect(markup).toContain('data-testid="crosshair-weapon-option-main"');
   });
 
-  it("requires an explicit custom build and hides in-game choices", () => {
-    const markup = renderCrosshair(false, undefined, true);
-    expect(markup).toContain('data-testid="crosshair-build"');
-    expect(markup).not.toContain('data-testid="stock-crosshair-file"');
-
-    expect(markup).not.toContain('data-testid="crosshair-apply"');
-    expect(markup).not.toContain('data-testid="stock-crosshair-apply"');
-    expect(markup).not.toContain("Install pack");
-    expect(markup).not.toContain("Save crosshair");
+  it("shows no build or apply action while nothing needs writing", () => {
+    for (const custom of [false, true]) {
+      const markup = renderCrosshair(false, undefined, custom);
+      expect(markup).not.toContain('data-testid="crosshair-build"');
+      expect(markup).not.toContain('data-testid="crosshair-use-tf2"');
+      expect(markup).not.toContain("Install pack");
+      expect(markup).not.toContain("Save crosshair");
+    }
+    expect(renderCrosshair(false, 'cl_crosshair_file ""\n', true)).toContain("Custom pack on");
   });
 
   it("keeps the controls live while TF2 is running so a draft can be made", () => {
@@ -125,10 +117,9 @@ describe("crosshair settings placement", () => {
     // takes the pictures and sliders away.
     const markup = renderCrosshair(true);
 
-    expect(markup).toContain('data-testid="stock-crosshair-file-default"');
-    expect(markup).not.toMatch(/data-testid="stock-crosshair-file-default"[^>]*disabled=""/);
-    expect(markup).not.toMatch(/data-testid="stock-crosshair-file-crosshair3"[^>]*disabled=""/);
+    expect(markup).toContain('data-testid="crosshair-shape-tf-default"');
+    expect(markup).not.toMatch(/data-testid="crosshair-shape-tf-default"[^>]*disabled=""/);
+    expect(markup).not.toMatch(/data-testid="crosshair-shape-shape-dot"[^>]*disabled=""/);
     expect(markup).not.toMatch(/data-testid="stock-crosshair-scale"[^>]*disabled=""/);
-    expect(markup).not.toMatch(/data-testid="crosshair-color"[^>]*disabled=""/);
   });
 });

@@ -254,7 +254,7 @@ it("saves two retained pane drafts through the native write queue before releasi
 it("keeps manual crosshair changes explicit when closing and discards only after a decision", async () => {
   const build = vi.spyOn(api, "applyCrosshairs");
   await clickId("settings-tab-crosshair");
-  await clickId("crosshair-mode-custom");
+  await clickId("crosshair-shape-shape-dot");
   const event = { preventDefault: vi.fn() };
   await act(async () => close(event));
   expect(event.preventDefault).toHaveBeenCalledOnce();

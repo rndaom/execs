@@ -60,3 +60,38 @@ export const STOCK_CROSSHAIR_LABELS: Record<StockCrosshairFile, string> = {
   crosshair6: "Cross with gaps",
   crosshair7: "Solid plus",
 };
+
+/**
+ * The fallback geometry as a 64×64 white RGBA sprite, for pictures drawn
+ * before (or without) the real sprites decoded from the player's game files.
+ */
+export function stockCrosshairRgba(file: string): Uint8ClampedArray | null {
+  const primitives = stockCrosshairPrimitives(file);
+  if (!primitives) return null;
+  const size = 64;
+  const pixels = new Uint8ClampedArray(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const px = x + 0.5;
+      const py = y + 0.5;
+      const on = primitives.some((shape) => {
+        if (shape.kind === "rect") {
+          return px >= shape.x && px < shape.x + shape.w && py >= shape.y && py < shape.y + shape.h;
+        }
+        if (shape.kind === "ring") {
+          return Math.abs(Math.hypot(px - shape.cx, py - shape.cy) - shape.r) <= shape.stroke / 2;
+        }
+        if (shape.kind === "disc") return Math.hypot(px - shape.cx, py - shape.cy) <= shape.r;
+        const vx = shape.x2 - shape.x1;
+        const vy = shape.y2 - shape.y1;
+        const t = Math.max(
+          0,
+          Math.min(1, ((px - shape.x1) * vx + (py - shape.y1) * vy) / (vx * vx + vy * vy)),
+        );
+        return Math.hypot(px - (shape.x1 + t * vx), py - (shape.y1 + t * vy)) <= shape.w / 2;
+      });
+      if (on) pixels.fill(255, (y * size + x) * 4, (y * size + x) * 4 + 4);
+    }
+  }
+  return pixels;
+}

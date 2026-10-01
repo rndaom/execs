@@ -6,30 +6,40 @@ import {
   renderCrosshairDesign,
   serializeDesign,
 } from "../lib/crosshair-designer";
+import { DESIGN_PREFIX, IMAGE_PREFIX, libraryName, VTF_PREFIX } from "../lib/crosshair-labels";
 import {
   CROSSHAIR_CANVAS_SIZE,
-  CROSSHAIR_SHAPES,
   type CrosshairDraft,
   CUSTOM_CROSSHAIR_SHAPE,
   DESIGNED_CROSSHAIR_NAME,
   seedCrosshairDraft,
+  serializeCrosshairDraft,
+  tf2ChoiceForFile,
 } from "../lib/crosshair-ui";
 
-export type PreviewPixels = { width: number; height: number; rgba: number[] };
+export type PreviewPixels = { width: number; height: number; rgba: number[] | Uint8ClampedArray };
 
 export type CrosshairDraftApi = {
   draft: CrosshairDraft;
   setDraft: Dispatch<SetStateAction<CrosshairDraft>>;
   seeded: CrosshairDraft;
   discard: () => void;
-  /** Local pixels for library entries added this session. */
+  /** Local pixels for library entries added this session, else the pack's. */
   previewFor: (name: string) => PreviewPixels | null;
   removeLibraryEntry: (name: string) => void;
-  saveDesign: (design: CrosshairDesign, label?: string) => void;
+  /** Save a design; `replace` overwrites that entry instead of adding one. */
+  saveDesign: (design: CrosshairDesign, label?: string, replace?: string) => string;
   acknowledge: (sent: CrosshairDraft, color: [number, number, number]) => void;
+  /** The legacy single imported image. */
   setImportedPng: (pixels: number[]) => void;
+  /** A named 64×64 image in the library; returns its name. */
+  addImage: (pixels: number[], label: string) => string;
+  /** A named VTF in the library, previewed with `sprite`; returns its name. */
+  addVtf: (bytes: number[], sprite: StockCrosshairSprite, label: string) => string;
   /** Library entries whose bytes we actually hold, for the apply call. */
   libraryPayload: () => Record<string, CrosshairAssetPayload>;
+  /** Per-weapon choices kept in a switched-off pack, for an explicit restore. */
+  savedAssignments: Record<string, string>;
 };
 
 /**
@@ -39,18 +49,38 @@ export type CrosshairDraftApi = {
  * an unrelated write reloads fresh objects without clearing unbuilt PNGs,
  * library bytes or weapon overrides. A profile switch changes ownership and
  * discards the old draft; a confirmed build acknowledges only the sent version.
+ *
+ * With no pack running (none saved, or one switched off) the seed starts from
+ * TF2's own live crosshair (`stockFile`); a switched-off pack still lends its
+ * library so saved designs stay available.
  */
 export function useCrosshairDraft(
   profileId: string | null,
   record: CrosshairRecord | null,
   packPreviews: Record<string, StockCrosshairSprite> | null,
+  stockFile?: string,
 ): CrosshairDraftApi {
-  const recordKey = draftRecordKey(profileId, JSON.stringify(record ?? null));
+  const packLive = record !== null && !record.inactive;
+  const recordKey = draftRecordKey(
+    profileId,
+    JSON.stringify([record ?? null, packLive ? null : (stockFile ?? null)]),
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: recordKey covers record by value.
-  const seeded = useMemo(() => seedCrosshairDraft(record), [recordKey]);
+  const seeded = useMemo(() => {
+    const fromRecord = seedCrosshairDraft(record);
+    if (packLive || stockFile === undefined) return fromRecord;
+    return { ...fromRecord, shape: tf2ChoiceForFile(stockFile), assignments: {} };
+  }, [recordKey]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: recordKey covers record by value.
+  const savedAssignments = useMemo(
+    () => (record?.inactive ? seedCrosshairDraft(record).assignments : {}),
+    [recordKey],
+  );
+  // Compared as content, so a confirmed build reads as clean once the sorted
+  // native record comes back, and later reloads can reseed it.
   const [draft, setDraft] = useSeededDraft(
     seeded,
-    (value) => JSON.stringify(value),
+    serializeCrosshairDraft,
     draftRecordKey(profileId, "custom-crosshair"),
   );
   const [fetchedPreviews, setFetchedPreviews] = useSeededDraft<Record<string, PreviewPixels>>(
@@ -96,49 +126,68 @@ export function useCrosshairDraft(
         ...current,
         library,
         assignments,
-        shape: removingSelection ? CROSSHAIR_SHAPES[0] : current.shape,
+        shape: removingSelection ? "shape-cross" : current.shape,
         // The imported-PNG buffer belongs to the "custom" shape; falling back
         // to a first-party shape while it lingers left a stale preview and a
         // stale payload on the next apply.
-        customRgba: removingSelection ? null : current.customRgba,
+        customRgba:
+          removingSelection && name === CUSTOM_CROSSHAIR_SHAPE ? null : current.customRgba,
         design: Object.keys(designs).length ? JSON.stringify(designs) : null,
       };
     });
   }
 
-  function saveDesign(design: CrosshairDesign, label?: string) {
-    const base = label
-      ? `design-${
-          label
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-|-$/g, "")
-            .slice(0, 40) || "crosshair"
-        }`
-      : DESIGNED_CROSSHAIR_NAME;
-    let name = base;
-    for (let suffix = 2; name in draft.library && draft.shape !== name; suffix += 1) {
-      name = `${base}-${suffix}`;
-    }
+  function remember(name: string, pixels: PreviewPixels) {
+    setFetchedPreviews((current) => ({ ...current, [name]: pixels }));
+  }
+
+  function saveDesign(design: CrosshairDesign, label?: string, replace?: string): string {
+    const name =
+      replace && (replace in draft.library || replace === DESIGNED_CROSSHAIR_NAME)
+        ? replace
+        : label
+          ? libraryName(DESIGN_PREFIX, label, (taken) => taken in draft.library)
+          : DESIGNED_CROSSHAIR_NAME;
     // Stored untinted; the tint rides cl_crosshair_red/green/blue at apply time.
     const rgba = Array.from(renderCrosshairDesign(design, null));
-    setFetchedPreviews((current) => ({
-      ...current,
-      [name]: {
-        width: CROSSHAIR_CANVAS_SIZE,
-        height: CROSSHAIR_CANVAS_SIZE,
-        rgba,
-      },
-    }));
+    remember(name, { width: CROSSHAIR_CANVAS_SIZE, height: CROSSHAIR_CANVAS_SIZE, rgba });
     setDraft((current) => ({
       ...current,
-      shape: name,
-      design: JSON.stringify({ ...designLibrary(current.design), [name]: serializeDesign(design) }),
+      // A new design becomes the main crosshair; an edited one stays wherever
+      // it is already used.
+      shape: replace === name ? current.shape : name,
+      design: JSON.stringify({
+        ...designLibrary(current.design),
+        [name]: serializeDesign(design, label),
+      }),
       library: {
         ...current.library,
         [name]: { format: "rgba", bytes: rgba },
       },
     }));
+    return name;
+  }
+
+  function addImage(pixels: number[], label: string): string {
+    const name = libraryName(IMAGE_PREFIX, label, (taken) => taken in draft.library);
+    remember(name, { width: CROSSHAIR_CANVAS_SIZE, height: CROSSHAIR_CANVAS_SIZE, rgba: pixels });
+    setDraft((current) => ({
+      ...current,
+      shape: name,
+      library: { ...current.library, [name]: { format: "rgba", bytes: pixels } },
+    }));
+    return name;
+  }
+
+  function addVtf(bytes: number[], sprite: StockCrosshairSprite, label: string): string {
+    const name = libraryName(VTF_PREFIX, label, (taken) => taken in draft.library);
+    remember(name, { width: sprite.width, height: sprite.height, rgba: sprite.rgba });
+    setDraft((current) => ({
+      ...current,
+      shape: name,
+      library: { ...current.library, [name]: { format: "vtf", bytes } },
+    }));
+    return name;
   }
 
   function setImportedPng(pixels: number[]) {
@@ -174,10 +223,13 @@ export function useCrosshairDraft(
     removeLibraryEntry,
     saveDesign,
     setImportedPng,
+    addImage,
+    addVtf,
     libraryPayload,
+    savedAssignments,
     acknowledge: (sent, color) =>
       setDraft((current) =>
-        JSON.stringify(current) === JSON.stringify(sent)
+        serializeCrosshairDraft(current) === serializeCrosshairDraft(sent)
           ? {
               ...current,
               color,

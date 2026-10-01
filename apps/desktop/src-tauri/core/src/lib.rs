@@ -15,6 +15,7 @@ pub mod disk_space;
 pub mod files_workspace;
 pub mod finder;
 pub mod first_run;
+pub mod game_resolution;
 pub mod hash;
 pub mod health;
 pub mod hitsound;

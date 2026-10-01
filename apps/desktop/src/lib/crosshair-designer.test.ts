@@ -4,10 +4,13 @@ import {
   DESIGN_LIMITS,
   DESIGN_STYLES,
   defaultCrosshairDesign,
+  designCode,
   designFillMask,
+  designLabel,
   dilate,
   maxDesignSize,
   parseDesign,
+  parseDesignCode,
   renderCrosshairDesign,
   serializeDesign,
 } from "./crosshair-designer";
@@ -322,5 +325,112 @@ describe("shadow layer", () => {
         expect(shadowed[i * 4 + 3], `pixel ${i}`).toBe(plain[i * 4 + 3]);
       }
     }
+  });
+});
+
+describe("turned, smoothed and shared designs", () => {
+  const alphaAt = (pixels: Uint8ClampedArray, x: number, y: number) => at(pixels, x, y)[3];
+
+  it("keeps older designs serializing exactly as before", () => {
+    const old = { ...defaultCrosshairDesign(), style: "circle" as const };
+    expect(JSON.parse(serializeDesign(old))).toEqual(clampDesign(old));
+    expect(Object.keys(clampDesign(old))).not.toContain("rotation");
+    expect(Object.keys(clampDesign({ ...old, rotation: 360, smooth: false }))).not.toContain(
+      "rotation",
+    );
+    expect(clampDesign({ ...old, rotation: -90 }).rotation).toBe(270);
+  });
+
+  it("turns a design a quarter turn clockwise without losing a pixel", () => {
+    const upright = clampDesign({ ...defaultCrosshairDesign(), style: "t", outline: 0, gap: 2 });
+    const turned = renderCrosshairDesign({ ...upright, rotation: 90 });
+    const original = renderCrosshairDesign(upright);
+    // Clockwise about the 32/32 corner: pixel (x, y) lands on (63 - y, x).
+    for (let y = 0; y < SIZE; y += 1) {
+      for (let x = 0; x < SIZE; x += 1) {
+        expect(alphaAt(turned, SIZE - 1 - y, x), `${x},${y}`).toBe(alphaAt(original, x, y));
+      }
+    }
+  });
+
+  it("turns a cross into an x at 45 degrees and keeps it inside the sprite", () => {
+    const design = clampDesign({
+      ...defaultCrosshairDesign(),
+      style: "cross",
+      rotation: 45,
+      size: 30,
+      gap: 0,
+      outline: 0,
+    });
+    expect(design.size).toBeLessThanOrEqual(maxDesignSize(design));
+    const pixels = renderCrosshairDesign(design);
+    // Diagonal pixels are lit, the upright arm is not.
+    expect(alphaAt(pixels, 32 + 8, 32 + 8)).toBeGreaterThan(0);
+    expect(alphaAt(pixels, 32, 32 - 10)).toBe(0);
+  });
+
+  it("gives smooth edges partial alpha while hard edges stay all or nothing", () => {
+    const circle = { ...defaultCrosshairDesign(), style: "circle" as const, size: 10, outline: 0 };
+    const hard = renderCrosshairDesign(circle);
+    const smooth = renderCrosshairDesign({ ...circle, smooth: true });
+    const partial = (pixels: Uint8ClampedArray) =>
+      pixels.filter((value, index) => index % 4 === 3 && value > 0 && value < 255).length;
+    expect(partial(hard)).toBe(0);
+    expect(partial(smooth)).toBeGreaterThan(10);
+  });
+
+  it("draws square dots and outlines around turned designs", () => {
+    const squareDot = designFillMask({
+      ...defaultCrosshairDesign(),
+      style: "dot",
+      dotShape: "square",
+      dotSize: 2,
+      size: 4,
+    });
+    // A 4×4 block straddling the centre, corners included.
+    expect(squareDot[30 * SIZE + 30]).toBe(1);
+    expect(squareDot[33 * SIZE + 33]).toBe(1);
+    expect(squareDot[34 * SIZE + 34]).toBe(0);
+    const outlined = renderCrosshairDesign({
+      ...defaultCrosshairDesign(),
+      style: "cross",
+      rotation: 30,
+      outline: 2,
+    });
+    const black = (pixels: Uint8ClampedArray) =>
+      pixels.filter(
+        (_, index) =>
+          index % 4 === 0 &&
+          pixels[index + 3] > 0 &&
+          pixels[index] === 0 &&
+          pixels[index + 1] === 0 &&
+          pixels[index + 2] === 0,
+      ).length;
+    expect(black(outlined)).toBeGreaterThan(20);
+  });
+
+  it("opens the middle of each side of a square with the gap", () => {
+    const closed = designFillMask({ ...defaultCrosshairDesign(), style: "square", gap: 0 });
+    const brackets = designFillMask({ ...defaultCrosshairDesign(), style: "square", gap: 6 });
+    // Middle of the right side.
+    expect(closed[32 * SIZE + 32 + 12]).toBe(1);
+    expect(brackets[32 * SIZE + 32 + 12]).toBe(0);
+    // Corner stays.
+    expect(brackets[(32 - 12) * SIZE + 32 + 11]).toBe(1);
+  });
+
+  it("round-trips a share code with its name and refuses anything else", () => {
+    const design = clampDesign({
+      ...defaultCrosshairDesign(),
+      style: "triangle",
+      rotation: 180,
+      smooth: true,
+    });
+    const code = designCode(design, "Upside down");
+    expect(code.startsWith("execs-crosshair:")).toBe(true);
+    expect(parseDesignCode(`  ${code}\n`)).toEqual({ design, label: "Upside down" });
+    expect(parseDesignCode("execs-crosshair:!!!")).toBeNull();
+    expect(parseDesignCode("hello")).toBeNull();
+    expect(designLabel(serializeDesign(design, "  Named  "))).toBe("Named");
   });
 });

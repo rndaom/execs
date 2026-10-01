@@ -1225,8 +1225,29 @@ export async function removeCrosshairs(): Promise<ProfileDetail> {
   return call<ProfileDetail>("remove_crosshairs");
 }
 
-export async function deactivateCrosshairs(): Promise<ProfileDetail> {
-  return call<ProfileDetail>("deactivate_crosshairs");
+/** Switch the custom pack off; `stock` is TF2's own crosshair file and size to use. */
+export async function deactivateCrosshairs(stock?: {
+  file: string;
+  scale: number;
+}): Promise<ProfileDetail> {
+  return call<ProfileDetail>("deactivate_crosshairs", { stock: stock ?? null });
+}
+
+/** Decode a VTF the player picked, for a preview before it joins the library. */
+export async function previewCrosshairVtf(bytes: number[]): Promise<StockCrosshairSprite> {
+  return call<StockCrosshairSprite>("preview_crosshair_vtf", { bytes });
+}
+
+export type GameResolution = {
+  width: number;
+  height: number;
+  windowed?: boolean;
+  borderless?: boolean;
+};
+
+/** TF2's saved video resolution, or null when it cannot be found. Read-only. */
+export async function getGameResolution(): Promise<GameResolution | null> {
+  return call<GameResolution | null>("get_game_resolution");
 }
 
 export async function getViewmodelSourceCatalog(): Promise<ViewmodelSourceCatalog> {

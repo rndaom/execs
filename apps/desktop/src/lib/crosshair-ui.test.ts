@@ -5,12 +5,18 @@ import {
   CROSSHAIR_CANVAS_SIZE,
   catalogSlots,
   copyClassToAllClasses,
+  crosshairLibraryDirty,
+  crosshairNeedsPack,
+  EXTERNAL_CROSSHAIR_CHOICE,
   emptyCrosshairDraft,
   isBuiltinCrosshairShape,
+  planCrosshair,
   previewCrosshairRecord,
   renderCrosshairRgba,
   seedCrosshairDraft,
   slotAssignment,
+  tf2ChoiceForFile,
+  tf2CrosshairFile,
   tintCrosshairRgba,
   validCrosshairName,
   WEAPON_CATALOG,
@@ -234,5 +240,85 @@ describe("crosshair names and slots", () => {
     });
     expect(firstParty.shape).toBe("circle");
     expect(firstParty.assignments.tf_weapon_scattergun).toBe("dot");
+  });
+});
+
+describe("what a crosshair draft needs", () => {
+  const base = { ...emptyCrosshairDraft(), shape: "tf-crosshair3" };
+
+  it("maps cl_crosshair_file values to TF2 choices and back", () => {
+    expect(tf2ChoiceForFile("")).toBe("tf-default");
+    expect(tf2ChoiceForFile("Crosshair5")).toBe("tf-crosshair5");
+    expect(tf2ChoiceForFile("my_hud/reticle")).toBe(EXTERNAL_CROSSHAIR_CHOICE);
+    expect(tf2CrosshairFile("tf-default")).toBe("");
+    expect(tf2CrosshairFile("tf-crosshair7")).toBe("crosshair7");
+    expect(tf2CrosshairFile("dot")).toBeNull();
+    expect(
+      seedCrosshairDraft({ id: "p", shape: "tf-crosshair2", assignments: { a: "tf-default" } }),
+    ).toMatchObject({ shape: "tf-crosshair2", assignments: { a: "tf-default" } });
+  });
+
+  it("lets TF2 draw its own sprite alone and needs the pack for anything else", () => {
+    expect(
+      planCrosshair({ draft: base, seeded: base, packLive: false, stockFile: "crosshair3" }),
+    ).toEqual({ kind: "none" });
+    const dot = { ...base, shape: "dot" };
+    expect(planCrosshair({ draft: dot, seeded: base, packLive: false, stockFile: "" })).toEqual({
+      kind: "build",
+    });
+    const exception = { ...base, assignments: { tf_weapon_bat: "dot" } };
+    expect(
+      planCrosshair({ draft: exception, seeded: base, packLive: false, stockFile: "" }),
+    ).toEqual({ kind: "build" });
+    // An "exception" equal to the main crosshair is none at all.
+    const redundant = { ...base, assignments: { tf_weapon_bat: "tf-crosshair3" } };
+    expect(crosshairNeedsPack(redundant, redundant)).toBe(false);
+  });
+
+  it("keeps new designs by building even when TF2 draws the main crosshair", () => {
+    const withDesign = {
+      ...base,
+      library: { "design-a": { format: "rgba" as const, bytes: [1] } },
+    };
+    expect(crosshairLibraryDirty(withDesign, base)).toBe(true);
+    expect(
+      planCrosshair({ draft: withDesign, seeded: base, packLive: false, stockFile: "" }),
+    ).toEqual({ kind: "build" });
+  });
+
+  it("switches a live pack off only for a changed, TF2-only draft", () => {
+    const live = { ...base, shape: "cross" };
+    expect(planCrosshair({ draft: live, seeded: live, packLive: true, stockFile: "" })).toEqual({
+      kind: "none",
+    });
+    expect(
+      planCrosshair({
+        draft: { ...live, shape: "tf-crosshair6" },
+        seeded: live,
+        packLive: true,
+        stockFile: "",
+      }),
+    ).toEqual({ kind: "deactivate", file: "crosshair6" });
+    expect(
+      planCrosshair({
+        draft: { ...live, shape: EXTERNAL_CROSSHAIR_CHOICE },
+        seeded: live,
+        packLive: true,
+        stockFile: "hud/x",
+      }),
+    ).toEqual({ kind: "deactivate", file: "hud/x" });
+    expect(
+      planCrosshair({
+        draft: { ...live, shape: "dot" },
+        seeded: live,
+        packLive: true,
+        stockFile: "",
+      }),
+    ).toEqual({ kind: "build" });
+    // A pack whose main crosshair is TF2's own stays as it is until changed.
+    const tf2Pack = { ...base };
+    expect(
+      planCrosshair({ draft: tf2Pack, seeded: tf2Pack, packLive: true, stockFile: "" }),
+    ).toEqual({ kind: "none" });
   });
 });

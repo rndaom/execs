@@ -85,11 +85,8 @@ async function debounce() {
 }
 
 describe("stock crosshair refreshes", () => {
-  it("shows and preserves an external material through a size edit", async () => {
+  it("preserves an external material through a size edit", async () => {
     await render(32, false, "profile-a", "cl_crosshair_file myreticle\ncl_crosshair_scale 32\n");
-    expect(box.querySelector("[data-testid='stock-crosshair-external']")).not.toBeNull();
-    expect(box.textContent).toContain("External: myreticle");
-    expect(box.textContent).toContain("External material preview unavailable");
     await setScale(40);
     await debounce();
     expect(save).toHaveBeenCalledTimes(1);

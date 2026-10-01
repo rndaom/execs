@@ -9,7 +9,6 @@ import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
 import { Disclosure } from "./components/ui/Disclosure";
 import { Loading, LoadingState } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
-import { CrosshairScene } from "./crosshair/CrosshairScene";
 import { GameplayPane } from "./GameplayPane";
 import { HudPane } from "./HudPane";
 import { AppStatusProvider, useAppStatus } from "./hooks/useAppStatus";
@@ -27,6 +26,7 @@ import {
   type CrosshairSourceStatus,
   type FilesContext,
   type FilesSource,
+  type GameResolution,
   isTauri,
   type LaunchSyncStatus,
   type ModImportReview,
@@ -176,6 +176,7 @@ export function SettingsHost({
     null,
   );
   const stockSpritesRequested = useRef(false);
+  const [gameResolution, setGameResolution] = useState<GameResolution | null>(null);
   const [packPreviews, setPackPreviews] = useState<Record<string, StockCrosshairSprite> | null>(
     null,
   );
@@ -497,6 +498,25 @@ export function SettingsHost({
       stockSpritesRequested.current = false;
     };
   }, [api, tab, visible]);
+
+  // TF2's saved resolution sizes the crosshair preview. Re-read on every visit:
+  // the player may have changed it in TF2 since. Unknown stays unknown.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey re-reads after TF2 closes.
+  useEffect(() => {
+    if (!visible || tab !== "crosshair") return;
+    let cancelled = false;
+    api
+      .getGameResolution()
+      .then((resolution) => {
+        if (!cancelled) setGameResolution(resolution);
+      })
+      .catch(() => {
+        if (!cancelled) setGameResolution(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, tab, visible, refreshKey]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey explicitly re-reads competing sources after external profile changes.
   useEffect(() => {
@@ -1142,7 +1162,9 @@ export function SettingsHost({
           stockArtSources={crosshairContent}
           sourceStatus={crosshairSourceStatus}
           onOpenMods={() => onNavigate?.("mods")}
-          scene={<CrosshairScene />}
+          launchOptions={launchSeed}
+          gameResolution={gameResolution}
+          onPreviewVtf={(bytes) => api.previewCrosshairVtf(bytes)}
           packPreviews={packPreviews}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           onSaveStock={(gameplayText) =>
@@ -1163,9 +1185,9 @@ export function SettingsHost({
               );
             })
           }
-          onDeactivate={() =>
+          onDeactivate={(stock) =>
             write(async () => {
-              await api.deactivateCrosshairs();
+              await api.deactivateCrosshairs(stock);
             })
           }
           onRemove={() => {
