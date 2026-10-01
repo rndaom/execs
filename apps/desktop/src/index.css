@@ -3058,3 +3058,460 @@ a:focus-visible,
     margin-top: -4px;
   }
 }
+
+/* First-run welcome tour. Every picture rests on its final frame and plays
+   once into it, so reduced motion (which removes animation) shows the same
+   picture standing still. */
+@layer components {
+  .welcome-body {
+    display: grid;
+    gap: 18px;
+  }
+
+  .welcome-top {
+    display: flex;
+    min-height: 28px;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .welcome-progress {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .welcome-progress li {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-pill);
+    background: var(--color-edge-strong);
+    transition:
+      width var(--motion-move) var(--ease-out),
+      background-color var(--motion) ease;
+  }
+
+  .welcome-progress li[data-state="done"] {
+    background: rgb(217 132 73 / 0.45);
+  }
+
+  .welcome-progress li[data-state="current"] {
+    width: 22px;
+    background: var(--color-brand);
+  }
+
+  .welcome-stage {
+    position: relative;
+    display: grid;
+    height: 188px;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--color-edge);
+    border-radius: var(--radius-lg);
+    /* The same quiet dot grid the app's backdrop is drawn on. */
+    background-color: var(--color-bg);
+    background-image: radial-gradient(circle, rgb(242 235 228 / 0.07) 1px, transparent 1.4px);
+    background-size: 14px 14px;
+    background-position: 7px 7px;
+    animation: welcome-in-next 260ms var(--ease-out) both;
+  }
+
+  .welcome-stage[data-direction="back"] {
+    animation-name: welcome-in-back;
+  }
+
+  .welcome-copy {
+    display: grid;
+    gap: 6px;
+    min-height: 92px;
+    align-content: start;
+    animation: welcome-copy-in 260ms var(--ease-out) 40ms both;
+  }
+
+  .welcome-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  .welcome-text {
+    margin: 0;
+    max-width: 52ch;
+    color: var(--color-ink-muted);
+    line-height: 1.55;
+  }
+
+  .welcome-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .welcome-actions-end {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  /* Shared picture parts: a profile card and the orange change dot. */
+  .wp-card {
+    display: flex;
+    width: 236px;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-lg);
+    background: var(--color-panel-raised);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+  }
+
+  .wp-avatar {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: none;
+    place-items: center;
+    border-radius: var(--radius-md);
+    background: rgb(217 132 73 / 0.16);
+    color: var(--color-brand);
+    font-weight: 700;
+  }
+
+  .wp-avatar-alt {
+    background: rgb(242 235 228 / 0.08);
+    color: var(--color-ink-muted);
+  }
+
+  .wp-card-text {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .wp-card-name {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .wp-card-meta {
+    color: var(--color-ink-faint);
+    font-size: 12px;
+  }
+
+  .wp-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-pill);
+    background: var(--color-brand);
+  }
+
+  /* 1. Saved: the card settles, the check lands, the dot pops. */
+  .wp-saved {
+    position: relative;
+  }
+
+  .wp-card-rise {
+    animation: wp-rise 480ms var(--ease-out) 80ms both;
+  }
+
+  .wp-check {
+    display: grid;
+    width: 20px;
+    height: 20px;
+    flex: none;
+    place-items: center;
+    border-radius: var(--radius-pill);
+    background: rgb(131 197 150 / 0.16);
+    color: var(--color-ok);
+    animation: wp-pop 420ms var(--ease-out) 520ms both;
+  }
+
+  .wp-saved .wp-dot {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    animation: wp-pop 420ms var(--ease-out) 760ms both;
+  }
+
+  /* 2. Sidebar: the selection glides from Binds to Crosshair to Sounds. */
+  .wp-rail {
+    position: relative;
+    display: grid;
+    width: 176px;
+    padding: 6px;
+    border: 1px solid var(--color-edge);
+    border-radius: var(--radius-lg);
+    background: var(--color-panel);
+  }
+
+  .wp-group {
+    display: grid;
+  }
+
+  .wp-group-label {
+    height: 18px;
+    padding: 3px 8px 0;
+    color: var(--color-ink-faint);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .wp-tab {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    height: 24px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    color: var(--color-ink-muted);
+    font-size: 13px;
+  }
+
+  .wp-tab .wp-dot {
+    margin-left: auto;
+    animation: wp-pop 420ms var(--ease-out) 1900ms both;
+  }
+
+  /* Rows: label 18, two tabs of 24, label 18, then HUD, Crosshair, Sounds. */
+  .wp-highlight {
+    position: absolute;
+    top: calc(6px + 18px + 24px * 2 + 18px + 24px * 2);
+    right: 6px;
+    left: 6px;
+    height: 24px;
+    border-radius: var(--radius-md);
+    background: rgb(217 132 73 / 0.14);
+    box-shadow: inset 2px 0 0 var(--color-brand);
+    animation: wp-glide 1800ms var(--ease-out) 200ms both;
+  }
+
+  /* 3. Profiles: the active ring moves to the new profile and back. */
+  .wp-swap {
+    display: grid;
+    gap: 10px;
+  }
+
+  .wp-card-a {
+    box-shadow:
+      0 0 0 2px var(--color-brand),
+      0 10px 30px rgb(0 0 0 / 0.35);
+    animation: wp-ring-away 2200ms ease 250ms both;
+  }
+
+  .wp-card-b {
+    animation: wp-ring-visit 2200ms ease 250ms both;
+  }
+
+  /* 4. TF2 closed: the lock lifts and the waiting change saves. */
+  .wp-closed {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+  }
+
+  .wp-pill,
+  .wp-change {
+    position: relative;
+    display: grid;
+  }
+
+  .wp-pill-layer,
+  .wp-change-layer {
+    grid-area: 1 / 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .wp-pill-layer {
+    padding: 7px 14px;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-pill);
+    background: var(--color-panel-raised);
+    font-weight: 600;
+  }
+
+  .wp-change-layer {
+    padding: 5px 12px;
+    border-radius: var(--radius-md);
+    color: var(--color-ink-muted);
+    font-size: 13px;
+  }
+
+  .wp-change-saved {
+    color: var(--color-ok);
+  }
+
+  .wp-led {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-pill);
+  }
+
+  .wp-led-warn {
+    background: var(--color-warn);
+  }
+
+  .wp-led-ok {
+    background: var(--color-ok);
+  }
+
+  .wp-pill-running,
+  .wp-change-waiting {
+    opacity: 0;
+    animation: wp-leave 1900ms ease 200ms both;
+  }
+
+  .wp-pill-closed,
+  .wp-change-saved {
+    animation: wp-arrive 1900ms ease 200ms both;
+  }
+}
+
+@keyframes welcome-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+
+@keyframes welcome-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+}
+
+@keyframes welcome-copy-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes wp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+}
+
+@keyframes wp-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* From Binds, through Crosshair, to Sounds. */
+@keyframes wp-glide {
+  0%,
+  22% {
+    transform: translateY(calc(-24px * 3 - 18px));
+  }
+  48%,
+  66% {
+    transform: translateY(-24px);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes wp-ring-away {
+  0%,
+  18% {
+    box-shadow:
+      0 0 0 2px var(--color-brand),
+      0 10px 30px rgb(0 0 0 / 0.35);
+  }
+  30%,
+  62% {
+    box-shadow:
+      0 0 0 0 transparent,
+      0 10px 30px rgb(0 0 0 / 0.35);
+  }
+  76%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--color-brand),
+      0 10px 30px rgb(0 0 0 / 0.35);
+  }
+}
+
+@keyframes wp-ring-visit {
+  0%,
+  18% {
+    box-shadow:
+      0 0 0 0 transparent,
+      0 10px 30px rgb(0 0 0 / 0.35);
+  }
+  30%,
+  62% {
+    box-shadow:
+      0 0 0 2px var(--color-brand),
+      0 10px 30px rgb(0 0 0 / 0.35);
+  }
+  76%,
+  100% {
+    box-shadow:
+      0 0 0 0 transparent,
+      0 10px 30px rgb(0 0 0 / 0.35);
+  }
+}
+
+@keyframes wp-leave {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  60%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes wp-arrive {
+  0%,
+  50% {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  70%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer components {
+  .comfig-empty {
+    max-width: 640px;
+    padding-block: 8px;
+  }
+}

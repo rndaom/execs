@@ -77,6 +77,7 @@ import {
   previewLibrary,
   previewLocked,
   previewUpdate,
+  previewVanillaLayer,
 } from "./preview";
 import type { RestorePoint } from "./restore-points-ui";
 import { previewViewmodelRecord } from "./viewmodel-ui";
@@ -258,7 +259,7 @@ export function createPreviewApi(state: PreviewState): Api {
       id: active.id,
       name: active.name,
       launchOptions,
-      layer: "comfig",
+      layer: previewVanillaLayer(state) ? "vanilla" : "comfig",
       files: [...files.map((file) => file.path), ...PREVIEW_PACKAGES].map((path) => ({
         path,
         sha256: sourceHash(files.find((file) => file.path === path)?.text ?? ""),
