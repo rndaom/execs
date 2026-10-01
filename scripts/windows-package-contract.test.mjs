@@ -15,6 +15,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { Writable } from "node:stream";
 import { finished } from "node:stream/promises";
 import test from "node:test";
+import { fixtureCacheSources } from "./absorb-cache-fixture.mjs";
 import {
   assertHostObservation,
   assertNormalExit,
@@ -46,14 +47,14 @@ import {
 
 const python =
   process.env.EXECS_TEST_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
-const retained = resolve("scripts/fixtures/windows-package-v020/no-hud.zip");
+const retained = resolve("scripts/fixtures/windows-package-v021/no-hud.zip");
 
 function withFixture(fn) {
   const parent = realpathSync(mkdtempSync(join(tmpdir(), "execs-windows-package-test-")));
   const scratch = join(parent, "fixture");
   mkdirSync(scratch);
   try {
-    return fn(seedWindowsFixture(scratch, "0.2.0"), parent);
+    return fn(seedWindowsFixture(scratch, "0.2.1"), parent);
   } finally {
     assert.equal(dirname(parent), realpathSync(tmpdir()));
     assert.ok(basename(parent).startsWith("execs-windows-package-test-"));
@@ -640,11 +641,11 @@ test("Windows fixture isolates child-only paths and keeps all original bytes and
     assert.throws(() => assertWindowsFixturePreserved(fixture), /app-data bytes/);
   }));
 
-test("actual retained v0.2.0 ZIP passes unchanged and all four payloads match independent hashes", () =>
+test("actual retained v0.2.1 ZIP passes unchanged and all four payloads match independent hashes", () =>
   withFixture((fixture) => {
     const source = windowsPublicFixture.sources.find((value) => value.case === "no-hud");
     const before = sha256(readFileSync(retained));
-    assert.equal(before, "306ae6236a8b79465c6aca6fea64dbdd56c06f447f789e28c8c6d62e8dcdcde1");
+    assert.equal(before, "b35ab9654f6a9bd7c8b2f0b2c368454d42df2ccf8b572b4f505165ffe7e03370");
     assert.equal(before, source.archiveSha256);
     // Adapt only expected identity; never rewrite the authentic archive under test.
     fixture.portableManifest.name = source.manifest.name;
@@ -662,12 +663,12 @@ test("actual retained v0.2.0 ZIP passes unchanged and all four payloads match in
     assert.throws(() => assertWindowsFixturePreserved(fixture, proof), /export bytes/);
   }));
 
-test("actual public v0.2.0 HUD export retains all eight manifest payloads and HUD options", () =>
+test("actual public v0.2.1 HUD export retains all eight manifest payloads and HUD options", () =>
   withFixture((fixture) => {
     const source = windowsPublicFixture.sources.find((value) => value.case === "single-hud");
-    const archive = resolve("scripts/fixtures/windows-package-v020/single-hud.zip");
+    const archive = resolve("scripts/fixtures/windows-package-v021/single-hud.zip");
     const hash = sha256(readFileSync(archive));
-    assert.equal(hash, "c0488c9bd2d45f949741219f48e58f02ad6aeeb796fb5273195e9274df62a6af");
+    assert.equal(hash, "e9063318d60b8d650ccb3ec0cecb37080847b6b1618906839309faefc421f522");
     assert.equal(hash, source.archiveSha256);
     fixture.portableManifest = structuredClone(source.manifest);
     copyFileSync(archive, fixture.exportPath);
@@ -676,6 +677,65 @@ test("actual public v0.2.0 HUD export retains all eight manifest payloads and HU
     assert.equal(proof.manifest.files.length, 8);
     assert.deepEqual(proof.manifest.hud.options, { compact: "1" });
     assert.equal(sha256(readFileSync(archive)), hash);
+  }));
+
+test("public app startup and close output is validated, never hiding other data changes", () =>
+  withFixture((fixture) => {
+    const files = fixture.metadata[`${fixture.activeProfileId}/manifest.json`].files;
+    const stamps = fixtureCacheSources(fixture.tf2Root, files);
+    const cache = (sha) => ({
+      entries: Object.fromEntries(
+        files
+          .filter((file) => Object.hasOwn(stamps, join(fixture.tf2Root, file.path)))
+          .map((file) => [
+            join(fixture.tf2Root, file.path),
+            { stamp: stamps[join(fixture.tf2Root, file.path)], sha256: sha ?? file.sha256 },
+          ]),
+      ),
+    });
+    const cachePath = join(fixture.library, fixture.activeProfileId, "absorb-cache.json");
+    const settingsPath = join(fixture.data, "settings.json");
+    const window = { x: 0, y: 0, width: 1200, height: 800, maximized: false };
+    mkdirSync(join(fixture.data, "logs"));
+    mkdirSync(join(fixture.data, "maintenance"));
+    writeFileSync(
+      join(fixture.data, "logs", "activity.log"),
+      "2026-09-28T13:40:22Z tidy: Tidy-up: 0 sound caches removed\n",
+    );
+    writeFileSync(
+      join(fixture.data, "maintenance", "tidy-up.json"),
+      '{"version":1,"incompleteRuns":0}',
+    );
+    writeFileSync(cachePath, JSON.stringify(cache()));
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window }));
+    assert.equal(assertWindowsFixturePreserved(fixture).originalBytesPreserved, true);
+
+    // v0.2.1 writes every preference when it saves; the seed already holds the defaults.
+    assert.deepEqual(fixture.settings.preferences, {
+      checkForUpdatesOnStartup: true,
+      motion: "system",
+    });
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({ ...fixture.settings, window, preferences: { motion: "reduce" } }),
+    );
+    assert.throws(
+      () => assertWindowsFixturePreserved(fixture),
+      /settings changed beyond the window placement/,
+    );
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window }));
+
+    writeFileSync(join(fixture.data, "maintenance", "other.json"), "{}");
+    assert.throws(() => assertWindowsFixturePreserved(fixture), /app-data bytes/);
+    rmSync(join(fixture.data, "maintenance", "other.json"));
+    writeFileSync(cachePath, JSON.stringify(cache("0".repeat(64))));
+    assert.throws(() => assertWindowsFixturePreserved(fixture), /absorb cache hash/);
+    writeFileSync(cachePath, JSON.stringify(cache()));
+    writeFileSync(settingsPath, JSON.stringify({ ...fixture.settings, window, schema: 2 }));
+    assert.throws(
+      () => assertWindowsFixturePreserved(fixture),
+      /settings changed beyond the window placement/,
+    );
   }));
 
 function alteredArchive(fixture, change) {
@@ -1013,14 +1073,17 @@ test("current public Windows baseline is independent of candidate version and fa
         name: asset.name,
         size: asset.bytes,
         digest: `sha256:${asset.sha256}`,
-        url: `https://github.com/rndaom/execs/releases/download/v0.2.0/${asset.name}`,
+        url: `https://github.com/rndaom/execs/releases/download/v0.2.1/${asset.name}`,
       };
     }),
   };
-  assert.equal(selectCurrentPublicNsis(release).version, "0.2.0");
+  assert.equal(selectCurrentPublicNsis(release).version, "0.2.1");
   for (const change of [
     (r) => {
-      r.tagName = "v0.2.1";
+      r.tagName = "v0.2.0";
+    },
+    (r) => {
+      r.tagName = "v0.2.2";
     },
     (r) => {
       r.isDraft = true;
