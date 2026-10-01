@@ -27,6 +27,8 @@ export const PREVIEW_STATES = [
   "first-unused-locked",
   "create",
   "settings-comfig",
+  "settings-comfig-vanilla",
+  "welcome",
   "settings-inventory",
   "settings-binds",
   "settings-gameplay",
@@ -77,6 +79,8 @@ const READY: PreviewState[] = [
   "first-unused-locked",
   "create",
   "settings-comfig",
+  "settings-comfig-vanilla",
+  "welcome",
   "settings-inventory",
   "settings-binds",
   "settings-gameplay",
@@ -204,11 +208,23 @@ export function previewCreating(state: PreviewState): boolean {
   return state === "create";
 }
 
+/** `?preview=welcome` opens the first-run welcome tour over a saved profile. */
+export function previewWelcome(state: PreviewState): boolean {
+  return state === "welcome";
+}
+
+/** States whose sample profile does not use mastercomfig. */
+export function previewVanillaLayer(state: PreviewState): boolean {
+  return state === "settings-comfig-vanilla" || state === "welcome";
+}
+
 export function previewSettingsTab(state: PreviewState): SettingsTab | null {
   switch (state) {
     case "settings-inventory":
       return "inventory";
     case "settings-comfig":
+    case "settings-comfig-vanilla":
+    case "welcome":
     case "folder-repair":
     case "profile-import-huds":
     case "settings-locked":

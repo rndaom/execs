@@ -98,6 +98,7 @@ export function SettingsHost({
   onRecoveryChange,
   onError,
   onNavigate,
+  onTryComfig,
   onHudReviewRequired,
   launchSync = null,
   onLaunchOptionsSaved,
@@ -127,6 +128,8 @@ export function SettingsHost({
   onSettledChange?: (settled: boolean) => void;
   onRecoveryChange?: (recovery: boolean) => void;
   onError: SetOperationError;
+  /** Opens New profile to try mastercomfig from a profile that does not use it. */
+  onTryComfig?: () => void;
   onNavigate?: (tab: SettingsTab) => void;
   onHudReviewRequired?: (profileId: string) => void;
   /** App's comparison of the active profile with Steam's saved launch options. */
@@ -954,6 +957,7 @@ export function SettingsHost({
           detail={detail}
           state={comfig}
           onCheckRelease={api.checkComfigRelease}
+          onTryComfig={onTryComfig}
           onApplyPreset={(preset) => {
             return write(async () => {
               await api.setComfigPreset(preset);

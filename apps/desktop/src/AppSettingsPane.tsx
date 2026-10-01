@@ -38,6 +38,8 @@ export type AppSettingsPaneProps = {
   ready?: boolean;
   /** Absent in contexts that cannot uninstall (tests, first-run shells). */
   onUninstall?: (deleteData: boolean, onError: (message: string) => void) => void;
+  /** Replays the first-run welcome tour; absent before a profile is active. */
+  onShowWelcome?: () => void;
   uninstallBlockedReason?: string | null;
 };
 
@@ -80,6 +82,7 @@ export function AppSettingsPane({
   backAction,
   ready = true,
   onUninstall,
+  onShowWelcome,
   uninstallBlockedReason = null,
 }: AppSettingsPaneProps) {
   const installation = useCopyFeedback();
@@ -321,6 +324,16 @@ export function AppSettingsPane({
             >
               Report a bug <ArrowSquareOut size={15} aria-hidden="true" />
             </button>
+            {onShowWelcome ? (
+              <button
+                type="button"
+                data-testid="app-show-welcome"
+                className="btn btn-ghost"
+                onClick={onShowWelcome}
+              >
+                Show the welcome tour
+              </button>
+            ) : null}
           </div>
           <p className="t-meta mt-2">
             Diagnostics include your install path and active profile name.

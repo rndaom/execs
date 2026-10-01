@@ -23,6 +23,7 @@ import { Modal } from "./components/ui/Modal";
 import { Loading } from "./components/ui/Spinner";
 import { ToastProvider } from "./components/ui/Toast";
 import { Wordmark } from "./components/ui/Wordmark";
+import { WelcomeTour } from "./components/WelcomeTour";
 import { WriteLockBanner } from "./components/WriteLockBanner";
 import { FirstRunExisting } from "./FirstRunExisting";
 import { useAppPreferences } from "./hooks/useAppPreferences";
@@ -58,6 +59,7 @@ import {
   previewCreating,
   previewSettingsTab,
   previewUpdateProgress,
+  previewWelcome,
 } from "./lib/preview";
 import { createSettingsDraftStore } from "./lib/settings-drafts";
 import {
@@ -68,6 +70,7 @@ import {
   showSettingsChrome,
   writeLastPane,
 } from "./lib/settings-ui";
+import type { WelcomeOrigin } from "./lib/welcome-tour";
 import { SettingsHost } from "./SettingsHost";
 import { SettingsLayout } from "./SettingsLayout";
 import { SetupWizard } from "./SetupWizard";
@@ -321,10 +324,41 @@ export function App({
 
   const creating = firstRun.creating;
 
+  // The welcome tour opens once, when first-run setup finishes, and again
+  // from App settings. Nothing about it is stored.
+  const [welcome, setWelcome] = useState<WelcomeOrigin | null>(() =>
+    previewWelcome(preview) ? "saved" : null,
+  );
+  const [welcomeOffersComfig, setWelcomeOffersComfig] = useState(false);
+  useEffect(() => {
+    if (welcome === null) return;
+    let cancelled = false;
+    void api
+      .getActiveProfileDetail()
+      .then((detail) => {
+        if (!cancelled) setWelcomeOffersComfig(detail !== null && detail.layer !== "comfig");
+      })
+      .catch(() => {
+        if (!cancelled) setWelcomeOffersComfig(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, welcome]);
+
+  // From Comfig or the welcome tour: a new profile from the current setup,
+  // named for what it is for. The player's own profile is never converted.
+  const tryComfig = useCallback(() => {
+    setWelcome(null);
+    setDraftName((name) => name || "Trying mastercomfig");
+    filesExit.request(firstRun.openCreate);
+  }, [filesExit, firstRun.openCreate]);
+
   const onSaveCurrent = useCallback(async () => {
     if (await profiles.saveCurrent(draftName)) {
       firstRun.clear();
       setDraftName("");
+      setWelcome("saved");
     }
   }, [profiles, firstRun, draftName]);
 
@@ -372,8 +406,11 @@ export function App({
   }, [api, setLibrary, setError]);
 
   const onApplyWizard = useCallback(async () => {
+    // A later "Create new profile" uses the same wizard; only first run welcomes.
+    const firstProfile = !firstRun.creating;
     if (await firstRun.applyWizard(draftName)) {
       setDraftName("");
+      if (firstProfile) setWelcome("created");
     }
   }, [firstRun, draftName]);
 
@@ -522,6 +559,14 @@ export function App({
             setAppSettingsOpen(false);
             install.change();
           })
+        }
+        onShowWelcome={
+          settingsOpen
+            ? () => {
+                closeAppSettings();
+                setWelcome("saved");
+              }
+            : undefined
         }
         onUninstall={(deleteData, onError) =>
           filesExit.request(async () => {
@@ -729,6 +774,7 @@ export function App({
                     )?.name ?? null
                   }
                   onNavigate={navigateSettings}
+                  onTryComfig={tryComfig}
                   running={lock.running}
                   externalBusy={
                     busy ||
@@ -774,6 +820,18 @@ export function App({
       }}
     >
       <ToastProvider>
+        <WelcomeTour
+          open={welcome !== null && settingsOpen && !progress.state.active}
+          profileName={
+            profiles.library?.profiles.find(
+              (profile) => profile.id === profiles.library?.activeProfileId,
+            )?.name ?? null
+          }
+          origin={welcome ?? "saved"}
+          offerComfig={welcomeOffersComfig}
+          onClose={() => setWelcome(null)}
+          onTryComfig={tryComfig}
+        />
         <HudOwnershipDialog
           api={api}
           profile={

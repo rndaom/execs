@@ -125,6 +125,7 @@ export function ComfigPane({
   onUpdatePackages,
   onImportCustom,
   onCheckRelease,
+  onTryComfig,
 }: {
   detail: ProfileDetail | null;
   state: ComfigUiState;
@@ -134,6 +135,8 @@ export function ComfigPane({
   onUpdatePackages: () => void;
   onImportCustom: () => void;
   onCheckRelease?: (profileId: string) => Promise<string>;
+  /** Opens New profile, starting from the current setup, to try mastercomfig. */
+  onTryComfig?: () => void;
 }) {
   const { running, busy } = useAppStatus();
   // These are explicit writes. Keep the selected controls and preview on the
@@ -223,6 +226,29 @@ export function ComfigPane({
         ? "Packages not installed"
         : null;
 
+  // A profile without mastercomfig keeps its own configs. Offer a safe way to
+  // try it instead of a page of controls that cannot be used.
+  if (detail && detail.layer !== "comfig") {
+    return (
+      <section data-testid="settings-comfig" className="min-w-0 text-left">
+        <PaneHeader title="Comfig" />
+        <div data-testid="comfig-vanilla-gate" className="comfig-empty">
+          <h2 className="t-section">This profile doesn't use mastercomfig</h2>
+          {onTryComfig ? (
+            <button
+              type="button"
+              data-testid="comfig-try-new-profile"
+              className="btn btn-primary mt-4"
+              onClick={onTryComfig}
+            >
+              Try mastercomfig in a new profile
+            </button>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section data-testid="settings-comfig" className="min-w-0 text-left">
       <PaneHeader
@@ -238,9 +264,8 @@ export function ComfigPane({
 
       {detail && !supported ? (
         <p data-testid="comfig-vanilla-gate" className="pane-note mb-5">
-          This profile does not use mastercomfig. Installing it needs a review of your autoexec,
-          class cfgs and managed settings before moving them into tf/cfg/overrides/. Comfig changes
-          are unavailable here so your current setup keeps working.
+          This profile's mastercomfig files were changed outside execs, so execs leaves them as they
+          are.
         </p>
       ) : null}
 
