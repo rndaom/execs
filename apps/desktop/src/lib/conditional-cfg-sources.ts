@@ -46,6 +46,8 @@ export const SOUNDS_CVARS = new Set([
   "tf_dingaling_lasthit_pitchmindmg",
   "tf_dingaling_lasthit_pitchmaxdmg",
   "tf_dingalingaling_last_effect",
+  "volume",
+  "snd_musicvolume",
 ]);
 
 export function relevantCvars(tab: string): Set<string> | null {

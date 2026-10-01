@@ -9,6 +9,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- Sounds has Game volume and Music volume sliders. Once you set them, the profile keeps its own
+  levels, so switching profiles or a replaced `config.cfg` no longer resets TF2 to full volume, and
+  changes you make in TF2's own options are kept after the game closes.
 - Mods can browse GameBanana's Sounds section too: voice packs, announcers, music, weapon and taunt
   sounds install like other mods. Hit and kill sounds open in Sounds instead, where you can preview
   every sound in the download and choose one for either slot.
