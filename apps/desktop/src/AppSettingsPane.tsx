@@ -256,11 +256,7 @@ export function AppSettingsPane({
           ) : null}
         </SettingsSection>
 
-        <SettingsSection
-          id="app-storage"
-          title="App data"
-          description="Profiles, preferences and logs."
-        >
+        <SettingsSection id="app-storage" title="App data">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
             <p className="t-body min-w-0 break-all text-ink-muted" data-testid="app-data-location">
               {settings.data?.dataDirectory ??
@@ -356,11 +352,7 @@ export function AppSettingsPane({
         </SettingsSection>
 
         {onUninstall ? (
-          <SettingsSection
-            id="app-uninstall"
-            title="Uninstall"
-            description="Remove execs from this computer."
-          >
+          <SettingsSection id="app-uninstall" title="Uninstall">
             <UninstallSection
               api={api}
               blockedReason={!ready ? "Wait for execs to finish starting." : uninstallBlockedReason}

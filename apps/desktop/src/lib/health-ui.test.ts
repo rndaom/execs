@@ -40,13 +40,13 @@ describe("installation health", () => {
     const items = healthItems(health());
     expect(items.every((item) => item.status === "ok")).toBe(true);
     expect(byId(items, "profiles").lines).toEqual(["Main has every saved file."]);
-    expect(byId(items, "cloud").lines).toContain(
-      "Steam uploads that copy when it syncs; execs cannot confirm the upload.",
-    );
+    // Keeping Steam's local copy current is not a claim that Steam uploaded it.
+    expect(byId(items, "cloud").lines).toEqual([
+      "execs keeps Steam's local copy of config.cfg up to date.",
+    ]);
     expect(byId(items, "offline").lines).toEqual([
       "Switching profiles works offline.",
       "Browsing HUDs works offline from a list saved 2 days ago.",
-      "Installing HUDs and mods, mastercomfig updates and app updates need a connection.",
     ]);
   });
 
