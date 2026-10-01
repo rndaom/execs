@@ -88,7 +88,7 @@ describe("boost", () => {
     });
     expect(
       packChangeNeeded(
-        { hit: slot({ boost: 6 }), kill: slot({}), repeatDelay: 0 },
+        { hit: slot({ boost: 6 }), kill: slot({}), repeatDelay: 0, gameVolume: 1, musicVolume: 1 },
         {
           hit: installed,
           kill: installed,

@@ -646,3 +646,66 @@ it("lists a GameBanana kill sound once, aimed at its slot, without saving anythi
     vi.unstubAllGlobals();
   }
 });
+
+it("saves game and music volume with the profile and keeps an exact saved level", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "Audio",
+    class {
+      pause = vi.fn();
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+    },
+  );
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  const onSave = vi.fn(async (_text: string, _pack: unknown) => true);
+  const api = {
+    comfigHitsoundIndex: async () => [],
+    listStockHitsounds: async () => ["hitsound"],
+    getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
+  } as unknown as Api;
+  const slider = (id: string) => box.querySelector<HTMLInputElement>(`[data-testid="${id}"]`);
+  try {
+    await act(async () =>
+      root.render(
+        <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
+          <SoundsPane
+            api={api}
+            profileId="A"
+            record={null}
+            layer="vanilla"
+            // What TF2's own options saved into config.cfg.
+            effective={{ volume: "0.015000", snd_musicvolume: "0.300000" }}
+            managedText=""
+            onSave={onSave}
+            onRemove={() => {}}
+          />
+        </AppStatusProvider>,
+      ),
+    );
+    expect(slider("sounds-game-volume")?.value).toBe("2");
+    expect(slider("sounds-music-volume")?.value).toBe("30");
+    expect(onSave).not.toHaveBeenCalled();
+
+    const music = slider("sounds-music-volume");
+    if (!music) throw new Error("music volume slider missing");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(music, "10");
+      music.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(box.querySelector('[data-testid="sounds-volume"]')?.textContent).toContain("10%");
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 800)));
+    expect(onSave).toHaveBeenCalledOnce();
+    const [text, pack] = onSave.mock.calls[0] ?? [];
+    expect(pack).toBeNull();
+    // The untouched game volume keeps TF2's exact level; music takes the slider.
+    expect(text).toContain("volume 0.015\n");
+    expect(text).toContain("snd_musicvolume 0.1\n");
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    vi.unstubAllGlobals();
+  }
+});
