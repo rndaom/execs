@@ -45,6 +45,10 @@ import {
   windowsNativeShell,
 } from "./windows-package-smoke.mjs";
 
+// Hosted Windows runners have taken 10.0–10.6 s just to start PowerShell, so a
+// 10 s limit failed healthy runs. The limit only bounds a hung shell.
+const POWERSHELL_TEST_TIMEOUT_MS = 30_000;
+
 const python =
   process.env.EXECS_TEST_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
 const retained = resolve("scripts/fixtures/windows-package-v021/no-hud.zip");
@@ -755,9 +759,6 @@ function alteredArchive(fixture, change) {
       `
 import json, stat, sys, zipfile
 
-// Hosted Windows runners have taken 10.0–10.6 s just to start PowerShell, so a
-// 10 s limit failed healthy runs. The limit only bounds a hung shell.
-const POWERSHELL_TEST_TIMEOUT_MS = 30_000;
 change = sys.argv[3]
 with zipfile.ZipFile(sys.argv[1]) as original, zipfile.ZipFile(sys.argv[2], 'w') as output:
     for item in original.infolist():
