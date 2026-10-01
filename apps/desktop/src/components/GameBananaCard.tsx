@@ -1,6 +1,7 @@
 import { ArrowClockwise, ArrowSquareOut, Check, Image } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { GameBananaMod } from "../lib/bridge";
+import { gameBananaSoundSlot } from "../lib/gamebanana-browser-ui";
 import { GAMEBANANA_MAP_NOTE, GAMEBANANA_MAPS_CATEGORY } from "../lib/mods-ui";
 import { Spinner } from "./ui/Spinner";
 
@@ -50,15 +51,22 @@ export function GameBananaCard({
   const installing = installState === "installing";
   const loading = installState === "loading";
   const working = installing || loading;
+  // Hit and kill sounds are chosen in Sounds; preparing them writes nothing to
+  // TF2, so a running game does not block it.
+  const soundSlot = gameBananaSoundSlot(mod);
   const installLabel = installing
-    ? "Installing…"
+    ? soundSlot
+      ? "Preparing…"
+      : "Installing…"
     : loading
       ? "Loading files…"
       : failed
         ? "Retry"
-        : running
-          ? "Close TF2 to install"
-          : "Install";
+        : soundSlot
+          ? "Use in Sounds"
+          : running
+            ? "Close TF2 to install"
+            : "Install";
   const category = mod.subCategory ? `${mod.category} · ${mod.subCategory}` : mod.category;
 
   return (
@@ -101,10 +109,14 @@ export function GameBananaCard({
             className="enter-fade absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg/80 px-4 text-center"
           >
             <Spinner size={22} />
-            <span className="t-row">{installing ? "Installing" : "Loading files"}</span>
+            <span className="t-row">
+              {installing ? (soundSlot ? "Preparing sounds" : "Installing") : "Loading files"}
+            </span>
             <span className="t-meta">
               {installing
-                ? "Downloading from GameBanana and adding it to this profile."
+                ? soundSlot
+                  ? "Downloading from GameBanana and getting its sounds ready for Sounds."
+                  : "Downloading from GameBanana and adding it to this profile."
                 : "Reading the author's file list."}
             </span>
           </div>
@@ -127,7 +139,12 @@ export function GameBananaCard({
         <p className="t-meta tnum">{meta}</p>
         {mod.route === "hud" ? (
           <p className="t-meta">This is a HUD. Import the author's archive in HUD.</p>
-        ) : mod.categoryId === GAMEBANANA_MAPS_CATEGORY ? (
+        ) : soundSlot ? (
+          <p className="t-meta">
+            A {soundSlot === "hit" ? "hit" : "kill"} sound. It opens in Sounds, where you can
+            preview it and choose it for either slot.
+          </p>
+        ) : mod.section === "mod" && mod.categoryId === GAMEBANANA_MAPS_CATEGORY ? (
           <p className="t-meta">{GAMEBANANA_MAP_NOTE}</p>
         ) : null}
         {failed ? (
@@ -135,8 +152,8 @@ export function GameBananaCard({
             {installState === "load-failed"
               ? "Could not read the author's files. Retry, or open it on GameBanana."
               : failureReason
-                ? `Install failed: ${failureReason}`
-                : "Install failed. Retry, or open it on GameBanana."}
+                ? `${soundSlot ? "Could not prepare it" : "Install failed"}: ${failureReason}`
+                : `${soundSlot ? "Could not prepare it" : "Install failed"}. Retry, or open it on GameBanana.`}
           </p>
         ) : null}
       </div>
@@ -175,7 +192,7 @@ export function GameBananaCard({
             className={`btn ${failed ? "btn-primary" : "btn-ghost"} ml-auto gap-1.5`}
             aria-label={`${installLabel} ${mod.name}`}
             aria-describedby={failed ? failureId : undefined}
-            disabled={working || locked}
+            disabled={working || (locked && !soundSlot)}
             onClick={onInstall}
           >
             {failed ? <ArrowClockwise size={15} /> : null}

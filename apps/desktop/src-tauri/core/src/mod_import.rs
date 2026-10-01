@@ -27,6 +27,24 @@ pub struct ModImportChoice {
     pub bytes: u64,
     pub content_roots: Vec<String>,
     pub disabled_reason: Option<String>,
+    /// TF2's hit or kill sound paths this choice ships (`hit`, `kill`). Those
+    /// files compete with the ones the Sounds pane manages, so the review
+    /// says so and does not choose the pack for the player.
+    pub sound_slots: Vec<String>,
+}
+
+/// The two virtual paths the Sounds pane owns, and the slot each one plays.
+const SOUND_SLOT_PATHS: [(&str, &str); 2] = [
+    ("sound/ui/hitsound.wav", "hit"),
+    ("sound/ui/killsound.wav", "kill"),
+];
+
+fn sound_slot_of(path: &str) -> Option<&'static str> {
+    let lower = path.replace('\\', "/").to_ascii_lowercase();
+    SOUND_SLOT_PATHS
+        .iter()
+        .find(|(canonical, _)| lower == *canonical)
+        .map(|(_, slot)| *slot)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -214,12 +232,14 @@ impl PreparedModImport {
         for (index, (path, name, mut content, mut disabled_reason)) in packs.into_iter().enumerate()
         {
             let mut content_roots = BTreeSet::new();
+            let mut sound_slots = BTreeSet::new();
             let (files, bytes) = match &content {
                 Some(ModContent::Tree(entries)) => {
                     for (rel, _) in entries {
                         if let Some((root, _)) = rel.split_once('/') {
                             content_roots.insert(root.to_string());
                         }
+                        sound_slots.extend(sound_slot_of(rel));
                     }
                     (
                         entries.len(),
@@ -231,6 +251,7 @@ impl PreparedModImport {
                         if let Some((root, _)) = path.split_once('/') {
                             content_roots.insert(root.to_string());
                         }
+                        sound_slots.extend(sound_slot_of(path));
                         Ok(())
                     }) {
                         Ok((summary, external)) => {
@@ -266,6 +287,13 @@ impl PreparedModImport {
                 bytes,
                 content_roots: content_roots.into_iter().collect(),
                 disabled_reason,
+                // Hit before kill, matching the Sounds pane.
+                sound_slots: SOUND_SLOT_PATHS
+                    .iter()
+                    .map(|(_, slot)| *slot)
+                    .filter(|slot| sound_slots.contains(slot))
+                    .map(str::to_string)
+                    .collect(),
             });
             payloads.push(content);
         }
@@ -489,6 +517,32 @@ mod tests {
         assert_eq!(prepared.choices[0].content_roots, ["materials", "models"]);
         let packs = prepared.select(&["1".into()]).unwrap();
         assert_eq!(packs, vec![("red".into(), ModContent::Vpk(bytes))]);
+    }
+
+    #[test]
+    fn choices_that_ship_tf2s_hit_or_kill_sound_say_so() {
+        let sounds = crate::vpk::write_vpk_v1(&BTreeMap::from([
+            ("sound/ui/killsound.wav".into(), b"kill".to_vec()),
+            ("sound/vo/scout_yes01.mp3".into(), b"voice".to_vec()),
+        ]));
+        let prepared = PreparedModImport::from_entries(
+            "sounds",
+            vec![
+                ("loose/sound/UI/HitSound.wav".into(), vec![1]),
+                ("loose/sound/ui/killsound.wav".into(), vec![2]),
+                ("voices/sound/vo/scout_no01.mp3".into(), vec![3]),
+                ("packed.vpk".into(), sounds),
+            ],
+        )
+        .unwrap();
+        let slots: BTreeMap<_, _> = prepared
+            .choices
+            .iter()
+            .map(|choice| (choice.path.as_str(), choice.sound_slots.clone()))
+            .collect();
+        assert_eq!(slots["loose"], ["hit", "kill"]);
+        assert_eq!(slots["packed.vpk"], ["kill"]);
+        assert!(slots["voices"].is_empty());
     }
 
     #[test]

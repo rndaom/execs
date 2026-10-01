@@ -565,3 +565,84 @@ it("keeps a remembered preview level and mute in the dock", async () => {
     vi.unstubAllGlobals();
   }
 });
+
+it("lists a GameBanana kill sound once, aimed at its slot, without saving anything", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal(
+    "Audio",
+    class {
+      pause = vi.fn();
+      addEventListener = vi.fn();
+      removeEventListener = vi.fn();
+    },
+  );
+  const box = document.createElement("div");
+  document.body.append(box);
+  const root = createRoot(box);
+  const api = {
+    comfigHitsoundIndex: async () => [],
+    listStockHitsounds: async () => ["hitsound"],
+    getHitsoundSources: async () => ({ hits: {}, incomplete: [] }),
+  } as unknown as Api;
+  const info = {
+    formatTag: 2,
+    channels: 1,
+    sampleRate: 22050,
+    bitsPerSample: 4,
+    dataBytes: 2048,
+    durationMs: 200,
+  };
+  const incoming = {
+    key: 1,
+    slot: "kill" as const,
+    title: "Oof pack",
+    sounds: [
+      { token: "t1", name: "Oof pack · oof.wav", info, converted: false },
+      { token: "t2", name: "Oof pack · loud/oof.wav", info, converted: true },
+    ],
+    skipped: 1,
+    truncated: false,
+  };
+  const onSave = vi.fn(async () => true);
+  const handled = vi.fn();
+  const pane = (value: typeof incoming | null) => (
+    <AppStatusProvider value={{ error: null, setError: vi.fn(), busy: false, running: false }}>
+      <SoundsPane
+        api={api}
+        profileId="A"
+        record={null}
+        layer="vanilla"
+        effective={{}}
+        managedText=""
+        onSave={onSave}
+        onRemove={() => {}}
+        incoming={value}
+        onIncomingHandled={handled}
+      />
+    </AppStatusProvider>
+  );
+  try {
+    await act(async () => root.render(pane(incoming)));
+    expect(handled).toHaveBeenCalledWith(1);
+    expect(box.querySelector<HTMLInputElement>('[data-testid="sounds-target-kill"]')?.checked).toBe(
+      true,
+    );
+    const note = box.querySelector('[data-testid="sounds-gamebanana-added"]')?.textContent;
+    expect(note).toContain("Added 2 sounds from “Oof pack” on GameBanana, made for kills.");
+    expect(note).toContain("1 other file in the download could not be used.");
+    const row = box.querySelector('[data-testid="sounds-row-own:t2"]');
+    expect(row?.textContent).toContain("From GameBanana");
+    expect(row?.textContent).not.toContain("Your file");
+    expect(box.querySelector('[data-testid="sounds-assign-kill-own:t1"]')).not.toBeNull();
+    // Arriving in the library is not a choice: nothing is saved.
+    expect(onSave).not.toHaveBeenCalled();
+
+    // The same handoff does not replace a file added since.
+    await act(async () => root.render(pane({ ...incoming })));
+    expect(box.querySelectorAll('[data-testid^="sounds-row-own:"]')).toHaveLength(2);
+  } finally {
+    await act(async () => root.unmount());
+    box.remove();
+    vi.unstubAllGlobals();
+  }
+});

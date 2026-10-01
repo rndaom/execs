@@ -10,6 +10,7 @@ import { GameBananaBrowser } from "./GameBananaBrowser";
 const records: GameBananaMod[] = [
   {
     id: 11,
+    section: "mod",
     name: "A very descriptive rocket trail",
     author: "Rocket Author",
     category: "Effects",
@@ -28,6 +29,7 @@ const records: GameBananaMod[] = [
   },
   {
     id: 12,
+    section: "mod",
     name: "Second page skin",
     author: "Skin Author",
     category: "Skins",
@@ -164,7 +166,7 @@ describe("GameBananaBrowser presentation", () => {
     await act(async () => install?.click());
     await act(async () => Promise.resolve());
 
-    expect(variants).toHaveBeenCalledWith(11);
+    expect(variants).toHaveBeenCalledWith(11, "mod", false);
     expect(box.textContent).toContain("Optional class menu");
     expect(onInstall).not.toHaveBeenCalled();
     const selected = box.querySelector<HTMLButtonElement>(
@@ -178,7 +180,7 @@ describe("GameBananaBrowser presentation", () => {
     await act(async () => selected?.click());
     await act(async () => Promise.resolve());
 
-    expect(onInstall).toHaveBeenCalledWith(11, 112);
+    expect(onInstall).toHaveBeenCalledWith(11, 112, "mod");
     expect(box.querySelector('[role="alert"]')?.textContent).toContain("Install failed");
     expect(install?.getAttribute("aria-label")).toBe("Retry A very descriptive rocket trail");
   });
@@ -275,7 +277,7 @@ describe("GameBananaBrowser presentation", () => {
     await act(async () =>
       box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-selected"]')?.click(),
     );
-    expect(onInstall).toHaveBeenCalledWith(11, 131);
+    expect(onInstall).toHaveBeenCalledWith(11, 131, "mod");
   });
 
   it("routes GUI HUDs to HUD and installs other GUI mods like any mod", async () => {
@@ -310,6 +312,73 @@ describe("GameBananaBrowser presentation", () => {
     });
     expect(onOpenHud).toHaveBeenCalledOnce();
     expect(box.querySelector('[data-testid="mods-gb-install-22"]')).not.toBeNull();
+  });
+
+  it("browses GameBanana's Sounds section and sends hit sounds to Sounds, not Install", async () => {
+    const hitSound: GameBananaMod = {
+      ...records[0],
+      id: 21865,
+      section: "sound",
+      name: "Quake hit",
+      category: "Hitsound",
+      categoryId: 381,
+      route: "hitSound",
+      url: "https://gamebanana.com/sounds/21865",
+    };
+    search.mockImplementation(
+      async (_query, _sort, _category, _number, _mature, _refresh, section) =>
+        section === "sound" ? { ...page(1), records: [hitSound] } : page(1),
+    );
+    const categories = vi.fn(async () => []);
+    const onInstall = vi.fn(async () => true);
+    const onUseInSounds = vi.fn(async () => true as const);
+    await act(async () => {
+      root.render(
+        <GameBananaBrowser
+          api={
+            {
+              searchGameBananaMods: search,
+              gameBananaModCategories: categories,
+              gameBananaDownloadVariants: variants,
+            } as unknown as Api
+          }
+          active
+          // Preparing a sound writes nothing, so the write lock does not block it.
+          locked
+          running
+          installed={[]}
+          onInstall={onInstall}
+          onUseInSounds={onUseInSounds}
+        />,
+      );
+    });
+    await act(async () => Promise.resolve());
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-section-sound"]')?.click(),
+    );
+    await act(async () => Promise.resolve());
+
+    expect(search).toHaveBeenLastCalledWith("", "new", null, 1, false, false, "sound");
+    expect(categories).toHaveBeenLastCalledWith(false, "sound");
+    const use = box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-21865"]');
+    expect(use?.textContent).toBe("Use in Sounds");
+    expect(use?.disabled).toBe(false);
+    expect(box.textContent).toContain("A hit sound. It opens in Sounds");
+
+    await act(async () => use?.click());
+    await act(async () => Promise.resolve());
+    expect(variants).toHaveBeenCalledWith(21865, "sound", true);
+    await act(async () => {
+      box.querySelector<HTMLInputElement>('input[value="111"]')?.click();
+    });
+    const download = box.querySelector<HTMLButtonElement>(
+      '[data-testid="mods-gb-install-selected"]',
+    );
+    expect(download?.textContent).toBe("Download and open in Sounds");
+    await act(async () => download?.click());
+    await act(async () => Promise.resolve());
+    expect(onUseInSounds).toHaveBeenCalledWith(hitSound, 111);
+    expect(onInstall).not.toHaveBeenCalled();
   });
 
   it("paginates above and below, then focuses results without stealing search focus", async () => {

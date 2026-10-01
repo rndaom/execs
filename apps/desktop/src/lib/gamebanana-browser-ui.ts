@@ -2,6 +2,7 @@ import type {
   GameBananaDownloadVariant,
   GameBananaMod,
   GameBananaPage,
+  GameBananaSection,
   GameBananaSort,
   GameBananaTotal,
 } from "./bridge";
@@ -24,6 +25,7 @@ export const GAMEBANANA_PAGE_CACHE_MAX_FRESH_MS = 10 * 60_000;
 export const GAMEBANANA_PAGE_CACHE_STALE_GRACE_MS = 5 * 60_000;
 
 export type GameBananaRequest = {
+  section: GameBananaSection;
   query: string;
   sort: GameBananaSort;
   category: number | null;
@@ -46,6 +48,7 @@ export function gameBananaQueryError(query: string): string | null {
 
 export function gameBananaRequestKey(request: GameBananaRequest): string {
   return [
+    request.section,
     normalizeGameBananaQuery(request.query).toLowerCase(),
     request.sort,
     request.category ?? "all",
@@ -238,6 +241,18 @@ export function gameBananaVariantFacts(
   else if (gameBananaVariantOversized(variant)) facts.push("Over execs' 512 MB mod limit");
   else if (!variant.supported) facts.push("Not supported for Mods");
   return facts.join(" · ");
+}
+
+export const GAMEBANANA_SECTIONS: { id: GameBananaSection; label: string }[] = [
+  { id: "mod", label: "Mods" },
+  { id: "sound", label: "Sounds" },
+];
+
+/** A hit or kill sound upload goes to the Sounds pane rather than installing as a pack. */
+export function gameBananaSoundSlot(mod: GameBananaMod): "hit" | "kill" | null {
+  if (mod.route === "hitSound") return "hit";
+  if (mod.route === "killSound") return "kill";
+  return null;
 }
 
 /** Mods over this size install only by hand; matches the native `MAX_MOD_BYTES`. */

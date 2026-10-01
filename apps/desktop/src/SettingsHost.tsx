@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
@@ -65,6 +65,7 @@ import { SettingsBusyQueue } from "./lib/settings-busy-ui";
 import { createSettingsDraftStore, type SettingsDraftStore } from "./lib/settings-drafts";
 import { type CfgText, readSettingsSnapshot } from "./lib/settings-loading";
 import { SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
+import type { IncomingSounds } from "./lib/sound-library";
 import { prefetchViewmodelCatalog } from "./lib/viewmodel-catalog-cache";
 import { ModsPane } from "./ModsPane";
 import { SoundsPane } from "./SoundsPane";
@@ -183,6 +184,13 @@ export function SettingsHost({
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [modsHudImportRequired, setModsHudImportRequired] = useState<string | null>(null);
+  // A GameBanana hit or kill sound on its way to the Sounds library.
+  const [incomingSounds, setIncomingSounds] = useState<IncomingSounds | null>(null);
+  const incomingSoundsKey = useRef(0);
+  const clearIncomingSounds = useCallback(
+    (key: number) => setIncomingSounds((current) => (current?.key === key ? null : current)),
+    [],
+  );
   const modImport = useModImportReview(api, activeProfileId, visible && tab === "mods");
   const [settingsBusyQueue] = useState(() => new SettingsBusyQueue(setQueueBusy));
   /** Rejects obsolete profile snapshots. */
@@ -1245,6 +1253,8 @@ export function SettingsHost({
           managedText={files.find((file) => file.path === path)?.text ?? ""}
           sourceFiles={detail?.files}
           sourceRefreshKey={refreshKey}
+          incoming={incomingSounds}
+          onIncomingHandled={clearIncomingSounds}
           // Sound files and CVars share one recoverable native transaction.
           onSave={(gameplayText, pack) =>
             write(async () => {
@@ -1476,13 +1486,28 @@ export function SettingsHost({
           }
           // Awaited by the card, so "Installing…" lasts exactly as long as the
           // install and the profile reload behind it.
-          onInstallGameBananaMod={(id, fileId) => {
+          onInstallGameBananaMod={(id, fileId, section) => {
             setModsHudImportRequired(null);
-            return installReviewedMod(() => api.prepareGameBananaMod(id, fileId), {
+            return installReviewedMod(() => api.prepareGameBananaMod(id, fileId, section), {
               success: "Mod installed",
               failure: "Could not install",
               pending: "Installing mod…",
             });
+          }}
+          // Preparing sounds writes nothing to TF2 or the profile; Sounds
+          // saves only after the player chooses one.
+          onUseGameBananaSound={async (mod, fileId) => {
+            try {
+              const prepared = await api.prepareGameBananaHitsounds(mod.id, fileId);
+              incomingSoundsKey.current += 1;
+              setIncomingSounds({ ...prepared, key: incomingSoundsKey.current });
+              onNavigate?.("sounds");
+              return true;
+            } catch (err) {
+              return {
+                failed: err instanceof Error ? err.message : "Check your connection and try again.",
+              };
+            }
           }}
         />
       );

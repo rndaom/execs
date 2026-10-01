@@ -1,4 +1,10 @@
-import type { ComfigHitsound, HitsoundKind, HitsoundPick, PickedHitsound } from "./bridge";
+import type {
+  ComfigHitsound,
+  GameBananaSounds,
+  HitsoundKind,
+  HitsoundPick,
+  PickedHitsound,
+} from "./bridge";
 import { type SoundChoice, STOCK_HITSOUND_EFFECTS } from "./hitsound-ui";
 
 /** Where a library sound comes from. */
@@ -16,6 +22,8 @@ export type SoundLibraryEntry = {
   id: string;
   label: string;
   source: SoundSourceId;
+  /** Shown in place of the source's usual label (a downloaded file says where from). */
+  sourceLabel?: string;
   /** What the picker installs / auditions for a given slot. */
   choiceFor: (kind: HitsoundKind) => SoundChoice;
   pickFor: (kind: HitsoundKind) => HitsoundPick;
@@ -173,15 +181,43 @@ export function ownEntryMeta(picked: PickedHitsound): string | undefined {
   return facts.length ? facts.join(" · ") : undefined;
 }
 
-export function ownEntry(picked: PickedHitsound): SoundLibraryEntry {
+/** The label for where a library sound comes from. */
+export function soundSourceLabel(entry: SoundLibraryEntry): string {
+  return entry.sourceLabel ?? SOUND_SOURCE_LABELS[entry.source];
+}
+
+/** `from` names where a downloaded file came from (GameBanana). */
+export function ownEntry(picked: PickedHitsound, from?: string): SoundLibraryEntry {
   return {
     id: `own:${picked.token}`,
     label: picked.name,
     source: "own",
+    sourceLabel: from ? `From ${from}` : undefined,
     meta: ownEntryMeta(picked),
     choiceFor: () => ({ kind: "file", picked }),
     pickFor: () => ({ kind: "file", token: picked.token, name: picked.name }),
   };
+}
+
+/** One handoff from a GameBanana hit or kill sound card; `key` makes it happen once. */
+export type IncomingSounds = GameBananaSounds & { key: number };
+
+/** What a GameBanana handoff added to the library, in plain words. */
+export function gameBananaAddedNote(added: GameBananaSounds): string {
+  const slot = added.slot === "hit" ? "hits" : "kills";
+  const count = added.sounds.length;
+  const parts = [
+    count === 1
+      ? `Added “${added.title}” from GameBanana, made for ${slot}. Preview it below, then choose Use.`
+      : `Added ${count} sounds from “${added.title}” on GameBanana, made for ${slot}. Preview them below, then choose Use.`,
+  ];
+  if (added.skipped > 0) {
+    parts.push(
+      `${added.skipped} other ${added.skipped === 1 ? "file" : "files"} in the download could not be used.`,
+    );
+  }
+  if (added.truncated) parts.push("The download has more sounds than the library lists at once.");
+  return parts.join(" ");
 }
 
 export function comfigEntries(index: ComfigHitsound[]): SoundLibraryEntry[] {
@@ -209,7 +245,7 @@ export function soundAccessibleNames(entries: SoundLibraryEntry[]): Map<string, 
   for (const group of groups.values()) {
     group.forEach((entry, index) => {
       const duplicate = group.length > 1 ? `, sound ${index + 1}` : "";
-      names.set(entry.id, `${entry.label} (${SOUND_SOURCE_LABELS[entry.source]}${duplicate})`);
+      names.set(entry.id, `${entry.label} (${soundSourceLabel(entry)}${duplicate})`);
     });
   }
   return names;
@@ -241,7 +277,7 @@ export function filterSoundLibrary(
     if (!needle) return true;
     return (
       entry.label.toLowerCase().includes(needle) ||
-      SOUND_SOURCE_LABELS[entry.source].toLowerCase().includes(needle)
+      soundSourceLabel(entry).toLowerCase().includes(needle)
     );
   });
   const byName = (a: SoundLibraryEntry, b: SoundLibraryEntry) =>

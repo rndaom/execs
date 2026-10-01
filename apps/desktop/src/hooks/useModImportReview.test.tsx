@@ -14,6 +14,7 @@ const choice = (id: string, disabledReason: string | null = null) => ({
   bytes: 10,
   contentRoots: [],
   disabledReason,
+  soundSlots: [],
 });
 const review: ModImportReview = {
   token: "review-a",

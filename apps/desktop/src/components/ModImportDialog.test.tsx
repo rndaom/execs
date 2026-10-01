@@ -3,9 +3,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ModImportReview } from "../lib/bridge";
-import { ModImportDialog, modChoiceDescription } from "./ModImportDialog";
+import { ModImportDialog, modChoiceDescription, modChoiceSoundNote } from "./ModImportDialog";
 
-const choice = (overrides: Partial<ModImportReview["choices"][number]>) => ({
+const choice = (
+  overrides: Partial<ModImportReview["choices"][number]>,
+): ModImportReview["choices"][number] => ({
   id: "0",
   name: "Gory Gibbing",
   path: ".",
@@ -13,6 +15,7 @@ const choice = (overrides: Partial<ModImportReview["choices"][number]>) => ({
   bytes: 48 * 1024,
   contentRoots: ["particles"],
   disabledReason: null,
+  soundSlots: [],
   ...overrides,
 });
 
@@ -53,4 +56,31 @@ it("never labels the archive's top level as a dot", async () => {
   );
   const labels = [...document.body.querySelectorAll(".t-row")].map((label) => label.textContent);
   expect(labels).toEqual(["Gory Gibbing", "blue"]);
+});
+
+it("flags a pack that replaces TF2's hit or kill sound and does not choose it for the player", async () => {
+  expect(modChoiceSoundNote(choice({}))).toBeNull();
+  expect(modChoiceSoundNote(choice({ soundSlots: ["kill"] }))).toContain("TF2's kill sound");
+  expect(modChoiceSoundNote(choice({ soundSlots: ["hit", "kill"] }))).toContain(
+    "hit and kill sounds",
+  );
+  const onConfirm = vi.fn();
+  await act(async () =>
+    root.render(
+      <ModImportDialog
+        review={{
+          token: "t",
+          readmes: [],
+          choices: [choice({ name: "Sound pack", soundSlots: ["hit"] })],
+        }}
+        onClose={vi.fn()}
+        onConfirm={onConfirm}
+      />,
+    ),
+  );
+  expect(document.body.textContent).toContain("can override what you chose in Sounds");
+  const install = [...document.body.querySelectorAll("button")].find(
+    (button) => button.textContent === "Install selected",
+  );
+  expect(install?.disabled).toBe(true);
 });

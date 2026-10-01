@@ -811,6 +811,7 @@ pub fn run() {
             commands::hitsound::list_stock_hitsounds,
             commands::hitsound::get_hitsound_sources,
             commands::hitsound::pick_hitsound_file,
+            commands::hitsound::prepare_gamebanana_hitsounds,
             commands::hitsound::apply_hitsounds,
             commands::hitsound::apply_hitsounds_with_settings,
             commands::hitsound::remove_hitsounds,
