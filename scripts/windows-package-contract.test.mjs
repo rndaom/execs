@@ -45,9 +45,20 @@ import {
   windowsNativeShell,
 } from "./windows-package-smoke.mjs";
 
-// Hosted Windows runners have taken 10.0–10.6 s just to start PowerShell, so a
-// 10 s limit failed healthy runs. The limit only bounds a hung shell.
-const POWERSHELL_TEST_TIMEOUT_MS = 30_000;
+// Hosted Windows runners have taken from 10 s to over 30 s to start PowerShell,
+// so shorter limits failed healthy runs. The limit only bounds a hung shell.
+const POWERSHELL_TEST_TIMEOUT_MS = 60_000;
+// PowerShell 7's update check and telemetry add to its cold start on CI.
+process.env.POWERSHELL_UPDATECHECK ??= "Off";
+process.env.POWERSHELL_TELEMETRY_OPTOUT ??= "1";
+
+/** Why a PowerShell child did not exit cleanly: which shell, how and how long. */
+function shellFailure(command, result, startedAt) {
+  const how = result.error
+    ? result.error.message
+    : `status ${result.status}, signal ${result.signal}`;
+  return `${command} after ${Date.now() - startedAt} ms (${how}): ${result.stderr}`;
+}
 
 const python =
   process.env.EXECS_TEST_PYTHON ?? (process.platform === "win32" ? "python" : "python3");
@@ -130,6 +141,7 @@ $rejected = @($special | ForEach-Object { -not (Test-SendKeysLiteralPath ($env:E
 } | ConvertTo-Json -Depth 4 -Compress
 `;
   for (const command of ["pwsh", windowsNativeShell("Save", process.env.WINDIR).command]) {
+    const startedAt = Date.now();
     const result = spawnSync(
       command,
       [
@@ -147,7 +159,7 @@ $rejected = @($special | ForEach-Object { -not (Test-SendKeysLiteralPath ($env:E
         env: { ...process.env, EXECS_TEST_DESTINATION: safeHostedDestination },
       },
     );
-    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.status, 0, shellFailure(command, result, startedAt));
     const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
     assert.equal(actual.accepted, true);
     assert.equal(actual.relativeRefused, true);
@@ -178,6 +190,7 @@ $save = 0x534b0001
 } | ConvertTo-Json -Depth 3 -Compress
 `;
   for (const command of ["pwsh", windowsNativeShell("Save", process.env.WINDIR).command]) {
+    const startedAt = Date.now();
     const result = spawnSync(
       command,
       [
@@ -190,7 +203,7 @@ $save = 0x534b0001
       ],
       { encoding: "utf8", timeout: POWERSHELL_TEST_TIMEOUT_MS, windowsHide: true },
     );
-    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.status, 0, shellFailure(command, result, startedAt));
     const actual = JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim());
     for (const [name, passed] of Object.entries(actual)) assert.equal(passed, true, name);
   }
@@ -374,6 +387,7 @@ $foreignOwner = [pscustomobject]@{ title = 'Export profile'; class = '#32770'; v
 } | ConvertTo-Json -Compress
 `;
   for (const command of ["pwsh", windowsNativeShell("Save", process.env.WINDIR).command]) {
+    const startedAt = Date.now();
     const result = spawnSync(
       command,
       [
@@ -386,7 +400,7 @@ $foreignOwner = [pscustomobject]@{ title = 'Export profile'; class = '#32770'; v
       ],
       { encoding: "utf8", timeout: POWERSHELL_TEST_TIMEOUT_MS, windowsHide: true },
     );
-    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.status, 0, shellFailure(command, result, startedAt));
     assert.deepEqual(JSON.parse(result.stdout.replace(/^\uFEFF/, "").trim()), {
       processOwned: "process-owned-top-level",
       windowOwned: "main-window-owned",
