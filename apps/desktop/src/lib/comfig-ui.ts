@@ -20,17 +20,12 @@ export const PREVIEW_COMFIG_STATE: ComfigUiState = {
   addons: ["no-tutorial"],
 };
 
-/** One line per official addon, shared by the Comfig pane and the wizard. */
-export const OFFICIAL_ADDON_DETAILS: Record<OfficialAddon, string> = {
-  "no-footsteps": "Remove player footstep sounds.",
-  "no-pyroland": "Disable Pyroland visual effects.",
-  "no-soundscapes": "Remove ambient map soundscapes.",
-  "no-tutorial": "Skip tutorial hints and prompts.",
-  lowmem: "Reduce memory use on limited systems.",
-  "null-canceling-movement": "Keep opposite movement keys responsive.",
-  "flat-mouse": "Use direct, unaccelerated mouse input.",
-  "transparent-viewmodels":
-    "Official mastercomfig addon. Requires DirectX 9 and a supporting HUD; disables post-processing and anti-aliasing. execs cannot verify HUD support.",
+/**
+ * Addon names speak for themselves; only a real side effect gets a line,
+ * shared by the Comfig pane, the wizard and Viewmodels.
+ */
+export const OFFICIAL_ADDON_DETAILS: Partial<Record<OfficialAddon, string>> = {
+  "transparent-viewmodels": "Needs DirectX 9 and a HUD that supports it. Turns off anti-aliasing.",
 };
 
 /** This official addon is part of a Comfig profile, even before packages are installed. */

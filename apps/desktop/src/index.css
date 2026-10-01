@@ -2068,9 +2068,10 @@ a:focus-visible,
 }
 
 @layer components {
+  /* Five name-only tiles: one row when there is room, never one left alone. */
   .comfig-presets {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
     gap: 8px;
   }
 

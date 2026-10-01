@@ -108,7 +108,7 @@ describe("World FOV menu range", () => {
     expect(field("gameplay-fov").min).toBe("75");
     expect(field("gameplay-fov").max).toBe("90");
     expect(field("gameplay-fov").value).toBe("75");
-    expect(box.textContent).toContain("Your cfg value (60.125) stays");
+    expect(box.textContent).toContain("Your cfg sets 60.125°, so TF2 uses 75°.");
     await act(async () => vi.advanceTimersByTimeAsync(701));
     expect(save).not.toHaveBeenCalled();
     await type("gameplay-sensitivity", "2.5");

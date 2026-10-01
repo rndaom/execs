@@ -95,11 +95,6 @@ function ModuleControl({
           );
         })}
       </fieldset>
-      {module.levels.includes("default") ? (
-        <p className="t-meta mt-1">
-          Use preset inherits its value; Module default writes an explicit override.
-        </p>
-      ) : null}
     </article>
   );
 }
@@ -304,7 +299,6 @@ export function ComfigPane({
               name="comfig-preset"
               value={item.id}
               title={item.label}
-              description={item.description}
               selected={supported && state.preset === item.id}
               disabled={locked}
               onSelect={() => {
@@ -473,7 +467,6 @@ export function ComfigPane({
                       : "Updates have not been checked."}
               </p>
             ) : null}
-            {supported ? <p className="t-meta mt-1">Updates apply only to this profile.</p> : null}
           </div>
 
           <div className="pane-actions">
@@ -521,23 +514,22 @@ export function ComfigPane({
       </section>
 
       <p className="pane-note mt-6">
-        Uses official mastercomfig packages. execs is not affiliated with mastercomfig or{" "}
+        Packages by{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://comfig.app")}
           className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
-          comfig.app
+          mastercomfig
         </button>
-        . Support the project through its{" "}
+        , not affiliated with execs ·{" "}
         <button
           type="button"
           onClick={() => void openExternal("https://docs.comfig.app/latest/support_me/")}
           className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
         >
-          donate page
+          Donate
         </button>
-        .
       </p>
     </section>
   );

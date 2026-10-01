@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { CopySettings, type CopySettingsSource } from "./components/CopySettings";
-import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
 import { SliderRow } from "./components/ui/SliderRow";
@@ -88,8 +87,8 @@ export function GameplayPane({
               label="World FOV"
               description={
                 draft.fov_desired < FOV_MIN || draft.fov_desired > FOV_MAX
-                  ? `TF2 uses ${clampInt(draft.fov_desired, FOV_MIN, FOV_MAX)}°. Your cfg value (${draft.fov_desired}) stays until you change this slider.`
-                  : "How much of the world you can see."
+                  ? `Your cfg sets ${draft.fov_desired}°, so TF2 uses ${clampInt(draft.fov_desired, FOV_MIN, FOV_MAX)}°.`
+                  : undefined
               }
               value={clampInt(draft.fov_desired, FOV_MIN, FOV_MAX)}
               min={FOV_MIN}
@@ -114,10 +113,6 @@ export function GameplayPane({
               <dd className="tnum t-row">{draft.viewmodel_fov}°</dd>
             </div>
           </dl>
-          <p className="t-meta mt-5 border-t border-edge pt-4">
-            These values describe the cfg settings. Open TF2 to see the result with your HUD and
-            viewmodel.
-          </p>
         </aside>
       </div>
 
@@ -127,7 +122,6 @@ export function GameplayPane({
             id="gameplay-sensitivity"
             testId="gameplay-sensitivity"
             label="Sensitivity"
-            description="TF2’s default is 3."
             value={draft.sensitivity}
             resetKey={profileId}
             onChange={(sensitivity) => patch({ sensitivity })}
@@ -136,7 +130,6 @@ export function GameplayPane({
             id="gameplay-zoom-sensitivity"
             testId="gameplay-zoom-sensitivity"
             label="Zoomed sensitivity ratio"
-            description="Multiplies sensitivity while scoped. TF2’s default is 1."
             value={draft.zoom_sensitivity_ratio}
             resetKey={profileId}
             onChange={(zoom_sensitivity_ratio) => patch({ zoom_sensitivity_ratio })}
@@ -150,7 +143,6 @@ export function GameplayPane({
             id="gameplay-autoreload"
             testId="gameplay-autoreload"
             label="Auto reload"
-            description="Reload clip weapons when you stop firing."
             checked={draft.cl_autoreload === 1}
             onChange={(next) => patch({ cl_autoreload: next ? 1 : 0 })}
           />
@@ -158,11 +150,10 @@ export function GameplayPane({
             id="gameplay-fastswitch"
             testId="gameplay-fastswitch"
             label="Fast weapon switch"
-            description="Select a weapon without a confirmation click."
             checked={draft.hud_fastswitch !== 0}
             note={
               draft.hud_fastswitch !== 0 && draft.hud_fastswitch !== 1
-                ? `Your cfg uses weapon selection mode ${draft.hud_fastswitch}. It is kept until you change this switch; enabling it selects the standard fast-switch mode.`
+                ? `Your cfg uses mode ${draft.hud_fastswitch}; kept until you change this.`
                 : undefined
             }
             onChange={(next) => patch({ hud_fastswitch: next ? 1 : 0 })}
@@ -171,9 +162,16 @@ export function GameplayPane({
             id="gameplay-medigun-autoheal"
             testId="gameplay-medigun-autoheal"
             label="Medigun auto-heal"
-            description="Click once to keep healing instead of holding fire."
             checked={draft.tf_medigun_autoheal === 1}
             onChange={(next) => patch({ tf_medigun_autoheal: next ? 1 : 0 })}
+          />
+          {/* TF2 refuses the cheat-only r_drawtracers from startup cfgs, so it has no control. */}
+          <SwitchRow
+            id="gameplay-tracers-fp"
+            testId="gameplay-tracers-fp"
+            label="First-person tracers"
+            checked={draft.r_drawtracers_firstperson === 1}
+            onChange={(next) => patch({ r_drawtracers_firstperson: next ? 1 : 0 })}
           />
         </PaneSection>
 
@@ -182,7 +180,6 @@ export function GameplayPane({
             id="gameplay-combattext"
             testId="gameplay-combattext"
             label="Damage numbers"
-            description="Show the damage you deal over each target."
             checked={draft.hud_combattext === 1}
             onChange={(next) => patch({ hud_combattext: next ? 1 : 0 })}
           />
@@ -190,16 +187,14 @@ export function GameplayPane({
             id="gameplay-combattext-batching"
             testId="gameplay-combattext-batching"
             label="Combine damage numbers"
-            description="Merge hits that land close together into one number."
             checked={draft.hud_combattext_batching === 1}
-            note={draft.hud_combattext === 1 ? undefined : "Applies when damage numbers are on."}
+            note={draft.hud_combattext === 1 ? undefined : "Needs damage numbers."}
             onChange={(next) => patch({ hud_combattext_batching: next ? 1 : 0 })}
           />
           <SwitchRow
             id="gameplay-combattext-healing"
             testId="gameplay-combattext-healing"
             label="Healing numbers"
-            description="Show health restored per second over players you heal."
             checked={draft.hud_combattext_healing === 1}
             onChange={(next) => patch({ hud_combattext_healing: next ? 1 : 0 })}
           />
@@ -207,12 +202,7 @@ export function GameplayPane({
       </div>
 
       <div className="section pane-split">
-        <PaneSection
-          id="gameplay-viewmodels"
-          title="Viewmodels"
-          description="Viewmodel FOV, visibility, left-handed and transparent viewmodels are in Viewmodels."
-          first
-        >
+        <PaneSection id="gameplay-viewmodels" title="Viewmodels" first>
           {onOpenViewmodels ? (
             <button
               type="button"
@@ -224,34 +214,7 @@ export function GameplayPane({
             </button>
           ) : null}
         </PaneSection>
-
-        <section className="min-w-0">
-          {/* Tracer visibility is a less common choice, so it lives behind a disclosure.
-            TF2 refuses the cheat-only r_drawtracers from startup cfgs, so it has no control. */}
-          <Disclosure
-            profileId={profileId}
-            storageKey="gameplay-advanced"
-            summary="Advanced"
-            testId="gameplay-advanced"
-            defaultOpen
-          >
-            <fieldset className="min-w-0">
-              <legend className="sr-only">Advanced gameplay options</legend>
-              <SwitchRow
-                id="gameplay-tracers-fp"
-                testId="gameplay-tracers-fp"
-                label="First-person tracers"
-                checked={draft.r_drawtracers_firstperson === 1}
-                onChange={(next) => patch({ r_drawtracers_firstperson: next ? 1 : 0 })}
-              />
-            </fieldset>
-          </Disclosure>
-        </section>
       </div>
-      <p className="pane-note mt-6">
-        Saved to {gameplayPath(layer)}. Supported menu settings already managed by execs follow
-        TF2’s options after the game closes.
-      </p>
     </section>
   );
 }

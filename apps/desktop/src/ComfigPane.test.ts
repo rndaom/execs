@@ -94,7 +94,6 @@ describe("ComfigPane workspaces", () => {
     );
     expect(document.body.textContent).toContain("mastercomfig 9.100.0");
     expect(document.body.textContent).toContain("Update available: 9.100.1");
-    expect(document.body.textContent).toContain("Updates apply only to this profile");
   });
 
   it("keeps an unknown version explicit and reports a failed check", async () => {
@@ -213,6 +212,5 @@ describe("ComfigPane workspaces", () => {
     expect(labels).toContain("Use preset");
     expect(labels).toContain("Module default");
     expect(labels.filter((label) => label === "Default")).toHaveLength(0);
-    expect(document.body.textContent).toContain("Use preset inherits its value");
   });
 });

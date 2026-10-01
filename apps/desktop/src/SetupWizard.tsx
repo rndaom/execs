@@ -6,7 +6,7 @@ import { SwitchRow } from "./components/ui/Switch";
 import { useToast } from "./components/ui/Toast";
 import { useAppStatus } from "./hooks/useAppStatus";
 import { openExternal, type StartFrom, type WizardSpec } from "./lib/bridge";
-import { COMFIG_PRESETS, comfigPresetById } from "./lib/comfig-catalog";
+import { COMFIG_PRESETS } from "./lib/comfig-catalog";
 import { OFFICIAL_ADDON_DETAILS } from "./lib/comfig-ui";
 import {
   type ComfigPresetId,
@@ -49,7 +49,6 @@ export function SetupWizard({
   const { running, busy, error, dismissError } = useAppStatus();
   const toast = useToast();
   const canApply = canApplyWizard(draftName, running, busy);
-  const selectedPreset = comfigPresetById(preset);
 
   return (
     <OnboardingFrame
@@ -130,15 +129,6 @@ export function SetupWizard({
               </button>
             </div>
           </div>
-          <p className="t-meta mt-2 sm:pl-[132px]">
-            {running
-              ? "Keep choosing your setup. Close TF2 before applying it."
-              : creating
-                ? onCreateOnly
-                  ? "Create adds the profile and keeps TF2 as it is. Create and switch also switches TF2 to it."
-                  : "Creates the profile, then switches TF2 to it."
-                : "Creates the profile and applies your selections to TF2."}
-          </p>
         </div>
 
         <OperationError message={error} onDismiss={dismissError} className="mt-4" />
@@ -146,12 +136,7 @@ export function SetupWizard({
         <div className="section pane-workspace">
           <div>
             {startFrom && onStartFrom ? (
-              <PaneSection
-                id="wizard-start-from"
-                title="Start from"
-                description="Where your in-game options come from."
-                first
-              >
+              <PaneSection id="wizard-start-from" title="Start from" first>
                 <div data-testid="wizard-start-from" className="mt-4 grid gap-3 sm:grid-cols-2">
                   {START_FROM_OPTIONS.map((option) => (
                     <OptionTile
@@ -160,7 +145,6 @@ export function SetupWizard({
                       name="wizard-start-from"
                       value={option.id}
                       title={option.label}
-                      description={option.description}
                       selected={startFrom === option.id}
                       disabled={busy}
                       onSelect={() => onStartFrom(option.id)}
@@ -170,13 +154,8 @@ export function SetupWizard({
               </PaneSection>
             ) : null}
 
-            <PaneSection
-              id="wizard-preset"
-              title="Preset"
-              description="Sets the default for every module."
-              first={!(startFrom && onStartFrom)}
-            >
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <PaneSection id="wizard-preset" title="Preset" first={!(startFrom && onStartFrom)}>
+              <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
                 {COMFIG_PRESETS.map((item) => (
                   <OptionTile
                     key={item.id}
@@ -184,19 +163,12 @@ export function SetupWizard({
                     name="comfig-preset"
                     value={item.id}
                     title={item.label}
-                    description={item.description}
                     selected={preset === item.id}
                     disabled={busy}
                     onSelect={() => onPreset(item.id)}
                   />
                 ))}
               </div>
-              {selectedPreset ? (
-                <p className="t-meta mt-3 text-ink-faint">
-                  {selectedPreset.label}: {selectedPreset.performance.toLowerCase()} performance ·{" "}
-                  {selectedPreset.fidelity.toLowerCase()} fidelity
-                </p>
-              ) : null}
             </PaneSection>
           </div>
 
@@ -220,20 +192,19 @@ export function SetupWizard({
                 />
               ))}
             </div>
-            <p className="t-meta mt-3">Manage official addons later in Comfig.</p>
           </PaneSection>
         </div>
 
         <p className="t-meta mt-6 border-t border-edge pt-4 text-ink-faint">
-          Uses official mastercomfig packages. execs is not affiliated with{" "}
+          Packages by{" "}
           <button
             type="button"
             onClick={() => void openExternal("https://comfig.app")}
             className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
           >
-            comfig.app
+            mastercomfig
           </button>
-          .
+          , not affiliated with execs
         </p>
       </form>
     </OnboardingFrame>
