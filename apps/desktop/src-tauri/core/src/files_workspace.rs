@@ -1,6 +1,6 @@
 //! Optimistic, source-bound Files edits. Callers hold WriteGate across reads
 //! and the existing recoverable profile transaction; there is no force save.
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +10,7 @@ use crate::profile::{load_library_from, load_manifest, normalize_rel_path, Profi
 use crate::surface::CfgLayer;
 
 const MAX_EDITOR_BYTES: usize = 1024 * 1024;
+const CONFIG_CFG: &str = "tf/cfg/config.cfg";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,7 +66,44 @@ fn optional_bytes(root: &Path, path: &Path) -> Result<Option<Vec<u8>>, ProfileEr
     }
 }
 
+/// TF2's live bytes for a cfg path. A TF2 that has not run on this PC for a
+/// while keeps `config.cfg` only in its Steam Cloud copy; Save current and
+/// absorb already read that copy as the live file, so Files and the settings
+/// panes read it too instead of reporting the file as missing.
+fn live_bytes(
+    root: &Path,
+    path: &str,
+    cloud_config: Option<&Path>,
+) -> Result<Option<Vec<u8>>, ProfileError> {
+    let live = optional_bytes(root, &root.join(path))?;
+    if live.is_some() || path != CONFIG_CFG {
+        return Ok(live);
+    }
+    match cloud_config {
+        Some(cloud) if cloud.is_file() => {
+            crate::archive::read_regular_file_bounded(cloud, MAX_EDITOR_BYTES as u64)
+        }
+        _ => Ok(None),
+    }
+}
+
+fn cloud_config_for(steam_roots: Option<&[PathBuf]>) -> Option<PathBuf> {
+    match steam_roots {
+        Some(roots) => crate::launch::find_cloud_config_from(roots),
+        None => crate::launch::find_cloud_config(),
+    }
+}
+
 pub fn read_from(profiles: &Path, root: &Path, path: &str) -> Result<FilesContent, ProfileError> {
+    read_from_with(profiles, root, path, cloud_config_for(None).as_deref())
+}
+
+pub fn read_from_with(
+    profiles: &Path,
+    root: &Path,
+    path: &str,
+    cloud_config: Option<&Path>,
+) -> Result<FilesContent, ProfileError> {
     let path = normalize_rel_path(path)?;
     let context = context_from(profiles, root)?;
     let manifest = load_manifest(profiles, &context.profile_id)?;
@@ -82,7 +120,7 @@ pub fn read_from(profiles: &Path, root: &Path, path: &str) -> Result<FilesConten
     // Provided pack files are inspected from the library. Only cfg-layer files
     // can be edited, and their current live bytes are authoritative.
     let current = if path.starts_with("tf/cfg/") {
-        optional_bytes(root, &root.join(&path))?
+        live_bytes(root, &path, cloud_config)?
     } else {
         Some(library.clone())
     };
@@ -232,8 +270,9 @@ where
         .to_string_lossy()
         .replace('\\', "/");
     check_destination(profiles, &library_rel)?;
+    let cloud_config = cloud_config_for(options.steam_roots);
     let library = optional_bytes(profiles, &library_path)?;
-    let live = optional_bytes(root, &root.join(path))?;
+    let live = live_bytes(root, path, cloud_config.as_deref())?;
     if file.is_some_and(|file| {
         library
             .as_ref()
@@ -264,7 +303,7 @@ where
         // Snapshotting can take time and external editors do not hold our
         // gate. Do not adopt newer live bytes as an authorized rollback base.
         let current_library = optional_bytes(profiles, &library_path)?;
-        let current_live = optional_bytes(root, &root.join(path))?;
+        let current_live = live_bytes(root, path, cloud_config.as_deref())?;
         if current_library.as_ref().map(|bytes| sha256_hex(bytes)) != expected.library_sha256
             || current_live.as_ref().map(|bytes| sha256_hex(bytes)) != expected.sha256
         {
