@@ -351,7 +351,7 @@ function AccountInventoryPolish({
               </ul>
             ) : (
               <p className="t-meta mt-3 text-ink-faint">
-                Restoring a layout only changes the draft. New and protected items keep their place.
+                Restoring a layout only changes the draft.
               </p>
             )}
           </>
@@ -391,9 +391,7 @@ function AccountInventoryPolish({
             ))}
           </ol>
         ) : (
-          <p className="t-meta text-ink-faint">
-            Outcomes on this device appear here. This is not Steam's transaction history.
-          </p>
+          <p className="t-meta text-ink-faint">Operations from this PC appear here.</p>
         )}
       </div>
       {feedback ? (

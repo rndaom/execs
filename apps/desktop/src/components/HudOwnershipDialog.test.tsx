@@ -90,9 +90,8 @@ it("focuses Cancel and lets Escape close without selecting a HUD", async () => {
   expect(choice(0).checked).toBe(false);
   expect(choice(1).checked).toBe(false);
   expect(button("Use selected HUD").disabled).toBe(true);
-  expect(container.textContent).toContain("Original HUD copies are kept for recovery");
-  expect(container.textContent).toContain("manual recovery");
-  expect(container.textContent).toContain("will not stay selectable inside this profile");
+  expect(container.textContent).toContain("The other HUDs are kept as copies");
+  expect(container.textContent).toContain("not selectable here");
   await act(async () =>
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
   );

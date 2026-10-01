@@ -101,17 +101,11 @@ export function UninstallSection({
 
   return (
     <div data-testid="uninstall">
-      <p className="t-body text-ink-muted">
-        Your current TF2 setup stays installed: its cfg files, HUD and custom files remain in TF2
-        after execs is gone.
-      </p>
+      <p className="t-body text-ink-muted">Your TF2 setup stays as it is.</p>
 
       {casualCopy ? (
         <div className="mt-3" data-testid="uninstall-casual">
-          <p className="t-meta">
-            {casualCopy} Restore stock files puts those back. It does not reset the rest of your
-            setup.
-          </p>
+          <p className="t-meta">{casualCopy} Restore stock files puts those back.</p>
           <button
             type="button"
             className="btn btn-ghost mt-2"
@@ -135,8 +129,8 @@ export function UninstallSection({
       </div>
       <p className="t-meta mt-1">
         {casualInstalled
-          ? "Available after Restore stock files, because execs keeps the original game files it needs in its data."
-          : `Profiles, restore points, downloads and settings in ${info.dataDirectory}. Export profiles you want to keep first.`}
+          ? "Restore stock files first; execs keeps the original game files in its data."
+          : `Profiles, restore points and settings in ${info.dataDirectory}. Export any you want to keep.`}
       </p>
 
       {debCommand ? (

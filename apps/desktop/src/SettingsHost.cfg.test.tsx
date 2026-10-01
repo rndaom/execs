@@ -108,8 +108,8 @@ function control<T extends HTMLElement>(selector: string): T {
 }
 
 describe("real Gameplay save preserves cfg settings", () => {
-  it("discloses Launch and class CFG overrides without blocking Viewmodels edits", async () => {
-    const { render, onNavigate, writeManagedCfg } = fixture(
+  it("keeps Viewmodels editable when class cfgs and launch options set the same values", async () => {
+    const { render, writeManagedCfg } = fixture(
       {
         "tf/cfg/config.cfg": "viewmodel_fov 70\n",
         "tf/cfg/scout.cfg": "viewmodel_fov 120\n",
@@ -118,17 +118,8 @@ describe("real Gameplay save preserves cfg settings", () => {
       "+exec personal +viewmodel_fov 110",
     );
     await render("viewmodels");
-    const notice = control<HTMLElement>('[data-testid="conditional-cfg-sources"]');
-    expect(notice.textContent).toContain("Launch +exec personal");
-    expect(notice.textContent).toContain("Launch +viewmodel_fov");
-    expect(notice.textContent).toContain("tf/cfg/scout.cfg:1 — viewmodel_fov");
-    const buttons = [...notice.querySelectorAll<HTMLButtonElement>("button")];
-    await act(async () =>
-      buttons.find((button) => button.textContent?.includes("scout.cfg"))?.click(),
-    );
-    expect(onNavigate).toHaveBeenCalledWith("files");
-    await act(async () => buttons.find((button) => button.textContent?.includes("+exec"))?.click());
-    expect(onNavigate).toHaveBeenCalledWith("launch");
+    // Class cfgs and launch options no longer get an explanation fold.
+    expect(document.querySelector('[data-testid="conditional-cfg-sources"]')).toBeNull();
     expect(control('[data-testid="settings-surface-viewmodels"]').hasAttribute("inert")).toBe(
       false,
     );
@@ -137,7 +128,7 @@ describe("real Gameplay save preserves cfg settings", () => {
     expect(writeManagedCfg).toHaveBeenCalledOnce();
   });
 
-  it("shows where each Gameplay value comes from and warns about later overrides", async () => {
+  it("warns about later overrides without a where-it-comes-from fold", async () => {
     const { render, onNavigate } = fixture({
       "tf/cfg/config.cfg": "sensitivity 3\n",
       "tf/cfg/autoexec.cfg": "exec execs_gameplay\nfov_desired 80\n",
@@ -146,11 +137,12 @@ describe("real Gameplay save preserves cfg settings", () => {
     await render("gameplay");
     const overrides = control<HTMLElement>('[data-testid="cfg-overrides"]');
     expect(overrides.textContent).toContain("fov_desired — tf/cfg/autoexec.cfg:2");
-    const source = control<HTMLElement>('[data-testid="cfg-source-sensitivity"]');
-    expect(source.textContent).toContain("TF2 config.cfg");
+    expect(document.querySelector('[data-testid="cfg-sources"]')).toBeNull();
     await act(async () =>
-      source
-        .querySelector<HTMLButtonElement>('button[aria-label="Open tf/cfg/config.cfg:1 in Files"]')
+      overrides
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Open tf/cfg/autoexec.cfg:2 in Files"]',
+        )
         ?.click(),
     );
     expect(onNavigate).toHaveBeenCalledWith("files");

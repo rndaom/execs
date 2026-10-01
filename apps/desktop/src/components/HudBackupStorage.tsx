@@ -95,10 +95,7 @@ export function HudBackupStorage({
           Refresh
         </button>
       </div>
-      <p className="t-meta mt-1">
-        Older HUD files kept in TF2 and the profile library. Dates are the newest file dates; older
-        backups did not record when they were made.
-      </p>
+      <p className="t-meta mt-1">Older HUD files execs kept as backups.</p>
       {loading ? (
         <p className="t-meta mt-2">
           <Loading>Reading HUD backups…</Loading>

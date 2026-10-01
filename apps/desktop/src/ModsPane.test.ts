@@ -137,7 +137,9 @@ describe("ModsPane profile particle containment", () => {
     ).toBeNull();
     const saved = button("mods-particle-square-series");
     expect(saved.getAttribute("aria-checked")).toBe("true");
-    expect(document.body.textContent).toContain("Saved cueki choices reapply only while their download");
+    expect(document.body.textContent).toContain(
+      "Saved cueki choices reapply only while their download",
+    );
 
     await act(async () => saved.click());
     expect(saved.getAttribute("aria-checked")).toBe("false");

@@ -168,9 +168,7 @@ export function FilesReference({ command }: FilesReferenceProps) {
           </dl>
         </article>
       )}
-      <p className="t-meta">
-        Offline reference reviewed {REFERENCE_REVIEWED}. Your game may differ.
-      </p>
+      <p className="t-meta">Reference from {REFERENCE_REVIEWED}.</p>
     </section>
   );
 }
