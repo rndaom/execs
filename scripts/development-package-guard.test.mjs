@@ -606,14 +606,22 @@ test("driver cleanup reports an unexplained close failure without a native proce
 });
 
 test("development transitions distinguish same-version replacement and refuse downgrade", () => {
-  assert.equal(developmentTransition("0.2.0", "0.2.0"), "same-version-replacement");
-  assert.equal(developmentTransition("0.2.0", "0.2.1"), "upgrade");
-  assert.equal(developmentTransition("0.2.0", "0.2.0+1"), "upgrade");
-  assert.throws(() => developmentTransition("0.2.0", "0.1.8"), /downgrade/);
-  assert.throws(() => developmentTransition("0.2.0+2", "0.2.0+1"), /downgrade/);
+  assert.equal(developmentTransition("0.2.1", "0.2.1"), "same-version-replacement");
+  assert.equal(developmentTransition("0.2.1", "0.2.2"), "upgrade");
+  assert.equal(developmentTransition("0.2.1", "0.3.0"), "upgrade");
+  assert.equal(developmentTransition("0.2.1", "0.2.1+1"), "upgrade");
+  assert.throws(() => developmentTransition("0.2.1", "0.2.0"), /downgrade/);
+  assert.throws(() => developmentTransition("0.2.1+2", "0.2.1+1"), /downgrade/);
 });
 
 test("development Linux baseline pins current public assets and refuses metadata drift", () => {
+  const version = developmentPublicFixture.exporterTag.slice(1);
+  assert.equal(developmentPublicRelease.tagName, "v0.2.1");
+  assert.equal(developmentPublicRelease.publishedAt, "2026-09-28T23:37:58Z");
+  assert.equal(
+    developmentPublicRelease.exporterRevision,
+    "ebb2d507635f314675a481a0c8b5d683fb4502cf",
+  );
   for (const kind of ["appimage", "deb"]) {
     const pins = developmentPublicRelease.packages[kind];
     const value = {
@@ -625,16 +633,19 @@ test("development Linux baseline pins current public assets and refuses metadata
         name: p.name,
         size: p.bytes,
         digest: `sha256:${p.sha256}`,
-        url: `https://github.com/rndaom/execs/releases/download/v0.2.0/${p.name}`,
+        url: `https://github.com/rndaom/execs/releases/download/v${version}/${p.name}`,
       })),
     };
     assert.equal(
-      selectDevelopmentPublicPackage(value, "0.2.0", kind).artifact.name,
+      selectDevelopmentPublicPackage(value, version, kind).artifact.name,
       pins.artifact.name,
     );
     for (const edit of [
       (r) => {
-        r.tagName = "v0.2.1";
+        r.tagName = "v0.2.0";
+      },
+      (r) => {
+        r.tagName = "v0.2.2";
       },
       (r) => {
         r.isDraft = true;
@@ -657,7 +668,7 @@ test("development Linux baseline pins current public assets and refuses metadata
     ]) {
       const changed = structuredClone(value);
       edit(changed);
-      assert.throws(() => selectDevelopmentPublicPackage(changed, "0.2.0", kind));
+      assert.throws(() => selectDevelopmentPublicPackage(changed, version, kind));
     }
   }
 });
