@@ -1,4 +1,5 @@
 import { OnboardingFrame } from "./components/OnboardingFrame";
+import { PresetSummary } from "./components/PresetSummary";
 import { OperationError } from "./components/ui/OperationError";
 import { OptionTile } from "./components/ui/OptionTile";
 import { PaneSection } from "./components/ui/PaneSection";
@@ -133,7 +134,7 @@ export function SetupWizard({
 
         <OperationError message={error} onDismiss={dismissError} className="mt-4" />
 
-        <div className="section pane-workspace">
+        <div className="section">
           <div>
             {startFrom && onStartFrom ? (
               <PaneSection id="wizard-start-from" title="Start from" first>
@@ -145,6 +146,7 @@ export function SetupWizard({
                       name="wizard-start-from"
                       value={option.id}
                       title={option.label}
+                      description={option.description}
                       selected={startFrom === option.id}
                       disabled={busy}
                       onSelect={() => onStartFrom(option.id)}
@@ -169,6 +171,7 @@ export function SetupWizard({
                   />
                 ))}
               </div>
+              <PresetSummary preset={preset} />
             </PaneSection>
           </div>
 
@@ -176,9 +179,8 @@ export function SetupWizard({
             id="wizard-addons"
             title="Official addons"
             meta={<span className="tnum">{addons.length} selected</span>}
-            first
           >
-            <div className="mt-1">
+            <div className="comfig-addons mt-1">
               {OFFICIAL_ADDONS.map((item) => (
                 <SwitchRow
                   key={item.id}

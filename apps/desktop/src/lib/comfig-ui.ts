@@ -25,6 +25,9 @@ export const PREVIEW_COMFIG_STATE: ComfigUiState = {
  * shared by the Comfig pane, the wizard and Viewmodels.
  */
 export const OFFICIAL_ADDON_DETAILS: Partial<Record<OfficialAddon, string>> = {
+  lowmem: "For PCs with little memory.",
+  "null-canceling-movement": "Holding both directions moves the way you pressed last.",
+  "flat-mouse": "Raw input, no acceleration.",
   "transparent-viewmodels": "Needs DirectX 9 and a HUD that supports it. Turns off anti-aliasing.",
 };
 

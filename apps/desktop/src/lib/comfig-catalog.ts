@@ -3,7 +3,7 @@ import type { ComfigPreset } from "./bridge";
 export type ComfigPresetEntry = {
   id: ComfigPreset;
   label: string;
-  /** One-line summary shown on the tile. */
+  /** One line shown under the presets for the selected one. */
   description: string;
   /** Where the preset sits on the performance ↔ fidelity axis. */
   balance: string;
@@ -51,7 +51,7 @@ export const COMFIG_PRESETS: ComfigPresetEntry[] = [
   {
     id: "none",
     label: "Custom",
-    description: "Skip preset tuning and configure modules yourself.",
+    description: "No preset. Set each module yourself.",
     balance: "Manual",
     performance: "Stock",
     fidelity: "Stock",

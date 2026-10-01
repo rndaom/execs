@@ -1,5 +1,6 @@
 import { ArrowSquareOut } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
+import { PresetSummary } from "./components/PresetSummary";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { Disclosure } from "./components/ui/Disclosure";
 import { OptionTile } from "./components/ui/OptionTile";
@@ -307,6 +308,7 @@ export function ComfigPane({
             />
           ))}
         </div>
+        {supported ? <PresetSummary preset={state.preset} /> : null}
       </section>
 
       <PaneSection

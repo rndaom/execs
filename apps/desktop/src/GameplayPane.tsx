@@ -162,6 +162,7 @@ export function GameplayPane({
             id="gameplay-medigun-autoheal"
             testId="gameplay-medigun-autoheal"
             label="Medigun auto-heal"
+            description="Click once to heal instead of holding fire."
             checked={draft.tf_medigun_autoheal === 1}
             onChange={(next) => patch({ tf_medigun_autoheal: next ? 1 : 0 })}
           />
