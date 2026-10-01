@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Added
 
+- A Guide button in the sidebar opens the [execs guide](docs/guide/README.md) page for the pane
+  you're on, for your version of execs.
 - A short welcome tour after first-run setup explains profiles: your setup is saved, change
   things from the sidebar, try ideas in a new profile and switch back, and close TF2 before
   changing things. Skip it at any step; App settings can show it again.
@@ -29,6 +31,9 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Changed
 
+- Panes, dialogs and first-run screens keep to short labels: explanations of how things work moved
+  into the guide, and warnings and errors are one line each. The "where these values come from"
+  and "class cfgs and launch options" folds are gone.
 - Comfig on a profile that doesn't use mastercomfig shows one plain explanation and a Try
   mastercomfig in a new profile button, instead of a page of greyed-out controls. Your own
   profile is never converted.

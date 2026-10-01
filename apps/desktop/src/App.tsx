@@ -1,4 +1,4 @@
-import { ArrowLeft, GearSix } from "@phosphor-icons/react";
+import { ArrowLeft, BookOpen, GearSix } from "@phosphor-icons/react";
 import {
   useCallback,
   useEffect,
@@ -47,11 +47,12 @@ import {
   CONFIRM_HOLD_MS,
   CONFIRM_MAX_MS,
 } from "./lib/boot-ui";
-import { invokeErrorMessage, isTauri, type LaunchSyncStatus } from "./lib/bridge";
+import { invokeErrorMessage, isTauri, type LaunchSyncStatus, openExternal } from "./lib/bridge";
 import { motionHold, revealPane, revealScreen } from "./lib/entrance";
 import { createFilesDraftStore } from "./lib/files-drafts";
 import { confirmEnabled } from "./lib/finder-ui";
 import { firstRunSurface, showStartFromChoice } from "./lib/first-run-ui";
+import { guideUrl } from "./lib/guide";
 import { launchSyncAction, launchSyncWarning } from "./lib/launch-ui";
 import { previewSwitchStep } from "./lib/library-ui";
 import {
@@ -744,18 +745,38 @@ export function App({
               onTab={navigateSettings}
               scrollIdentity={`${path}:${profiles.library?.activeProfileId ?? "none"}`}
               utility={
-                <button
-                  ref={appSettingsButton}
-                  type="button"
-                  data-testid="app-settings-open"
-                  aria-current={appSettingsOpen ? "page" : undefined}
-                  data-active={appSettingsOpen ? "true" : "false"}
-                  className="settings-nav-item"
-                  onClick={openAppSettings}
-                >
-                  <GearSix size={16} aria-hidden="true" />
-                  <span className="settings-nav-label">App settings</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    data-testid="guide-open"
+                    className="settings-nav-item"
+                    title={`Guide for ${appSettingsOpen ? "App settings" : SETTINGS_TAB_LABELS[settingsTab]}`}
+                    onClick={() =>
+                      void openExternal(
+                        guideUrl(
+                          appSettingsOpen ? "app-settings" : settingsTab,
+                          update.version,
+                          import.meta.env.DEV,
+                        ),
+                      ).catch(() => {})
+                    }
+                  >
+                    <BookOpen size={16} aria-hidden="true" />
+                    <span className="settings-nav-label">Guide</span>
+                  </button>
+                  <button
+                    ref={appSettingsButton}
+                    type="button"
+                    data-testid="app-settings-open"
+                    aria-current={appSettingsOpen ? "page" : undefined}
+                    data-active={appSettingsOpen ? "true" : "false"}
+                    className="settings-nav-item"
+                    onClick={openAppSettings}
+                  >
+                    <GearSix size={16} aria-hidden="true" />
+                    <span className="settings-nav-label">App settings</span>
+                  </button>
+                </>
               }
             >
               <div ref={profileSettings} hidden={appSettingsOpen}>
