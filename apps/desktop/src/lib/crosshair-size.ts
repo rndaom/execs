@@ -11,6 +11,8 @@
  * higher the resolution, the smaller it looks.
  */
 
+import { tf2LaunchArguments } from "./launch-ui";
+
 export type DrawnSize = { width: number; height: number };
 
 /** A weapon-script sprite: execs shapes, designs, imports and VTFs. */
@@ -118,10 +120,11 @@ export function validGameSize(width: number, height: number): boolean {
 /**
  * `-w` / `-h` / `-windowed` / `-sw` / `-fullscreen` / `-full` from a launch
  * option string. Source applies them at launch and saves them over the video
- * settings, so they win.
+ * settings, so they win. Words before `%command%` belong to a wrapper such as
+ * gamescope, whose own `-w`/`-W` sizes are not TF2's.
  */
 export function launchOptionDisplay(options: string): Partial<GameDisplay> {
-  const tokens = options.split(/\s+/).filter(Boolean);
+  const tokens = tf2LaunchArguments(options);
   const out: Partial<GameDisplay> = {};
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index].toLowerCase();

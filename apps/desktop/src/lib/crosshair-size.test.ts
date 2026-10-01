@@ -122,6 +122,17 @@ describe("which resolution the preview assumes", () => {
     });
     expect(launchOptionDisplay("-fullscreen")).toEqual({ windowed: false });
   });
+
+  it("ignores a wrapper's own sizes before %command%", () => {
+    // gamescope's -W/-H are its output size; TF2 itself gets no size here.
+    expect(
+      launchOptionDisplay("gamescope -w 1920 -h 1080 -W 2560 -H 1440 -f -- %command%"),
+    ).toEqual({});
+    expect(launchOptionDisplay("gamescope -W 2560 -H 1440 -- %command% -w 1920 -h 1080")).toEqual({
+      width: 1920,
+      height: 1080,
+    });
+  });
 });
 
 describe("resampling like the GPU", () => {

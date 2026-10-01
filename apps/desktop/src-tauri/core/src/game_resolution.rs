@@ -73,12 +73,19 @@ fn read_windows_registry() -> Option<GameResolution> {
 
 #[cfg_attr(windows, allow(dead_code))]
 fn steam_registry_candidates() -> Vec<PathBuf> {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
-        return Vec::new();
-    };
+    std::env::var_os("HOME")
+        .map(|home| steam_registry_candidates_in(Path::new(&home)))
+        .unwrap_or_default()
+}
+
+/// Native, Flatpak and Snap Steam each keep `.steam/registry.vdf` in the home
+/// directory they run with, matching the installs `finder` discovers.
+#[cfg_attr(windows, allow(dead_code))]
+fn steam_registry_candidates_in(home: &Path) -> Vec<PathBuf> {
     vec![
-        home.join(".steam").join("registry.vdf"),
+        home.join(".steam/registry.vdf"),
         home.join(".var/app/com.valvesoftware.Steam/.steam/registry.vdf"),
+        home.join("snap/steam/common/.steam/registry.vdf"),
     ]
 }
 
@@ -163,6 +170,19 @@ mod tests {
             "ScreenWidth" "0" "ScreenHeight" "1080" } } } } } } }"#;
         assert_eq!(resolution_from_registry_vdf(tiny), None);
         assert_eq!(resolution_from_registry_vdf("not vdf {"), None);
+    }
+
+    #[test]
+    fn native_flatpak_and_snap_steam_registries_are_all_checked() {
+        let home = Path::new("/home/player");
+        assert_eq!(
+            steam_registry_candidates_in(home),
+            [
+                home.join(".steam/registry.vdf"),
+                home.join(".var/app/com.valvesoftware.Steam/.steam/registry.vdf"),
+                home.join("snap/steam/common/.steam/registry.vdf"),
+            ]
+        );
     }
 
     #[test]

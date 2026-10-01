@@ -274,10 +274,10 @@ fn audio_members(entries: Vec<(String, Vec<u8>)>) -> Vec<(String, Vec<u8>)> {
     }
     let prefix = shared.unwrap_or_default().len();
     audio
-        .iter()
+        .into_iter()
         .map(|(path, bytes)| {
             let name = path.split('/').skip(prefix).collect::<Vec<_>>().join("/");
-            (name, bytes.clone())
+            (name, bytes)
         })
         .collect()
 }

@@ -440,11 +440,13 @@ export function CrosshairPane({
   async function switchToTf2(file: string) {
     if (working || !onDeactivate) return;
     setWorking(true);
+    // The controls must hold exactly what the native write published.
+    const sent = safeStockFile(file);
     try {
       await controls.flush();
-      const result = await onDeactivate({ file: safeStockFile(file), scale });
+      const result = await onDeactivate({ file: sent, scale });
       if (result === false || currentProfile.current !== profileId) return;
-      controls.patch({ cl_crosshair_file: file });
+      controls.patch({ cl_crosshair_file: sent });
     } catch {
       // Reported by the host.
     } finally {
