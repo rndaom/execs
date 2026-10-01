@@ -8,13 +8,17 @@ import { AppStatusProvider } from "./hooks/useAppStatus";
 import { SettingsHost } from "./SettingsHost";
 
 // Pixel decoding is a browser boundary; the pane, draft, host, queue and toast
-// are real. Deterministic pixels make both the PNG and library payload visible.
-vi.mock("./crosshair/PngImportField", () => ({
-  PngImportField: ({ onImport }: { onImport: (pixels: number[]) => void }) => (
-    <button type="button" data-testid="fixture-png" onClick={() => onImport([1, 2, 3, 255])}>
-      Import fixture PNG
-    </button>
-  ),
+// are real. Deterministic pixels make both the image and library payload visible.
+vi.mock("./crosshair/useCrosshairImport", () => ({
+  useCrosshairImport: ({ onImage }: { onImage: (pixels: number[], label: string) => void }) => ({
+    pick: async () => onImage([1, 2, 3, 255], "fixture"),
+    pending: null,
+    reading: false,
+    error: null,
+    fit: () => {},
+    cancel: () => {},
+    dismissError: () => {},
+  }),
 }));
 
 let root: Root;
@@ -73,6 +77,7 @@ beforeEach(() => {
     getStockCrosshairSprites: vi.fn(async () => ({})),
     getCrosshairContentSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
     getCrosshairSourceStatus: vi.fn(async () => ({ state: "none" })),
+    getGameResolution: vi.fn(async () => null),
     getPackCrosshairPreviews: vi.fn(async () => ({})),
     comfigHitsoundIndex: async () => [],
     listStockHitsounds: vi.fn(async () => []),
@@ -201,9 +206,18 @@ async function elapsed() {
   await act(async () => vi.advanceTimersByTimeAsync(701));
 }
 async function design() {
-  await click('input[value="designs"]');
-  await click('[data-testid="crosshair-open-designer"]');
+  await click('[data-testid="crosshair-new-design"]');
   await click('[data-testid="crosshair-designer-save"]');
+}
+async function importImage() {
+  await act(async () => {
+    const field = element<HTMLInputElement>('[data-testid="crosshair-import-file"]');
+    Object.defineProperty(field, "files", {
+      configurable: true,
+      value: [new File(["png"], "fixture.png", { type: "image/png" })],
+    });
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 describe("crosshair writes through the real host outcome contract", () => {
@@ -212,8 +226,7 @@ describe("crosshair writes through the real host outcome contract", () => {
     async (phase) => {
       await render();
       await design();
-      await click('input[value="import"]');
-      await click('[data-testid="fixture-png"]');
+      await importImage();
       const apply = api.applyCrosshairs.getMockImplementation();
       api.applyCrosshairs.mockImplementationOnce(async (...args: any[]) => {
         if (phase === "after write") await apply(...args);
@@ -228,9 +241,8 @@ describe("crosshair writes through the real host outcome contract", () => {
       expect(api.applyCrosshairs).toHaveBeenCalledTimes(2);
       const first = api.applyCrosshairs.mock.calls[0];
       const retry = api.applyCrosshairs.mock.calls[1];
-      expect(first[2]).toEqual([1, 2, 3, 255]);
+      expect(first[4]["png-fixture"].bytes).toEqual([1, 2, 3, 255]);
       expect(first[4]["design-my-crosshair"].bytes.length).toBe(64 * 64 * 4);
-      expect(retry[2]).toEqual(first[2]);
       expect(retry[4]).toEqual(first[4]);
       expect(props.onPendingChange).toHaveBeenLastCalledWith(false);
     },
@@ -256,11 +268,10 @@ describe("crosshair writes through the real host outcome contract", () => {
     await render();
     await design();
     await click('[data-testid="crosshair-build"]');
-    await click('input[value="import"]');
-    await click('[data-testid="fixture-png"]');
+    await importImage();
     await act(async () => pending.resolve(null));
     await click('[data-testid="crosshair-build"]');
-    expect(api.applyCrosshairs.mock.calls[1][2]).toEqual([1, 2, 3, 255]);
+    expect(api.applyCrosshairs.mock.calls[1][4]["png-fixture"].bytes).toEqual([1, 2, 3, 255]);
   });
 
   it("does not send one profile's unbuilt pixels from another profile", async () => {
@@ -271,9 +282,10 @@ describe("crosshair writes through the real host outcome contract", () => {
     expect(
       document.querySelector('[data-testid="crosshair-shape-design-my-crosshair"]'),
     ).toBeNull();
-    await click('[data-testid="crosshair-shape-dot"]');
+    await click('[data-testid="crosshair-shape-shape-dot"]');
     await click('[data-testid="crosshair-build"]');
-    expect(api.applyCrosshairs.mock.calls[0][4]).toEqual({});
+    // Only the execs shape's own pixels travel; nothing from profile A.
+    expect(Object.keys(api.applyCrosshairs.mock.calls[0][4])).toEqual(["shape-dot"]);
     expect(api.applyCrosshairs.mock.calls[0][2]).toBeUndefined();
   });
 });

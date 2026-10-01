@@ -1,69 +1,44 @@
 import { useEffect, useRef } from "react";
-import {
-  CROSSHAIR_CANVAS_SIZE,
-  type CrosshairColor,
-  CUSTOM_CROSSHAIR_SHAPE,
-  isBuiltinCrosshairShape,
-  renderCrosshairRgba,
-  tintCrosshairRgba,
-} from "../lib/crosshair-ui";
+import { CROSSHAIR_CANVAS_SIZE, type CrosshairColor, tintCrosshairRgba } from "../lib/crosshair-ui";
 import type { PreviewPixels } from "./useCrosshairDraft";
 
 /**
- * Paint any crosshair source into a canvas: a builtin shape, the imported
- * PNG buffer, or decoded sprite pixels of any size (scaled with
- * nearest-neighbour and centred). Shared by the big preview, the chips, the
- * community grid and the weapon popover so they cannot disagree.
+ * Paint a crosshair sprite into a 64×64 canvas, tinted the way the engine
+ * tints it (RGB multiply). A sprite of another size keeps its true size
+ * relative to a 64 px crosshair, centred, and is shrunk to fit only when it
+ * is larger than the canvas.
  */
 export function paintCrosshair(
   canvas: HTMLCanvasElement,
-  shape: string,
-  customRgba: number[] | null,
+  pixels: PreviewPixels | null,
   color: CrosshairColor | null,
-  preview: PreviewPixels | null,
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     return;
   }
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const exact = (rgba: number[] | Uint8ClampedArray) => {
-    const image = ctx.createImageData(CROSSHAIR_CANVAS_SIZE, CROSSHAIR_CANVAS_SIZE);
-    image.data.set(tintCrosshairRgba(rgba, color));
-    ctx.putImageData(image, 0, 0);
-  };
-  if (shape === CUSTOM_CROSSHAIR_SHAPE && customRgba) {
-    exact(customRgba);
-    return;
-  }
-  if (isBuiltinCrosshairShape(shape) && shape !== CUSTOM_CROSSHAIR_SHAPE) {
-    exact(renderCrosshairRgba(shape));
-    return;
-  }
-  if (!preview || preview.width <= 0 || preview.height <= 0) {
-    return;
-  }
-  if (preview.width === CROSSHAIR_CANVAS_SIZE && preview.height === CROSSHAIR_CANVAS_SIZE) {
-    exact(preview.rgba);
+  if (!pixels || pixels.width <= 0 || pixels.height <= 0) {
     return;
   }
   const scratch = document.createElement("canvas");
-  scratch.width = preview.width;
-  scratch.height = preview.height;
+  scratch.width = pixels.width;
+  scratch.height = pixels.height;
   const scratchCtx = scratch.getContext("2d");
   if (!scratchCtx) {
     return;
   }
-  const image = scratchCtx.createImageData(preview.width, preview.height);
-  image.data.set(tintCrosshairRgba(preview.rgba, color));
+  const image = scratchCtx.createImageData(pixels.width, pixels.height);
+  image.data.set(tintCrosshairRgba(pixels.rgba, color));
   scratchCtx.putImageData(image, 0, 0);
-  const scale = Math.min(
-    CROSSHAIR_CANVAS_SIZE / preview.width,
-    CROSSHAIR_CANVAS_SIZE / preview.height,
+  const fit = Math.min(
+    1,
+    CROSSHAIR_CANVAS_SIZE / pixels.width,
+    CROSSHAIR_CANVAS_SIZE / pixels.height,
   );
-  const width = Math.max(1, Math.round(preview.width * scale));
-  const height = Math.max(1, Math.round(preview.height * scale));
-  ctx.imageSmoothingEnabled = false;
+  const width = Math.max(1, Math.round(pixels.width * fit));
+  const height = Math.max(1, Math.round(pixels.height * fit));
+  ctx.imageSmoothingEnabled = fit < 1;
   ctx.drawImage(
     scratch,
     Math.round((CROSSHAIR_CANVAS_SIZE - width) / 2),
@@ -73,38 +48,53 @@ export function paintCrosshair(
   );
 }
 
-/** A small square picture of one crosshair, on the app's dark ground. */
+/**
+ * A small square picture of one crosshair on the app's dark ground. With a
+ * device pixel per sprite pixel it is pixel-exact; smaller pictures are
+ * smoothed so a one-pixel line fades instead of disappearing.
+ */
 export function CrosshairThumb({
-  shape,
-  customRgba = null,
+  pixels,
   color,
-  preview,
-  size = 48,
+  size = 64,
   className = "",
   testId,
+  label,
 }: {
-  shape: string;
-  customRgba?: number[] | null;
+  pixels: PreviewPixels | null;
   color: CrosshairColor | null;
-  preview: PreviewPixels | null;
   size?: number;
   className?: string;
   testId?: string;
+  /** Present when the picture is meaningful on its own; otherwise decorative. */
+  label?: string;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     if (ref.current) {
-      paintCrosshair(ref.current, shape, customRgba, color, preview);
+      paintCrosshair(ref.current, pixels, color);
     }
-  }, [shape, customRgba, color, preview]);
+  }, [pixels, color]);
   return (
     <canvas
       ref={ref}
       data-testid={testId}
+      role={label ? "img" : undefined}
+      aria-label={label}
+      aria-hidden={label ? undefined : true}
       width={CROSSHAIR_CANVAS_SIZE}
       height={CROSSHAIR_CANVAS_SIZE}
-      className={`thumb-art ${className}`.trim()}
-      style={{ width: size, height: size }}
+      className={`crosshair-thumb ${className}`.trim()}
+      style={{
+        width: size,
+        height: size,
+        // Crisp whenever the screen has a device pixel per sprite pixel.
+        imageRendering:
+          size * (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1) >=
+          CROSSHAIR_CANVAS_SIZE
+            ? "pixelated"
+            : "auto",
+      }}
     />
   );
 }

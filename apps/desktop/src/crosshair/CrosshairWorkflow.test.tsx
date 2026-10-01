@@ -6,10 +6,8 @@ import { CrosshairPane } from "../CrosshairPane";
 import { AppStatusProvider } from "../hooks/useAppStatus";
 import { AutosaveActivity, AutosavePending } from "../hooks/useAutosave";
 import type { ContentIndex, CrosshairRecord, CrosshairSourceStatus } from "../lib/bridge";
-import { defaultCrosshairDesign, renderCrosshairDesign } from "../lib/crosshair-designer";
 import { ColorPicker } from "./ColorPicker";
-import { CrosshairDesigner } from "./CrosshairDesigner";
-import { CrosshairPreview } from "./CrosshairPreview";
+import { CrosshairDesigner, type CrosshairDesignerDraft } from "./CrosshairDesigner";
 import { type CrosshairDraftApi, useCrosshairDraft } from "./useCrosshairDraft";
 
 let root: Root;
@@ -21,17 +19,31 @@ let active: boolean;
 let hudOverlayState: "enabled" | "disabled" | "possible" | "none";
 let stockArtSources: ContentIndex | null;
 let sourceStatus: CrosshairSourceStatus | null;
+let gameResolution: { width: number; height: number; windowed?: boolean } | null;
+let launchOptions: string;
+let profileId: string;
 const save = vi.fn(async (_text: string) => undefined);
 const build = vi.fn(async (..._args: unknown[]) => true);
-const deactivate = vi.fn(async () => undefined);
+const deactivate = vi.fn(async (_stock?: { file: string; scale: number }) => true);
+const remove = vi.fn();
 const pending = vi.fn();
 const openHud = vi.fn();
 const openMods = vi.fn();
+const previewVtf = vi.fn(async (_bytes: number[]) => ({
+  width: 32,
+  height: 32,
+  rgba: Array(32 * 32 * 4).fill(255),
+}));
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  try {
+    window.localStorage.clear();
+  } catch {
+    // jsdom without storage
+  }
   box = document.createElement("div");
   document.body.append(box);
   root = createRoot(box);
@@ -47,14 +59,16 @@ beforeEach(() => {
   hudOverlayState = "none";
   stockArtSources = null;
   sourceStatus = null;
+  gameResolution = { width: 1920, height: 1080, windowed: false };
+  launchOptions = "";
+  profileId = "A";
   managed =
     'cl_crosshair_file ""\ncl_crosshair_scale 32\ncl_crosshair_red 17\ncl_crosshair_green 123\ncl_crosshair_blue 241\n';
-  save.mockReset();
-  build.mockReset();
-  deactivate.mockReset();
-  pending.mockReset();
-  openHud.mockReset();
-  openMods.mockReset();
+  for (const mock of [save, build, deactivate, remove, pending, openHud, openMods, previewVtf]) {
+    mock.mockClear();
+  }
+  build.mockImplementation(async () => true);
+  deactivate.mockImplementation(async () => true);
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -69,7 +83,7 @@ async function render() {
         <AutosavePending.Provider value={pending}>
           <AutosaveActivity.Provider value={active}>
             <CrosshairPane
-              profileId="A"
+              profileId={profileId}
               layer="vanilla"
               effective={{}}
               managedText={managed}
@@ -77,13 +91,16 @@ async function render() {
               onSaveStock={save}
               onApply={build}
               onDeactivate={deactivate}
-              onRemove={() => {}}
+              onRemove={remove}
               hudOverlayState={hudOverlayState}
               hudName="Example HUD"
               onOpenHud={openHud}
               stockArtSources={stockArtSources}
               sourceStatus={sourceStatus}
               onOpenMods={openMods}
+              gameResolution={gameResolution}
+              launchOptions={launchOptions}
+              onPreviewVtf={previewVtf}
             />
           </AutosaveActivity.Provider>
         </AutosavePending.Provider>
@@ -92,9 +109,16 @@ async function render() {
   );
 }
 function element<T extends HTMLElement>(selector: string): T {
-  const found = box.querySelector<T>(selector);
+  const found = box.querySelector<T>(selector) ?? document.querySelector<T>(selector);
   if (!found) throw new Error(`Missing ${selector}`);
   return found;
+}
+function saved(): CrosshairRecord {
+  if (!record) throw new Error("Expected a saved crosshair pack");
+  return record;
+}
+function maybe(selector: string) {
+  return box.querySelector(selector);
 }
 async function click(selector: string) {
   await act(async () => element(selector).click());
@@ -106,15 +130,375 @@ async function input(selector: string, value: string) {
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+async function pickFile(name: string, bytes: number[]) {
+  await act(async () => {
+    const field = element<HTMLInputElement>('[data-testid="crosshair-import-file"]');
+    Object.defineProperty(field, "files", {
+      configurable: true,
+      value: [new File([new Uint8Array(bytes)], name)],
+    });
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  // File reads resolve over a few microtasks.
+  for (let index = 0; index < 5; index += 1) {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
 async function elapsed() {
   await act(async () => vi.advanceTimersByTimeAsync(701));
 }
+function checked(name: string) {
+  return element<HTMLInputElement>(`[data-testid="crosshair-shape-${name}"]`).checked;
+}
+function text(selector: string) {
+  return element(selector).textContent ?? "";
+}
 
-describe("0.1.4 crosshair workflow", () => {
+describe("crosshair choice and what applying it takes", () => {
+  it("shows TF2's sprites, execs shapes and the player's own crosshairs in one gallery", async () => {
+    record = { ...saved(), library: { "design-mine": "rgba" } };
+    await render();
+    for (const name of [
+      "tf-default",
+      "tf-crosshair1",
+      "tf-crosshair7",
+      "shape-dot",
+      "design-mine",
+    ]) {
+      expect(maybe(`[data-testid="crosshair-shape-${name}"]`), name).not.toBeNull();
+    }
+    expect(maybe('[data-testid="crosshair-new-design"]')).not.toBeNull();
+    expect(maybe('[data-testid="crosshair-import"]')).not.toBeNull();
+    expect(box.querySelector("select")).toBeNull();
+    expect(maybe('[data-testid="crosshair-build"]')).toBeNull();
+    expect(text('[data-testid="crosshair-live-state"]')).toBe("Custom pack on");
+  });
+
+  it("lets TF2 draw its own sprite with no pack: the choice autosaves like size and colour", async () => {
+    record = null;
+    managed = "cl_crosshair_file crosshair3\ncl_crosshair_scale 24\n";
+    await render();
+    expect(checked("tf-crosshair3")).toBe(true);
+    await click('[data-testid="crosshair-shape-tf-crosshair5"]');
+    expect(maybe('[data-testid="crosshair-build"]')).toBeNull();
+    await elapsed();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls[0][0]).toContain("cl_crosshair_file crosshair5");
+    expect(build).not.toHaveBeenCalled();
+  });
+
+  it("asks for an explicit build for a custom crosshair and holds size until then", async () => {
+    record = null;
+    managed = "cl_crosshair_file crosshair3\ncl_crosshair_scale 24\n";
+    await render();
+    await click('[data-testid="crosshair-shape-shape-dot"]');
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
+    expect(text('[data-testid="crosshair-pending"]')).toContain("Nothing changes in TF2");
+    await input("#stock-crosshair-scale", "40");
+    await elapsed();
+    expect(save).not.toHaveBeenCalled();
+    await click('[data-testid="crosshair-build"]');
+    expect(build).toHaveBeenCalledWith(
+      "shape-dot",
+      {},
+      undefined,
+      [200, 200, 200],
+      { "shape-dot": { format: "rgba", bytes: expect.any(Array) } },
+      null,
+      expect.objectContaining({
+        scale: 40,
+        stock: { file: "crosshair3", scale: 40 },
+        libraryNames: ["shape-dot"],
+      }),
+    );
+    const sent = build.mock.calls[0][4] as Record<string, { bytes: number[] }>;
+    expect(sent["shape-dot"].bytes).toHaveLength(64 * 64 * 4);
+  });
+
+  it("switches back to TF2's crosshair in one action that carries the sprite and size", async () => {
+    await render();
+    await click('[data-testid="crosshair-shape-tf-crosshair5"]');
+    expect(text('[data-testid="crosshair-pending"]')).toContain("TF2 will draw its own crosshair");
+    await elapsed();
+    expect(save).not.toHaveBeenCalled();
+    await click('[data-testid="crosshair-use-tf2"]');
+    expect(deactivate).toHaveBeenCalledWith({ file: "crosshair5", scale: 32 });
+    expect(build).not.toHaveBeenCalled();
+  });
+
+  it("builds a TF2 sprite with per-weapon exceptions as a pack", async () => {
+    await render();
+    await click('[data-testid="crosshair-shape-tf-crosshair5"]');
+    await click("#crosshair-class-tab-scout");
+    await click('[data-testid="crosshair-weapon-tf_weapon_scattergun"]');
+    expect(text('[data-testid="crosshair-editor-target"]')).toBe("Scattergun");
+    await click('[data-testid="crosshair-weapon-option-shape-dot"]');
+    expect(text('[data-testid="crosshair-weapon-count"]')).toContain("1 weapon uses");
+    await click('[data-testid="crosshair-build"]');
+    expect(build.mock.calls[0][0]).toBe("tf-crosshair5");
+    expect(build.mock.calls[0][1]).toEqual({ tf_weapon_scattergun: "shape-dot" });
+    expect((build.mock.calls[0][6] as { stock: { file: string } }).stock.file).toBe("crosshair5");
+  });
+
+  it("discards pending choices without writing", async () => {
+    await render();
+    await click('[data-testid="crosshair-shape-shape-circle"]');
+    await click('[data-testid="crosshair-discard"]');
+    expect(checked("cross")).toBe(true);
+    expect(maybe('[data-testid="crosshair-build"]')).toBeNull();
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), false);
+    expect(build).not.toHaveBeenCalled();
+  });
+
+  it("keeps the choice and the bar after a rejected build", async () => {
+    build.mockRejectedValueOnce(new Error("disk refused"));
+    await render();
+    await click('[data-testid="crosshair-shape-shape-circle"]');
+    await click('[data-testid="crosshair-build"]');
+    expect(checked("shape-circle")).toBe(true);
+    expect(text('[data-testid="crosshair-pending"]')).toContain("not in TF2 yet");
+  });
+
+  it("defers size edits while the game runs and keeps the pack builder locked", async () => {
+    running = true;
+    await render();
+    await click('[data-testid="crosshair-shape-shape-dot"]');
+    await input("#stock-crosshair-scale", "48");
+    await elapsed();
+    expect(save).not.toHaveBeenCalled();
+    expect(element<HTMLButtonElement>('[data-testid="crosshair-build"]').disabled).toBe(true);
+    running = false;
+    await render();
+    await elapsed();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls[0][0]).toContain("cl_crosshair_scale 48");
+  });
+
+  it("retains an unbuilt shape through a colour autosave", async () => {
+    await render();
+    await click('[data-testid="crosshair-shape-shape-dot"]');
+    await input("input[aria-invalid]", "#137bfa");
+    await elapsed();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(build).not.toHaveBeenCalled();
+    record = { ...saved(), color: [19, 123, 250] };
+    managed += "cl_crosshair_red 19\ncl_crosshair_blue 250\n";
+    await render();
+    expect(checked("shape-dot")).toBe(true);
+    await click('[data-testid="crosshair-build"]');
+    expect(build).toHaveBeenCalledWith(
+      "shape-dot",
+      {},
+      undefined,
+      [19, 123, 250],
+      expect.objectContaining({ "shape-dot": expect.any(Object) }),
+      null,
+      expect.objectContaining({ scale: 32 }),
+    );
+  });
+
+  it("applies a colour swatch exactly", async () => {
+    await render();
+    await click('[data-testid="crosshair-swatch-green"]');
+    await elapsed();
+    expect(save.mock.calls[0][0]).toContain("cl_crosshair_red 0");
+    expect(save.mock.calls[0][0]).toContain("cl_crosshair_green 255");
+  });
+});
+
+describe("a confirmed build reads as saved", () => {
+  // Field bug: Build crosshair pack succeeded, yet "These changes are not in
+  // TF2 yet" stayed however often it was pressed.
+  it("clears once the native record returns sorted and without an unused execs shape", async () => {
+    record = { ...saved(), shape: "shape-cross", library: { "shape-cross": "rgba" } };
+    await render();
+    for (const name of ["Zeta", "Alpha"]) {
+      await click('[data-testid="crosshair-new-design"]');
+      await input('input[aria-label="Design name"]', name);
+      await click('[data-testid="crosshair-designer-save"]');
+    }
+    expect(checked("design-alpha")).toBe(true);
+    await click('[data-testid="crosshair-build"]');
+    const [shape, assignments, , color, , design, settings] = build.mock.calls[0] as [
+      string,
+      Record<string, string>,
+      unknown,
+      [number, number, number],
+      unknown,
+      string,
+      { libraryNames: string[] },
+    ];
+    // The native build drops the unused shape and keeps names sorted.
+    expect(settings.libraryNames).toEqual(["design-zeta", "design-alpha"]);
+    record = {
+      ...saved(),
+      shape,
+      assignments,
+      color,
+      library: { "design-alpha": "rgba", "design-zeta": "rgba" },
+      design,
+    };
+    managed =
+      'cl_crosshair_file ""\ncl_crosshair_scale 32\ncl_crosshair_red 17\ncl_crosshair_green 123\ncl_crosshair_blue 241\n';
+    await render();
+    expect(maybe('[data-testid="crosshair-build"]')).toBeNull();
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), false);
+    // Later edits still count, and a later reload still applies.
+    await click('[data-testid="crosshair-shape-shape-dot"]');
+    expect(maybe('[data-testid="crosshair-build"]')).not.toBeNull();
+  });
+});
+
+describe("designs and imports", () => {
+  it("retains an open design across pane visits and saves it without building", async () => {
+    await render();
+    await click('[data-testid="crosshair-new-design"]');
+    await input('input[aria-label="Design name"]', "Retained design");
+    await input("#designer-size", "19");
+    expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
+    expect(maybe('[data-testid="crosshair-build"]')).toBeNull();
+    active = false;
+    await render();
+    active = true;
+    await render();
+    expect(element<HTMLInputElement>('input[aria-label="Design name"]').value).toBe(
+      "Retained design",
+    );
+    expect(element<HTMLInputElement>("#designer-size").value).toBe("19");
+    await click('[data-testid="crosshair-designer-save"]');
+    await elapsed();
+    expect(save).not.toHaveBeenCalled();
+    expect(build).not.toHaveBeenCalled();
+    expect(checked("design-retained-design")).toBe(true);
+    await click('[data-testid="crosshair-build"]');
+    expect(build).toHaveBeenCalledWith(
+      "design-retained-design",
+      {},
+      undefined,
+      [17, 123, 241],
+      expect.objectContaining({ "design-retained-design": expect.any(Object) }),
+      expect.stringContaining("Retained design"),
+      expect.any(Object),
+    );
+  });
+
+  it("starts a new design from the selected execs shape and keeps the shape", async () => {
+    await render();
+    await click('[data-testid="crosshair-shape-shape-circle"]');
+    await click('[data-testid="crosshair-new-design"]');
+    expect(
+      element<HTMLInputElement>('[data-testid="crosshair-designer-style-circle"]').checked,
+    ).toBe(true);
+    expect(element<HTMLInputElement>("#designer-size").value).toBe("7");
+    await input('input[aria-label="Design name"]', "My circle");
+    await click('[data-testid="crosshair-designer-save"]');
+    expect(checked("design-my-circle")).toBe(true);
+    expect(maybe('[data-testid="crosshair-shape-shape-circle"]')).not.toBeNull();
+  });
+
+  it("edits a saved design in place without moving the main crosshair", async () => {
+    record = {
+      ...saved(),
+      shape: "cross",
+      assignments: { tf_weapon_bat: "design-bat" },
+      library: { "design-bat": "rgba" },
+      design: JSON.stringify({
+        "design-bat": JSON.stringify({ style: "circle", size: 8, label: "Bat ring" }),
+      }),
+    };
+    await render();
+    expect(text('label[for="crosshair-choice-design-bat"]')).toContain("Bat ring");
+    await click('[data-testid="crosshair-actions-design-bat"]');
+    await click('[data-testid="crosshair-menu-edit"]');
+    expect(element<HTMLInputElement>('input[aria-label="Design name"]').value).toBe("Bat ring");
+    await input("#designer-rotation", "45");
+    await click('[data-testid="crosshair-designer-save"]');
+    expect(checked("cross")).toBe(true);
+    expect(maybe('[data-testid="crosshair-shape-design-bat-ring"]')).toBeNull();
+    await click('[data-testid="crosshair-build"]');
+    const library = build.mock.calls[0][4] as Record<string, { bytes: number[] }>;
+    expect(Object.keys(library)).toEqual(["design-bat"]);
+    expect(build.mock.calls[0][5]).toContain('\\"rotation\\":45');
+  });
+
+  it("pastes a shared design code into the editor", async () => {
+    await render();
+    await click('[data-testid="crosshair-new-design"]');
+    await click('[data-testid="crosshair-designer-paste-code"]');
+    await input('input[aria-label="Design code"]', "nonsense");
+    expect(text('[data-testid="crosshair-designer"]')).toContain("not an execs design code");
+    const { designCode } = await import("../lib/crosshair-designer");
+    const code = designCode(
+      {
+        style: "triangle",
+        size: 10,
+        thickness: 2,
+        gap: 0,
+        dot: true,
+        dotSize: 1,
+        outline: 0,
+        shadow: false,
+        opacity: 255,
+      },
+      "Shared",
+    );
+    await input('input[aria-label="Design code"]', code);
+    await act(async () => {
+      element<HTMLFormElement>('input[aria-label="Design code"]').closest("form")?.requestSubmit();
+    });
+    expect(element<HTMLInputElement>('input[aria-label="Design name"]').value).toBe("Shared");
+    expect(
+      element<HTMLInputElement>('[data-testid="crosshair-designer-style-triangle"]').checked,
+    ).toBe(true);
+  });
+
+  it("imports a VTF under its file name after the native reader accepts it", async () => {
+    await render();
+    await pickFile("Bomo Reticle.vtf", [0x56, 0x54, 0x46, 0, 1, 2, 3]);
+    expect(previewVtf).toHaveBeenCalledWith([0x56, 0x54, 0x46, 0, 1, 2, 3]);
+    expect(checked("vtf-bomo-reticle")).toBe(true);
+    await click('[data-testid="crosshair-build"]');
+    expect(
+      (build.mock.calls[0][4] as Record<string, { format: string }>)["vtf-bomo-reticle"],
+    ).toEqual({
+      format: "vtf",
+      bytes: [0x56, 0x54, 0x46, 0, 1, 2, 3],
+    });
+  });
+
+  it("refuses a file that is neither PNG nor VTF", async () => {
+    await render();
+    await pickFile("notes.png", [1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(text('[data-testid="crosshair-import-error"]')).toContain("Choose a PNG or VTF");
+    expect(previewVtf).not.toHaveBeenCalled();
+  });
+
+  it("removes a library crosshair with its assignments", async () => {
+    record = {
+      ...saved(),
+      shape: "design-old",
+      assignments: { tf_weapon_bat: "design-old" },
+      library: { "design-old": "rgba" },
+    };
+    await render();
+    await click('[data-testid="crosshair-actions-design-old"]');
+    await click('[data-testid="crosshair-menu-remove"]');
+    expect(maybe('[data-testid="crosshair-shape-design-old"]')).toBeNull();
+    await click('[data-testid="crosshair-build"]');
+    expect(build.mock.calls[0][0]).toBe("shape-cross");
+    expect(build.mock.calls[0][1]).toEqual({});
+    expect((build.mock.calls[0][6] as { libraryNames: string[] }).libraryNames).toEqual([
+      "shape-cross",
+    ]);
+  });
+});
+
+describe("older packs and notices", () => {
   it("previews a legacy imported community shape under its migrated name", async () => {
-    if (!record) throw new Error("Expected a saved crosshair pack");
     const legacy: CrosshairRecord = {
-      ...record,
+      ...saved(),
       shape: "circle",
       assignments: { tf_weapon_scattergun: "dot" },
       library: { circle: "vtf", dot: "vtf" },
@@ -138,42 +522,69 @@ describe("0.1.4 crosshair workflow", () => {
   });
 
   it("keeps a retired catalog selection in the saved library without offering a download", async () => {
-    if (!record) throw new Error("Expected a saved crosshair pack");
     record = {
-      ...record,
+      ...saved(),
       shape: "venom_circle",
       assignments: { tf_weapon_scattergun: "venom_dot" },
       library: { venom_circle: "vtf", venom_dot: "vtf" },
     };
     await render();
     expect(box.textContent).toContain("New Venom downloads are no longer offered");
-    expect(box.textContent).toContain("Build pack reuses files already in the saved pack");
-    expect(box.querySelector('[data-testid="crosshair-open-community"]')).toBeNull();
-    await click('input[value="designs"]');
-    expect(element<HTMLInputElement>('[data-testid="crosshair-shape-venom_circle"]').checked).toBe(
-      true,
-    );
-    expect(box.querySelector('[data-testid="crosshair-shape-venom_dot"]')).not.toBeNull();
+    expect(checked("venom_circle")).toBe(true);
+    expect(maybe('[data-testid="crosshair-shape-venom_dot"]')).not.toBeNull();
+    await click('[data-testid="crosshair-shape-shape-dot"]');
+    await click('[data-testid="crosshair-shape-venom_circle"]');
+    // Back to the saved state: nothing to build.
+    expect(maybe('[data-testid="crosshair-build"]')).toBeNull();
+    await click('[data-testid="crosshair-shape-shape-circle"]');
     await click('[data-testid="crosshair-build"]');
     expect(build).toHaveBeenCalledWith(
-      "venom_circle",
+      "shape-circle",
       { tf_weapon_scattergun: "venom_dot" },
       undefined,
       [17, 123, 241],
-      {},
+      expect.objectContaining({ "shape-circle": expect.any(Object) }),
       null,
-      expect.objectContaining({ libraryNames: ["venom_circle", "venom_dot"] }),
+      expect.objectContaining({ libraryNames: ["venom_circle", "venom_dot", "shape-circle"] }),
     );
   });
 
-  it("keeps a non-prefixed legacy VTF selected and selectable", async () => {
-    if (!record) throw new Error("Expected a saved crosshair pack");
-    record = { ...record, shape: "bomo1", library: { bomo1: "vtf" } };
+  it("keeps a non-prefixed legacy VTF selected", async () => {
+    record = { ...saved(), shape: "bomo1", library: { bomo1: "vtf" } };
     await render();
-    await click('input[value="designs"]');
-    expect(element<HTMLInputElement>('[data-testid="crosshair-shape-bomo1"]').checked).toBe(true);
-    await click('[data-testid="crosshair-build"]');
-    expect(build.mock.calls.at(-1)?.[0]).toBe("bomo1");
+    expect(checked("bomo1")).toBe(true);
+  });
+
+  it("restores per-weapon choices kept with a switched-off pack only when asked", async () => {
+    record = {
+      ...saved(),
+      inactive: true,
+      assignments: { tf_weapon_scattergun: "dot" },
+    };
+    managed = "cl_crosshair_file crosshair3\ncl_crosshair_scale 32\n";
+    await render();
+    expect(checked("tf-crosshair3")).toBe(true);
+    expect(text('[data-testid="crosshair-live-state"]')).toBe("TF2 draws its own crosshair");
+    expect(maybe('[data-testid="crosshair-build"]')).toBeNull();
+    await act(async () =>
+      [...box.querySelectorAll("button")].find((b) => b.textContent === "Restore them")?.click(),
+    );
+    expect(text('[data-testid="crosshair-weapon-count"]')).toContain("1 weapon uses");
+    expect(maybe('[data-testid="crosshair-build"]')).not.toBeNull();
+  });
+
+  it("keeps an external material for every weapon and preserves it through size edits", async () => {
+    record = null;
+    managed = "cl_crosshair_file myreticle\ncl_crosshair_scale 32\n";
+    await render();
+    expect(checked("tf-external")).toBe(true);
+    expect(text('[data-testid="crosshair-stage"]')).toContain("cannot be previewed");
+    expect(element<HTMLButtonElement>('[data-testid="crosshair-slot-primary"]').disabled).toBe(
+      true,
+    );
+    await input("#stock-crosshair-scale", "40");
+    await elapsed();
+    expect(save.mock.calls[0][0]).toContain("cl_crosshair_file myreticle");
   });
 
   it("links to HUD controls when a HUD overlay can add another crosshair", async () => {
@@ -201,197 +612,146 @@ describe("0.1.4 crosshair workflow", () => {
       incomplete: [],
     };
     await render();
-    await click('[data-testid="crosshair-mode-stock"]');
+    expect(maybe('[data-testid="crosshair-stock-art-notice"]')).toBeNull();
+    await click('[data-testid="crosshair-shape-tf-crosshair3"]');
     expect(box.textContent).toContain("Alternate.vpk also supplies");
     expect(box.textContent).toContain("preview uses Valve's original sprite");
     await click('[data-testid="crosshair-stock-art-notice"] button');
     expect(openMods).toHaveBeenCalledTimes(1);
   });
 
-  it("warns when external edits make a saved pack's record unverified", async () => {
-    if (!record) throw new Error("Expected a saved crosshair pack");
-    record = { ...record, inactive: true, sourceChanged: true };
+  it("warns about outside edits and rebuilds on request", async () => {
+    record = { ...saved(), sourceChanged: true };
     await render();
-    expect(box.textContent).toContain("saved crosshair pack changed outside execs");
+    expect(box.textContent).toContain("changed outside execs");
     await click('[data-testid="crosshair-source-changed"] button');
-    expect(box.querySelector('[data-testid="crosshair-build"]')).not.toBeNull();
+    expect(build.mock.calls[0][0]).toBe("cross");
   });
 
-  it("warns when TF2 updates the scripts used to build a saved pack", async () => {
+  it("warns when TF2 updates the scripts used to build a live pack", async () => {
     sourceStatus = { state: "changed" };
     await render();
     expect(box.textContent).toContain("TF2's weapon scripts changed since this pack was built");
     sourceStatus = { state: "unverified" };
     await render();
-    expect(box.textContent).toContain(
-      "older crosshair pack has no recorded TF2 weapon-script version",
-    );
+    expect(box.textContent).toContain("no recorded TF2 weapon-script version");
+    record = { ...saved(), inactive: true };
+    await render();
+    expect(maybe('[data-testid="crosshair-script-source-status"]')).toBeNull();
   });
 
-  it("retains an embedded design across pane visits and separates library save from pack build", async () => {
+  it("removes the pack only after confirming", async () => {
     await render();
-    await click('input[value="designs"]');
-    await click('[data-testid="crosshair-open-designer"]');
-    await input('input[aria-label="Design name"]', "Retained design");
-    await input("#designer-size", "19");
-    expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
-    expect(box.querySelector('[data-testid="crosshair-build"]')).toBeNull();
-    active = false;
-    await render();
-    expect(box.querySelector('[data-testid="crosshair-designer"]')).toBeNull();
-    active = true;
-    await render();
-    await click('[data-testid="crosshair-open-designer"]');
-    expect(element<HTMLInputElement>('input[aria-label="Design name"]').value).toBe(
-      "Retained design",
-    );
-    expect(element<HTMLInputElement>("#designer-size").value).toBe("19");
-    await click('[data-testid="crosshair-designer-save"]');
-    await elapsed();
-    expect(save).not.toHaveBeenCalled();
-    expect(build).not.toHaveBeenCalled();
-    await click('[data-testid="crosshair-build"]');
-    expect(build).toHaveBeenCalledWith(
-      "design-retained-design",
-      {},
-      undefined,
-      [17, 123, 241],
-      expect.objectContaining({ "design-retained-design": expect.any(Object) }),
-      expect.any(String),
-      expect.any(Object),
-    );
+    await click('[data-testid="crosshair-more"]');
+    await click('[data-testid="crosshair-remove-pack"]');
+    expect(remove).not.toHaveBeenCalled();
+    await click('[data-testid="crosshair-remove-confirm"]');
+    expect(remove).toHaveBeenCalledTimes(1);
   });
-  it("customizes a fixed shape into a named design without replacing the preset", async () => {
+});
+
+describe("true-size preview", () => {
+  it("reports the in-game pixels for the size and the resolution it assumes", async () => {
+    managed = 'cl_crosshair_file ""\ncl_crosshair_scale 48\n';
+    gameResolution = { width: 2560, height: 1440, windowed: false };
     await render();
-    await click('[data-testid="crosshair-shape-execs-diamond"]');
-    expect(box.textContent).toContain("Customize shape");
-    await click('[data-testid="crosshair-open-designer"]');
-    expect(
-      element<HTMLInputElement>('[data-testid="crosshair-designer-style-diamond"]').checked,
-    ).toBe(true);
-    await input('input[aria-label="Design name"]', "My diamond");
-    await click('[data-testid="crosshair-designer-save"]');
-    expect(
-      element<HTMLInputElement>('[data-testid="crosshair-shape-design-my-diamond"]').checked,
-    ).toBe(true);
-    await click('[data-testid="crosshair-build"]');
-    expect(build.mock.calls.at(-1)?.[0]).toBe("design-my-diamond");
-    await click('input[value="builtin"]');
-    expect(box.querySelector('[data-testid="crosshair-shape-execs-diamond"]')).not.toBeNull();
+    expect(text('[data-testid="crosshair-sprite-size"]')).toContain("96 × 96 px sprite");
+    // The thin cross covers 8..55 of its 64 px sprite: 72 of the 96 drawn pixels.
+    expect(text('[data-testid="crosshair-drawn-size"]')).toBe("72 × 72 px");
+    expect(text('[data-testid="crosshair-display"]')).toContain("2560 × 1440");
+    expect(text('[data-testid="crosshair-display-source"]')).toContain("TF2's video settings");
   });
-  it("retains an unbuilt shape through a color autosave and forces an explicit build", async () => {
+
+  it("lets launch options win over the saved resolution", async () => {
+    launchOptions = "-novid -w 1280 -h 720 -windowed";
     await render();
-    await click('[data-testid="crosshair-shape-dot"]');
-    await input("input[aria-invalid]", "#137bfa");
-    await elapsed();
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(build).not.toHaveBeenCalled();
-    if (!record) throw new Error("Expected a custom profile");
-    record = { ...record, color: [19, 123, 250] };
-    managed += "cl_crosshair_red 19\ncl_crosshair_blue 250\n";
-    await render();
-    expect(element<HTMLInputElement>('[data-testid="crosshair-shape-dot"]').checked).toBe(true);
-    await click('[data-testid="crosshair-build"]');
-    expect(build).toHaveBeenCalledWith(
-      "dot",
-      {},
-      undefined,
-      [19, 123, 250],
-      {},
-      null,
-      expect.objectContaining({ scale: 32 }),
-    );
-    expect(box.textContent).not.toContain("Discard pending drafts");
+    expect(text('[data-testid="crosshair-display"]')).toContain("1280 × 720");
+    expect(text('[data-testid="crosshair-display"]')).toContain("Windowed");
+    expect(text('[data-testid="crosshair-display-source"]')).toContain("launch options");
   });
-  it("defers size edits while the game runs and keeps the pack builder locked", async () => {
-    running = true;
-    await render();
-    await input("#stock-crosshair-scale", "48");
-    await elapsed();
-    expect(save).not.toHaveBeenCalled();
-    expect(element<HTMLButtonElement>('[data-testid="crosshair-build"]').disabled).toBe(true);
-    running = false;
-    await render();
-    await elapsed();
-    expect(save).toHaveBeenCalledTimes(1);
-    expect(save.mock.calls[0][0]).toContain("cl_crosshair_scale 48");
-  });
-  it("changing mode does not write until its explicit action, and returning to Custom does not save a stock file", async () => {
-    await render();
-    await click('[data-testid="crosshair-mode-stock"]');
-    await elapsed();
-    expect(save).not.toHaveBeenCalled();
-    expect(deactivate).not.toHaveBeenCalled();
-    expect(element<HTMLInputElement>("#stock-crosshair-scale").value).toBe("24");
-    await click('[data-testid="crosshair-mode-custom"]');
-    await elapsed();
-    expect(save).not.toHaveBeenCalled();
-    expect(box.querySelector('[data-testid="stock-crosshair-file"]')).toBeNull();
-    await click('[data-testid="crosshair-mode-stock"]');
-    const button = [...box.querySelectorAll("button")].find(
-      (b) => b.textContent === "Use in-game crosshair",
-    );
-    await act(async () => button?.click());
-    expect(deactivate).toHaveBeenCalledTimes(1);
-  });
-  it("protects unbuilt custom shapes after returning to In-game and offers resume or discard", async () => {
+
+  it("explains weapon default instead of drawing a guess", async () => {
     record = null;
+    managed = 'cl_crosshair_file ""\n';
     await render();
-    await click('[data-testid="crosshair-mode-custom"]');
-    await click('[data-testid="crosshair-shape-dot"]');
-    expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
-    await click('[data-testid="crosshair-mode-stock"]');
-    expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
-    expect(box.querySelector('[data-testid="crosshair-hidden-draft"]')).not.toBeNull();
-    const resume = [...box.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Resume custom edits",
-    );
-    await act(async () => resume?.click());
-    expect(element<HTMLInputElement>('[data-testid="crosshair-shape-dot"]').checked).toBe(true);
-    await click('[data-testid="crosshair-mode-stock"]');
-    const discard = [...box.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Discard custom edits",
-    );
-    await act(async () => discard?.click());
-    expect(pending).toHaveBeenLastCalledWith(expect.any(String), false);
-    expect(box.querySelector('[data-testid="crosshair-hidden-draft"]')).toBeNull();
-    expect(build).not.toHaveBeenCalled();
+    expect(checked("tf-default")).toBe(true);
+    expect(text('[data-testid="crosshair-stage"]')).toContain("Each weapon draws its own");
   });
-  it("keeps a designer draft protected while In-game mode or another pane is showing", async () => {
-    record = null;
+
+  it("edits one weapon on the page and resets it to the main crosshair", async () => {
+    record = { ...saved(), assignments: { tf_weapon_scattergun: "dot" } };
     await render();
-    await click('[data-testid="crosshair-mode-custom"]');
-    await click('[data-testid="crosshair-open-designer"]');
-    await input("#designer-size", "19");
-    const explicitId = pending.mock.calls.find((call) => call.length === 2 && call[1])?.[0];
-    await click('[data-testid="crosshair-mode-stock"]');
-    active = false;
-    await render();
-    expect(pending.mock.calls.filter((call) => call[0] === explicitId).at(-1)).toEqual([
-      explicitId,
-      true,
-    ]);
-    active = true;
-    await render();
-    await click('[data-testid="crosshair-mode-custom"]');
-    await click('[data-testid="crosshair-open-designer"]');
-    expect(element<HTMLInputElement>("#designer-size").value).toBe("19");
+    // Every class starts on the slot rows; a class tab lists its weapons.
+    expect(text('[data-testid="crosshair-editor-target"]')).toBe("Every primary weapon");
+    await click("#crosshair-class-tab-scout");
+    await click('[data-testid="crosshair-weapon-tf_weapon_scattergun"]');
+    expect(text('[data-testid="crosshair-editor-target"]')).toBe("Scattergun");
+    expect(
+      element('[data-testid="crosshair-weapon-tf_weapon_scattergun"]').getAttribute("aria-pressed"),
+    ).toBe("true");
+    await click('[data-testid="crosshair-weapon-option-main"]');
+    expect(text('[data-testid="crosshair-weapon-count"]')).toContain("Every weapon uses");
+    await click("#crosshair-class-tab-all");
+    await click('[data-testid="crosshair-slot-melee"]');
+    await click('[data-testid="crosshair-weapon-option-tf-default"]');
+    expect(text('[data-testid="crosshair-weapon-count"]')).toMatch(/\d+ weapons use/);
+    await click('[data-testid="crosshair-weapons-reset"]');
+    expect(text('[data-testid="crosshair-weapon-count"]')).toContain("Every weapon uses");
   });
-  it("keeps unbuilt controls after a rejected build", async () => {
-    build.mockRejectedValueOnce(new Error("disk refused"));
-    await render();
-    await click('[data-testid="crosshair-shape-execs-diamond"]');
-    await click('[data-testid="crosshair-build"]');
-    expect(element<HTMLInputElement>('[data-testid="crosshair-shape-execs-diamond"]').checked).toBe(
-      true,
-    );
-    expect(box.textContent).toContain("not been built");
+});
+
+describe("pieces", () => {
+  it("lets a legacy dot shrink below its hidden geometry floor", async () => {
+    let value: CrosshairDesignerDraft = {
+      name: "",
+      design: {
+        style: "dot",
+        size: 24,
+        thickness: 2,
+        gap: 3,
+        dot: false,
+        dotSize: 8,
+        outline: 1,
+        shadow: false,
+        opacity: 255,
+      },
+    };
+    function Harness() {
+      return (
+        <CrosshairDesigner
+          value={value}
+          color={[255, 255, 255]}
+          editing={null}
+          onChange={(next) => {
+            value = next;
+          }}
+          onClose={() => {}}
+        />
+      );
+    }
+    await act(async () => root.render(<Harness />));
+    expect(maybe("#designer-size")).toBeNull();
+    await input("#designer-dot-radius", "1");
+    expect(value.design.dotSize).toBe(1);
+    expect(value.design.size).toBe(4);
   });
+
+  it("preserves invalid hex as an editable field without saving it and accepts pasted exact RGB", async () => {
+    const change = vi.fn();
+    await act(async () => root.render(<ColorPicker color={[17, 123, 241]} onChange={change} />));
+    await input("input[aria-invalid]", "oops");
+    expect(change).not.toHaveBeenCalled();
+    expect(element("input[aria-invalid]").getAttribute("aria-invalid")).toBe("true");
+    await input("input[aria-invalid]", "#117bf1");
+    expect(change).toHaveBeenLastCalledWith([17, 123, 241]);
+    expect(element("input[aria-invalid]").getAttribute("aria-invalid")).toBe("false");
+  });
+
   it("discards edited pixels and never carries a preview into another profile", async () => {
     let api: CrosshairDraftApi | undefined;
-    function Probe({ profileId, width }: { profileId: string; width: number }) {
+    function Probe({ id, width }: { id: string; width: number }) {
       api = useCrosshairDraft(
-        profileId,
+        id,
         {
           id: "execs-crosshairs",
           shape: "design-kept",
@@ -402,63 +762,18 @@ describe("0.1.4 crosshair workflow", () => {
       );
       return null;
     }
-    await act(async () => root.render(<Probe profileId="A" width={1} />));
-    await act(async () => api?.saveDesign(defaultCrosshairDesign(), "kept"));
+    const { defaultCrosshairDesign } = await import("../lib/crosshair-designer");
+    await act(async () => root.render(<Probe id="A" width={1} />));
+    await act(async () => {
+      api?.saveDesign(defaultCrosshairDesign(), "kept", "design-kept");
+    });
     expect(api?.previewFor("design-kept")?.width).toBe(64);
     await act(async () => api?.discard());
     expect(api?.previewFor("design-kept")?.width).toBe(1);
-    await act(async () => api?.saveDesign(defaultCrosshairDesign(), "kept"));
-    await act(async () => root.render(<Probe profileId="B" width={2} />));
+    await act(async () => {
+      api?.saveDesign(defaultCrosshairDesign(), "kept", "design-kept");
+    });
+    await act(async () => root.render(<Probe id="B" width={2} />));
     expect(api?.previewFor("design-kept")?.width).toBe(2);
-  });
-  it("lets a legacy dot shrink below its hidden geometry floor", async () => {
-    const saved = vi.fn();
-    const initial = { ...defaultCrosshairDesign(), style: "dot" as const, size: 24, dotSize: 8 };
-    await act(async () =>
-      root.render(
-        <CrosshairDesigner open initial={initial} color={null} onSave={saved} onClose={() => {}} />,
-      ),
-    );
-    expect(box.querySelector("#designer-size")).toBeNull();
-    await input("#designer-dot-radius", "1");
-    await click('[data-testid="crosshair-designer-save"]');
-    const next = saved.mock.calls[0][0];
-    expect(next.dotSize).toBe(1);
-    expect(next.size).toBe(4);
-    const visible = (pixels: Uint8ClampedArray) =>
-      pixels.filter((_, i) => i % 4 === 3 && pixels[i] > 0).length;
-    expect(visible(renderCrosshairDesign(next))).toBeLessThan(
-      visible(renderCrosshairDesign(initial)),
-    );
-  });
-  it("keeps the complete non-square sprite and scales each intrinsic dimension", async () => {
-    await act(async () =>
-      root.render(
-        <CrosshairPreview
-          shape="odd"
-          customRgba={null}
-          color={[17, 123, 241]}
-          scale={64}
-          preview={{ width: 31, height: 47, rgba: Array(31 * 47 * 4).fill(255) }}
-        />,
-      ),
-    );
-    const canvas = element<HTMLCanvasElement>("canvas");
-    expect([canvas.width, canvas.height]).toEqual([31, 47]);
-    expect(canvas.style.width).toBe(`${(62 / 1280) * 100}%`);
-    expect(canvas.style.height).toBe("auto");
-    const detail = element<HTMLCanvasElement>('[data-testid="crosshair-sprite-detail"]');
-    expect([detail.width, detail.height]).toEqual([31, 47]);
-    expect([detail.style.width, detail.style.height]).toEqual(["63px", "96px"]);
-  });
-  it("preserves invalid hex as an editable field without saving it and accepts pasted exact RGB", async () => {
-    const change = vi.fn();
-    await act(async () => root.render(<ColorPicker color={[17, 123, 241]} onChange={change} />));
-    await input("input[aria-invalid]", "oops");
-    expect(change).not.toHaveBeenCalled();
-    expect(element("input[aria-invalid]").getAttribute("aria-invalid")).toBe("true");
-    await input("input[aria-invalid]", "#117bf1");
-    expect(change).toHaveBeenLastCalledWith([17, 123, 241]);
-    expect(element("input[aria-invalid]").getAttribute("aria-invalid")).toBe("false");
   });
 });

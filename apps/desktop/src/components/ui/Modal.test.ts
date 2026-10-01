@@ -2,10 +2,8 @@
 import { act, createRef, createElement as h } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CrosshairDesigner } from "../../crosshair/CrosshairDesigner";
 import { AutosaveActivity } from "../../hooks/useAutosave";
 import { useFilesExitGuard } from "../../hooks/useFilesExitGuard";
-import { defaultCrosshairDesign } from "../../lib/crosshair-designer";
 import { createFilesDraftStore } from "../../lib/files-drafts";
 import { Modal } from "./Modal";
 
@@ -254,7 +252,7 @@ it("falls back to a contained enabled action when the requested initial target i
   expect(document.activeElement).toBe(element("cancel"));
 });
 
-it("cancels the real Files exit guard above the designer without closing either the app or designer", async () => {
+it("cancels the real Files exit guard above a pane dialog without closing either the app or dialog", async () => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
   const store = createFilesDraftStore();
   store.read("a", "tf/cfg/config.cfg", "old");
@@ -268,13 +266,17 @@ it("cancels the real Files exit guard above the designer without closing either 
       "div",
       null,
       guard.modal,
-      h(CrosshairDesigner, {
-        open: true,
-        initial: defaultCrosshairDesign(),
-        color: null,
-        onSave: applyPane,
-        onClose: closePane,
-      }),
+      h(
+        Modal,
+        {
+          open: true,
+          title: "Pane dialog",
+          testId: "crosshair-designer",
+          onClose: closePane,
+          onDefaultAction: applyPane,
+        },
+        h("button", { type: "button" }, "Save"),
+      ),
     );
   }
   await act(async () => root.render(h(Harness)));

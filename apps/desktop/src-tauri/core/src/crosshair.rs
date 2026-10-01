@@ -47,6 +47,25 @@ const SHAPES: [&str; 9] = [
     "execs-ring-cross",
 ];
 
+/// TF2's own choices, usable as the base or as a per-weapon override inside a
+/// pack. `tf-default` keeps the weapon's own Valve script (the pack does not
+/// ship one for it); `tf-crosshair1`..`7` point the weapon script at Valve's
+/// `vgui/crosshairs/crosshairN` material, so no Valve art is copied.
+pub const TF_DEFAULT_CROSSHAIR: &str = "tf-default";
+const TF_SPRITE_PREFIX: &str = "tf-crosshair";
+
+/// The Valve material stem (`crosshair3`) a `tf-crosshair3` choice names.
+pub fn valve_crosshair_stem(name: &str) -> Option<&str> {
+    let stem = name.strip_prefix("tf-")?;
+    let number = stem.strip_prefix("crosshair")?;
+    (number.len() == 1 && ('1'..='7').contains(&number.chars().next()?)).then_some(stem)
+}
+
+/// Any TF2-owned choice: never a library entry, never a pack material.
+pub fn is_valve_crosshair_choice(name: &str) -> bool {
+    name == TF_DEFAULT_CROSSHAIR || valve_crosshair_stem(name).is_some()
+}
+
 /// Names must survive VPK paths, VMT text, and material lookups unescaped.
 pub fn valid_crosshair_name(name: &str) -> bool {
     (1..=64).contains(&name.len())
@@ -236,6 +255,23 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
+    deactivate_crosshairs_with_stock_to(profiles, root, id, None, running)
+}
+
+/// Deactivate the pack and publish `stock` (TF2's own crosshair file and size)
+/// in the same transaction. `None` restores the stock choice saved with the
+/// pack. The chosen settings become the pack's remembered stock choice.
+pub fn deactivate_crosshairs_with_stock_to<I, S>(
+    profiles: &Path,
+    root: &Path,
+    id: &str,
+    stock_choice: Option<crate::profile::CrosshairStockSettings>,
+    running: I,
+) -> Result<ProfileDetail, ProfileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
     let running: Vec<String> = running.into_iter().map(|s| s.as_ref().to_owned()).collect();
     refuse_if_running_among(&running)?;
     let manifest = load_manifest(profiles, id)?;
@@ -274,11 +310,11 @@ where
     } else {
         GAMEPLAY_VANILLA_PATH
     };
-    let mut cfg = crate::apply::current_managed_bytes(profiles, root, &manifest, path)?;
+    let cfg = crate::apply::current_managed_bytes(profiles, root, &manifest, path)?;
     crate::managed_cfg::validate_quotes(&cfg)?;
-    let stock = record
-        .stock
+    let stock = stock_choice
         .clone()
+        .or_else(|| record.stock.clone())
         .unwrap_or(crate::profile::CrosshairStockSettings {
             file: String::new(),
             scale: 32,
@@ -288,13 +324,28 @@ where
         stock: stock.clone(),
         library_names: None,
     })?;
-    cfg.extend_from_slice(
-        format!(
-            "\ncl_crosshair_file \"{}\"\ncl_crosshair_scale {}\n",
-            stock.file, stock.scale
-        )
-        .as_bytes(),
+    // Replace the crosshair lines rather than appending another copy; the
+    // colour carries over exactly as the managed cfg already has it.
+    let mut submitted = format!(
+        "cl_crosshair_file \"{}\"\ncl_crosshair_scale {}\n",
+        stock.file, stock.scale
     );
+    for name in [
+        "cl_crosshair_red",
+        "cl_crosshair_green",
+        "cl_crosshair_blue",
+    ] {
+        if let Some(value) =
+            crate::managed_cfg::scalar(&cfg, name).and_then(|v| v.parse::<u8>().ok())
+        {
+            submitted.push_str(&format!("{name} {value}\n"));
+        }
+    }
+    let cfg = crate::managed_cfg::merge_scope(
+        &cfg,
+        submitted.as_bytes(),
+        crate::managed_cfg::ManagedCfgScope::Crosshair,
+    )?;
     prepared.push((path.to_owned(), cfg));
     let puts: Vec<_> = prepared
         .iter()
@@ -311,6 +362,9 @@ where
         |manifest| {
             if let Some(record) = &mut manifest.crosshair {
                 record.inactive = true;
+                if stock_choice.is_some() {
+                    record.stock = Some(stock.clone());
+                }
             }
             Ok(())
         },
@@ -454,7 +508,10 @@ where
                 "Crosshair name {name} must be 1-64 lowercase letters, digits, - or _."
             )));
         }
-        if SHAPES.contains(&name.as_str()) {
+        if SHAPES.contains(&name.as_str())
+            || is_valve_crosshair_choice(name)
+            || name.starts_with(TF_SPRITE_PREFIX)
+        {
             return Err(ProfileError::Io(format!(
                 "Crosshair name {name} is reserved for a built-in shape."
             )));
@@ -492,8 +549,17 @@ where
             .ok_or_else(|| ProfileError::Io("The crosshair library byte count overflowed.".into()))
     })?;
     let mut needed: BTreeMap<String, ResolvedAsset> = BTreeMap::new();
+    // TF2's own sprites stay Valve's materials; only their real dimensions are
+    // needed so the weapon script maps the whole texture.
+    let mut valve_dimensions: BTreeMap<String, (u32, u32)> = BTreeMap::new();
     for name in &referenced {
-        if needed.contains_key(*name) {
+        if let Some(stem) = valve_crosshair_stem(name) {
+            if !valve_dimensions.contains_key(stem) {
+                valve_dimensions.insert(stem.to_owned(), valve_sprite_dimensions(tf2_root, stem)?);
+            }
+            continue;
+        }
+        if *name == TF_DEFAULT_CROSSHAIR || needed.contains_key(*name) {
             continue;
         }
         let resolved = if SHAPES.contains(name) {
@@ -599,6 +665,8 @@ where
     }
 
     let mut patched_stems = BTreeSet::new();
+    // Every script the source offered, patched or deliberately left as Valve's.
+    let mut resolved_stems = BTreeSet::new();
     let mut failed_scripts: Vec<String> = Vec::new();
     for (script, body) in scripts {
         let base = script.rsplit('/').next().unwrap_or(script);
@@ -606,26 +674,43 @@ where
             .strip_suffix(".txt")
             .or_else(|| base.strip_suffix(".ctx"))
             .unwrap_or(base);
+        if !resolved_stems.insert(stem.to_string()) {
+            return Err(ProfileError::Io(format!(
+                "The local TF2 VPK has more than one source script for {stem}. Crosshairs were not applied."
+            )));
+        }
         let used = assignments
             .get(stem)
             .cloned()
             .unwrap_or_else(|| shape.to_string());
-        let (width, height) = dimensions
-            .get(&used)
-            .copied()
-            .unwrap_or((CROSSHAIR_SIZE, CROSSHAIR_SIZE));
-        let patched = match patch_crosshair_script(body, &used, width, height) {
+        // The weapon keeps TF2's own script and crosshair; the pack omits it.
+        if used == TF_DEFAULT_CROSSHAIR {
+            continue;
+        }
+        let (material, (width, height)) = match valve_crosshair_stem(&used) {
+            Some(stem) => (
+                format!("vgui/crosshairs/{stem}"),
+                valve_dimensions
+                    .get(stem)
+                    .copied()
+                    .unwrap_or((CROSSHAIR_SIZE, CROSSHAIR_SIZE)),
+            ),
+            None => (
+                pack_material(&used),
+                dimensions
+                    .get(&used)
+                    .copied()
+                    .unwrap_or((CROSSHAIR_SIZE, CROSSHAIR_SIZE)),
+            ),
+        };
+        let patched = match patch_crosshair_script_material(body, &material, width, height) {
             Ok(patched) => patched,
             Err(err) => {
                 failed_scripts.push(format!("{script}: {err}"));
                 continue;
             }
         };
-        if !patched_stems.insert(stem.to_string()) {
-            return Err(ProfileError::Io(format!(
-                "The local TF2 VPK has more than one source script for {stem}. Crosshairs were not applied."
-            )));
-        }
+        patched_stems.insert(stem.to_string());
         prepared_files.push((
             format!("tf/custom/{EXECS_CROSSHAIRS_PACK}/scripts/{stem}.txt"),
             patched.into_bytes(),
@@ -639,7 +724,7 @@ where
     }
     let unbuilt: Vec<_> = assignments
         .keys()
-        .filter(|stem| !patched_stems.contains(*stem))
+        .filter(|stem| !resolved_stems.contains(*stem))
         .cloned()
         .collect();
     if !unbuilt.is_empty() {
@@ -997,6 +1082,37 @@ fn vtf_header_dimensions(bytes: &[u8]) -> (u32, u32) {
     }
 }
 
+/// The largest imported VTF edge. Crosshair sprites are small; the weapon
+/// script maps the whole texture, so the header must describe it exactly.
+const MAX_IMPORTED_VTF_DIMENSION: u32 = 512;
+
+/// Decode a player-picked VTF for its preview, with the same checks a build
+/// applies to a library VTF.
+pub fn preview_library_vtf(bytes: &[u8]) -> Result<StockCrosshairSprite, ProfileError> {
+    if bytes.len() > MAX_STORED_CROSSHAIR_BYTES as usize {
+        return Err(ProfileError::Io(format!(
+            "That VTF is larger than {} MiB.",
+            MAX_STORED_CROSSHAIR_BYTES / (1024 * 1024)
+        )));
+    }
+    if bytes.len() < 80 || &bytes[0..4] != b"VTF\0" {
+        return Err(ProfileError::Io("That is not a VTF file.".into()));
+    }
+    let decoded = crate::vtf_read::decode_vtf_frame0(bytes)
+        .map_err(|err| ProfileError::Io(format!("That VTF could not be read: {err}")))?;
+    if decoded.width > MAX_IMPORTED_VTF_DIMENSION || decoded.height > MAX_IMPORTED_VTF_DIMENSION {
+        return Err(ProfileError::Io(format!(
+            "That VTF is {} × {}; crosshairs can be at most {MAX_IMPORTED_VTF_DIMENSION} × {MAX_IMPORTED_VTF_DIMENSION}.",
+            decoded.width, decoded.height
+        )));
+    }
+    Ok(StockCrosshairSprite {
+        width: decoded.width,
+        height: decoded.height,
+        rgba: decoded.rgba,
+    })
+}
+
 /// Read a previously-applied pack VTF back out of the exclusive store,
 /// verbatim — the pack itself is the byte store for library entries.
 pub fn stored_pack_crosshair(profiles_dir: &Path, profile_id: &str, name: &str) -> Option<Vec<u8>> {
@@ -1213,13 +1329,58 @@ pub fn patch_crosshair_script(
     width: u32,
     height: u32,
 ) -> Result<String, String> {
+    patch_crosshair_script_material(text, &pack_material(shape), width, height)
+}
+
+fn pack_material(name: &str) -> String {
+    format!("vgui/replay/thumbnails/{name}")
+}
+
+/// Point every crosshair block of a weapon script at `material`, mapping the
+/// whole `width` × `height` texture. The engine draws the crosshair at those
+/// dimensions × `cl_crosshair_scale` / 32 screen pixels.
+pub fn patch_crosshair_script_material(
+    text: &str,
+    material: &str,
+    width: u32,
+    height: u32,
+) -> Result<String, String> {
     let mut map = parse_vdf(text)?;
-    let material = format!("vgui/replay/thumbnails/{shape}");
-    let patched = patch_crosshair_blocks(&mut map, &material, width, height);
+    let patched = patch_crosshair_blocks(&mut map, material, width, height);
     if patched == 0 {
-        ensure_crosshair_block(&mut map, &material, width, height);
+        ensure_crosshair_block(&mut map, material, width, height);
     }
     Ok(serialize_vdf(&map))
+}
+
+/// Width and height of Valve's `vgui/crosshairs/<stem>` sprite from the
+/// player's own tf2_textures_dir.vpk. Only the VTF header is used.
+fn valve_sprite_dimensions(tf2_root: &Path, stem: &str) -> Result<(u32, u32), ProfileError> {
+    let vpk = tf2_root.join("tf").join("tf2_textures_dir.vpk");
+    let wanted = format!("materials/vgui/crosshairs/{stem}.vtf");
+    let keep = |rel: &str| rel.eq_ignore_ascii_case(&wanted);
+    let archive = read_vpk_dir_file_filtered(&vpk, &keep).map_err(|err| {
+        ProfileError::Io(format!(
+            "Could not read TF2's {stem} crosshair from tf2_textures_dir.vpk: {}",
+            err.message()
+        ))
+    })?;
+    let bytes = archive
+        .files
+        .iter()
+        .find(|(path, _)| path.eq_ignore_ascii_case(&wanted))
+        .map(|(_, bytes)| bytes)
+        .ok_or_else(|| {
+            ProfileError::Io(format!(
+                "TF2's {stem} crosshair is missing from tf2_textures_dir.vpk. Verify TF2's files."
+            ))
+        })?;
+    if bytes.len() < 80 || &bytes[0..4] != b"VTF\0" {
+        return Err(ProfileError::Io(format!(
+            "TF2's {stem} crosshair is not a valid VTF file. Verify TF2's files."
+        )));
+    }
+    Ok(vtf_header_dimensions(bytes))
 }
 
 fn patch_crosshair_blocks(map: &mut VdfMap, material: &str, width: u32, height: u32) -> usize {
@@ -2000,6 +2161,58 @@ mod tests {
         assert!(!tf2
             .join("tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt")
             .exists());
+
+        // TF2's own sprites inside a pack: the real sprite bytes, copied into
+        // the isolated root, and every weapon script but the default one.
+        assert_eq!(
+            valve_sprite_dimensions(&install, "crosshair3").unwrap(),
+            (64, 64)
+        );
+        let real = read_vpk_dir_file_filtered(&textures, &|rel| {
+            rel.to_ascii_lowercase()
+                .starts_with("materials/vgui/crosshairs/")
+        })
+        .unwrap();
+        std::fs::write(
+            tf2.join("tf/tf2_textures_dir.vpk"),
+            write_vpk_v2(&real.files),
+        )
+        .unwrap();
+        let mut assignments = BTreeMap::new();
+        assignments.insert("tf_weapon_scattergun".to_string(), "dot".to_string());
+        assignments.insert(
+            "tf_weapon_bat".to_string(),
+            TF_DEFAULT_CROSSHAIR.to_string(),
+        );
+        apply_crosshairs_configured_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "tf-crosshair3",
+            &assignments,
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            Some(&CrosshairBuildSettings {
+                scale: 32,
+                library_names: Some(Vec::new()),
+                stock: crate::profile::CrosshairStockSettings {
+                    file: "crosshair3".into(),
+                    scale: 32,
+                },
+            }),
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        let pack = tf2.join("tf/custom/execs-crosshairs/scripts");
+        assert!(!pack.join("tf_weapon_bat.txt").exists());
+        let minigun = std::fs::read_to_string(pack.join("tf_weapon_minigun.txt")).unwrap();
+        assert!(minigun.contains("vgui/crosshairs/crosshair3"));
+        let scattergun = std::fs::read_to_string(pack.join("tf_weapon_scattergun.txt")).unwrap();
+        assert!(scattergun.contains("vgui/replay/thumbnails/dot"));
+
         assert_eq!(
             crate::hash::sha256_hex(&std::fs::read(misc).unwrap()),
             hashes[0]
@@ -2084,6 +2297,273 @@ mod tests {
             .join("tf/custom/execs-crosshairs/materials/vgui/replay/thumbnails/dot.vtf")
             .exists());
         cleanup(&root);
+    }
+
+    /// A tf2_textures_dir.vpk holding Valve-style stock crosshair sprites.
+    fn write_stock_textures(tf2: &Path, sprites: &[(&str, u32)]) {
+        let mut files = BTreeMap::new();
+        for (stem, size) in sprites {
+            let pixels = vec![255u8; (size * size * 4) as usize];
+            files.insert(
+                format!("materials/vgui/crosshairs/{stem}.vtf"),
+                encode_vtf_bgra8888(&pixels, *size, *size).unwrap(),
+            );
+        }
+        std::fs::write(tf2.join("tf/tf2_textures_dir.vpk"), write_vpk_v2(&files)).unwrap();
+    }
+
+    fn crosshair_block(script: &str) -> (String, String, String) {
+        let parsed = parse_vdf(script).unwrap();
+        let block = parsed
+            .get("WeaponData")
+            .and_then(VdfValue::as_obj)
+            .and_then(|weapon| weapon.get("TextureData"))
+            .and_then(VdfValue::as_obj)
+            .and_then(|texture| texture.get("crosshair"))
+            .and_then(VdfValue::as_obj)
+            .unwrap();
+        let field = |name: &str| {
+            block
+                .get(name)
+                .and_then(VdfValue::as_str)
+                .unwrap()
+                .to_owned()
+        };
+        (field("file"), field("width"), field("height"))
+    }
+
+    #[test]
+    fn tf2_sprites_build_as_valve_materials_and_default_weapons_keep_their_script() {
+        let (root, tf2, id) = setup();
+        write_stock_textures(&tf2, &[("crosshair3", 64), ("crosshair5", 32)]);
+        let profiles = root.join("profiles");
+        let mut scripts = BTreeMap::new();
+        for stem in [
+            "tf_weapon_scattergun",
+            "tf_weapon_bat",
+            "tf_weapon_pistol_scout",
+        ] {
+            scripts.insert(format!("scripts/{stem}.ctx"), sample_script());
+        }
+        let mut assignments = BTreeMap::new();
+        assignments.insert("tf_weapon_bat".into(), TF_DEFAULT_CROSSHAIR.into());
+        assignments.insert("tf_weapon_pistol_scout".into(), "tf-crosshair5".into());
+        let settings = CrosshairBuildSettings {
+            scale: 40,
+            stock: crate::profile::CrosshairStockSettings {
+                file: "crosshair3".into(),
+                scale: 32,
+            },
+            library_names: Some(Vec::new()),
+        };
+        let detail = apply_crosshairs_configured_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "tf-crosshair3",
+            &assignments,
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            Some(&settings),
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        let record = detail.crosshair.unwrap();
+        assert_eq!(record.shape, "tf-crosshair3");
+        assert!(record.library.is_empty());
+        let pack = tf2.join("tf/custom/execs-crosshairs");
+        let scattergun =
+            std::fs::read_to_string(pack.join("scripts/tf_weapon_scattergun.txt")).unwrap();
+        assert_eq!(
+            crosshair_block(&scattergun),
+            (
+                "vgui/crosshairs/crosshair3".into(),
+                "64".into(),
+                "64".into()
+            )
+        );
+        let pistol =
+            std::fs::read_to_string(pack.join("scripts/tf_weapon_pistol_scout.txt")).unwrap();
+        assert_eq!(
+            crosshair_block(&pistol),
+            (
+                "vgui/crosshairs/crosshair5".into(),
+                "32".into(),
+                "32".into()
+            )
+        );
+        // The Bat keeps Valve's own script and crosshair; no Valve art is copied.
+        assert!(!pack.join("scripts/tf_weapon_bat.txt").exists());
+        assert!(!pack.join("materials/vgui/crosshairs").exists());
+        assert!(!pack
+            .join("materials/vgui/replay/thumbnails/tf-crosshair3.vtf")
+            .exists());
+
+        // The export carries the record and imports without a material pair.
+        let zip = root.join("valve.zip");
+        crate::zip::export_profile_to(&profiles, &tf2, &id, &zip).unwrap();
+        let imported = crate::zip::import_profile_from(&profiles, &tf2, &zip, unlocked()).unwrap();
+        let imported_id = &imported
+            .profiles
+            .iter()
+            .find(|profile| profile.id != id)
+            .unwrap()
+            .id;
+        let imported = load_manifest(&profiles, imported_id).unwrap();
+        assert_eq!(imported.crosshair.unwrap().assignments, assignments);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn a_default_base_ships_only_the_overridden_weapons() {
+        let (root, tf2, id) = setup();
+        let mut scripts = BTreeMap::new();
+        for stem in ["tf_weapon_scattergun", "tf_weapon_bat"] {
+            scripts.insert(format!("scripts/{stem}.ctx"), sample_script());
+        }
+        let mut assignments = BTreeMap::new();
+        assignments.insert("tf_weapon_scattergun".into(), "dot".into());
+        apply_crosshairs_with_scripts(
+            &root.join("profiles"),
+            &tf2,
+            &id,
+            TF_DEFAULT_CROSSHAIR,
+            &assignments,
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        let pack = tf2.join("tf/custom/execs-crosshairs");
+        assert!(pack.join("scripts/tf_weapon_scattergun.txt").is_file());
+        assert!(!pack.join("scripts/tf_weapon_bat.txt").exists());
+        assert!(pack
+            .join("materials/vgui/replay/thumbnails/dot.vtf")
+            .is_file());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn a_missing_valve_sprite_refuses_the_build_and_tf2_names_stay_reserved() {
+        let (root, tf2, id) = setup();
+        let profiles = root.join("profiles");
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+        let error = apply_crosshairs_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "tf-crosshair2",
+            &BTreeMap::new(),
+            None,
+            None,
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(
+            error.message().contains("crosshair2"),
+            "{}",
+            error.message()
+        );
+        assert!(pack_paths(&profiles, &id).unwrap().is_empty());
+
+        let mut library = BTreeMap::new();
+        library.insert(
+            "tf-crosshair2".to_string(),
+            CrosshairAsset {
+                format: CrosshairAssetFormat::Rgba,
+                bytes: vec![0; (CROSSHAIR_SIZE * CROSSHAIR_SIZE * 4) as usize],
+            },
+        );
+        let error = apply_crosshairs_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            None,
+            &library,
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(error.message().contains("reserved"), "{}", error.message());
+        assert_eq!(valve_crosshair_stem("tf-crosshair8"), None);
+        assert_eq!(valve_crosshair_stem("tf-crosshair7"), Some("crosshair7"));
+        cleanup(&root);
+    }
+
+    #[test]
+    fn deactivating_with_a_tf2_choice_replaces_the_crosshair_lines_in_one_write() {
+        let (root, tf2, id) = setup();
+        let profiles = root.join("profiles");
+        let mut scripts = BTreeMap::new();
+        scripts.insert("scripts/tf_weapon_scattergun.ctx".into(), sample_script());
+        apply_crosshairs_with_scripts(
+            &profiles,
+            &tf2,
+            &id,
+            "cross",
+            &BTreeMap::new(),
+            None,
+            Some([10, 20, 30]),
+            &BTreeMap::new(),
+            None,
+            &scripts,
+            unlocked(),
+        )
+        .unwrap();
+        let choice = crate::profile::CrosshairStockSettings {
+            file: "crosshair6".into(),
+            scale: 44,
+        };
+        let detail = deactivate_crosshairs_with_stock_to(
+            &profiles,
+            &tf2,
+            &id,
+            Some(choice.clone()),
+            unlocked(),
+        )
+        .unwrap();
+        let record = detail.crosshair.unwrap();
+        assert!(record.inactive);
+        assert_eq!(record.stock, Some(choice));
+        let cfg = std::fs::read_to_string(tf2.join("tf/cfg/execs_gameplay.cfg")).unwrap();
+        assert_eq!(cfg.matches("cl_crosshair_file").count(), 1, "{cfg}");
+        assert_eq!(cfg.matches("cl_crosshair_scale").count(), 1, "{cfg}");
+        assert!(cfg.contains("cl_crosshair_file \"crosshair6\""));
+        assert!(cfg.contains("cl_crosshair_scale 44"));
+        assert!(cfg.contains("cl_crosshair_red 10"));
+        assert!(cfg.contains("cl_crosshair_blue 30"));
+        assert!(!tf2
+            .join("tf/custom/execs-crosshairs/scripts/tf_weapon_scattergun.txt")
+            .exists());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn a_picked_vtf_previews_with_its_own_dimensions_and_bounds() {
+        let pixels = vec![255u8; 32 * 16 * 4];
+        let vtf = encode_vtf_bgra8888(&pixels, 32, 16).unwrap();
+        let sprite = preview_library_vtf(&vtf).unwrap();
+        assert_eq!((sprite.width, sprite.height), (32, 16));
+        assert!(preview_library_vtf(b"PNG not a vtf").is_err());
+        let large = encode_vtf_bgra8888(&vec![0u8; 1024 * 8 * 4], 1024, 8).unwrap();
+        assert!(preview_library_vtf(&large)
+            .unwrap_err()
+            .message()
+            .contains("at most 512"));
     }
 
     #[test]

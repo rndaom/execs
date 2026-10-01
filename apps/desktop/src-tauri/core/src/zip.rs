@@ -1736,10 +1736,13 @@ fn validate_feature_payloads(manifest: &ProfileZipManifest) -> Result<(), Profil
                 ));
             }
         }
-        let names = (!record.shape.is_empty())
-            .then_some(record.shape.as_str())
-            .into_iter()
-            .chain(record.library.keys().map(String::as_str));
+        // TF2's own choices are Valve materials (or no script at all); only
+        // pack-owned names carry a material pair.
+        let names = (!record.shape.is_empty()
+            && !crate::crosshair::is_valve_crosshair_choice(&record.shape))
+        .then_some(record.shape.as_str())
+        .into_iter()
+        .chain(record.library.keys().map(String::as_str));
         for name in names {
             if !crate::crosshair::valid_crosshair_name(name)
                 || !material(name, "vtf")
@@ -1757,7 +1760,11 @@ fn validate_feature_payloads(manifest: &ProfileZipManifest) -> Result<(), Profil
                 "crosshair record has no verified weapon scripts",
             ));
         }
-        for stem in record.assignments.keys() {
+        for (stem, choice) in &record.assignments {
+            // A weapon kept on TF2's default has no script in the pack.
+            if choice == crate::crosshair::TF_DEFAULT_CROSSHAIR {
+                continue;
+            }
             if !paths.contains(format!("{prefix}scripts/{stem}.txt").as_str()) {
                 return Err(invalid_zip(format!(
                     "crosshair record has no verified weapon script for {stem}"

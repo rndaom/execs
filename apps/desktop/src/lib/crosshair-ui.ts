@@ -270,7 +270,11 @@ export function seedCrosshairDraft(record: CrosshairRecord | null | undefined): 
       library[rename(name)] = { format: format === "rgba" ? "rgba" : "vtf", bytes: null };
     }
   }
-  const known = (value: string) => isBuiltinCrosshairShape(value) || value in library;
+  const known = (value: string) =>
+    isBuiltinCrosshairShape(value) ||
+    isTf2CrosshairChoice(value) ||
+    value.startsWith("shape-") ||
+    value in library;
   const raw = renameSelection(record?.shape ?? "cross");
   const shape = known(raw) ? raw : "cross";
   const assignments: Record<string, CrosshairShape> = {};
@@ -288,15 +292,43 @@ export function seedCrosshairDraft(record: CrosshairRecord | null | undefined): 
   return { shape, assignments, customRgba: null, color, library, design: record?.design ?? null };
 }
 
+const byName = <T>([a]: [string, T], [b]: [string, T]) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** execs shapes ride in the pack under `shape-` names but are never draft content. */
+function isPresetName(name: string): boolean {
+  return name.startsWith("shape-");
+}
+
 /**
- * Whether the builder holds anything an apply would write.
- *
- * Both sides come from the same seed, so a plain serialization is enough: a
- * new shape, an override, a tint, a designer save, an imported PNG or a
- * community entry all show up as a difference from the installed record.
+ * The draft as content, so two drafts that would build the same pack compare
+ * equal. The native record keeps names sorted while a draft keeps them in the
+ * order they were added; execs shapes left over from an earlier build are
+ * redrawn on demand; an exception equal to the main crosshair is none.
+ */
+export function serializeCrosshairDraft(draft: CrosshairDraft): string {
+  return JSON.stringify({
+    shape: draft.shape,
+    assignments: Object.entries(draft.assignments)
+      .filter(([, value]) => value !== draft.shape)
+      .sort(byName),
+    customRgba: draft.customRgba,
+    color: draft.color,
+    library: Object.entries(draft.library)
+      .filter(([name]) => !isPresetName(name))
+      .sort(byName)
+      .map(([name, entry]) => [name, entry.format, entry.bytes]),
+    design: draft.design,
+  });
+}
+
+/**
+ * Whether the builder holds anything an apply would write: a new shape, an
+ * override, a tint, a designer save, an imported image or a library entry.
+ * Compared as content, so a confirmed build always reads as clean once the
+ * saved record comes back.
  */
 export function crosshairDraftDirty(draft: CrosshairDraft, seeded: CrosshairDraft): boolean {
-  return JSON.stringify(draft) !== JSON.stringify(seeded);
+  return serializeCrosshairDraft(draft) !== serializeCrosshairDraft(seeded);
 }
 
 function clampChannel(value: number): number {
@@ -492,5 +524,107 @@ export function previewCrosshairRecord(): CrosshairRecord {
     id: EXECS_CROSSHAIRS_PACK,
     shape: "cross",
     assignments: { tf_weapon_scattergun: "dot" },
+  };
+}
+
+/* ---- TF2's own crosshairs ------------------------------------------------
+ * `tf-default` is "each weapon's own crosshair" and `tf-crosshair1`–`7` are
+ * Valve's sprites. With no custom pack running they are just
+ * `cl_crosshair_file`; inside a pack the build points weapon scripts at the
+ * same Valve materials, so they can mix with custom crosshairs per weapon. */
+
+export const TF2_DEFAULT_CHOICE = "tf-default";
+export const TF2_CROSSHAIR_CHOICES = [
+  TF2_DEFAULT_CHOICE,
+  "tf-crosshair1",
+  "tf-crosshair2",
+  "tf-crosshair3",
+  "tf-crosshair4",
+  "tf-crosshair5",
+  "tf-crosshair6",
+  "tf-crosshair7",
+] as const;
+/** A material from another pack or HUD in `cl_crosshair_file`, kept as is. */
+export const EXTERNAL_CROSSHAIR_CHOICE = "tf-external";
+
+export function isTf2CrosshairChoice(name: string): boolean {
+  return (TF2_CROSSHAIR_CHOICES as readonly string[]).includes(name);
+}
+
+/** The `cl_crosshair_file` value a TF2 choice stands for. */
+export function tf2CrosshairFile(choice: string): string | null {
+  if (choice === TF2_DEFAULT_CHOICE) return "";
+  return isTf2CrosshairChoice(choice) ? choice.slice(3) : null;
+}
+
+/** The TF2 choice for a `cl_crosshair_file` value; an unknown material is external. */
+export function tf2ChoiceForFile(file: string): string {
+  const normalized = file.trim().toLowerCase();
+  if (normalized === "") return TF2_DEFAULT_CHOICE;
+  const choice = `tf-${normalized}`;
+  return isTf2CrosshairChoice(choice) ? choice : EXTERNAL_CROSSHAIR_CHOICE;
+}
+
+/** Overrides that actually differ from the base crosshair. */
+export function effectiveAssignments(draft: Pick<CrosshairDraft, "shape" | "assignments">) {
+  return Object.fromEntries(
+    Object.entries(draft.assignments).filter(([, value]) => value !== draft.shape),
+  );
+}
+
+function libraryContent(draft: CrosshairDraft): string {
+  const content = JSON.parse(serializeCrosshairDraft(draft));
+  return JSON.stringify([content.library, content.design, content.customRgba]);
+}
+
+/** New designs or imports that exist only in this draft so far. */
+export function crosshairLibraryDirty(draft: CrosshairDraft, seeded: CrosshairDraft): boolean {
+  return libraryContent(draft) !== libraryContent(seeded);
+}
+
+/**
+ * TF2 alone can draw this draft: one of its own crosshairs for every weapon
+ * and nothing new to keep. Anything else needs the custom pack.
+ */
+export function crosshairNeedsPack(draft: CrosshairDraft, seeded: CrosshairDraft): boolean {
+  const tf2Base = isTf2CrosshairChoice(draft.shape) || draft.shape === EXTERNAL_CROSSHAIR_CHOICE;
+  return (
+    !tf2Base ||
+    Object.keys(effectiveAssignments(draft)).length > 0 ||
+    crosshairLibraryDirty(draft, seeded)
+  );
+}
+
+export type CrosshairPlan =
+  /** Nothing to write, or only cvars that autosave. */
+  | { kind: "none" }
+  /** Build (or rebuild) the custom pack. */
+  | { kind: "build" }
+  /** Turn the pack off and let TF2 draw `file` itself. */
+  | { kind: "deactivate"; file: string };
+
+/**
+ * What applying the draft takes, given whether the custom pack is live.
+ * Size and colour are cvars and autosave in every case.
+ */
+export function planCrosshair({
+  draft,
+  seeded,
+  packLive,
+  stockFile,
+}: {
+  draft: CrosshairDraft;
+  seeded: CrosshairDraft;
+  packLive: boolean;
+  /** The live `cl_crosshair_file`, kept when the draft names an external material. */
+  stockFile: string;
+}): CrosshairPlan {
+  const needsPack = crosshairNeedsPack(draft, seeded);
+  if (!packLive) return needsPack ? { kind: "build" } : { kind: "none" };
+  if (!crosshairDraftDirty(draft, seeded)) return { kind: "none" };
+  if (needsPack) return { kind: "build" };
+  return {
+    kind: "deactivate",
+    file: tf2CrosshairFile(draft.shape) ?? stockFile,
   };
 }

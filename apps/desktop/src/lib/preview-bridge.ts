@@ -1050,13 +1050,16 @@ export function createPreviewApi(state: PreviewState): Api {
         scale: settings?.scale,
         stock: settings?.stock,
         shape,
-        assignments,
+        // Native records are BTreeMaps: keep the same sorted order here so
+        // the preview exercises the same comparisons as the app.
+        assignments: Object.fromEntries(
+          Object.entries(assignments).sort(([a], [b]) => a.localeCompare(b)),
+        ),
         color: color ?? null,
         library: Object.fromEntries(
-          names.map((name) => [
-            name,
-            library?.[name]?.format ?? crosshair?.library?.[name] ?? "rgba",
-          ]),
+          [...names]
+            .sort()
+            .map((name) => [name, library?.[name]?.format ?? crosshair?.library?.[name] ?? "rgba"]),
         ),
         design: design ?? null,
       };
@@ -1101,9 +1104,16 @@ export function createPreviewApi(state: PreviewState): Api {
       crosshair = null;
       return requireDetail();
     },
-    async deactivateCrosshairs() {
+    async previewCrosshairVtf() {
+      throw notInPreview("VTF crosshair previews");
+    },
+    // Fixture data: a common resolution so the preview can be judged.
+    async getGameResolution() {
+      return { width: 1920, height: 1080, windowed: false };
+    },
+    async deactivateCrosshairs(stock) {
       if (crosshair) {
-        crosshair = { ...crosshair, inactive: true };
+        crosshair = { ...crosshair, inactive: true, ...(stock ? { stock } : {}) };
         const path =
           requireDetail().layer === "comfig"
             ? "tf/cfg/overrides/execs_gameplay.cfg"

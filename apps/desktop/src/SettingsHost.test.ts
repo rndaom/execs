@@ -131,6 +131,7 @@ beforeEach(() => {
     getStockCrosshairSprites: vi.fn(async () => ({})),
     getCrosshairContentSources: vi.fn(async () => ({ hits: {}, incomplete: [] })),
     getCrosshairSourceStatus: vi.fn(async () => ({ state: "none" })),
+    getGameResolution: vi.fn(async () => null),
     getHudCatalog: vi.fn(async () => ({ entries: [], warning: null })),
     getHudState: vi.fn(async () => ({ profileId: "A", installed: null, schemaSupported: false })),
     getHudStats: vi.fn(async () => ({ stats: {}, warning: null })),

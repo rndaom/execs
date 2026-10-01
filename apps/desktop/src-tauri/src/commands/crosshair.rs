@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use execs_core::{CrosshairAsset, ProfileDetail, StockCrosshairSprite};
 
-use super::shared::{active_manifest, with_profile, with_root};
+use super::shared::{active_manifest, blocking, with_profile, with_root};
 use crate::error::CommandError;
 use crate::WriteGate;
 
@@ -143,18 +143,37 @@ pub async fn remove_crosshairs(
     with_profile(|root, profile_id| Ok(execs_core::remove_crosshairs(&root, &profile_id)?)).await
 }
 
+/// Turn the custom pack off. `stock` publishes TF2's own crosshair file and
+/// size in the same transaction; without it the pack's saved choice returns.
 #[tauri::command]
 pub async fn deactivate_crosshairs(
     gate: tauri::State<'_, WriteGate>,
+    stock: Option<execs_core::profile::CrosshairStockSettings>,
 ) -> Result<ProfileDetail, CommandError> {
     let _guard = gate.lock_for_write().await?;
-    with_profile(|root, id| {
-        Ok(execs_core::crosshair::deactivate_crosshairs_to(
+    with_profile(move |root, id| {
+        Ok(execs_core::crosshair::deactivate_crosshairs_with_stock_to(
             &execs_core::profiles_dir(),
             &root,
             &id,
+            stock,
             execs_core::process_lock::live_process_names(),
         )?)
     })
     .await
+}
+
+/// Decode a VTF the player picked so it can be previewed before it joins the
+/// library. Read-only; the bytes are validated again when a pack is built.
+#[tauri::command]
+pub async fn preview_crosshair_vtf(bytes: Vec<u8>) -> Result<StockCrosshairSprite, CommandError> {
+    blocking(move || Ok(execs_core::crosshair::preview_library_vtf(&bytes)?)).await
+}
+
+/// TF2's saved video resolution, for a true-to-size crosshair preview.
+/// `None` when the setting cannot be found; nothing is written.
+#[tauri::command]
+pub async fn get_game_resolution(
+) -> Result<Option<execs_core::game_resolution::GameResolution>, CommandError> {
+    blocking(|| Ok(execs_core::game_resolution::read_game_resolution())).await
 }

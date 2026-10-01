@@ -5,6 +5,39 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Changed
+
+- The Crosshair pane is rebuilt around one picture gallery: TF2's own crosshairs, execs shapes and
+  your designs and imports sit together, with no In-game / Custom switch. TF2's own crosshairs
+  apply as soon as you pick them; anything else, or a different crosshair for some weapons, shows
+  one Build crosshair pack button. Switching back to a TF2 crosshair is one button too, and your
+  custom crosshairs stay saved.
+- The crosshair preview is true to size. It reads your TF2 resolution (or launch options, or one
+  you set) and offers Actual size, which shows the crosshair at exactly the pixels it covers on
+  your screen, Whole screen and a 4× pixel zoom, on dark, bright or split backgrounds. It also
+  shows how TF2 resamples the crosshair at sizes other than 32. Earlier versions assumed
+  1280 × 720, so the crosshair looked bigger in execs than in game at higher resolutions.
+- Per-weapon crosshairs use class tabs, each class's weapons, and the chosen weapon's crosshairs as
+  pictures beside them. No drop-down menus.
+- execs' own shapes are now the ones players commonly use: dot, cross, gap cross, gap cross with a
+  dot, circle, circle with a dot, X and an outlined cross. Each can be opened in the designer and
+  adjusted. Profiles using an earlier execs shape keep it.
+
+### Fixed
+
+- After Build crosshair pack succeeded, the Crosshair pane could keep saying the changes were not
+  in TF2 yet, however many times it was built.
+
+### Added
+
+- TF2's own crosshairs (including each weapon's default) can be used per weapon alongside custom
+  ones.
+- The crosshair designer adds rotation, smooth edges, square and triangle shapes, a gap that turns
+  a square into corner brackets, a square centre dot, and share codes you can copy and paste.
+- Import several PNG images and VTF crosshairs, each kept under its own name. Large PNGs are
+  fitted into the 64 × 64 sprite on request.
+- Quick colour swatches and a size reset in the Crosshair pane.
+
 ## [0.2.1] - 2026-09-28
 
 ### Added

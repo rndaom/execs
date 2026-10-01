@@ -799,6 +799,8 @@ pub fn run() {
             commands::crosshair::get_crosshair_source_status,
             commands::crosshair::remove_crosshairs,
             commands::crosshair::deactivate_crosshairs,
+            commands::crosshair::preview_crosshair_vtf,
+            commands::crosshair::get_game_resolution,
             commands::viewmodel::build_viewmodel_pack,
             commands::viewmodel::build_selected_viewmodel_pack,
             commands::viewmodel::import_viewmodels,

@@ -1170,66 +1170,6 @@ a:focus-visible,
     background: var(--color-ink);
   }
 
-  /* ---- Thumbnail choice grid --------------------------------------------
-     Small square pictures (crosshairs) picked by looking, not by reading.
-     Selected = the same 1.5px ring the tiles use. */
-
-  .thumb {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    border: 1px solid var(--color-edge);
-    border-radius: var(--radius-lg);
-    background: transparent;
-    padding: 8px 6px 7px;
-    transition:
-      border-color var(--motion) ease,
-      background-color var(--motion) ease,
-      box-shadow var(--motion) ease;
-  }
-
-  .thumb:not(.thumb-disabled):hover {
-    border-color: var(--color-edge-strong);
-    background: var(--color-panel);
-  }
-
-  .thumb-selected {
-    border-color: transparent;
-    box-shadow: inset 0 0 0 1.5px var(--color-brand);
-  }
-
-  .thumb-disabled {
-    cursor: not-allowed;
-    opacity: 0.4;
-  }
-
-  .thumb-art {
-    display: block;
-    width: 48px;
-    height: 48px;
-    border-radius: 0.375rem;
-    background: var(--color-bg);
-    image-rendering: pixelated;
-  }
-
-  .thumb-label {
-    display: block;
-    max-width: 100%;
-    overflow: hidden;
-    font-size: 11.5px;
-    line-height: 1.3;
-    color: var(--color-ink-muted);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .thumb-selected .thumb-label {
-    color: var(--color-ink);
-  }
-
   /* ---- Disclosure -------------------------------------------------------
      "Fine-tune…" / "Advanced" sections fold away by default. */
 
@@ -2439,4 +2379,658 @@ a:focus-visible,
 /* The screen's own wordmark waits while the startup wordmark travels to it. */
 [data-wordmark-held] {
   opacity: 0;
+}
+
+/* ---- Crosshair ---------------------------------------------------------
+   Choose on the left; see, size and colour on the right. The preview column
+   stays in view while the choices scroll. */
+@layer components {
+  .crosshair-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    align-items: start;
+    gap: 32px;
+    margin-top: 20px;
+  }
+
+  .crosshair-side {
+    min-width: 0;
+  }
+
+  @media (min-height: 700px) {
+    .crosshair-side {
+      position: sticky;
+      top: 16px;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .crosshair-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .crosshair-side {
+      position: static;
+      order: -1;
+      max-width: 480px;
+    }
+  }
+
+  /* Picture of one crosshair on the game-dark ground. */
+  .crosshair-thumb {
+    display: block;
+    flex: none;
+    border-radius: var(--radius-sm);
+    background: #121417;
+  }
+
+  .crosshair-thumb-empty {
+    display: grid;
+    width: 56px;
+    height: 56px;
+    place-items: center;
+    padding: 4px;
+    font-size: 10.5px;
+    line-height: 1.2;
+    text-align: center;
+    color: var(--color-ink-faint);
+  }
+
+  .crosshair-gallery {
+    display: grid;
+    gap: 20px;
+  }
+
+  .crosshair-gallery-group {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .crosshair-gallery-group > legend {
+    margin-bottom: 8px;
+  }
+
+  .crosshair-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+    gap: 14px 8px;
+  }
+
+  .crosshair-grid-compact {
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 10px 6px;
+  }
+
+  .crosshair-style-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 10px 6px;
+  }
+
+  .crosshair-item {
+    position: relative;
+    min-width: 0;
+  }
+
+  /* One choice: a picture on the game-dark ground with its name below. No
+     card around it; the picture itself takes the selection ring. */
+  .crosshair-choice {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+  }
+
+  .crosshair-choice-art {
+    position: relative;
+    display: grid;
+    width: 64px;
+    height: 64px;
+    flex: none;
+    place-items: center;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: #121417;
+    box-shadow: inset 0 0 0 1px var(--color-edge);
+    color: var(--color-ink-muted);
+    transition: box-shadow var(--motion) ease;
+  }
+
+  .crosshair-choice-art .crosshair-thumb {
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .crosshair-choice:hover .crosshair-choice-art {
+    box-shadow: inset 0 0 0 1px var(--color-edge-strong);
+  }
+
+  .crosshair-choice[data-selected="true"] .crosshair-choice-art,
+  .crosshair-choice[data-selected="true"]:hover .crosshair-choice-art {
+    box-shadow:
+      0 0 0 2px var(--color-bg),
+      0 0 0 3.5px var(--color-brand);
+  }
+
+  .peer:focus-visible + .crosshair-choice .crosshair-choice-art,
+  .crosshair-choice:focus-visible .crosshair-choice-art {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 4px;
+  }
+
+  button.crosshair-choice:focus-visible {
+    outline: none;
+  }
+
+  .crosshair-choice-name {
+    display: -webkit-box;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.3;
+    text-align: center;
+    color: var(--color-ink-muted);
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    transition: color var(--motion) ease;
+  }
+
+  .crosshair-choice:hover .crosshair-choice-name {
+    color: var(--color-ink);
+  }
+
+  .crosshair-choice[data-selected="true"] .crosshair-choice-name {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+
+  .crosshair-choice-sm .crosshair-choice-art {
+    width: 48px;
+    height: 48px;
+  }
+
+  .crosshair-choice-sm .crosshair-choice-name {
+    font-size: 11.5px;
+  }
+
+  .crosshair-choice-action .crosshair-choice-art {
+    border: 1px dashed var(--color-edge-strong);
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .crosshair-choice-action:hover .crosshair-choice-art {
+    border-color: var(--color-ink-faint);
+    box-shadow: none;
+    color: var(--color-ink);
+  }
+
+  .crosshair-choice-action:focus-within .crosshair-choice-art {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 4px;
+  }
+
+  /* More actions on a choice that has them; shown on hover, focus and the
+     selected choice, always reachable by keyboard. */
+  .crosshair-choice-more {
+    position: absolute;
+    top: -6px;
+    right: calc(50% - 42px);
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-pill);
+    background: var(--color-panel-raised);
+    color: var(--color-ink-muted);
+    opacity: 0;
+    transition:
+      opacity var(--motion) ease,
+      color var(--motion) ease;
+  }
+
+  .crosshair-item:hover .crosshair-choice-more,
+  .crosshair-choice-more:focus-visible,
+  .crosshair-item:has(input:checked) .crosshair-choice-more {
+    opacity: 1;
+  }
+
+  .crosshair-choice-more:hover {
+    color: var(--color-ink);
+  }
+
+  /* ---- Per weapon ---------------------------------------------------------- */
+
+  /* List and choices side by side when the column is wide enough. */
+  .crosshair-perweapon-section {
+    container-type: inline-size;
+  }
+
+  .crosshair-perweapon {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    margin-top: 8px;
+  }
+
+  .crosshair-perweapon[data-disabled] {
+    opacity: 0.5;
+  }
+
+  .crosshair-perweapon-choices {
+    border-top: 1px solid var(--color-edge);
+    padding-top: 16px;
+  }
+
+  @container (min-width: 520px) {
+    .crosshair-perweapon {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 20px;
+    }
+
+    .crosshair-perweapon-choices {
+      position: sticky;
+      top: 16px;
+      align-self: start;
+      border-top: 0;
+      border-left: 1px solid var(--color-edge);
+      padding-top: 6px;
+      padding-left: 20px;
+    }
+  }
+
+  .crosshair-editor-weapon {
+    display: flex;
+    width: 100%;
+    min-height: 46px;
+    align-items: center;
+    gap: 12px;
+    border-radius: var(--radius-md);
+    padding: 6px 10px 6px 6px;
+    font-size: 13.5px;
+    color: var(--color-ink);
+    transition: background-color var(--motion) ease;
+  }
+
+  .crosshair-editor-weapon:not(:disabled):hover {
+    background: var(--color-panel);
+  }
+
+  .crosshair-editor-weapon[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--color-brand) 9%, var(--color-panel));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand) 55%, transparent);
+  }
+
+  .crosshair-editor-current {
+    display: grid;
+    width: 64px;
+    height: 64px;
+    flex: none;
+    place-items: center;
+  }
+
+  /* ---- Preview stage ---------------------------------------------------- */
+
+  .crosshair-stage-frame {
+    position: relative;
+    display: grid;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--color-edge);
+    border-radius: var(--radius-lg);
+  }
+
+  /* Code-drawn backdrops for judging contrast; never game footage. */
+  .crosshair-scene-dark {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.04) 0 48%, transparent 48% 100%),
+      linear-gradient(135deg, #3a332d 0%, #2a2724 48%, #1b1c1e 100%);
+  }
+
+  .crosshair-scene-light {
+    background:
+      linear-gradient(180deg, transparent 0 55%, rgb(0 0 0 / 0.08) 55% 100%),
+      linear-gradient(180deg, #b9d0de 0%, #d9d4c4 55%, #c6b9a0 100%);
+  }
+
+  .crosshair-scene-mixed {
+    background: linear-gradient(90deg, #1d1d1f 0 50%, #d6d2c6 50% 100%);
+  }
+
+  /* Centred on the frame whatever its size: an enlarged crosshair crops
+     evenly around its middle, as the engine centres it on the screen. */
+  .crosshair-stage-sprite {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: block;
+    line-height: 0;
+    transform: translate(-50%, -50%);
+  }
+
+  .crosshair-stage-locator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    min-width: 20px;
+    min-height: 20px;
+    border: 1.5px solid var(--color-brand);
+    border-radius: var(--radius-pill);
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  /* The real-size magnifier in Whole screen. */
+  .crosshair-stage-loupe {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 38%;
+    aspect-ratio: 1;
+    max-width: 128px;
+    overflow: hidden;
+    border: 1px solid var(--color-brand);
+    border-radius: var(--radius-md);
+    box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+  }
+
+  .crosshair-stage-loupe-tag {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    border-radius: var(--radius-sm);
+    background: rgb(16 15 14 / 0.78);
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+  }
+
+  .crosshair-stage-hud {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .crosshair-stage-hud > span {
+    position: absolute;
+    border-radius: 2px;
+    background: rgb(255 255 255 / 0.1);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+  }
+
+  .crosshair-scene-light .crosshair-stage-hud > span {
+    background: rgb(0 0 0 / 0.12);
+  }
+
+  .crosshair-stage-hud .hud-health {
+    bottom: 5%;
+    left: 4%;
+    width: 9%;
+    height: 12%;
+  }
+
+  .crosshair-stage-hud .hud-ammo {
+    right: 4%;
+    bottom: 5%;
+    width: 11%;
+    height: 8%;
+  }
+
+  .crosshair-stage-hud .hud-timer {
+    top: 3%;
+    left: 45%;
+    width: 10%;
+    height: 6%;
+  }
+
+  .crosshair-stage-hud .hud-feed {
+    top: 4%;
+    right: 3%;
+    width: 18%;
+    height: 3.5%;
+  }
+
+  .crosshair-stage-hud .hud-feed-2 {
+    top: 9%;
+    width: 14%;
+  }
+
+  .crosshair-stage-sprite > canvas {
+    display: block;
+  }
+
+  .crosshair-stage-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.08) 1px, transparent 1px);
+    pointer-events: none;
+  }
+
+  .crosshair-stage-empty {
+    position: relative;
+    max-width: 16rem;
+    border-radius: var(--radius-md);
+    background: rgb(16 15 14 / 0.82);
+    padding: 6px 12px;
+    font-size: 13px;
+    text-align: center;
+    color: var(--color-ink-muted);
+  }
+
+  .crosshair-stage-tag {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    border-radius: var(--radius-sm);
+    background: rgb(16 15 14 / 0.78);
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+  }
+
+  .crosshair-scenes {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .crosshair-scene-choice {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .crosshair-scene-swatch {
+    display: block;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-pill);
+    transition: box-shadow var(--motion) ease;
+  }
+
+  .crosshair-scene-choice input:checked + .crosshair-scene-swatch {
+    box-shadow:
+      0 0 0 2px var(--color-bg),
+      0 0 0 3.5px var(--color-brand);
+  }
+
+  .crosshair-scene-choice input:focus-visible + .crosshair-scene-swatch {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 3px;
+  }
+
+  .crosshair-specs {
+    display: grid;
+    gap: 6px;
+    margin-top: 14px;
+    font-size: 13px;
+  }
+
+  .crosshair-specs > div {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .crosshair-specs dt {
+    color: var(--color-ink-faint);
+  }
+
+  .crosshair-specs dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--color-ink-muted);
+  }
+
+  .crosshair-link {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-ink-muted);
+    text-decoration: underline;
+    text-decoration-color: var(--color-edge-strong);
+    text-underline-offset: 3px;
+    transition: color var(--motion) ease;
+  }
+
+  .crosshair-link:hover {
+    color: var(--color-ink);
+  }
+
+  .crosshair-display-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: var(--radius-sm);
+    padding: 2px 4px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  .crosshair-display-button:hover {
+    background: var(--color-panel-raised);
+  }
+
+  .crosshair-resolution,
+  .crosshair-chip {
+    border: 1px solid var(--color-edge);
+    border-radius: var(--radius-sm);
+    padding: 3px 6px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink-muted);
+    transition:
+      border-color var(--motion) ease,
+      color var(--motion) ease;
+  }
+
+  .crosshair-resolution:hover,
+  .crosshair-chip:hover {
+    border-color: var(--color-edge-strong);
+    color: var(--color-ink);
+  }
+
+  .crosshair-resolution-selected,
+  .crosshair-chip-selected {
+    border-color: var(--color-brand);
+    color: var(--color-ink);
+  }
+
+  .crosshair-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .crosshair-swatch {
+    width: 22px;
+    height: 22px;
+    border: 1px solid rgb(0 0 0 / 0.45);
+    border-radius: var(--radius-pill);
+    transition: box-shadow var(--motion) ease;
+  }
+
+  .crosshair-swatch[aria-pressed="true"],
+  .crosshair-swatch-custom[data-custom="true"] {
+    box-shadow:
+      0 0 0 2px var(--color-bg),
+      0 0 0 3.5px var(--color-brand);
+  }
+
+  /* Any colour: a hue ring, holding the current colour when it is not one
+     of the swatches. */
+  .crosshair-swatch-custom {
+    position: relative;
+    display: grid;
+    place-items: center;
+    border-color: transparent;
+    background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  }
+
+  .crosshair-swatch-custom-dot {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--color-bg);
+    border-radius: var(--radius-pill);
+  }
+
+  .crosshair-hex {
+    display: flex;
+    width: 8.5rem;
+    min-height: 34px;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+    padding: 0 10px 0 6px;
+    font-size: 13.5px;
+    color: var(--color-ink);
+  }
+
+  .crosshair-hex:focus-within {
+    border-color: var(--color-brand);
+  }
+
+  .crosshair-hex:has(input[aria-invalid="true"]) {
+    border-color: var(--color-error);
+  }
+
+  .crosshair-hex-chip {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    border: 1px solid rgb(0 0 0 / 0.45);
+    border-radius: var(--radius-sm);
+  }
+
+  .crosshair-hue::-webkit-slider-runnable-track {
+    height: 8px;
+    background: linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red);
+  }
+
+  .crosshair-hue::-webkit-slider-thumb {
+    margin-top: -4px;
+  }
 }

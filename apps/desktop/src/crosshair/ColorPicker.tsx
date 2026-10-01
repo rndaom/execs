@@ -1,10 +1,25 @@
 import { useId, useState } from "react";
-import { Caret } from "../components/ui/Caret";
 import { hexToRgb, rgbToHex } from "../lib/color";
 import { hsvToRgb, rgbToHsv } from "../lib/crosshair-color";
 import type { CrosshairColor } from "../lib/crosshair-ui";
 
-/** RGB stays authoritative: merely opening the picker never quantizes a saved color. */
+/** Colours players commonly pick for a crosshair; TF2's default first. */
+export const CROSSHAIR_SWATCHES: readonly { name: string; rgb: CrosshairColor }[] = [
+  { name: "TF2 default", rgb: [200, 200, 200] },
+  { name: "White", rgb: [255, 255, 255] },
+  { name: "Green", rgb: [0, 255, 0] },
+  { name: "Cyan", rgb: [0, 255, 255] },
+  { name: "Yellow", rgb: [255, 255, 0] },
+  { name: "Magenta", rgb: [255, 0, 255] },
+  { name: "Red", rgb: [255, 0, 0] },
+  { name: "Orange", rgb: [255, 128, 0] },
+];
+
+/**
+ * Crosshair colour: common swatches, a custom swatch that opens a colour
+ * field, and an exact hex field. RGB stays authoritative: merely opening the
+ * field never quantizes a saved colour.
+ */
 export function ColorPicker({
   color,
   onChange,
@@ -12,6 +27,7 @@ export function ColorPicker({
 }: {
   color: CrosshairColor;
   onChange: (color: CrosshairColor) => void;
+  /** Start with the colour field closed. */
   compact?: boolean;
 }) {
   const id = useId();
@@ -22,49 +38,94 @@ export function ColorPicker({
   const hex = rgbToHex(...color);
   const invalid = entry !== null && hexToRgb(entry) === null;
   const [expanded, setExpanded] = useState(!compact);
+  const preset = CROSSHAIR_SWATCHES.some((swatch) =>
+    swatch.rgb.every((channel, index) => channel === color[index]),
+  );
   function change(h: number, s: number, v: number) {
     setLastHue(h);
     setEntry(null);
     onChange(hsvToRgb(h, s, v));
   }
+  function fromPointer(event: React.PointerEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    change(
+      hue,
+      Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+      Math.min(1, Math.max(0, 1 - (event.clientY - rect.top) / rect.height)),
+    );
+  }
   return (
-    <fieldset className="min-w-0 max-w-80">
+    <fieldset className="min-w-0">
       <legend className="t-row mb-3">Color</legend>
-      <div className="mt-3 flex items-center gap-3">
+      <div className="crosshair-swatches">
+        {CROSSHAIR_SWATCHES.map((swatch) => {
+          const selected = swatch.rgb.every((channel, index) => channel === color[index]);
+          return (
+            <button
+              key={swatch.name}
+              type="button"
+              title={swatch.name}
+              aria-label={swatch.name}
+              aria-pressed={selected}
+              data-testid={`crosshair-swatch-${swatch.name.toLowerCase().replaceAll(" ", "-")}`}
+              className="crosshair-swatch"
+              style={{ background: rgbToHex(...swatch.rgb) }}
+              onClick={() => {
+                setEntry(null);
+                onChange(swatch.rgb);
+              }}
+            />
+          );
+        })}
         <button
           type="button"
           aria-label="Color picker"
-          title={expanded ? "Close color picker" : "Open color picker"}
+          title={expanded ? "Close the colour field" : "Pick any colour"}
           aria-expanded={expanded}
           aria-controls={`${id}-picker`}
+          data-testid="crosshair-swatch-custom"
+          data-custom={!preset}
+          className="crosshair-swatch crosshair-swatch-custom"
           onClick={() => setExpanded((current) => !current)}
-          className="size-8 shrink-0 rounded-md border border-edge-strong"
-          style={{ background: hex }}
-        />
-        <label className="sr-only" htmlFor={`${id}-hex`}>
-          Hex color
-        </label>
-        <input
-          id={`${id}-hex`}
-          aria-invalid={invalid}
-          aria-describedby={invalid ? `${id}-error` : undefined}
-          className="input min-w-0 w-28 tnum"
-          value={entry ?? hex}
-          spellCheck={false}
-          maxLength={7}
-          onChange={(e) => {
-            const value = e.target.value;
-            setEntry(value);
-            const rgb = hexToRgb(value);
-            if (rgb) onChange([rgb.r, rgb.g, rgb.b]);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setEntry(null);
-          }}
-        />
-        <span className="t-meta tnum">{color.join(", ")}</span>
+        >
+          {preset ? null : (
+            <span className="crosshair-swatch-custom-dot" style={{ background: hex }} />
+          )}
+        </button>
       </div>
-      <div id={`${id}-picker`} hidden={!expanded}>
+
+      <div className="mt-3 flex items-center gap-3">
+        <label className="crosshair-hex">
+          <span className="crosshair-hex-chip" style={{ background: hex }} aria-hidden="true" />
+          <span className="sr-only">Hex color</span>
+          <input
+            id={`${id}-hex`}
+            aria-invalid={invalid}
+            aria-describedby={invalid ? `${id}-error` : undefined}
+            className="w-full min-w-0 bg-transparent tnum outline-none"
+            value={entry ?? hex}
+            spellCheck={false}
+            maxLength={7}
+            onChange={(e) => {
+              const value = e.target.value;
+              setEntry(value);
+              const rgb = hexToRgb(value);
+              if (rgb) onChange([rgb.r, rgb.g, rgb.b]);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setEntry(null);
+            }}
+          />
+        </label>
+        <span className="tnum text-[12px] text-ink-faint">RGB {color.join(" ")}</span>
+      </div>
+      {invalid ? (
+        <p id={`${id}-error`} className="t-meta mt-2">
+          Enter six hex digits, for example #00ff80.
+        </p>
+      ) : null}
+
+      <div id={`${id}-picker`} hidden={!expanded} className="mt-3">
         <fieldset
           aria-label="Color field"
           className="relative h-28 touch-none rounded-md border border-edge-strong"
@@ -73,21 +134,10 @@ export function ColorPicker({
           }}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);
-            const rect = event.currentTarget.getBoundingClientRect();
-            change(
-              hue,
-              (event.clientX - rect.left) / rect.width,
-              1 - (event.clientY - rect.top) / rect.height,
-            );
+            fromPointer(event);
           }}
           onPointerMove={(event) => {
-            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-            const rect = event.currentTarget.getBoundingClientRect();
-            change(
-              hue,
-              (event.clientX - rect.left) / rect.width,
-              1 - (event.clientY - rect.top) / rect.height,
-            );
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) fromPointer(event);
           }}
         >
           <span
@@ -106,47 +156,9 @@ export function ColorPicker({
           max={359}
           value={Math.round(hue)}
           onChange={(e) => change(Number(e.target.value), hsv.s || 1, hsv.v || 1)}
-          className="range mt-3 w-full"
-          style={{
-            background: "linear-gradient(to right, red, yellow, lime, cyan, blue, magenta, red)",
-          }}
+          className="range crosshair-hue mt-3 w-full"
         />
       </div>
-      {invalid ? (
-        <p id={`${id}-error`} className="t-meta mt-2">
-          Enter six hex digits, for example #00ff80.
-        </p>
-      ) : null}
-      <details className="fold mt-3 t-meta">
-        <summary className="cursor-pointer hover:text-ink">
-          <Caret fold />
-          Saturation and brightness
-        </summary>
-        <label className="mt-2 block">
-          Saturation
-          <input
-            aria-label="Saturation"
-            type="range"
-            className="range w-full"
-            min={0}
-            max={100}
-            value={Math.round(hsv.s * 100)}
-            onChange={(e) => change(hue, Number(e.target.value) / 100, hsv.v)}
-          />
-        </label>
-        <label className="mt-2 block">
-          Brightness
-          <input
-            aria-label="Brightness"
-            type="range"
-            className="range w-full"
-            min={0}
-            max={100}
-            value={Math.round(hsv.v * 100)}
-            onChange={(e) => change(hue, hsv.s, Number(e.target.value) / 100)}
-          />
-        </label>
-      </details>
     </fieldset>
   );
 }
