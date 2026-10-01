@@ -1273,16 +1273,33 @@ export function createPreviewApi(state: PreviewState): Api {
         throw new Error("Choose the mod again to review it.");
       pendingModImport = null;
       if (choices.length !== 1 || choices[0] !== "0:0") throw new Error("Choose an available mod.");
-      return this.installGameBananaMod(pending.id, pending.fileId);
+      const { id, fileId } = pending;
+      const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
+      const variants = await this.gameBananaDownloadVariants(id);
+      // A short pause so the fixture shows the card's install overlay.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (listing?.route !== "mod" || !variants.some((file) => file.id === fileId)) {
+        throw notInPreview(`Installing mod ${id}`);
+      }
+      if (!mods.some((mod) => mod.source.kind === "gamebanana" && mod.source.id === id)) {
+        mods = [
+          ...mods,
+          {
+            id: `gb-${id}`,
+            name: listing.name,
+            source: { kind: "gamebanana", id, url: listing.url },
+            pack: `${listing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.vpk`,
+            files: 12,
+            bytes: 4_200_000,
+            installedAt: new Date().toISOString(),
+          },
+        ];
+        modsPayload = { ...modsPayload, profileParticleSources: particleSources() };
+      }
+      return requireDetail();
     },
     async cancelModImport(token: string) {
       if (pendingModImport?.token === token) pendingModImport = null;
-    },
-    async importModArchive() {
-      throw notInPreview("Importing a mod archive");
-    },
-    async importModFolder() {
-      throw notInPreview("Importing a mod folder");
     },
     async removeMod(id: string) {
       mods = mods.filter((mod) => mod.id !== id);
@@ -1434,31 +1451,6 @@ export function createPreviewApi(state: PreviewState): Api {
         });
       }
       return files;
-    },
-    async installGameBananaMod(id: number, fileId: number) {
-      const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
-      const variants = await this.gameBananaDownloadVariants(id);
-      // A short pause so the fixture shows the card's install overlay.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      if (listing?.route !== "mod" || !variants.some((file) => file.id === fileId)) {
-        throw notInPreview(`Installing mod ${id}`);
-      }
-      if (!mods.some((mod) => mod.source.kind === "gamebanana" && mod.source.id === id)) {
-        mods = [
-          ...mods,
-          {
-            id: `gb-${id}`,
-            name: listing.name,
-            source: { kind: "gamebanana", id, url: listing.url },
-            pack: `${listing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.vpk`,
-            files: 12,
-            bytes: 4_200_000,
-            installedAt: new Date().toISOString(),
-          },
-        ];
-        modsPayload = { ...modsPayload, profileParticleSources: particleSources() };
-      }
-      return requireDetail();
     },
 
     // --- preloader ----------------------------------------------------------
