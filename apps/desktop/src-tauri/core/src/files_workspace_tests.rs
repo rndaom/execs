@@ -506,3 +506,67 @@ fn reviewed_restore_of_unchanged_library_bytes_reprojects_live() {
         );
     }
 }
+
+#[test]
+fn a_config_cfg_kept_only_in_steam_cloud_reads_and_saves_like_the_live_file() {
+    // A TF2 that has not run on this PC for a while has no tf/cfg/config.cfg;
+    // its settings live in the Steam Cloud copy, which Save current captured.
+    // Every settings pane used to stop with "Could not read settings:
+    // tf/cfg/config.cfg" and Files showed the file empty.
+    let dir = crate::test_temp_dir();
+    let profiles = dir.join("profiles");
+    let root = dir.join("tf2");
+    fs::create_dir_all(root.join("tf/cfg")).unwrap();
+    fs::create_dir_all(root.join("tf/custom")).unwrap();
+    fs::write(root.join("tf/steam.inf"), b"appID=440\n").unwrap();
+    let steam = dir.join("Steam");
+    let cloud = steam.join("userdata/111/440/remote/cfg/config.cfg");
+    fs::create_dir_all(cloud.parent().unwrap()).unwrap();
+    fs::write(&cloud, b"volume \"0.2\"\n").unwrap();
+    fs::create_dir_all(steam.join("userdata/111/config")).unwrap();
+    fs::write(
+        steam.join("userdata/111/config/localconfig.vdf"),
+        "\"UserLocalConfigStore\"\n{\n}\n",
+    )
+    .unwrap();
+    let roots = [steam];
+    crate::profile::save_current_as_to(
+        &profiles,
+        &root,
+        "Laptop current",
+        [] as [&str; 0],
+        crate::profile::SaveCurrentOptions {
+            launch_options: Some(""),
+            cloud_config: Some(&cloud),
+        },
+    )
+    .unwrap();
+    assert!(!root.join("tf/cfg/config.cfg").exists());
+
+    // Without the Cloud copy the file reads as missing: the old failure.
+    let missing = read_from_with(&profiles, &root, "tf/cfg/config.cfg", None).unwrap();
+    assert!(missing.text.is_none());
+
+    let content = read_from_with(&profiles, &root, "tf/cfg/config.cfg", Some(&cloud)).unwrap();
+    assert_eq!(content.text.as_deref(), Some("volume \"0.2\"\n"));
+    assert!(content.source.sha256.is_some());
+
+    // A save checks the same live bytes and writes TF2's own folder.
+    save_to(
+        &profiles,
+        &root,
+        "tf/cfg/config.cfg",
+        b"volume \"0.3\"\n",
+        &content.source,
+        [] as [&str; 0],
+        WriteOwnedOptions {
+            steam_roots: Some(&roots),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        fs::read(root.join("tf/cfg/config.cfg")).unwrap(),
+        b"volume \"0.3\"\n"
+    );
+    let _ = fs::remove_dir_all(&dir);
+}
