@@ -36,7 +36,6 @@ export function ModImport({
         open={open && active}
         testId="mods-import-modal"
         title="Import a mod"
-        description="Choose one archive, VPK, or extracted mod folder."
         onClose={() => setOpen(false)}
         initialFocusRef={cancelRef}
       >
@@ -68,18 +67,9 @@ export function ModImport({
             }}
           >
             <FolderOpen size={20} />
-            <span>
-              <span className="block">Choose extracted folder</span>
-              <span className="t-meta mt-0.5 block font-normal">
-                One mod, with its original contents
-              </span>
-            </span>
+            <span>Choose extracted folder</span>
           </button>
         </div>
-        <p className="t-meta mt-4">
-          Review the files inside an archive and choose the variants you want. Split archives and
-          multi-part VPKs must be extracted first.
-        </p>
         <div className="mt-5 flex justify-end border-t border-edge pt-4">
           <button
             ref={cancelRef}

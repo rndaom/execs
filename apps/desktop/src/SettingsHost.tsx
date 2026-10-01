@@ -2,11 +2,10 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { BindsPane } from "./BindsPane";
 import { ComfigPane } from "./ComfigPane";
 import { CrosshairPane } from "./CrosshairPane";
-import { CfgOverridesAlert, CfgSourcesDetails } from "./components/CfgSourcesPanel";
+import { CfgOverridesAlert } from "./components/CfgSourcesPanel";
 import type { CopySettingsSource } from "./components/CopySettings";
 import { ModImportDialog } from "./components/ModImportDialog";
 import { SettingsDraftBoundary } from "./components/SettingsDraftBoundary";
-import { Disclosure } from "./components/ui/Disclosure";
 import { Loading, LoadingState } from "./components/ui/Spinner";
 import { useToast } from "./components/ui/Toast";
 import { GameplayPane } from "./GameplayPane";
@@ -47,7 +46,6 @@ import {
   defaultComfigState,
   toggleComfigAddon,
 } from "./lib/comfig-ui";
-import { conditionalCfgSources } from "./lib/conditional-cfg-sources";
 import { type CopyFeedback, copyButtonLabel, copyToClipboard } from "./lib/copy-ui";
 import { analyzeFilesSnapshot } from "./lib/files-analysis";
 import {
@@ -289,16 +287,6 @@ export function SettingsHost({
   const maps = useMemo(
     () => mapsFromFiles(files, layer, detail?.files, detail ?? undefined),
     [files, layer, detail],
-  );
-  const conditionalSources = useMemo(
-    () =>
-      Object.fromEntries(
-        ["binds", "gameplay", "viewmodels", "crosshair", "sounds"].map((pane) => [
-          pane,
-          conditionalCfgSources(files, launchSeed, pane, detail ?? undefined),
-        ]),
-      ),
-    [files, launchSeed, detail],
   );
   // Only the visible pane pays for the extra override probe.
   const provenanceTab = visible && !filesLimited ? tab : null;
@@ -1792,72 +1780,6 @@ export function SettingsHost({
           ) : (
             pane(paneTab, visible && tab === paneTab)
           )}
-          {!identityPending &&
-          profileId &&
-          visible &&
-          tab === paneTab &&
-          (conditionalSources[paneTab]?.length ?? 0) > 0 ? (
-            <Disclosure
-              profileId={profileId}
-              storageKey={`conditional-cfg-sources-${paneTab}`}
-              testId="conditional-cfg-sources"
-              className="mt-8"
-              summary={
-                <span className="t-row">
-                  Class cfgs and launch options that can change these (
-                  {conditionalSources[paneTab].length})
-                </span>
-              }
-            >
-              <p className="t-meta mt-2">
-                These controls show the values your startup cfgs set. The lines below can set them
-                again when you play a class or launch TF2.
-              </p>
-              <ul className="t-meta mt-2 space-y-1">
-                {conditionalSources[paneTab].slice(0, 6).map((source) => (
-                  <li key={JSON.stringify(source)}>
-                    {onNavigate ? (
-                      <button
-                        type="button"
-                        className="text-left underline underline-offset-2"
-                        onClick={() => {
-                          if (source.kind === "class") {
-                            setFilesReviewTarget({
-                              id: ++filesReviewSequence.current,
-                              path: source.path,
-                              line: source.line,
-                            });
-                          }
-                          onNavigate(source.kind === "class" ? "files" : "launch");
-                        }}
-                      >
-                        {source.kind === "class"
-                          ? `${source.path}:${source.line} — ${source.label}`
-                          : `Launch ${source.label}`}
-                      </button>
-                    ) : source.kind === "class" ? (
-                      `${source.path}:${source.line} — ${source.label}`
-                    ) : (
-                      `Launch ${source.label}`
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {conditionalSources[paneTab].length > 6 ? (
-                <p className="t-meta mt-1">
-                  And {conditionalSources[paneTab].length - 6} more sources.
-                </p>
-              ) : null}
-            </Disclosure>
-          ) : null}
-          {!identityPending && profileId && visible && tab === paneTab && provenance ? (
-            <CfgSourcesDetails
-              profileId={profileId}
-              tab={paneTab}
-              provenance={provenance}
-              onOpen={openCfgSource}
-            />
-          ) : null}
         </SettingsDraftBoundary>
       ))}
     </AppStatusProvider>

@@ -137,7 +137,9 @@ describe("ModsPane profile particle containment", () => {
     ).toBeNull();
     const saved = button("mods-particle-square-series");
     expect(saved.getAttribute("aria-checked")).toBe("true");
-    expect(document.body.textContent).toContain("New library choices are no longer offered");
+    expect(document.body.textContent).toContain(
+      "Saved cueki choices reapply only while their download",
+    );
 
     await act(async () => saved.click());
     expect(saved.getAttribute("aria-checked")).toBe("false");
@@ -161,7 +163,7 @@ describe("ModsPane profile particle containment", () => {
     await act(async () => root.render(createElement(ModsPane, initial)));
     const alert = document.querySelector('[data-testid="mods-hud-import-required"]');
     expect(alert?.textContent).toContain("Extract this HUD VPK and import its folder.");
-    expect(alert?.textContent).toContain("select the intended source again");
+    expect(alert?.textContent).toContain("Import it again from HUD");
     const buttons = [...(alert?.querySelectorAll("button") ?? [])];
     await act(async () => buttons.find((item) => item.textContent === "Review in HUD")?.click());
     expect(onReviewHudImport).toHaveBeenCalledOnce();
@@ -363,7 +365,6 @@ describe("ModsPane particle overlaps", () => {
     expect(
       document.querySelector('[data-testid="mods-particle-conflict-explosion.pcf"]'),
     ).toBeNull();
-    expect(document.body.textContent).toContain("not merged");
 
     const use = [...(conflict()?.querySelectorAll("button") ?? [])].find(
       (candidate) => candidate.textContent === "Use Trails A",

@@ -74,9 +74,7 @@ export function FirstRunExisting({
                 ))}
               </ul>
             ) : null}
-            <p className={`t-meta ${reasons.length > 0 ? "mt-2" : ""}`}>
-              Your cfg layer, config.cfg, custom content and launch options are copied, not moved.
-            </p>
+            <p className={`t-meta ${reasons.length > 0 ? "mt-2" : ""}`}>Copied, not moved.</p>
           </div>
         </div>
 

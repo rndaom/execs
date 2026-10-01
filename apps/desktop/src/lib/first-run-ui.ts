@@ -20,13 +20,12 @@ export const START_FROM_OPTIONS: {
   {
     id: "current",
     label: "Current setup",
-    description:
-      "Copies your current in-game binds, audio and console options, including recent edits; no tutorial pop-ups.",
+    description: "Your binds and settings.",
   },
   {
     id: "fresh",
     label: "Fresh TF2",
-    description: "Valve defaults, as if newly installed.",
+    description: "Valve's defaults.",
   },
 ];
 

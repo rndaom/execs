@@ -172,7 +172,6 @@ function cloudItem(health: InstallHealth): HealthItem {
       health.cloudConfigPresent
         ? "execs keeps Steam's local copy of config.cfg up to date."
         : "Steam has no local copy of config.cfg yet. execs writes one when it saves config.cfg.",
-      "Steam uploads that copy when it syncs; execs cannot confirm the upload.",
     ],
   };
 }
@@ -190,7 +189,6 @@ function offlineItem(health: InstallHealth): HealthItem {
       ? "Browsing HUDs needs a connection."
       : `Browsing HUDs works offline from a list saved ${age(health.hudCatalogAgeSeconds)} ago.`,
   );
-  lines.push("Installing HUDs and mods, mastercomfig updates and app updates need a connection.");
   return { id: "offline", title: "Offline", status: "ok", lines };
 }
 

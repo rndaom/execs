@@ -153,4 +153,4 @@ and its contributors.
 
 Fan project, not affiliated with Valve Corporation. Team Fortress and Steam are trademarks of Valve Corporation.
 
-[Contributing](CONTRIBUTING.md) · [Releases](docs/RELEASE.md) · [Security](SECURITY.md) · [MIT license](LICENSE)
+[Guide](docs/guide/README.md) · [Contributing](CONTRIBUTING.md) · [Releases](docs/RELEASE.md) · [Security](SECURITY.md) · [MIT license](LICENSE)

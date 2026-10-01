@@ -16,7 +16,8 @@ export function SliderRow({
   id: string;
   testId: string;
   label: string;
-  description: string;
+  /** Only for a consequence the slider itself cannot show. */
+  description?: string;
   value: number;
   inputValue?: number;
   min: number;
@@ -33,9 +34,11 @@ export function SliderRow({
           <label htmlFor={id} className="t-row">
             {label}
           </label>
-          <p id={`${id}-description`} className="t-meta mt-1">
-            {description}
-          </p>
+          {description ? (
+            <p id={`${id}-description`} className="t-meta mt-1">
+              {description}
+            </p>
+          ) : null}
         </div>
         <output
           htmlFor={id}
@@ -54,7 +57,7 @@ export function SliderRow({
         step={step}
         value={inputValue ?? value}
         disabled={disabled}
-        aria-describedby={`${id}-description`}
+        aria-describedby={description ? `${id}-description` : undefined}
         onChange={(event) => onChange(Number(event.target.value))}
         className="range mt-3 block w-full"
       />

@@ -443,8 +443,7 @@ function DisplayPicker({
             />
           </div>
           <p className="t-meta mt-2 text-[12px]">
-            Fullscreen below your screen's resolution is stretched to fill it, so the crosshair
-            grows with it.
+            Stretched to fill your screen, so the crosshair grows too.
           </p>
           {display.source === "custom" ? (
             <button

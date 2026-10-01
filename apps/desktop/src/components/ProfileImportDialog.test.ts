@@ -96,8 +96,7 @@ describe("profile import dialog", () => {
       );
       const primary = () => box.querySelector<HTMLButtonElement>(".btn-primary");
       expect(primary()?.disabled).toBe(true);
-      expect(box.textContent).toContain("preserved originals");
-      expect(box.textContent).toContain("won’t be loaded by TF2");
+      expect(box.textContent).toContain("The others are kept but not loaded");
       await act(async () => primary()?.click());
       expect(profiles.confirmImport).not.toHaveBeenCalled();
       await act(async () => box.querySelector<HTMLInputElement>("#profile-import-hud-1")?.click());

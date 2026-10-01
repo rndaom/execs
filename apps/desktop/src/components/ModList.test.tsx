@@ -114,7 +114,7 @@ describe("ModList", () => {
     const modal = box.querySelector('[data-testid="mods-import-modal"]');
     expect(modal?.getAttribute("role")).toBe("dialog");
     expect(document.activeElement?.textContent).toBe("Cancel");
-    expect(modal?.textContent).toContain("archive, VPK, or extracted mod folder");
+    expect(modal?.textContent).toContain("Choose extracted folder");
     await act(async () =>
       box.querySelector<HTMLButtonElement>('[data-testid="mods-import-archive"]')?.click(),
     );

@@ -122,10 +122,7 @@ export function ProfileImportDialog({
             <div className="mt-4 border-t border-edge pt-4">
               <fieldset>
                 <legend className="t-row">Choose the HUD to use</legend>
-                <p className="t-meta mt-2">
-                  Other HUD folders stay in the profile as preserved originals and won’t be loaded
-                  by TF2.
-                </p>
+                <p className="t-meta mt-2">The others are kept but not loaded.</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {huds.map((hud, hudIndex) => (
                     <OptionTile
@@ -159,10 +156,7 @@ export function ProfileImportDialog({
               </summary>
               <div className="t-meta mt-3 space-y-3 break-words">
                 {review.creator ? (
-                  <p>
-                    Launch options are left empty. Optional mod variants, nested archives,
-                    instructions and unsupported files remain in the source ZIP.
-                  </p>
+                  <p>Launch options start empty. Extras outside cfg and custom stay in the ZIP.</p>
                 ) : null}
                 {review.notes.map((note) => (
                   <p key={note}>{note}</p>

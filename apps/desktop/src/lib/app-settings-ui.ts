@@ -52,24 +52,13 @@ export type StorageReport = {
 export type ClearReport = { freedBytes: number; failed: string[] };
 
 export const STORAGE_GROUP_COPY: Record<StorageGroupId, { label: string; detail: string }> = {
-  profiles: { label: "Profiles", detail: "Your saved profiles and their files." },
-  restorePoints: {
-    label: "Restore points",
-    detail: "Kept until you delete them in Restore points or newer ones replace them.",
-  },
-  downloads: {
-    label: "Downloads",
-    detail:
-      "HUD catalog and options, comfig.app sounds, and Casual setup files. Downloaded again when needed.",
-  },
-  retired: { label: "Retired downloads", detail: "Left over from features execs no longer has." },
-  logs: { label: "Logs", detail: "Crash logs and recent activity for bug reports." },
-  protected: {
-    label: "Recovery and sources",
-    detail:
-      "Recovery data, original game files, sounds you added and HUD backups. The old Casual library stays while a profile still uses it.",
-  },
-  other: { label: "Settings and other files", detail: "Kept." },
+  profiles: { label: "Profiles", detail: "" },
+  restorePoints: { label: "Restore points", detail: "Kept until you delete them." },
+  downloads: { label: "Downloads", detail: "Downloaded again when needed." },
+  retired: { label: "Retired downloads", detail: "Safe to clear." },
+  logs: { label: "Logs", detail: "For bug reports." },
+  protected: { label: "Recovery and sources", detail: "Needed to undo changes." },
+  other: { label: "Settings and other files", detail: "" },
 };
 
 export function formatStorageBytes(bytes: number): string {

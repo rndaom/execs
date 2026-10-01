@@ -78,7 +78,6 @@ export function ViewmodelSettings({
             id="viewmodel-fov"
             testId="viewmodel-fov"
             label="Viewmodel FOV"
-            description="Weapon perspective, independent of your world view."
             value={draft.viewmodel_fov}
             inputValue={clampInt(draft.viewmodel_fov, 1, 179)}
             min={1}
@@ -105,7 +104,6 @@ export function ViewmodelSettings({
               id="viewmodel-min"
               testId="viewmodel-min"
               label="Min viewmodels"
-              description="Compact weapon placement."
               checked={draft.tf_use_min_viewmodels === 1}
               disabled={!cfgReady}
               onChange={(next) => patch({ tf_use_min_viewmodels: next ? 1 : 0 })}

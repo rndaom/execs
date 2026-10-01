@@ -96,10 +96,7 @@ export function ModList({
       {onCheckUpdates ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p className="t-meta" role="status">
-            {managementError ??
-              (checking
-                ? "Checking GameBanana…"
-                : "Turn a pack off to keep it saved without loading it in TF2.")}
+            {managementError ?? (checking ? "Checking GameBanana…" : null)}
           </p>
           <button
             type="button"
@@ -172,8 +169,7 @@ export function ModList({
                   ) : null}
                   {selected ? (
                     <span id={`mods-protected-${modDomId(mod.id)}`} className="t-meta mt-1 block">
-                      Used by Casual setup. Change the particle selection before turning off or
-                      removing.
+                      Used by Casual setup. Change that selection first.
                     </span>
                   ) : null}
                 </span>
@@ -234,7 +230,6 @@ export function ModList({
         <Modal
           open
           title={`Add ${copyMod.name} to another profile`}
-          description="Copies the saved pack without downloading it again. Its on/off setting is kept. The current TF2 setup stays as it is."
           onClose={() => {
             if (!copyBusy) setCopying(null);
           }}

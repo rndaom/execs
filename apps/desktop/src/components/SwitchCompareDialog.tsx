@@ -93,8 +93,7 @@ export function SwitchCompareDialog({
       {comparison ? (
         <>
           <p className="t-meta mt-1">
-            Switching replaces your setup with {comparison.toName} exactly. This shows saved
-            profiles; changes made in TF2 since the last save are picked up first.
+            Switching replaces your setup with {comparison.toName} exactly.
           </p>
           <ComparisonTable
             comparison={comparison}

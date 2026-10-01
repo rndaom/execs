@@ -7,7 +7,6 @@ import {
   ContextMenuItem,
   type ContextMenuPosition,
 } from "./components/ui/ContextMenu";
-import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { CrosshairDesigner, type CrosshairDesignerDraft } from "./crosshair/CrosshairDesigner";
@@ -55,7 +54,6 @@ import {
 } from "./lib/crosshair-size";
 import {
   CROSSHAIR_CANVAS_SIZE,
-  CROSSHAIR_CASUAL_COPY,
   CROSSHAIR_SHAPES,
   type CrosshairColor,
   type CrosshairDraft,
@@ -329,7 +327,7 @@ export function CrosshairPane({
       id: "yours",
       title: "Yours",
       note: hasSavedVtf
-        ? "Earlier VTF crosshairs stay in this profile's pack. New Venom downloads are no longer offered."
+        ? "Earlier Venom Crosshairs by HbiVnm and their creators stay in this profile."
         : undefined,
       items: yours,
     },
@@ -544,10 +542,7 @@ export function CrosshairPane({
       <div className="grid gap-3 empty:hidden" data-testid="crosshair-notices">
         {record?.sourceChanged ? (
           <div className="pane-note" data-testid="crosshair-source-changed">
-            <p>
-              This crosshair pack was changed outside execs, so its pictures and per-weapon choices
-              may not match what TF2 draws. Build it again, or remove it from the ⋯ menu.
-            </p>
+            <p>This pack was changed outside execs. Rebuild it, or remove it from the ⋯ menu.</p>
             {!designer ? (
               <button
                 type="button"
@@ -564,9 +559,9 @@ export function CrosshairPane({
           <div className="pane-note" data-testid="crosshair-script-source-status">
             <p>
               {sourceStatus.state === "changed"
-                ? "TF2's weapon scripts changed since this pack was built. Build it again to pick up the update."
+                ? "TF2's weapon scripts changed. Rebuild to pick up the update."
                 : sourceStatus.state === "unverified"
-                  ? "This older crosshair pack has no recorded TF2 weapon-script version. Build it again to check it against the current game files."
+                  ? "Rebuild to check this pack against the current game."
                   : `Could not check TF2's weapon scripts: ${sourceStatus.reason ?? "the source is unavailable"}.`}
             </p>
             {sourceStatus.state !== "unavailable" && !record?.sourceChanged ? (
@@ -585,8 +580,8 @@ export function CrosshairPane({
           <div className="pane-note" data-testid="crosshair-hud-overlay-notice">
             <p>
               {hudOverlayState === "enabled"
-                ? `${hudName ?? "Your HUD"} has a crosshair overlay selected. TF2 may draw it on top of the crosshair here.`
-                : `${hudName ?? "Your HUD"} includes crosshair overlay controls. Their in-game state cannot be confirmed from the saved options.`}
+                ? `${hudName ?? "Your HUD"}'s crosshair overlay is on and draws over this one.`
+                : `${hudName ?? "Your HUD"} has its own crosshair overlay options.`}
             </p>
             {onOpenHud ? (
               <button type="button" className="btn btn-ghost mt-2" onClick={onOpenHud}>
@@ -598,8 +593,8 @@ export function CrosshairPane({
         {stockArtConflict ? (
           <div className="pane-note" data-testid="crosshair-stock-art-notice">
             <p>
-              {stockArtConflict.pack} also supplies {stockArtConflict.member}. The preview uses
-              Valve's original sprite, so TF2 may draw different art.
+              {stockArtConflict.pack} also replaces {stockArtConflict.member}, so TF2 may show
+              different art.
             </p>
             {onOpenMods ? (
               <button type="button" className="btn btn-ghost mt-2" onClick={onOpenMods}>
@@ -675,8 +670,8 @@ export function CrosshairPane({
                 {imports.pending ? (
                   <div className="pane-note mt-3" data-testid="crosshair-import-resize">
                     <p>
-                      That image is {imports.pending.width} × {imports.pending.height}. Crosshair
-                      sprites are 64 × 64, so it will be fitted inside, keeping its shape.
+                      That image is {imports.pending.width} × {imports.pending.height}. It will be
+                      fitted into 64 × 64.
                     </p>
                     <div className="mt-2 flex gap-2">
                       <button
@@ -720,38 +715,6 @@ export function CrosshairPane({
               />
             </>
           )}
-
-          <section className="section">
-            <Disclosure
-              profileId={profileId}
-              storageKey="crosshair-about"
-              summary="How crosshair size and packs work"
-            >
-              <div className="mt-3 grid max-w-[62ch] gap-2 t-meta">
-                <p>
-                  TF2 draws crosshairs in screen pixels. At size 32 a 64 px sprite covers 64 px
-                  whatever your resolution, so the same crosshair looks smaller at 2560 × 1440 than
-                  at 1280 × 720. The preview uses your game resolution for that reason.
-                </p>
-                <p>
-                  TF2's own crosshairs need nothing extra. Anything else, or a different crosshair
-                  for some weapons, is built into a small pack in tf/custom from your own copy of
-                  TF2's weapon scripts. {CROSSHAIR_CASUAL_COPY}
-                </p>
-                <p>
-                  Hit markers and team colours are not part of TF2's crosshair. Hit sounds are in
-                  Sounds and damage numbers in Gameplay; some HUDs add hit markers in their own
-                  options.
-                </p>
-                <p>
-                  Previously installed Venom Crosshairs are credited to HbiVnm and their respective
-                  creators. Stock crosshair previews are decoded from your own copy of the game.
-                  execs is not affiliated with Valve or Steam; Team Fortress 2 and its sprites are ©
-                  Valve Corporation.
-                </p>
-              </div>
-            </Disclosure>
-          </section>
         </div>
 
         <aside className="crosshair-side" aria-label="Preview, size and color">

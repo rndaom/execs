@@ -1436,8 +1436,8 @@ export function InventoryPane({
                 {capability?.organizer === "simulation"
                   ? "Test backpack. Steam is never contacted."
                   : capability?.organizer === "live"
-                    ? "Your signed-in Steam backpack. Applied changes affect this Steam account, not a customization profile."
-                    : "Your signed-in Steam backpack. This connection supports local arrangement drafts."}
+                    ? "Your Steam backpack. Changes apply to this Steam account, not a profile."
+                    : "Your Steam backpack. Arrange it here as a draft."}
               </p>
               {snapshot ? <p className="mt-2 break-all">Steam account {snapshot.steamId}</p> : null}
               <p className="mt-2">

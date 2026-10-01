@@ -173,7 +173,6 @@ describe("Onboarding", () => {
     expect(host.querySelector('[data-testid="wizard-show-all-presets"]')).toBeNull();
     expect(host.querySelectorAll('[role="switch"]')).toHaveLength(OFFICIAL_ADDONS.length);
     expect(host.textContent).toContain(OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]);
-    expect(host.textContent).toContain("Manage official addons later in Comfig.");
     await act(async () =>
       host.querySelector<HTMLButtonElement>('[data-testid="wizard-addon-no-tutorial"]')?.click(),
     );
@@ -193,7 +192,6 @@ describe("Onboarding", () => {
     const onCreateOnly = vi.fn(async () => true);
     const props = wizardProps({ creating: true, startFrom: "current", onCreateOnly });
     await act(async () => root.render(<SetupWizard {...props} />));
-    expect(host.textContent).toContain("Create adds the profile and keeps TF2 as it is.");
     await act(async () => button("Create").click());
     expect(onCreateOnly).toHaveBeenCalledOnce();
     expect(props.onApply).not.toHaveBeenCalled();

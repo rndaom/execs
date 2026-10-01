@@ -190,7 +190,7 @@ describe("Mods HUD recovery through the real settings host", () => {
     expect(element("mods-addon-no-sentry-shield-overlay")).toBeTruthy();
     expect(element("mods-particle-square-series")).toBeTruthy();
     expect(box.querySelector('[data-testid="mods-download"]')).toBeNull();
-    expect(box.textContent).toContain("New library choices are no longer offered");
+    expect(box.textContent).toContain("Saved cueki choices reapply only while their download");
   });
 
   it.each(["archive", "folder"] as const)(

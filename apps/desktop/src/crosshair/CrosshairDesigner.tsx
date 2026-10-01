@@ -381,9 +381,7 @@ export function CrosshairDesigner({
             Smooth edges
           </span>
         </div>
-        <p className="t-meta mt-2 text-[12px]">
-          The outline stays black whatever colour you choose, so the crosshair reads on bright maps.
-        </p>
+        <p className="t-meta mt-2 text-[12px]">The outline stays black.</p>
       </div>
     </section>
   );
