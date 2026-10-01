@@ -215,7 +215,15 @@ pub fn scan_tf2_installs_in(steam_roots: &[PathBuf]) -> Vec<Tf2Install> {
     out
 }
 
+/// The machine's real Steam installs. Unit tests never see them: a test that
+/// switched a fixture profile through a default `None` Steam root once wrote
+/// its `config.cfg` fixture (`bind w +forward`) into the developer's real
+/// Steam Cloud copy, which Steam uploaded and TF2 then loaded, wiping every
+/// other bind and the saved volume. Tests pass explicit fixture roots.
 pub fn discover_steam_roots() -> Vec<PathBuf> {
+    if cfg!(test) {
+        return Vec::new();
+    }
     let mut raw = Vec::new();
     #[cfg(windows)]
     raw.extend(windows_registry_steam());
@@ -323,6 +331,11 @@ mod tests {
         }
         let mut file = fs::File::create(path).unwrap();
         file.write_all(contents.as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn tests_never_discover_the_real_steam_install() {
+        assert!(discover_steam_roots().is_empty());
     }
 
     fn tf2_tree(root: &Path, app_id: &str) {
