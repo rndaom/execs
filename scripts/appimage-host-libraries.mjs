@@ -18,9 +18,12 @@ import { fileURLToPath } from "node:url";
 const script = fileURLToPath(import.meta.url);
 const root = resolve(dirname(script), "..");
 // Same output plugin as Tauri, pinned so a moved continuous asset fails closed.
+// Upstream's scheduled CI rebuilds `continuous` on the 1st of each month, so
+// this pin needs a reviewed update then. This hash is the 2026-10-01 rebuild
+// (upstream run 36815339264) of commit 536b0687, the source of the previous pin.
 const pluginUrl =
   "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage";
-const pluginSha256 = "0441769ab38009504d2678c38cd7e526955388dd30a215b4a20afaa5471652f2";
+const pluginSha256 = "49d6a17160675a6bd1781699aae6bdf7692d98552e02a3671d2183d10547842e";
 
 // These belong with the host EGL drivers. The older bundled Wayland lacks
 // wl_fixes_interface / wl_display_create_queue_with_name used by newer drivers.
