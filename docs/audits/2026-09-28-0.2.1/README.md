@@ -56,6 +56,20 @@ release fixtures and release-version rules are unchanged. All main CI jobs and b
 smoke scenarios passed before this test-only refresh; the final package check remains visible on
 the PR.
 
+After 0.2.1 was published (September 28, 23:37:58 UTC) both capability baselines went stale again:
+the Linux package job refused every PR with `'v0.2.1' !== 'v0.2.0'`, and the Windows probe would
+have done the same. On September 30 the retained harness ran against the unchanged tagged 0.2.1
+core (`ebb2d507`) with its vendored `unrar-ng-sys`, after all 325 extracted files matched the tag's
+blobs and all 121 registry dependencies matched its lock. The new exports, the signed Windows
+installer and the signed AppImage/Debian pins are in
+[windows-package-v021](../../../scripts/fixtures/windows-package-v021/README.md) and
+[development-package-v021](../../../scripts/fixtures/development-package-v021.md); all three
+updater signatures verified locally. The development version is 0.2.1, so the Linux job again
+records a same-version replacement. The first hosted Windows run showed that public 0.2.1 writes
+its activity log, tidy-up record and absorb hint; the Windows preservation check now validates and
+sets these and the saved window placement aside, using the Linux checks' helpers. The release-upgrade fixture (`package-smoke-v020.json`) and
+its v0.2.0 source are unchanged. Both hosted package checks on the PR remain the integration proof.
+
 Per-workstream evidence: [mouse recording](binds.md), [RAR decoding and licensing](rar.md),
 and [Casual/conflict diagnostics](mod-content-audit.md). The chooser tests bind confirmation to
 the exact source and current profile revision, reject replay and changed unselected sources,

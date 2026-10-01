@@ -1,15 +1,24 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import {
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertFixtureAbsorbCache } from "./absorb-cache-fixture.mjs";
+import { acceptWindowPlacement, setAsideAppMaintenance } from "./app-maintenance-fixture.mjs";
 import { regularFile, sha256, verifyPublicPackage } from "./development-package-guard.mjs";
 import { seedPackageFixture } from "./package-smoke-fixture.mjs";
 import { releaseInstallerName } from "./release-version.mjs";
 
 // Independent of candidate versions: this capability probe runs only the current public installer.
 export const windowsPublicFixture = JSON.parse(
-  readFileSync(new URL("./fixtures/windows-package-v020/fixture.json", import.meta.url), "utf8"),
+  readFileSync(new URL("./fixtures/windows-package-v021/fixture.json", import.meta.url), "utf8"),
 );
 
 export function selectCurrentPublicNsis(release) {
@@ -140,7 +149,15 @@ export function selectPreviousNsis(release, version) {
 }
 
 export function seedWindowsFixture(scratch, version) {
-  const fixture = seedPackageFixture(scratch, true, version, windowsPublicFixture);
+  const base = seedPackageFixture(scratch, true, version, windowsPublicFixture);
+  // The public app's default preferences, written out: closing saves the whole
+  // settings file with its window placement, which is the only change accepted.
+  const settings = {
+    ...base.settings,
+    preferences: { checkForUpdatesOnStartup: true, motion: "system" },
+  };
+  writeFileSync(join(base.data, "settings.json"), `${JSON.stringify(settings, null, 2)}\n`);
+  const fixture = { ...base, settings };
   for (const name of ["tmp", "webview", "exports"]) mkdirSync(join(scratch, name));
   const index = fixture.metadata["index.json"];
   const activeProfileId = index.activeProfileId;
@@ -193,6 +210,33 @@ export function assertWindowsFixturePreserved(fixture, proof = null) {
   assert.equal(fixture.data, join(fixture.childEnv.APPDATA, "execs"));
   const data = snapshotTree(fixture.data);
   const live = snapshotTree(fixture.tf2Root);
+  // The public app's own startup and close output, validated and then set aside
+  // exactly as in the Linux checks; every other data byte is compared exactly.
+  const cachePath = `profiles/${fixture.activeProfileId}/absorb-cache.json`;
+  if (Object.hasOwn(data.files, cachePath)) {
+    assertFixtureAbsorbCache(
+      fixture.library,
+      fixture.tf2Root,
+      fixture.activeProfileId,
+      fixture.metadata[`${fixture.activeProfileId}/manifest.json`].files,
+      "windows-preservation",
+      fixture.cacheSourceStamps,
+    );
+    delete data.files[cachePath];
+  }
+  setAsideAppMaintenance(
+    fixture.data,
+    data,
+    fixture.baseline.data.directories,
+    "windows-preservation",
+  );
+  acceptWindowPlacement(
+    fixture.data,
+    data,
+    fixture.settings,
+    fixture.baseline.data.files["settings.json"],
+    "windows-preservation",
+  );
   assert.deepEqual(data, fixture.baseline.data, "Original app-data bytes/inventory changed");
   assert.deepEqual(live, fixture.baseline.live, "Original live bytes/inventory changed");
   const exported = snapshotTree(dirname(fixture.exportPath));
