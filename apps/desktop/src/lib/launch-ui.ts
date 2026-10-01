@@ -337,6 +337,12 @@ export function steamWrapperPrefix(raw: string): string | null {
   return raw.includes("%command%") ? raw : null;
 }
 
+/** The words Steam passes to TF2: everything after a `%command%` wrapper. */
+export function tf2LaunchArguments(raw: string): string[] {
+  const offset = steamWrapperPrefix(raw)?.length ?? 0;
+  return launchWords(raw.slice(offset)).words.map((word) => word.value);
+}
+
 export type LaunchOptionGroup = { start: number; end: number; text: string };
 
 /** Removing one option also removes its values, while preserving every other byte. */
