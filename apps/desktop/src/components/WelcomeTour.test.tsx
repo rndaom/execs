@@ -100,7 +100,7 @@ describe("WelcomeTour", () => {
     await act(async () => q("welcome-try-comfig")?.click());
     expect(props.onTryComfig).toHaveBeenCalledOnce();
 
-    await act(async () => root.render(<></>));
+    await act(async () => root.render(null));
     await show({ offerComfig: false });
     for (let step = 0; step < 3; step += 1) await act(async () => q("welcome-next")?.click());
     expect(q("welcome-try-comfig")).toBeNull();
