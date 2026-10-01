@@ -25,10 +25,10 @@ export const unsignedConfig = { bundle: { createUpdaterArtifacts: false } };
 export const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 export const developmentPublicFixture = JSON.parse(
-  readFileSync(new URL("./fixtures/windows-package-v020/fixture.json", import.meta.url), "utf8"),
+  readFileSync(new URL("./fixtures/windows-package-v021/fixture.json", import.meta.url), "utf8"),
 );
 export const developmentPublicRelease = JSON.parse(
-  readFileSync(new URL("./fixtures/development-package-v020.json", import.meta.url), "utf8"),
+  readFileSync(new URL("./fixtures/development-package-v021.json", import.meta.url), "utf8"),
 );
 
 export function developmentTransition(publicVersion, candidateVersion) {
