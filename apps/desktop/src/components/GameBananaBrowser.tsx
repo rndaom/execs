@@ -2,14 +2,21 @@ import { ArrowClockwise, MagnifyingGlass, Package, SlidersHorizontal } from "@ph
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGameBananaBrowser } from "../hooks/useGameBananaBrowser";
 import type { Api } from "../lib/api";
-import type { GameBananaDownloadVariant, GameBananaMod, ModRecord } from "../lib/bridge";
+import type {
+  GameBananaDownloadVariant,
+  GameBananaMod,
+  GameBananaSection,
+  ModRecord,
+} from "../lib/bridge";
 import { openExternal } from "../lib/bridge";
 import {
+  GAMEBANANA_SECTIONS,
   GAMEBANANA_SORTS,
   gameBananaDefaultVariant,
   gameBananaMetaLine,
   gameBananaPager,
   gameBananaPageScopeNote,
+  gameBananaSoundSlot,
   gameBananaTotalLabel,
   gameBananaVariantFacts,
   gameBananaVariantOversized,
@@ -34,6 +41,10 @@ import { Switch } from "./ui/Switch";
 const ALL = "all";
 const MORE = "more";
 
+function listingKey(mod: GameBananaMod): string {
+  return `${mod.section}:${mod.id}`;
+}
+
 /** Search and install GameBanana listings without coupling presentation to request state. */
 export function GameBananaBrowser({
   api,
@@ -43,6 +54,7 @@ export function GameBananaBrowser({
   running,
   previewData = false,
   onInstall,
+  onUseInSounds,
   onOpenHud,
   onManageInstalled,
 }: {
@@ -55,15 +67,21 @@ export function GameBananaBrowser({
   running: boolean;
   previewData?: boolean;
   /** Resolves after both the install and profile reload complete. */
-  onInstall: (id: number, fileId: number) => Promise<ModInstallResult>;
+  onInstall: (id: number, fileId: number, section: GameBananaSection) => Promise<ModInstallResult>;
+  /**
+   * Prepares a hit or kill sound upload and opens it in Sounds. Resolves true
+   * once handed over, or with the reason it could not be prepared.
+   */
+  onUseInSounds?: (mod: GameBananaMod, fileId: number) => Promise<true | { failed: string }>;
   onOpenHud?: () => void;
   onManageInstalled?: () => void;
 }) {
   const browser = useGameBananaBrowser({ api, active });
   const [moreOpen, setMoreOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Sounds and mods number their listings separately; `key` keeps them apart.
   const [install, setInstall] = useState<{
-    id: number;
+    key: string;
     state: GameBananaInstallState;
     reason?: string;
   } | null>(null);
@@ -84,33 +102,57 @@ export function GameBananaBrowser({
 
   async function prepareInstall(mod: GameBananaMod) {
     const token = ++choiceToken.current;
-    setInstall({ id: mod.id, state: "loading" });
+    const key = listingKey(mod);
+    setInstall({ key, state: "loading" });
     setAnnouncement(`Loading files for ${mod.name}.`);
     try {
-      const variants = await api.gameBananaDownloadVariants(mod.id);
+      const variants = await api.gameBananaDownloadVariants(
+        mod.id,
+        mod.section,
+        gameBananaSoundSlot(mod) !== null,
+      );
       if (token !== choiceToken.current) return;
       setChooser({ mod, variants, selectedId: gameBananaDefaultVariant(variants) });
       setInstall(null);
       setAnnouncement(`Choose a file for ${mod.name}.`);
     } catch {
       if (token !== choiceToken.current) return;
-      setInstall({ id: mod.id, state: "load-failed" });
+      setInstall({ key, state: "load-failed" });
       setAnnouncement(`Could not load files for ${mod.name}. Retry is available on its card.`);
     }
   }
 
-  async function installMod(id: number, name: string, fileId: number) {
+  async function installMod(mod: GameBananaMod, fileId: number) {
+    const { name } = mod;
+    const key = listingKey(mod);
     setChooser(null);
-    setInstall({ id, state: "installing" });
+    setInstall({ key, state: "installing" });
+    if (gameBananaSoundSlot(mod)) {
+      setAnnouncement(`Preparing ${name} for Sounds.`);
+      let handed: true | { failed: string } = { failed: "" };
+      try {
+        handed = onUseInSounds ? await onUseInSounds(mod, fileId) : { failed: "" };
+      } catch (err) {
+        handed = { failed: err instanceof Error ? err.message : "" };
+      }
+      if (handed === true) {
+        setInstall(null);
+        setAnnouncement(`${name} is ready in Sounds.`);
+      } else {
+        setInstall({ key, state: "failed", reason: handed.failed || undefined });
+        setAnnouncement(`${name} could not be prepared. Retry is available on its card.`);
+      }
+      return;
+    }
     setAnnouncement(`Installing ${name}.`);
     let result: ModInstallResult = false;
     try {
-      result = await onInstall(id, fileId);
+      result = await onInstall(mod.id, fileId, mod.section);
     } catch {
       result = false;
     }
     if (typeof result === "object") {
-      setInstall({ id, state: "failed", reason: result.failed });
+      setInstall({ key, state: "failed", reason: result.failed });
       setAnnouncement(`${name} could not be installed: ${result.failed}`);
     } else if (result === "review-required" || result === "superseded") {
       setInstall(null);
@@ -119,7 +161,7 @@ export function GameBananaBrowser({
       setInstall(null);
       setAnnouncement(`${name} installed.`);
     } else {
-      setInstall({ id, state: "failed" });
+      setInstall({ key, state: "failed" });
       setAnnouncement(`${name} could not be installed. Retry is available on its card.`);
     }
   }
@@ -217,6 +259,24 @@ export function GameBananaBrowser({
             <ArrowClockwise size={16} />
           </button>
         </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Segmented
+          label="GameBanana section"
+          size="sm"
+          testIdPrefix="mods-gb-section"
+          options={GAMEBANANA_SECTIONS}
+          value={browser.section}
+          onChange={(next) => {
+            setMoreOpen(false);
+            browser.setSection(next);
+          }}
+        />
+        {browser.section === "sound" ? (
+          <p className="t-meta">
+            Hit and kill sounds open in Sounds; other sounds install as custom packs.
+          </p>
+        ) : null}
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         {categories.length > 0 ? (
@@ -394,14 +454,17 @@ export function GameBananaBrowser({
           >
             {shown.map((mod) => (
               <GameBananaCard
-                key={mod.id}
+                key={listingKey(mod)}
                 mod={mod}
                 meta={gameBananaMetaLine(mod, browser.sort)}
-                installed={isGameBananaInstalled(installed, mod.id)}
+                installed={
+                  gameBananaSoundSlot(mod) === null &&
+                  isGameBananaInstalled(installed, mod.id, mod.section)
+                }
                 locked={locked || install?.state === "installing"}
                 running={running}
-                installState={install?.id === mod.id ? install.state : "idle"}
-                failureReason={install?.id === mod.id ? install.reason : undefined}
+                installState={install?.key === listingKey(mod) ? install.state : "idle"}
+                failureReason={install?.key === listingKey(mod) ? install.reason : undefined}
                 onView={() => void openExternal(mod.url)}
                 onInstall={() => void prepareInstall(mod)}
                 onManage={onManageInstalled}
@@ -473,7 +536,9 @@ export function GameBananaBrowser({
           description={
             chooser.variants.length > 1
               ? "The author uploaded more than one file. Pick the one you want."
-              : "Check the file, then download and install it."
+              : gameBananaSoundSlot(chooser.mod)
+                ? "Check the file, then download it and choose a sound in Sounds."
+                : "Check the file, then download and install it."
           }
           testId="mods-gb-file-choice"
           className="fixed top-1/2 left-1/2 max-h-[calc(100dvh-2rem)] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
@@ -534,14 +599,18 @@ export function GameBananaBrowser({
               type="button"
               className="btn btn-primary"
               data-testid="mods-gb-install-selected"
-              disabled={chooser.selectedId === null || locked}
+              disabled={
+                chooser.selectedId === null || (locked && gameBananaSoundSlot(chooser.mod) === null)
+              }
               onClick={() => {
                 if (chooser.selectedId !== null) {
-                  void installMod(chooser.mod.id, chooser.mod.name, chooser.selectedId);
+                  void installMod(chooser.mod, chooser.selectedId);
                 }
               }}
             >
-              Download and review
+              {gameBananaSoundSlot(chooser.mod)
+                ? "Download and open in Sounds"
+                : "Download and review"}
             </button>
           </div>
         </Modal>

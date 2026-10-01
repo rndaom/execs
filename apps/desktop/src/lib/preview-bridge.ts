@@ -15,6 +15,7 @@ import {
   type FilesSource,
   type GameBananaDownloadVariant,
   type GameBananaMod,
+  type GameBananaSection,
   type GameBananaSort,
   type HitsoundRecord,
   type HitsoundSlotChange,
@@ -59,6 +60,8 @@ import {
 import {
   PREVIEW_GAMEBANANA_CATEGORIES,
   PREVIEW_GAMEBANANA_RECORDS,
+  PREVIEW_GAMEBANANA_SOUND_CATEGORIES,
+  PREVIEW_GAMEBANANA_SOUND_RECORDS,
   PREVIEW_MODS_CATALOG,
   PREVIEW_MODS_STATUS,
   PREVIEW_PARTICLE_SOURCES,
@@ -158,6 +161,13 @@ const BROWSED: Tf2Install = {
   path: "/home/user/.local/share/Steam/steamapps/common/Team Fortress 2",
 };
 
+/** Preview listings are found by section too: sounds and mods share ids upstream. */
+function previewGameBananaListing(id: number, section: GameBananaSection) {
+  return (section === "sound" ? PREVIEW_GAMEBANANA_SOUND_RECORDS : PREVIEW_GAMEBANANA_RECORDS).find(
+    (record) => record.id === id,
+  );
+}
+
 function notInPreview(what: string): BridgeError {
   return new BridgeError(`${what} is not available in preview mode.`, "PreviewOnly");
 }
@@ -204,7 +214,12 @@ export function createPreviewApi(state: PreviewState): Api {
     state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
   const savedMods = new Map<string, ModRecord[]>();
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
-  let pendingModImport: { token: string; id: number; fileId: number } | null = null;
+  let pendingModImport: {
+    token: string;
+    id: number;
+    fileId: number;
+    section: GameBananaSection;
+  } | null = null;
   const crosshairPixels: Record<string, { width: number; height: number; rgba: number[] }> = {};
   let crosshair = state === "settings-crosshair" ? previewCrosshairRecord() : null;
   let viewmodel = state === "settings-viewmodels" ? previewViewmodelRecord() : null;
@@ -305,6 +320,43 @@ export function createPreviewApi(state: PreviewState): Api {
       profiles: [...base.profiles, profile],
     };
     return library;
+  }
+
+  async function previewInstallGameBanana(
+    id: number,
+    fileId: number,
+    section: GameBananaSection,
+  ): Promise<ProfileDetail> {
+    const listing = previewGameBananaListing(id, section);
+    const variants = await api.gameBananaDownloadVariants(id, section);
+    // A short pause so the fixture shows the card's install overlay.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (listing?.route !== "mod" || !variants.some((file) => file.id === fileId)) {
+      throw notInPreview(`Installing mod ${id}`);
+    }
+    if (
+      !mods.some(
+        (mod) =>
+          mod.source.kind === "gamebanana" &&
+          mod.source.id === id &&
+          mod.source.url === listing.url,
+      )
+    ) {
+      mods = [
+        ...mods,
+        {
+          id: section === "sound" ? `gb-sound-${id}` : `gb-${id}`,
+          name: listing.name,
+          source: { kind: "gamebanana", id, url: listing.url },
+          pack: `${listing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.vpk`,
+          files: 12,
+          bytes: 4_200_000,
+          installedAt: new Date().toISOString(),
+        },
+      ];
+      modsPayload = { ...modsPayload, profileParticleSources: particleSources() };
+    }
+    return requireDetail();
   }
 
   const api: Api = {
@@ -1237,14 +1289,14 @@ export function createPreviewApi(state: PreviewState): Api {
     async prepareImportModFolder() {
       throw notInPreview("Importing a mod folder");
     },
-    async prepareGameBananaMod(id: number, fileId: number) {
+    async prepareGameBananaMod(id: number, fileId: number, section: GameBananaSection = "mod") {
       pendingModImport = null;
-      const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
-      const variants = await this.gameBananaDownloadVariants(id);
+      const listing = previewGameBananaListing(id, section);
+      const variants = await this.gameBananaDownloadVariants(id, section);
       if (listing?.route !== "mod" || !variants.some((file) => file.id === fileId))
         throw notInPreview(`Installing mod ${id}`);
       const token = `preview-mod-${id}-${fileId}-${Date.now()}`;
-      pendingModImport = { token, id, fileId };
+      pendingModImport = { token, id, fileId, section };
       return {
         token,
         choices: [
@@ -1254,8 +1306,9 @@ export function createPreviewApi(state: PreviewState): Api {
             path: `${listing.name}.vpk`,
             files: 1,
             bytes: 4200000,
-            contentRoots: ["materials"],
+            contentRoots: section === "sound" ? ["sound"] : ["materials"],
             disabledReason: null,
+            soundSlots: [],
           },
         ],
         readmes: [
@@ -1273,30 +1326,39 @@ export function createPreviewApi(state: PreviewState): Api {
         throw new Error("Choose the mod again to review it.");
       pendingModImport = null;
       if (choices.length !== 1 || choices[0] !== "0:0") throw new Error("Choose an available mod.");
-      const { id, fileId } = pending;
-      const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
-      const variants = await this.gameBananaDownloadVariants(id);
-      // A short pause so the fixture shows the card's install overlay.
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      if (listing?.route !== "mod" || !variants.some((file) => file.id === fileId)) {
-        throw notInPreview(`Installing mod ${id}`);
+      return previewInstallGameBanana(pending.id, pending.fileId, pending.section);
+    },
+    async prepareGameBananaHitsounds(id: number, fileId: number) {
+      const listing = previewGameBananaListing(id, "sound");
+      const variants = await this.gameBananaDownloadVariants(id, "sound", true);
+      if (
+        (listing?.route !== "hitSound" && listing?.route !== "killSound") ||
+        !variants.some((file) => file.id === fileId)
+      ) {
+        throw notInPreview(`Preparing sound ${id}`);
       }
-      if (!mods.some((mod) => mod.source.kind === "gamebanana" && mod.source.id === id)) {
-        mods = [
-          ...mods,
+      // Preview data cannot play, but the library still shows the handoff.
+      return {
+        slot: listing.route === "hitSound" ? ("hit" as const) : ("kill" as const),
+        title: listing.name,
+        sounds: [
           {
-            id: `gb-${id}`,
+            token: `preview-gb-${id}-${fileId}`,
             name: listing.name,
-            source: { kind: "gamebanana", id, url: listing.url },
-            pack: `${listing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.vpk`,
-            files: 12,
-            bytes: 4_200_000,
-            installedAt: new Date().toISOString(),
+            info: {
+              formatTag: 1,
+              channels: 1,
+              sampleRate: 22050,
+              bitsPerSample: 16,
+              dataBytes: 7938,
+              durationMs: 180,
+            },
+            converted: false,
           },
-        ];
-        modsPayload = { ...modsPayload, profileParticleSources: particleSources() };
-      }
-      return requireDetail();
+        ],
+        skipped: 0,
+        truncated: false,
+      };
     },
     async cancelModImport(token: string) {
       if (pendingModImport?.token === token) pendingModImport = null;
@@ -1355,9 +1417,12 @@ export function createPreviewApi(state: PreviewState): Api {
       page: number,
       includeMature = false,
       _refresh = false,
+      section: GameBananaSection = "mod",
     ) {
       const needle = query.trim().toLowerCase();
-      const matching = PREVIEW_GAMEBANANA_RECORDS.filter((record) => {
+      const records =
+        section === "sound" ? PREVIEW_GAMEBANANA_SOUND_RECORDS : PREVIEW_GAMEBANANA_RECORDS;
+      const matching = records.filter((record) => {
         const hitsQuery = needle === "" || record.name.toLowerCase().includes(needle);
         return (
           hitsQuery &&
@@ -1386,12 +1451,19 @@ export function createPreviewApi(state: PreviewState): Api {
         cache: { source: "network" as const, freshForMs: 10 * 60_000 },
       };
     },
-    async gameBananaModCategories() {
-      return PREVIEW_GAMEBANANA_CATEGORIES;
+    async gameBananaModCategories(_refresh = false, section: GameBananaSection = "mod") {
+      return section === "sound"
+        ? PREVIEW_GAMEBANANA_SOUND_CATEGORIES
+        : PREVIEW_GAMEBANANA_CATEGORIES;
     },
-    async gameBananaDownloadVariants(id: number): Promise<GameBananaDownloadVariant[]> {
-      const listing = PREVIEW_GAMEBANANA_RECORDS.find((record) => record.id === id);
-      if (listing?.route !== "mod") {
+    async gameBananaDownloadVariants(
+      id: number,
+      section: GameBananaSection = "mod",
+      forSounds = false,
+    ): Promise<GameBananaDownloadVariant[]> {
+      const listing = previewGameBananaListing(id, section);
+      const soundSlot = listing?.route === "hitSound" || listing?.route === "killSound";
+      if (!listing || (listing.route !== "mod" && !(soundSlot && forSounds))) {
         throw notInPreview(`GameBanana files for ${id}`);
       }
       const files: GameBananaDownloadVariant[] = [

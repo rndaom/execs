@@ -10,7 +10,9 @@ use execs_core::ProfileDetail;
 
 use super::shared::{blocking, with_profile};
 use crate::error::CommandError;
-use crate::gamebanana::{self, GameBananaCategory, GameBananaDownloadVariant, GameBananaPage};
+use crate::gamebanana::{
+    self, FileUse, GameBananaCategory, GameBananaDownloadVariant, GameBananaPage, GameBananaSection,
+};
 use crate::WriteGate;
 
 #[tauri::command]
@@ -87,12 +89,15 @@ pub async fn check_mod_updates() -> Result<Vec<ModUpdateStatus>, CommandError> {
         Ok(records
             .into_iter()
             .map(|record| {
-                let ModSource::Gamebanana { id, .. } = record.source else {
+                let ModSource::Gamebanana { id, url } = &record.source else {
                     unreachable!()
                 };
+                // A sound pack's saved page is `/sounds/<id>`; GameBanana
+                // numbers sounds and mods separately.
+                let section = GameBananaSection::of_page_url(url);
                 let result = checked
-                    .entry(id)
-                    .or_insert_with(|| gamebanana::mod_profile(id));
+                    .entry((section, *id))
+                    .or_insert_with(|| gamebanana::submission_profile(section, *id));
                 match result {
                     Ok(profile) => {
                         let available = profile.updated_at.and_then(|date| {
@@ -120,7 +125,7 @@ pub async fn check_mod_updates() -> Result<Vec<ModUpdateStatus>, CommandError> {
     .await
 }
 
-/// One page of TF2 mods from GameBanana.
+/// One page of TF2 mods (or, with `section: "sound"`, sounds) from GameBanana.
 ///
 /// Browse and name search share the index endpoint, so GameBanana applies the
 /// selected sort and supported filters to the whole result set. `refresh`
@@ -128,6 +133,7 @@ pub async fn check_mod_updates() -> Result<Vec<ModUpdateStatus>, CommandError> {
 /// request URL.
 #[tauri::command]
 pub async fn search_gamebanana_mods(
+    section: Option<String>,
     query: String,
     sort: String,
     category: Option<u64>,
@@ -137,8 +143,10 @@ pub async fn search_gamebanana_mods(
 ) -> Result<GameBananaPage, CommandError> {
     let include_mature = include_mature.unwrap_or(false);
     let refresh = refresh.unwrap_or(false);
+    let section = GameBananaSection::parse(section.as_deref())?;
     blocking(move || {
         Ok(gamebanana::search_mods(
+            section,
             &query,
             &sort,
             category,
@@ -152,16 +160,27 @@ pub async fn search_gamebanana_mods(
 
 #[tauri::command]
 pub async fn gamebanana_mod_categories(
+    section: Option<String>,
     refresh: Option<bool>,
 ) -> Result<Vec<GameBananaCategory>, CommandError> {
-    blocking(move || Ok(gamebanana::categories(refresh.unwrap_or(false))?)).await
+    let section = GameBananaSection::parse(section.as_deref())?;
+    blocking(move || Ok(gamebanana::categories(section, refresh.unwrap_or(false))?)).await
 }
 
 /// Show the author's file names and descriptions before a specific file is
 /// downloaded. The selected id is rechecked against a fresh page at install.
+/// `forSounds` marks loose WAV/MP3/Ogg files usable for a hit or kill sound.
 #[tauri::command]
 pub async fn gamebanana_download_variants(
     id: u64,
+    section: Option<String>,
+    for_sounds: Option<bool>,
 ) -> Result<Vec<GameBananaDownloadVariant>, CommandError> {
-    blocking(move || Ok(gamebanana::download_variants(id)?)).await
+    let section = GameBananaSection::parse(section.as_deref())?;
+    let file_use = if for_sounds.unwrap_or(false) {
+        FileUse::Sound
+    } else {
+        FileUse::Pack
+    };
+    blocking(move || Ok(gamebanana::download_variants_in(section, id, file_use)?)).await
 }

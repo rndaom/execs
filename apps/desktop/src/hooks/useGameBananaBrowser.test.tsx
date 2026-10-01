@@ -21,6 +21,7 @@ function result(id: number, name = `Mod ${id}`, freshForMs = 600_000): GameBanan
     records: [
       {
         id,
+        section: "mod",
         name,
         author: "Author",
         category: "Skins",

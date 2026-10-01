@@ -295,6 +295,18 @@ describe("your mods", () => {
     expect(isGameBananaInstalled(PREVIEW_PROFILE_MODS, 618_734)).toBe(true);
     expect(isGameBananaInstalled(PREVIEW_PROFILE_MODS, 602_110)).toBe(false);
     expect(isGameBananaInstalled([], 618_734)).toBe(false);
+    // Sounds and mods number their listings separately.
+    expect(isGameBananaInstalled(PREVIEW_PROFILE_MODS, 618_734, "sound")).toBe(false);
+    const sound = {
+      ...PREVIEW_PROFILE_MODS[1],
+      source: {
+        kind: "gamebanana" as const,
+        id: 27_865,
+        url: "https://gamebanana.com/sounds/27865",
+      },
+    };
+    expect(isGameBananaInstalled([sound], 27_865, "sound")).toBe(true);
+    expect(isGameBananaInstalled([sound], 27_865, "mod")).toBe(false);
   });
 
   it("makes a selector-safe test id", () => {
