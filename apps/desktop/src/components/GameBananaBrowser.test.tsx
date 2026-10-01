@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Api } from "../lib/api";
 import type { GameBananaMod, GameBananaPage } from "../lib/bridge";
+import type { ModInstallResult } from "../lib/mods-ui";
 import { GameBananaBrowser } from "./GameBananaBrowser";
 
 const records: GameBananaMod[] = [
@@ -111,7 +112,10 @@ function api(): Api {
   } as unknown as Api;
 }
 
-async function render(onInstall = vi.fn(async () => true), locked = false) {
+async function render(
+  onInstall: (id: number, fileId: number) => Promise<ModInstallResult> = vi.fn(async () => true),
+  locked = false,
+) {
   await act(async () => {
     root.render(
       <GameBananaBrowser
@@ -177,6 +181,25 @@ describe("GameBananaBrowser presentation", () => {
     expect(onInstall).toHaveBeenCalledWith(11, 112);
     expect(box.querySelector('[role="alert"]')?.textContent).toContain("Install failed");
     expect(install?.getAttribute("aria-label")).toBe("Retry A very descriptive rocket trail");
+  });
+
+  it("keeps the failure reason on the card after the header notice fades", async () => {
+    const onInstall = vi.fn(async () => ({ failed: "That archive is damaged." }));
+    await render(onInstall);
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-11"]')?.click(),
+    );
+    await act(async () => Promise.resolve());
+    await act(async () => {
+      box.querySelector<HTMLInputElement>('input[value="112"]')?.click();
+    });
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-selected"]')?.click(),
+    );
+    await act(async () => Promise.resolve());
+    expect(box.querySelector('[role="alert"]')?.textContent).toBe(
+      "Install failed: That archive is damaged.",
+    );
   });
 
   it("explains split uploads and chooses nothing for the player next to them", async () => {
@@ -255,15 +278,14 @@ describe("GameBananaBrowser presentation", () => {
     expect(onInstall).toHaveBeenCalledWith(11, 131);
   });
 
-  it("routes GUI HUDs and other GUIs without offering generic Mods install", async () => {
+  it("routes GUI HUDs to HUD and installs other GUI mods like any mod", async () => {
     const onInstall = vi.fn(async () => true);
     const onOpenHud = vi.fn();
-    const onManualImport = vi.fn();
     search.mockResolvedValue({
       ...page(1),
       records: [
         { ...records[0], id: 21, category: "GUIs", subCategory: "HUDs", route: "hud" },
-        { ...records[0], id: 22, category: "GUIs", subCategory: "Menus", route: "manual" },
+        { ...records[0], id: 22, category: "GUIs", subCategory: "Menus", route: "mod" },
       ],
     });
     await act(async () => {
@@ -276,20 +298,18 @@ describe("GameBananaBrowser presentation", () => {
           running={false}
           onInstall={onInstall}
           onOpenHud={onOpenHud}
-          onManualImport={onManualImport}
         />,
       );
     });
     await act(async () => Promise.resolve());
     expect(box.querySelector('[data-testid="mods-gb-install-21"]')).toBeNull();
-    expect(box.querySelector('[data-testid="mods-gb-install-22"]')).toBeNull();
+    expect(box.querySelector('[data-testid="mods-gb-route-22"]')).toBeNull();
+    expect(box.textContent).not.toContain("Follow the author's instructions");
     await act(async () => {
       box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-route-21"]')?.click();
-      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-route-22"]')?.click();
     });
     expect(onOpenHud).toHaveBeenCalledOnce();
-    expect(onManualImport).toHaveBeenCalledOnce();
-    expect(onInstall).not.toHaveBeenCalled();
+    expect(box.querySelector('[data-testid="mods-gb-install-22"]')).not.toBeNull();
   });
 
   it("paginates above and below, then focuses results without stealing search focus", async () => {

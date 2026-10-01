@@ -205,16 +205,22 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
     [toast, savedCount],
   );
 
+  // Reading a failure (pointer over it, or keyboard focus inside it) holds it;
+  // leaving starts its full reading time again.
+  const [held, setHeld] = useState(false);
   const linger = toastLingerMs(toast);
   useEffect(() => {
-    if (linger === null || toast === null) {
+    if (linger === null || toast === null || held) {
       return;
     }
     // Every completion creates a fresh toast, even with identical copy. The
     // captured identity also makes an obsolete timer unable to hide a retry.
     const timer = window.setTimeout(() => send({ type: "hide", expected: toast }), linger);
     return () => window.clearTimeout(timer);
-  }, [linger, toast, send]);
+  }, [linger, toast, send, held]);
+  // A new failure starts unheld, even if the pointer rested on the last one.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each toast identity resets the hold.
+  useEffect(() => setHeld(false), [toast]);
 
   const dismissible = toastDismissible(toast);
   useEffect(() => {
@@ -232,21 +238,36 @@ export function ToastProvider({ children }: { children?: ReactNode }) {
 
   const message = toast ? (
     dismissible ? (
-      <button
-        type="button"
-        data-testid="toast"
-        data-kind={toast.kind}
-        data-source={toast.source}
-        aria-label={`Dismiss: ${toast.message}`}
-        onClick={() => send({ type: "hide", expected: toast })}
+      <section
+        aria-label="Error"
         className={
           alertSlot ? "save-alert enter-fade" : "save-alert save-alert-floating enter-fade"
         }
+        onMouseEnter={() => setHeld(true)}
+        onMouseLeave={() => setHeld(false)}
+        onFocus={() => setHeld(true)}
+        onBlur={() => setHeld(false)}
       >
         <WarningCircle size={16} aria-hidden="true" className="shrink-0 text-error" />
-        <span className="min-w-0 flex-1">{toast.message}</span>
-        <X size={14} aria-hidden="true" className="shrink-0 text-ink-faint" />
-      </button>
+        <span
+          data-testid="toast"
+          data-kind={toast.kind}
+          data-source={toast.source}
+          className="min-w-0 flex-1"
+        >
+          {toast.message}
+        </span>
+        <button
+          type="button"
+          data-testid="toast-dismiss"
+          aria-label={`Dismiss: ${toast.message}`}
+          title="Dismiss"
+          onClick={() => send({ type: "hide", expected: toast })}
+          className="save-alert-dismiss"
+        >
+          <X size={16} weight="bold" aria-hidden="true" />
+        </button>
+      </section>
     ) : (
       <span
         data-testid="toast"

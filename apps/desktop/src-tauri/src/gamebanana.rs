@@ -63,7 +63,6 @@ pub struct GameBananaMod {
 pub enum GameBananaModRoute {
     Mod,
     Hud,
-    Manual,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -239,6 +238,9 @@ struct ProfilePage {
     profile_url: String,
     #[serde(rename = "_aRootCategory", default)]
     root_category: Option<CategoryRow>,
+    /// The immediate category, which tells a HUD apart from other GUI mods.
+    #[serde(rename = "_aCategory", default)]
+    category: Option<CategoryRow>,
     #[serde(rename = "_aGame", default)]
     game: Option<GameRow>,
     #[serde(rename = "_tsDateUpdated", default)]
@@ -419,15 +421,10 @@ fn record_to_mod(record: &RawRecord) -> GameBananaMod {
         category: category.map(|row| row.name.clone()).unwrap_or_default(),
         category_id,
         sub_category: sub_category.map(|row| row.name.clone()),
-        route: if is_gui {
-            if sub_category.is_some_and(|row| {
-                row.name.eq_ignore_ascii_case("HUDs")
-                    || category_id_from_url(&row.profile_url) == Some(1649)
-            }) {
-                GameBananaModRoute::Hud
-            } else {
-                GameBananaModRoute::Manual
-            }
+        // Other GUI mods (menus, icons, fonts, scoreboards) are ordinary
+        // custom packs; the installer still refuses a payload that is a HUD.
+        route: if is_gui && sub_category.is_some_and(is_hud_category) {
+            GameBananaModRoute::Hud
         } else {
             GameBananaModRoute::Mod
         },
@@ -525,10 +522,10 @@ fn validated_mod_page(candidate: &str, expected_id: u64) -> Option<String> {
     Some(parsed.to_string())
 }
 
-/// Browse can show GUI submissions, but those need a HUD or author-guided
-/// import route rather than the generic Mods installer. These other roots do
-/// not belong on the product's TF2 customization surfaces.
-const EXCLUDED_CATEGORIES: [&str; 4] = ["maps", "decal tool", "prefabs", "serverside weapons"];
+/// HUD submissions (under GUIs) go to the HUD pane; every other GUI mod installs
+/// like any other mod, and maps install into a pack's `maps` folder. These other
+/// roots are Hammer or server material, not something a player's game loads.
+const EXCLUDED_CATEGORIES: [&str; 3] = ["decal tool", "prefabs", "serverside weapons"];
 
 /// The installable root categories, cached for ten minutes.
 ///
@@ -556,10 +553,14 @@ fn is_browsable_category(name: &str) -> bool {
     !name.trim().is_empty() && !is_excluded_category(name)
 }
 
-fn is_mod_install_category(category: &CategoryRow) -> bool {
-    is_browsable_category(&category.name)
-        && !category.name.eq_ignore_ascii_case("GUIs")
-        && category_id_from_url(&category.profile_url) != Some(1644)
+fn is_gui_category(category: &CategoryRow) -> bool {
+    category.name.eq_ignore_ascii_case("GUIs")
+        || category_id_from_url(&category.profile_url) == Some(1644)
+}
+
+fn is_hud_category(category: &CategoryRow) -> bool {
+    category.name.eq_ignore_ascii_case("HUDs")
+        || category_id_from_url(&category.profile_url) == Some(1649)
 }
 
 /// Name and page URL, so an install can record what the user actually chose
@@ -568,8 +569,9 @@ pub fn mod_profile(id: u64) -> Result<GameBananaProfile, String> {
     // ProfilePage exposes the immediate category (e.g. Training or HUDs),
     // not its root. Request the root explicitly so descendants cannot bypass
     // the same install policy applied to All and search results.
-    let url =
-        format!("{API}/Mod/{id}?_csvProperties=_idRow,_sName,_sProfileUrl,_aRootCategory,_aGame,_tsDateUpdated");
+    let url = format!(
+        "{API}/Mod/{id}?_csvProperties=_idRow,_sName,_sProfileUrl,_aRootCategory,_aCategory,_aGame,_tsDateUpdated"
+    );
     let page: ProfilePage =
         net::get_json_for(&net::api_client()?, &url, RemoteSource::GameBananaApi)
             .map_err(|err| format!("Could not read that GameBanana mod ({err})"))?;
@@ -587,11 +589,17 @@ fn profile_from(page: ProfilePage, id: u64) -> Result<GameBananaProfile, String>
         .root_category
         .as_ref()
         .ok_or("Could not verify that mod's GameBanana category. Try again later.")?;
-    if !is_mod_install_category(category) {
-        return Err(
-            "That GameBanana category needs HUD or manual import; it cannot be installed from Mods."
-                .into(),
-        );
+    if !is_browsable_category(&category.name) {
+        return Err("That GameBanana category cannot be installed from Mods.".into());
+    }
+    if is_gui_category(category) {
+        let immediate = page
+            .category
+            .as_ref()
+            .ok_or("Could not verify that mod's GameBanana category. Try again later.")?;
+        if is_hud_category(immediate) {
+            return Err("That GameBanana mod is a HUD. Install it from the HUD pane.".into());
+        }
     }
     Ok(GameBananaProfile {
         updated_at: valid_timestamp(page.updated),
@@ -1152,13 +1160,21 @@ mod tests {
     }
 
     #[test]
-    fn browse_includes_guis_but_direct_mod_install_does_not() {
-        assert!(is_excluded_category("Maps"));
+    fn browse_includes_guis_and_maps_and_tells_huds_apart() {
+        assert!(!is_excluded_category("Maps"));
         assert!(!is_excluded_category("GUIs"));
         assert!(is_browsable_category("GUIs"));
-        assert!(!is_mod_install_category(&CategoryRow {
-            name: "GUIs".into(),
+        assert!(is_gui_category(&CategoryRow {
+            name: "Interface".into(),
             profile_url: "https://gamebanana.com/mods/cats/1644".into(),
+        }));
+        assert!(is_hud_category(&CategoryRow {
+            name: "HUDs".into(),
+            profile_url: String::new(),
+        }));
+        assert!(!is_hud_category(&CategoryRow {
+            name: "Icons".into(),
+            profile_url: "https://gamebanana.com/mods/cats/1648".into(),
         }));
         assert!(is_excluded_category("Decal Tool"));
         assert!(is_excluded_category("Prefabs"));
@@ -1205,7 +1221,11 @@ mod tests {
             );
             assert_eq!(
                 page.records.iter().map(|r| r.id).collect::<Vec<_>>(),
-                if mature { vec![2, 6, 7] } else { vec![2, 6] }
+                if mature {
+                    vec![1, 2, 6, 7]
+                } else {
+                    vec![1, 2, 6]
+                }
             );
             assert_eq!(page.total, GameBananaTotal::Estimated { value: 100 });
             assert_eq!(page.per_page, 20);
@@ -1217,7 +1237,7 @@ mod tests {
     }
 
     #[test]
-    fn gui_huds_are_discovered_without_offering_a_mod_install() {
+    fn gui_huds_route_to_hud_and_other_gui_mods_install() {
         let response: IndexResponse = serde_json::from_value(serde_json::json!({
             "_aRecords": [
                 { "_idRow": 1, "_sModelName": "Mod", "_sName": "A HUD",
@@ -1233,7 +1253,7 @@ mod tests {
         assert_eq!(page.records.len(), 2);
         assert_eq!(page.records[0].route, GameBananaModRoute::Hud);
         assert_eq!(page.records[0].sub_category.as_deref(), Some("HUDs"));
-        assert_eq!(page.records[1].route, GameBananaModRoute::Manual);
+        assert_eq!(page.records[1].route, GameBananaModRoute::Mod);
         assert_eq!(page.records[1].sub_category.as_deref(), Some("Menus"));
     }
 
@@ -1270,7 +1290,7 @@ mod tests {
                 .updated_at,
             None
         );
-        for name in EXCLUDED_CATEGORIES.into_iter().chain(["", "GUIs"]) {
+        for name in EXCLUDED_CATEGORIES.into_iter().chain([""]) {
             let mut page = valid.clone();
             page["_aRootCategory"]["_sName"] = name.into();
             assert!(
@@ -1278,12 +1298,27 @@ mod tests {
                 "{name}"
             );
         }
-        let mut renamed_gui = valid.clone();
-        renamed_gui["_aRootCategory"] = serde_json::json!({
+        // A GUI mod installs unless its own category is HUDs (by name or id),
+        // or GameBanana does not say which GUI category it is.
+        let mut menu = valid.clone();
+        menu["_aRootCategory"] = serde_json::json!({
             "_sName": "Interface",
             "_sProfileUrl": "https://gamebanana.com/mods/cats/1644"
         });
-        assert!(profile_from(serde_json::from_value(renamed_gui).unwrap(), 7).is_err());
+        menu["_aCategory"] = serde_json::json!({ "_sName": "Icons" });
+        assert!(profile_from(serde_json::from_value(menu.clone()).unwrap(), 7).is_ok());
+        for hud in [
+            serde_json::json!({ "_sName": "HUDs" }),
+            serde_json::json!({ "_sName": "Renamed", "_sProfileUrl": "https://gamebanana.com/mods/cats/1649" }),
+        ] {
+            let mut page = menu.clone();
+            page["_aCategory"] = hud;
+            let err = profile_from(serde_json::from_value(page).unwrap(), 7).unwrap_err();
+            assert!(err.contains("HUD pane"), "{err}");
+        }
+        let mut unknown = menu.clone();
+        unknown.as_object_mut().unwrap().remove("_aCategory");
+        assert!(profile_from(serde_json::from_value(unknown).unwrap(), 7).is_err());
         for field in ["_aRootCategory", "_aGame"] {
             let mut page = valid.clone();
             page.as_object_mut().unwrap().remove(field);
@@ -1664,7 +1699,8 @@ mod tests {
         let categories = categories(true).unwrap();
         println!("categories: {categories:?}");
         assert!(categories.iter().any(|category| category.name == "Skins"));
-        assert!(!categories.iter().any(|category| category.name == "Maps"));
+        assert!(categories.iter().any(|category| category.name == "Maps"));
+        assert!(!categories.iter().any(|category| category.name == "Prefabs"));
 
         let found = search_mods("scout", "likes", None, 1, false, true).unwrap();
         println!(

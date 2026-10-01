@@ -1,6 +1,7 @@
 import { ArrowClockwise, ArrowSquareOut, Check, Image } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { GameBananaMod } from "../lib/bridge";
+import { GAMEBANANA_MAP_NOTE, GAMEBANANA_MAPS_CATEGORY } from "../lib/mods-ui";
 import { Spinner } from "./ui/Spinner";
 
 export type GameBananaInstallState =
@@ -23,9 +24,10 @@ export function GameBananaCard({
   locked,
   running,
   installState,
+  failureReason,
   onView,
   onInstall,
-  onRoute,
+  onOpenHud,
   onManage,
 }: {
   mod: GameBananaMod;
@@ -34,9 +36,11 @@ export function GameBananaCard({
   locked: boolean;
   running: boolean;
   installState: GameBananaInstallState;
+  /** Why the last install failed, kept on the card after the notice fades. */
+  failureReason?: string;
   onView: () => void;
   onInstall: () => void;
-  onRoute: () => void;
+  onOpenHud: () => void;
   /** Opens Custom packs for a listing that is already installed. */
   onManage?: () => void;
 }) {
@@ -123,14 +127,16 @@ export function GameBananaCard({
         <p className="t-meta tnum">{meta}</p>
         {mod.route === "hud" ? (
           <p className="t-meta">This is a HUD. Import the author's archive in HUD.</p>
-        ) : mod.route === "manual" ? (
-          <p className="t-meta">Follow the author's instructions, then import the file you need.</p>
+        ) : mod.categoryId === GAMEBANANA_MAPS_CATEGORY ? (
+          <p className="t-meta">{GAMEBANANA_MAP_NOTE}</p>
         ) : null}
         {failed ? (
           <p id={failureId} role="alert" className="t-meta text-error">
             {installState === "load-failed"
               ? "Could not read the author's files. Retry, or open it on GameBanana."
-              : "Install failed. The reason is shown at the top of the window."}
+              : failureReason
+                ? `Install failed: ${failureReason}`
+                : "Install failed. Retry, or open it on GameBanana."}
           </p>
         ) : null}
       </div>
@@ -144,15 +150,14 @@ export function GameBananaCard({
         >
           <ArrowSquareOut size={15} />
         </button>
-        {mod.route !== "mod" ? (
+        {mod.route === "hud" ? (
           <button
             type="button"
             data-testid={`mods-gb-route-${mod.id}`}
             className="btn btn-ghost ml-auto"
-            disabled={mod.route === "manual" && locked}
-            onClick={onRoute}
+            onClick={onOpenHud}
           >
-            {mod.route === "hud" ? "Open HUD" : "Import mod…"}
+            Open HUD
           </button>
         ) : installed ? (
           <button
