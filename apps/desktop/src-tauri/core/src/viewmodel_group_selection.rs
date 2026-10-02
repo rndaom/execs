@@ -14,7 +14,9 @@ use crate::viewmodel_groups::{
 use crate::viewmodel_source::StockSourceError;
 use crate::viewmodel_vpk_candidate::{HideSelection, CLASSES};
 
-const CATALOG_IDENTITY_DOMAIN: &str = "execs:provisional-viewmodel-groups:v1";
+// v2: an animation shared with a shown group stays shown. The catalog
+// identity changes with the rule so builds made under v1 read as outdated.
+const CATALOG_IDENTITY_DOMAIN: &str = "execs:provisional-viewmodel-groups:v2";
 const MAX_ITEMS_PER_GROUP: usize = 100_000;
 const MAX_UNRESOLVED_ITEMS: usize = 100_000;
 
@@ -178,6 +180,9 @@ pub fn provisional_group_catalog_identity(
 /// Convert group IDs into the per-class animation sets accepted by
 /// `prototype_viewmodel_vpk`. Same-mode overlaps collapse to one animation;
 /// requests that would apply both transforms to one animation are refused.
+/// A group without a choice stays shown, so an animation it shares with a
+/// hidden group is left untouched: hiding the Concheror must not hide the
+/// Shovel swings it reuses.
 pub fn resolve_provisional_group_selection(
     catalog: &ViewmodelGroupCandidates,
     request: &ProvisionalGroupRequest,
@@ -229,6 +234,23 @@ pub fn resolve_provisional_group_selection(
             }
             selected.insert(animation.clone());
         }
+    }
+    for group in &catalog.groups {
+        if group_modes.contains_key(&group.id) {
+            continue;
+        }
+        if let Some(selection) = by_class.get_mut(&group.class) {
+            for animation in &group.animations {
+                selection.full.remove(animation);
+                selection.weapon.remove(animation);
+            }
+        }
+    }
+    by_class.retain(|_, selection| !selection.full.is_empty() || !selection.weapon.is_empty());
+    if by_class.is_empty() {
+        return Err(invalid(
+            "every selected animation is also used by a shown weapon, so nothing would be hidden",
+        ));
     }
     Ok(by_class)
 }
@@ -305,6 +327,67 @@ mod tests {
         );
         assert!(result["scout"].weapon.is_empty());
         assert_eq!(result["demoman"].weapon, BTreeSet::from(["@demo".into()]));
+    }
+
+    #[test]
+    fn animations_shared_with_a_shown_group_stay_shown() {
+        // Soldier's Concheror reuses the Shovel's swings; hiding the
+        // Concheror must leave the Shovel visible.
+        let catalog = ViewmodelGroupCandidates {
+            patch_version: "10828683".into(),
+            groups: vec![
+                group("soldier", &[6], &["@s_draw", "@s_swing"]),
+                group("soldier", &[354], &["@s_draw", "@s_swing", "@wh_fire"]),
+                group("soldier", &[10], &["@draw", "@fire"]),
+            ],
+            unresolved_items: Vec::new(),
+        };
+        let result = resolve_provisional_group_selection(
+            &catalog,
+            &request(
+                &catalog,
+                vec![
+                    choice(&catalog.groups[1], ProvisionalHideMode::Full),
+                    choice(&catalog.groups[2], ProvisionalHideMode::Full),
+                ],
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            result["soldier"].full,
+            BTreeSet::from(["@draw".into(), "@fire".into(), "@wh_fire".into()])
+        );
+        // Hiding the Shovel as well hides the shared swings.
+        let result = resolve_provisional_group_selection(
+            &catalog,
+            &request(
+                &catalog,
+                vec![
+                    choice(&catalog.groups[0], ProvisionalHideMode::Weapon),
+                    choice(&catalog.groups[1], ProvisionalHideMode::Weapon),
+                ],
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            result["soldier"].weapon,
+            BTreeSet::from(["@s_draw".into(), "@s_swing".into(), "@wh_fire".into()])
+        );
+    }
+
+    #[test]
+    fn a_selection_that_hides_nothing_fails() {
+        let mut catalog = catalog();
+        catalog.groups[1] = group("scout", &[2], &["@a"]);
+        catalog.groups[0] = group("scout", &[1], &["@a", "@b"]);
+        let only_shared = request(
+            &catalog,
+            vec![choice(&catalog.groups[1], ProvisionalHideMode::Full)],
+        );
+        assert!(resolve_provisional_group_selection(&catalog, &only_shared)
+            .unwrap_err()
+            .0
+            .contains("nothing would be hidden"));
     }
 
     #[test]

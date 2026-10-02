@@ -249,6 +249,45 @@ describe("Viewmodels source-derived draft", () => {
     ).toBe("shown");
   });
 
+  it("offers an outdated pack's choices again as an unbuilt draft", async () => {
+    record = {
+      id: "execs-viewmodels",
+      source: "stockBuilt",
+      preload: true,
+      options: {},
+      buildRecipe: {
+        schema: 1,
+        catalog: { ...catalog.catalog, catalogSha256: "older" },
+        sourceFingerprints: catalog.sourceFingerprints,
+        choices: [
+          { groupId: "soldier/c", mode: "full" },
+          { groupId: "soldier/gone", mode: "full" },
+        ],
+      },
+    };
+    await render();
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
+      "1 class changed · not built yet",
+    );
+    expect(element('[data-testid="viewmodel-draft-notice"]').textContent).toContain(
+      "Your built pack is out of date.",
+    );
+    await click('[data-testid="viewmodel-discard-draft"]');
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
+      "Everything shown",
+    );
+  });
+
+  it("says when a hidden weapon stays partly visible through a shown one", async () => {
+    await render();
+    await chooseWeapon("scout/b", "Hidden");
+    expect(element('[data-testid="viewmodel-partly-shown"]').textContent).toBe(
+      "Shortstop stays partly visible: it shares animations with Scattergun.",
+    );
+    await chooseWeapon("scout/a", "Hidden");
+    expect(box.querySelector('[data-testid="viewmodel-partly-shown"]')).toBeNull();
+  });
+
   it("keeps write operations disabled while TF2 runs or preload state is still loading", async () => {
     running = true;
     record = {

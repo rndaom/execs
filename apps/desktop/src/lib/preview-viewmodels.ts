@@ -3,7 +3,13 @@ import type { ViewmodelSourceCatalog } from "./bridge";
 type Group = ViewmodelSourceCatalog["groups"][number];
 type Item = [id: number, schemaName: string, slot: string, itemClass?: string];
 
-function group(id: string, cls: string, items: Item[], inspect = false): Group {
+function group(
+  id: string,
+  cls: string,
+  items: Item[],
+  inspect = false,
+  overlaps: string[] = [],
+): Group {
   return {
     id: `${cls}/${id}`,
     class: cls,
@@ -15,7 +21,7 @@ function group(id: string, cls: string, items: Item[], inspect = false): Group {
     })),
     animations: [`@${id}`],
     inspect,
-    overlaps: [],
+    overlaps,
     teamVariantsDiffer: false,
   };
 }
@@ -44,8 +50,8 @@ const bat: Item[] = [
 ];
 
 /**
- * A small browser-preview catalog shaped like a real install's Scout and Spy
- * groups. Real catalogs are derived from the player's own TF2 files.
+ * A small browser-preview catalog shaped like a real install's Scout, Soldier
+ * and Spy groups. The Concheror reuses the Shovel's swings, as it does in TF2. Real catalogs are derived from the player's own TF2 files.
  */
 export const PREVIEW_VIEWMODEL_CATALOG: ViewmodelSourceCatalog = {
   status: "provisional",
@@ -74,6 +80,27 @@ export const PREVIEW_VIEWMODEL_CATALOG: ViewmodelSourceCatalog = {
       true,
     ),
     group("b-inspect", "scout", bat, true),
+    group("rl", "soldier", [
+      [18, "TF_WEAPON_ROCKETLAUNCHER", "primary"],
+      [127, "The Direct Hit", "primary"],
+    ]),
+    group("sh", "soldier", [
+      [10, "TF_WEAPON_SHOTGUN_SOLDIER", "secondary"],
+      [415, "The Reserve Shooter", "secondary"],
+    ]),
+    group("wh", "soldier", [[354, "The Concheror", "secondary"]], false, ["soldier/s"]),
+    group(
+      "s",
+      "soldier",
+      [
+        [6, "TF_WEAPON_SHOVEL", "melee"],
+        [128, "The Equalizer", "melee"],
+        [129, "The Buff Banner", "secondary"],
+        [416, "The Market Gardener", "melee"],
+      ],
+      false,
+      ["soldier/wh"],
+    ),
     group("rev", "spy", [
       [24, "TF_WEAPON_REVOLVER", "secondary"],
       [61, "The Ambassador", "secondary"],

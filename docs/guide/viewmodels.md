@@ -14,7 +14,9 @@ Choose **Shown**, **Hidden** or **Hands only** for each class's weapon slots and
 
 **Every class…** applies one choice to the whole profile (show all, hide all, or keep melee visible) and shows exactly what changes before it applies.
 
-Some weapons share animations; those must be set the same before the pack can build.
+Some weapons share animations. A weapon you leave shown always stays fully visible, so a hidden weapon that shares animations with it stays partly visible; execs names these under the class. For example, Soldier's Concheror reuses the Shovel's swings, so hiding Secondary while keeping melee leaves those swings on screen. Weapons that share animations can't be set to Hidden and Hands only at the same time.
+
+If your built pack is out of date, its choices come back as unbuilt choices; build again to update it.
 
 If TF2 updates its files while you have unbuilt choices, execs keeps them but can't build them against the new files. Discard them to load the new weapons.
 
