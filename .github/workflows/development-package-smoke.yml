@@ -8,7 +8,7 @@ on:
       - scripts/development-package-*.mjs
       - scripts/app-maintenance-fixture*.mjs
       - scripts/package-smoke-fixture.mjs
-      - scripts/fixtures/package-smoke-v020.json
+      - scripts/fixtures/package-smoke-v021.json
       - scripts/fixtures/windows-package-v021/**
       - scripts/fixtures/development-package-v021.json
       - scripts/linux-native-*.mjs

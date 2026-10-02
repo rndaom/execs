@@ -8,7 +8,7 @@ on:
       - scripts/linux-native-*.mjs
       - scripts/app-maintenance-fixture*.mjs
       - scripts/package-smoke-fixture.mjs
-      - scripts/fixtures/package-smoke-v020.json
+      - scripts/fixtures/package-smoke-v021.json
       - apps/desktop/src-tauri/tauri.conf.json
       - apps/desktop/src-tauri/capabilities/**
       - apps/desktop/src-tauri/Cargo.lock
