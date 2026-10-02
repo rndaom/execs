@@ -10,7 +10,8 @@
     "studio": "node capture/emblems.mjs && node music/compose.mjs && remotion studio",
     "render": "node capture/emblems.mjs && node music/compose.mjs && remotion render Promo out/execs-promo.mp4 --codec=h264 --crf=18 --x264-preset=slow --audio-bitrate=192k",
     "gif": "node capture/emblems.mjs && node gif.mjs",
-    "announcement": "remotion still Announcement out/release-0.2.0-x.png"
+    "announcement": "remotion still Announcement out/release-0.2.0-x.png",
+    "readme": "remotion still ReadmeHeader ../../docs/media/readme-header.png --scale=2 && remotion still ReadmeInstall ../../docs/media/readme-install.png --scale=2"
   },
   "dependencies": {
     "@remotion/cli": "4.0.520",

@@ -6,7 +6,7 @@ import { theme } from "./theme";
 import { Wordmark } from "./Wordmark";
 
 /** The TF2 emblem as a centred halftone of execs orange dots, like the app's backdrop. */
-function EmblemHalftone({ size, spacing = 14 }: { size: number; spacing?: number }) {
+export function EmblemHalftone({ size, spacing = 14 }: { size: number; spacing?: number }) {
   const dots = useMemo(() => {
     const radius = size / 2;
     const scale = 11 / (radius * 0.86);

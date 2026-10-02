@@ -26,6 +26,13 @@ const REMOTE_ART = [
   "*tf2huds.dev*",
 ];
 
+/** The Crosshair scene's three clicks: gallery label and capture name. */
+const CROSSHAIR_PICKS = [
+  ["Cross with gaps", "tf2"],
+  ["Circle + dot", "circle"],
+  ["X", "x"],
+];
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const button = "button, [role=button], [role=tab], [role=menuitem], summary";
 
@@ -105,6 +112,18 @@ async function park(page) {
   await sleep(250);
 }
 
+/** Saving a profile opens the welcome tour, as after first-run setup; close it. */
+async function skipWelcome(page) {
+  const skipped = await page.evaluate(() => {
+    const skip = [...document.querySelectorAll("[role=dialog] button")].find(
+      (element) => element.textContent.trim() === "Skip",
+    );
+    skip?.click();
+    return Boolean(skip);
+  });
+  if (skipped) await sleep(700);
+}
+
 async function openProfiles(page) {
   await click(page, "header summary", "Profile", { settle: 500 });
 }
@@ -129,6 +148,7 @@ const FLOWS = {
       await page.keyboard.type(name);
       await page.keyboard.press("Enter");
       await sleep(700);
+      await skipWelcome(page);
     }
     await page.evaluate(() => document.activeElement?.blur());
     await snap("profiles-menu");
@@ -141,7 +161,7 @@ const FLOWS = {
   comfig: async (page, snap) => {
     await open(page, "settings-comfig");
     await snap("comfig-medium");
-    await click(page, "label", "High quality for modern systems", { settle: 1000 });
+    await click(page, "label", "High", { settle: 1000 });
     await snap("comfig-high");
   },
   binds: async (page, snap) => {
@@ -161,10 +181,11 @@ const FLOWS = {
   crosshair: async (page, snap) => {
     await open(page, "settings-crosshair");
     await snap("crosshair");
-    // Shape labels are lower case in the DOM and capitalised by CSS.
-    for (const shape of ["circle", "chevron", "ring cross"]) {
-      await click(page, "button, label", shape, { exact: true, settle: 900 });
-      await snap(`crosshair-${shape.split(" ")[0]}`);
+    // One of TF2's own crosshairs, then two execs shapes, from the main gallery
+    // (the first match; the per-weapon gallery repeats the names lower down).
+    for (const [label, name] of CROSSHAIR_PICKS) {
+      await click(page, "label", label, { exact: true, settle: 900 });
+      await snap(`crosshair-${name}`);
     }
   },
   viewmodels: async (page, snap) => {
@@ -209,19 +230,17 @@ const FLOWS = {
     await snap("files-problems");
   },
   news: async (page, snap) => {
-    await open(page, "settings-gameplay");
-    await click(page, "summary", "Where these values come from", { settle: 700 });
-    await scrollToText(page, "summary", "Where these values come from", 120);
-    await snap("gameplay-sources");
-    await open(page, "settings-comfig");
-    await openProfiles(page);
-    await click(page, button, "Actions for Main", { exact: true, settle: 400 });
-    await click(page, button, "Restore points", { settle: 1200 });
-    await snap("restore-points");
-    await open(page, "settings-comfig");
-    await click(page, button, "App settings", { settle: 1000 });
-    await scrollToText(page, "h2, h3", "Health", 24);
-    await snap("app-health");
+    await open(page, "settings-crosshair");
+    await scrollToText(page, "h2", "Per weapon", 24);
+    await snap("crosshair-weapons");
+    await open(page, "settings-mods");
+    await click(page, "label", "Sounds", { exact: true, settle: 900 });
+    await snap("mods-sounds");
+    await open(page, "settings-comfig-vanilla");
+    await snap("comfig-vanilla");
+    await open(page, "welcome");
+    await sleep(2500);
+    await snap("welcome");
   },
   inventory: async (page, snap) => {
     const blur = () => page.evaluate(() => document.activeElement?.blur());
@@ -330,21 +349,21 @@ const MARKS = {
     progress: { selector: "*", text: ["Profile applied", "Game closed", "Done"], pick: "climb" },
   },
   "comfig-medium": {
-    high: { selector: "label", text: ["High quality for modern systems"] },
+    high: { selector: "label", text: ["High"], exact: true },
   },
   binds: {
     taunt: { selector: "div", text: ["Taunt"], pick: "smallest" },
     reload: { selector: "div", text: ["Reload"], pick: "smallest" },
   },
-  "restore-points": {
-    dialog: { selector: "[role=dialog]", text: ["Restore points"] },
-  },
   crosshair: {
-    shapes: { selector: "*", text: ["plus gap", "ring cross"], pick: "climb" },
-    circle: { selector: "button, label", text: ["circle"], exact: true },
-    chevron: { selector: "button, label", text: ["chevron"], exact: true },
-    ring: { selector: "button, label", text: ["ring cross"], exact: true },
-    sprite: { selector: "*", text: ["64 × 64 sprite"], pick: "climb" },
+    gallery: { selector: "*", text: ["Weapon default", "Outlined"], pick: "climb" },
+    ...Object.fromEntries(
+      CROSSHAIR_PICKS.map(([label, name]) => [
+        name,
+        { selector: "label", text: [label], exact: true },
+      ]),
+    ),
+    preview: { selector: "*", text: ["Actual size on this screen"], pick: "climb" },
   },
   viewmodels: {
     primaryHidden: { selector: "label", text: ["Hidden"], exact: true },
@@ -494,32 +513,16 @@ const SETS = {
     width: 1028,
     height: 643,
     scale: 2.8,
-    flows: ["profiles", "files", "viewmodels", "news"],
-    keep: [
-      "compare",
-      "restore-points",
-      "gameplay-sources",
-      "app-health",
-      "files-problems",
-      "viewmodels-both",
-    ],
+    flows: ["crosshair", "sounds", "news"],
+    keep: ["crosshair", "crosshair-weapons", "sounds", "mods-sounds", "welcome", "comfig-vanilla"],
   },
   readme: {
     dir: README,
     prefix: "screen-",
     width: 1280,
     height: 800,
-    flows: ["inventory", "profiles", "crosshair", "viewmodels", "files", "news"],
-    keep: [
-      "inv-hover",
-      "inv-inspect",
-      "inv-reveal",
-      "compare",
-      "viewmodels-both",
-      "crosshair-ring",
-      "files-problems",
-      "app-health",
-    ],
+    flows: ["inventory", "profiles", "crosshair", "sounds"],
+    keep: ["compare", "crosshair-circle", "sounds", "inv-hover"],
   },
 };
 

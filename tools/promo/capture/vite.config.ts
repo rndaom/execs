@@ -51,7 +51,7 @@ const EDITS: Record<string, [string, string][]> = {
     ],
     // Steam already has the profile's launch options, the usual state, so the
     // header carries no sample-data warning.
-    ['const steamOptions = "-novid";', "const steamOptions = launchOptions;"],
+    ["const steamOptions = steamLaunchOptions;", "const steamOptions = launchOptions;"],
     // The sample crosshair pack was built by this version, so Crosshair shows
     // no legacy-pack notice.
     [

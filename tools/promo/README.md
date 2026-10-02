@@ -29,7 +29,8 @@ here, after `pnpm install` at the repository root.
 
 3. **Render.** `pnpm render` writes `out/execs-promo.mp4` with sound for other
    platforms. `pnpm gif` writes the README's silent `out/execs-promo.gif`; copy it
-   to `docs/media/promo.gif`. `pnpm announcement` renders the release graphic.
+   to `docs/media/promo.gif`. `pnpm announcement` renders the release graphic, and `pnpm readme` the
+   README's header and install-steps images into `docs/media/`.
    `pnpm studio` previews everything.
 
 ## Local sources

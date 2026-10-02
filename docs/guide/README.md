@@ -2,6 +2,7 @@
 
 How execs works, one page per part of the app. The app itself keeps to short labels; the details are here. The **Guide** button in the app's sidebar opens the page for the pane you are on.
 
+- [Installing and removing](install.md): downloads, the Windows warning, Linux, where files live
 - [Profiles](profiles.md): saving, switching, comparing and restoring your setups
 - [Comfig](comfig.md): mastercomfig presets, addons and modules
 - [Binds](binds.md)

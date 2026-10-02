@@ -8,6 +8,7 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
+import desktop from "../../../apps/desktop/package.json";
 import rawTargets from "../public/captures/targets.json";
 import { DotField, type FieldMotion } from "./DotField";
 import { loadInter } from "./fonts";
@@ -480,7 +481,7 @@ const RELOAD = T("binds", "reload");
 const keyOf = (row: Rect) => ({ x: row.x + row.width - 10, y: row.y + 10 });
 const cornerOf = (rect: Rect, inset = 6) => ({ x: rect.x + rect.width - inset, y: rect.y + inset });
 const PROGRESS = T("switch-done", "progress");
-const SHAPE = (name: "circle" | "chevron" | "ring") => T("crosshair", name);
+const SHAPE = (name: "tf2" | "circle" | "x") => T("crosshair", name);
 const PRIMARY_HIDDEN = T("viewmodels", "primaryHidden");
 const SECONDARY_HANDS = T("viewmodels-primary", "secondaryHands");
 const FILE_LINES = FILE_ROWS.slice(4, 14);
@@ -495,12 +496,12 @@ const CAMERA: CameraKey[] = [
   { at: on("comfig"), rect: { x: 220, y: 110, width: 1180, height: 470 }, cut: true },
   { at: on("clickHigh") + 6, rect: { x: 380, y: 0, width: 1060, height: 330 }, length: 16 },
   { at: on("binds"), rect: { x: 700, y: 395, width: 600, height: 230 }, cut: true },
-  // The shape tabs and grid, the sprite and the size and colour below them.
-  { at: on("crosshair"), rect: { x: 240, y: 180, width: 800, height: 520 }, cut: true },
+  // The gallery of TF2's crosshairs and execs shapes beside the true-size preview.
+  { at: on("crosshair"), rect: { x: 236, y: 120, width: 1150, height: 620 }, cut: true },
   { at: on("viewmodels"), rect: { x: 236, y: 290, width: 720, height: 330 }, cut: true },
   { at: at(10, 1), rect: { x: 700, y: 330, width: 700, height: 300 }, length: 12 },
-  // The library: its heading, the source filter and the first rows.
-  { at: on("sounds"), rect: { x: 236, y: 470, width: 1150, height: 430 }, cut: true },
+  // Game audio, the two sound slots and the top of the library.
+  { at: on("sounds"), rect: { x: 236, y: 120, width: 1150, height: 720 }, cut: true },
   {
     at: on("clickUse") + 3,
     rect: grow(union(T("sounds-used", "hitSlot"), T("sounds-used", "hitToggle")), 20),
@@ -514,9 +515,9 @@ function AppAct({ frame }: { frame: number }) {
   const features = [
     ["comfig", "Comfig", "Pick a preset. Tune the rest"],
     ["binds", "Binds", "Click an action. Press a key"],
-    ["crosshair", "Crosshair", "Pick a shape, or draw your own"],
+    ["crosshair", "Crosshair", "TF2's crosshairs or yours, at true size"],
     ["viewmodels", "Viewmodels", "Hide any weapon, class by class"],
-    ["sounds", "Sounds", "Hit sounds from TF2 and comfig.app"],
+    ["sounds", "Sounds", "Game volume and hit sounds, per profile"],
     ["files", "Files", "Edit cfgs with a linter that knows Source"],
   ] as const;
   const reveals: Reveal[] = [
@@ -555,9 +556,9 @@ function AppAct({ frame }: { frame: number }) {
           { src: "comfig-high", at: on("clickHigh"), fade: 3 },
           { src: "binds", at: on("binds") },
           { src: "crosshair", at: on("crosshair") },
-          { src: "crosshair-circle", at: on("clickCircle"), fade: 3 },
-          { src: "crosshair-chevron", at: on("clickChevron"), fade: 3 },
-          { src: "crosshair-ring", at: on("clickRing"), fade: 3 },
+          { src: "crosshair-tf2", at: on("clickTf2"), fade: 3 },
+          { src: "crosshair-circle", at: on("clickCircleDot"), fade: 3 },
+          { src: "crosshair-x", at: on("clickX"), fade: 3 },
           { src: "viewmodels", at: on("viewmodels") },
           { src: "viewmodels-primary", at: on("clickHidden"), fade: 3 },
           { src: "viewmodels-both", at: on("clickHands"), fade: 3 },
@@ -583,12 +584,12 @@ function AppAct({ frame }: { frame: number }) {
           { at: on("clickReload") - 4, ...centre(RELOAD) },
           { at: on("clickReload"), ...centre(RELOAD), click: true },
           { at: on("crosshair"), x: 700, y: 560 },
-          { at: on("clickCircle") - 3, ...centre(SHAPE("circle")) },
-          { at: on("clickCircle"), ...centre(SHAPE("circle")), click: true },
-          { at: on("clickChevron") - 3, ...centre(SHAPE("chevron")) },
-          { at: on("clickChevron"), ...centre(SHAPE("chevron")), click: true },
-          { at: on("clickRing") - 3, ...centre(SHAPE("ring")) },
-          { at: on("clickRing"), ...centre(SHAPE("ring")), click: true },
+          { at: on("clickTf2") - 3, ...centre(SHAPE("tf2")) },
+          { at: on("clickTf2"), ...centre(SHAPE("tf2")), click: true },
+          { at: on("clickCircleDot") - 3, ...centre(SHAPE("circle")) },
+          { at: on("clickCircleDot"), ...centre(SHAPE("circle")), click: true },
+          { at: on("clickX") - 3, ...centre(SHAPE("x")) },
+          { at: on("clickX"), ...centre(SHAPE("x")), click: true },
           { at: on("viewmodels"), x: 1060, y: 620 },
           { at: on("clickHidden") - 4, ...centre(PRIMARY_HIDDEN) },
           { at: on("clickHidden"), ...centre(PRIMARY_HIDDEN), click: true },
@@ -604,7 +605,7 @@ function AppAct({ frame }: { frame: number }) {
           [on("switchIn") + 6, on("comfig")],
           [on("clickHigh") + 14, on("binds")],
           [on("keyR") + 8, on("crosshair")],
-          [on("clickRing") + 10, on("viewmodels")],
+          [on("clickX") + 10, on("viewmodels")],
           [on("clickHands") + 14, on("sounds")],
           [on("clickUse") + 4, on("end")],
         ]}
@@ -613,9 +614,9 @@ function AppAct({ frame }: { frame: number }) {
           { at: on("clickHigh"), ...HIGH_DOT },
           { at: on("keyG"), ...keyOf(TAUNT) },
           { at: on("keyR"), ...keyOf(RELOAD) },
-          ...(["clickCircle", "clickChevron", "clickRing"] as const).map((event, index) => ({
+          ...(["clickTf2", "clickCircleDot", "clickX"] as const).map((event, index) => ({
             at: on(event),
-            ...cornerOf(SHAPE((["circle", "chevron", "ring"] as const)[index]), 8),
+            ...cornerOf(SHAPE((["tf2", "circle", "x"] as const)[index]), 8),
           })),
           { at: on("clickHidden"), ...cornerOf(PRIMARY_HIDDEN, 4) },
           { at: on("clickHands"), ...cornerOf(SECONDARY_HANDS, 4) },
@@ -667,39 +668,39 @@ function AppAct({ frame }: { frame: number }) {
   );
 }
 
-// ------------------------------------------------------------------ new in 0.2.0
+// ------------------------------------------------------------------ new in this release
 
 const NEWS_TILE = { width: 520, height: 292 };
 const NEWS = [
   {
-    src: "tile-compare",
-    crop: { x: 272, y: 40, width: 900, height: 506 },
-    label: "Compare before you switch",
+    src: "tile-crosshair",
+    crop: { x: 281, y: 187, width: 1120, height: 629 },
+    label: "Crosshair, rebuilt around one gallery",
   },
   {
-    src: "tile-restore-points",
-    crop: { x: 236, y: 190, width: 966, height: 543 },
-    label: "Restore points for every profile",
+    src: "tile-crosshair-weapons",
+    crop: { x: 274, y: 115, width: 564, height: 317 },
+    label: "Per-weapon crosshairs, class by class",
   },
   {
-    src: "tile-gameplay-sources",
-    crop: { x: 244, y: 551, width: 620, height: 349 },
-    label: "See where each value comes from",
+    src: "tile-sounds",
+    crop: { x: 274, y: 108, width: 1130, height: 635 },
+    label: "Game and music volume, per profile",
   },
   {
-    src: "tile-app-health",
-    crop: { x: 640, y: 112, width: 760, height: 428 },
-    label: "A health check for your install",
+    src: "tile-mods-sounds",
+    crop: { x: 281, y: 259, width: 648, height: 364 },
+    label: "Sounds from GameBanana",
   },
   {
-    src: "tile-files-problems",
-    crop: { x: 560, y: 360, width: 830, height: 467 },
-    label: "A new cfg editor",
+    src: "tile-welcome",
+    crop: { x: 380, y: 238, width: 680, height: 382 },
+    label: "A short welcome tour",
   },
   {
-    src: "tile-viewmodels-both",
-    crop: { x: 236, y: 78, width: 1190, height: 669 },
-    label: "Viewmodels, weapon by weapon",
+    src: "tile-comfig-vanilla",
+    crop: { x: 274, y: 108, width: 490, height: 275 },
+    label: "Try mastercomfig in a new profile",
   },
 ];
 
@@ -719,7 +720,7 @@ function News({ frame }: { frame: number }) {
           transform: `translateY(${(1 - title) * 20}px)`,
         }}
       >
-        <DotTitle text="New in 0.2.0" size={72} dotAt={start + 8} frame={frame} />
+        <DotTitle text={`New in ${desktop.version}`} size={72} dotAt={start + 8} frame={frame} />
       </div>
       {NEWS.map((tile, index) => {
         const appear = TILE_FRAMES[index];
@@ -1146,7 +1147,7 @@ function Outro({ frame }: { frame: number }) {
           transform: `translateY(${(1 - version) * 14}px)`,
         }}
       >
-        Version 0.2.0 <span style={{ color: theme.brand }}>·</span> Windows and Linux{" "}
+        Version {desktop.version} <span style={{ color: theme.brand }}>·</span> Windows and Linux{" "}
         <span style={{ color: theme.brand }}>·</span> Free and open source
       </div>
       <div
