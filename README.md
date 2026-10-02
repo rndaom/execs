@@ -1,12 +1,5 @@
 <p align="center">
-  <img src="docs/media/icon.png" width="88" alt="">
-</p>
-
-<h1 align="center">execs</h1>
-
-<p align="center">
-  Your Team Fortress 2 setup as profiles. Switch in one click.<br>
-  <sub>Free and open source for Windows and Linux</sub>
+  <img src="docs/media/readme-header.png" width="100%" alt="execs. Your Team Fortress 2 setup as profiles. Switch in one click. Free and open source for Windows and Linux.">
 </p>
 
 <p align="center">
@@ -65,7 +58,12 @@ Everything else is in the [changelog](CHANGELOG.md).
 
 Download from the [latest release](https://github.com/rndaom/execs/releases/latest).
 
-- **Windows 10 or 11 (64-bit):** run the `-setup.exe`. No admin rights needed. The installer isn't signed yet, so Windows may say *Windows protected your PC*; if you downloaded it from this page, choose **More info** → **Run anyway**.
+- **Windows 10 or 11 (64-bit):** run the `-setup.exe`. No admin rights needed. The installer isn't signed yet, so Windows may say *Windows protected your PC*:
+
+<p align="center">
+  <img src="docs/media/readme-install.png" width="100%" alt="Step 1: Windows protected your PC. Click More info. Step 2: click Run anyway and the installer starts. Only for the installer from github.com/rndaom/execs/releases.">
+</p>
+
 - **Linux (x86_64):** the AppImage updates itself; the `.deb` works too. Needs Ubuntu 22.04, Debian 12, Fedora 36 or newer.
 
 On first launch execs finds TF2 through Steam and saves your current setup as your first profile. Updates are offered in the app and install when you click. Checking the download, where files live, uninstalling and troubleshooting: [Installing and removing](docs/guide/install.md).
