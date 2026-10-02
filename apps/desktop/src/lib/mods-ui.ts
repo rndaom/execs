@@ -409,7 +409,7 @@ export function isGameBananaInstalled(
 // GameBanana browser
 // ---------------------------------------------------------------------------
 
-/** Where the mature-content choice is remembered, like the disclosures. */
+/** Where the mature-content choice is remembered in localStorage. */
 export const MATURE_STORAGE_KEY = "execs.gamebanana.mature";
 
 /**

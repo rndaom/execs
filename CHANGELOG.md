@@ -5,6 +5,16 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Changed
+
+- No more fold-out sections: every setting is on the page. Comfig's modules have their own tab
+  with search and category filters; HUD options, Mods' file check, Casual addons and particles,
+  and App settings' credits are always shown; Sounds puts pitch and repeat delay with each sound.
+- Viewmodels shows each class as one table, with every weapon under its slot and its own Shown,
+  Hidden or Hands only choice, instead of menus behind Customize weapons.
+- HUD options with long lists of choices, including HUD crosshair glyphs, show every choice on the
+  page instead of a drop-down menu.
+
 ## [0.2.2] - 2026-10-01
 
 ### Added

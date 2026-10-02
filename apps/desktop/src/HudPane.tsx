@@ -12,9 +12,8 @@ import {
 } from "@phosphor-icons/react";
 import { useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Alert } from "./components/ui/Alert";
-import { Caret } from "./components/ui/Caret";
+import { ChoiceChips } from "./components/ui/ChoiceChips";
 import { ClassTabs } from "./components/ui/ClassTabs";
-import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
@@ -27,6 +26,7 @@ import type { Api } from "./lib/api";
 import {
   type HudAlbumImage,
   type HudCatalogEntry,
+  type HudSchemaControl,
   type HudSchemaView,
   type HudStat,
   type HudUiState,
@@ -79,7 +79,7 @@ function alphaPercent(alpha: number): number {
   return Math.round((alpha / 255) * 100);
 }
 
-/** Above this many choices a schema combo stays a dropdown. */
+/** Above this many choices a schema combo wraps as chips instead of a segmented control. */
 const SEGMENTED_CHOICE_MAX = 4;
 
 /** Switching profiles or HUDs is a different record — the draft goes with it. */
@@ -319,7 +319,7 @@ export function HudPane({
         }
       />
 
-      <div className="border-b border-edge">
+      <div className="pane-views">
         <ClassTabs
           label="HUD workspace"
           idPrefix="hud-surface"
@@ -358,11 +358,8 @@ export function HudPane({
           ) : null}
 
           {installedId ? (
-            <section
-              data-testid="hud-installed"
-              className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]"
-            >
-              <div className="min-w-0">
+            <section data-testid="hud-installed">
+              <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
                 <div className="min-w-0">
                   <h2 className="t-pane">
                     {installedEntry ? hudDisplayName(installedEntry) : installedId}
@@ -425,313 +422,45 @@ export function HudPane({
                   </div>
                 </div>
 
-                {schemaLoading ? (
-                  <p role="status" className="t-meta section">
-                    <Loading>Loading HUD options…</Loading>
-                  </p>
-                ) : null}
-                {schemaError ? (
-                  <Alert tone="warn" testId="hud-schema-error" className="mt-4">
-                    HUD options are unavailable. {schemaError}{" "}
-                    <button type="button" className="underline" onClick={onRetryLocal}>
-                      Retry loading options
+                {installedEntry?.banner ? (
+                  <figure className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => setViewer({ entry: installedEntry, index: 0 })}
+                      className="surface m-0 w-full cursor-zoom-in"
+                      aria-label={`View ${hudDisplayName(installedEntry)} screenshots`}
+                    >
+                      <HudPreview
+                        src={installedEntry.banner}
+                        name={hudDisplayName(installedEntry)}
+                      />
                     </button>
-                  </Alert>
-                ) : null}
-
-                {state.installed && state.schemaSupported && schema ? (
-                  <Disclosure
-                    profileId={profileId}
-                    storageKey="hud-options"
-                    summary="HUD options"
-                    testId="hud-options-disclosure"
-                    className="mt-4 border-t border-edge"
-                    defaultOpen
-                  >
-                    <div data-testid="hud-options" className="flex flex-col">
-                      <div className="flex items-center justify-between gap-3 border-b border-edge pb-2">
-                        <p className="t-meta">
-                          {schema.author ? `Schema by ${schema.author}` : "Options"}
-                        </p>
-                      </div>
-                      {schema.sections.some((section) =>
-                        section.controls.some((control) => control.controlType === "crosshair"),
-                      ) ? (
-                        <p className="t-meta pt-3">
-                          This HUD draws its own crosshair, on top of TF2’s.
-                        </p>
-                      ) : null}
-                      <div className="grid gap-x-6 pt-1">
-                        {schema.sections.map((section) => (
-                          <fieldset key={section.name} className="flex min-w-0 flex-col gap-2 py-2">
-                            <legend className="eyebrow py-1">{section.name}</legend>
-                            {section.controls.map((control) => {
-                              if (control.unavailableReason) {
-                                return (
-                                  <div
-                                    key={control.name}
-                                    className="py-2"
-                                    data-testid="hud-option-unavailable"
-                                  >
-                                    <p className="t-row">{control.label} - Unavailable</p>
-                                    <p className="t-meta mt-1">{control.unavailableReason}</p>
-                                  </div>
-                                );
-                              }
-                              const value = draft[control.name] ?? control.value;
-                              if (control.controlType === "checkbox") {
-                                const enabled = isHudCheckboxOn(value);
-                                return (
-                                  <div
-                                    key={control.name}
-                                    className="flex items-center justify-between gap-3 py-1 text-[13.5px] text-ink"
-                                  >
-                                    <span>{control.label}</span>
-                                    <Switch
-                                      checked={enabled}
-                                      label={control.label}
-                                      testId={`hud-opt-${control.name}`}
-                                      onChange={(next) =>
-                                        setDraft((current) => ({
-                                          ...current,
-                                          [control.name]: next ? "true" : "false",
-                                        }))
-                                      }
-                                    />
-                                  </div>
-                                );
-                              }
-                              if (control.controlType === "combo") {
-                                if (control.choices.length <= SEGMENTED_CHOICE_MAX) {
-                                  return (
-                                    <div
-                                      key={control.name}
-                                      className="flex items-center justify-between gap-3 py-1 text-[13.5px] text-ink"
-                                    >
-                                      <span>{control.label}</span>
-                                      <Segmented
-                                        label={control.label}
-                                        size="sm"
-                                        testIdPrefix={`hud-opt-${control.name}`}
-                                        options={control.choices.map((choice) => ({
-                                          id: choice.value,
-                                          label: choice.label,
-                                        }))}
-                                        value={value}
-                                        onChange={(next) =>
-                                          setDraft((current) => ({
-                                            ...current,
-                                            [control.name]: next,
-                                          }))
-                                        }
-                                      />
-                                    </div>
-                                  );
-                                }
-                                return (
-                                  <label
-                                    key={control.name}
-                                    className="grid grid-cols-[minmax(0,1fr)_minmax(7rem,auto)] items-center gap-3 py-1 text-[13.5px] text-ink"
-                                    htmlFor={`hud-opt-${control.name}`}
-                                  >
-                                    <span>{control.label}</span>
-                                    <span className="select-field">
-                                      <select
-                                        id={`hud-opt-${control.name}`}
-                                        data-testid={`hud-opt-${control.name}`}
-                                        value={value}
-                                        onChange={(event) =>
-                                          setDraft((current) => ({
-                                            ...current,
-                                            [control.name]: event.target.value,
-                                          }))
-                                        }
-                                        className="field min-w-0 py-1.5 pr-7 pl-2 text-[13px] text-ink focus:outline-none disabled:opacity-50"
-                                      >
-                                        {control.choices.map((choice) => (
-                                          <option key={choice.value} value={choice.value}>
-                                            {choice.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <Caret />
-                                    </span>
-                                  </label>
-                                );
-                              }
-                              if (control.controlType === "crosshair") {
-                                return (
-                                  <label
-                                    key={control.name}
-                                    className="grid grid-cols-[minmax(0,1fr)_minmax(7rem,auto)] items-center gap-3 py-1 text-[13.5px] text-ink"
-                                    htmlFor={`hud-opt-${control.name}`}
-                                  >
-                                    <span>{control.label} · HUD overlay</span>
-                                    <span className="select-field">
-                                      <select
-                                        id={`hud-opt-${control.name}`}
-                                        data-testid={`hud-opt-${control.name}`}
-                                        value={value}
-                                        onChange={(event) =>
-                                          setDraft((current) => ({
-                                            ...current,
-                                            [control.name]: event.target.value,
-                                          }))
-                                        }
-                                        className="field min-w-0 py-1.5 pr-7 pl-2 text-[13px] text-ink focus:outline-none disabled:opacity-50"
-                                      >
-                                        {control.choices.map((choice) => (
-                                          <option key={choice.value} value={choice.value}>
-                                            {choice.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <Caret />
-                                    </span>
-                                  </label>
-                                );
-                              }
-                              if (control.controlType === "number") {
-                                // The schema's own bounds — respected on the way out,
-                                // not just advertised: `min`/`max` alone do not stop a
-                                // typed value from being applied.
-                                const minimum = Number(control.minimum);
-                                const maximum = Number(control.maximum);
-                                return (
-                                  <label
-                                    key={control.name}
-                                    className="grid grid-cols-[minmax(0,1fr)_5rem] items-center gap-3 py-1 text-[13.5px] text-ink"
-                                    htmlFor={`hud-opt-${control.name}`}
-                                  >
-                                    <span>{control.label}</span>
-                                    <input
-                                      id={`hud-opt-${control.name}`}
-                                      data-testid={`hud-opt-${control.name}`}
-                                      type="number"
-                                      value={value}
-                                      min={control.minimum}
-                                      max={control.maximum}
-                                      onChange={(event) =>
-                                        setDraft((current) => ({
-                                          ...current,
-                                          [control.name]: event.target.value,
-                                        }))
-                                      }
-                                      onBlur={(event) => {
-                                        const raw = Number(event.target.value);
-                                        if (!Number.isFinite(raw)) {
-                                          return;
-                                        }
-                                        let next = raw;
-                                        if (Number.isFinite(minimum)) {
-                                          next = Math.max(minimum, next);
-                                        }
-                                        if (Number.isFinite(maximum)) {
-                                          next = Math.min(maximum, next);
-                                        }
-                                        if (next !== raw) {
-                                          setDraft((current) => ({
-                                            ...current,
-                                            [control.name]: String(next),
-                                          }));
-                                        }
-                                      }}
-                                      className="field w-full px-2 py-1.5 text-[13px] text-ink focus:outline-none disabled:opacity-50"
-                                    />
-                                  </label>
-                                );
-                              }
-                              const rgba = parseHudRgba(value);
-                              return (
-                                <div key={control.name} className="py-1">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <label
-                                      className="text-[13.5px] text-ink"
-                                      htmlFor={`hud-opt-${control.name}`}
-                                    >
-                                      {control.label}
-                                    </label>
-                                    <input
-                                      id={`hud-opt-${control.name}`}
-                                      data-testid={`hud-opt-${control.name}`}
-                                      type="color"
-                                      value={rgbToHex(rgba.r, rgba.g, rgba.b)}
-                                      onChange={(event) => {
-                                        const rgb = hexToRgb(event.target.value);
-                                        if (!rgb) {
-                                          return;
-                                        }
-                                        setDraft((current) => ({
-                                          ...current,
-                                          [control.name]: formatHudRgba(
-                                            rgb.r,
-                                            rgb.g,
-                                            rgb.b,
-                                            rgba.a,
-                                          ),
-                                        }));
-                                      }}
-                                      className="h-7 w-10 cursor-pointer rounded-md border border-edge-strong bg-panel disabled:opacity-50"
-                                    />
-                                  </div>
-                                  <label className="mt-2 grid grid-cols-[auto_minmax(0,1fr)_3rem] items-center gap-2 text-[12px] text-ink-muted">
-                                    <span>Opacity</span>
-                                    <input
-                                      data-testid={`hud-opt-${control.name}-alpha`}
-                                      aria-label={`${control.label} opacity`}
-                                      type="range"
-                                      min={0}
-                                      max={255}
-                                      value={rgba.a}
-                                      onChange={(event) =>
-                                        setDraft((current) => ({
-                                          ...current,
-                                          [control.name]: formatHudRgba(
-                                            rgba.r,
-                                            rgba.g,
-                                            rgba.b,
-                                            Number(event.target.value),
-                                          ),
-                                        }))
-                                      }
-                                      className="range min-w-0"
-                                    />
-                                    {/* Percentage is what people mean by opacity; the
-                                raw 0–255 the HUD file stores rides along. */}
-                                    <span
-                                      data-testid={`hud-opt-${control.name}-alpha-value`}
-                                      className="text-right tabular-nums"
-                                      title={`${rgba.a} of 255`}
-                                    >
-                                      {alphaPercent(rgba.a)}%
-                                    </span>
-                                  </label>
-                                </div>
-                              );
-                            })}
-                          </fieldset>
-                        ))}
-                      </div>
-                    </div>
-                  </Disclosure>
-                ) : state.installed && !state.schemaSupported ? (
-                  <p data-testid="hud-options-notes" className="t-meta section">
-                    {hudSchemaUnavailableReason(state.installed.id)}
-                  </p>
+                  </figure>
                 ) : null}
               </div>
-
-              {installedEntry?.banner ? (
-                <figure className="min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => setViewer({ entry: installedEntry, index: 0 })}
-                    className="surface m-0 w-full cursor-zoom-in"
-                    aria-label={`View ${hudDisplayName(installedEntry)} screenshots`}
-                  >
-                    <HudPreview src={installedEntry.banner} name={hudDisplayName(installedEntry)} />
+              {schemaLoading ? (
+                <p role="status" className="t-meta section">
+                  <Loading>Loading HUD options…</Loading>
+                </p>
+              ) : null}
+              {schemaError ? (
+                <Alert tone="warn" testId="hud-schema-error" className="mt-4">
+                  HUD options are unavailable. {schemaError}{" "}
+                  <button type="button" className="underline" onClick={onRetryLocal}>
+                    Retry loading options
                   </button>
-                </figure>
+                </Alert>
+              ) : null}
+              {state.installed && state.schemaSupported && schema ? (
+                <HudOptions
+                  schema={schema}
+                  draft={draft}
+                  onChange={(name, value) => setDraft((current) => ({ ...current, [name]: value }))}
+                />
+              ) : state.installed && !state.schemaSupported ? (
+                <p data-testid="hud-options-notes" className="t-meta section">
+                  {hudSchemaUnavailableReason(state.installed.id)}
+                </p>
               ) : null}
             </section>
           ) : !stateLoading && !stateError ? (
@@ -1647,5 +1376,205 @@ function HudLightbox({
         </div>
       ) : null}
     </Modal>
+  );
+}
+
+/**
+ * The installed HUD's own options, all on the page: one group per schema
+ * section, laid out in columns. Long choices wrap as chips rather than
+ * hiding in a drop-down.
+ */
+function HudOptions({
+  schema,
+  draft,
+  onChange,
+}: {
+  schema: HudSchemaView;
+  draft: Record<string, string>;
+  onChange: (name: string, value: string) => void;
+}) {
+  const drawsCrosshair = schema.sections.some((section) =>
+    section.controls.some((control) => control.controlType === "crosshair"),
+  );
+  return (
+    <section data-testid="hud-options" aria-labelledby="hud-options-heading" className="section">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="hud-options-heading" className="t-section">
+          Options
+        </h2>
+        {schema.author ? <p className="t-meta">Schema by {schema.author}</p> : null}
+      </div>
+      {drawsCrosshair ? (
+        <p className="t-meta mt-1">This HUD draws its own crosshair, on top of TF2’s.</p>
+      ) : null}
+      <div className="hud-option-groups">
+        {schema.sections.map((section) => (
+          <fieldset key={section.name} className="hud-option-group">
+            <legend className="eyebrow">{section.name}</legend>
+            {section.controls.map((control) => (
+              <HudOptionControl
+                key={control.name}
+                control={control}
+                value={draft[control.name] ?? control.value}
+                onChange={(value) => onChange(control.name, value)}
+              />
+            ))}
+          </fieldset>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function HudOptionControl({
+  control,
+  value,
+  onChange,
+}: {
+  control: HudSchemaControl;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const inputId = `hud-opt-${control.name}`;
+  if (control.unavailableReason) {
+    return (
+      <div className="hud-option" data-testid="hud-option-unavailable">
+        <div className="min-w-0">
+          <p className="t-row">{control.label} - Unavailable</p>
+          <p className="t-meta mt-1">{control.unavailableReason}</p>
+        </div>
+      </div>
+    );
+  }
+  if (control.controlType === "checkbox") {
+    return (
+      <div className="hud-option">
+        <span>{control.label}</span>
+        <Switch
+          checked={isHudCheckboxOn(value)}
+          label={control.label}
+          testId={inputId}
+          onChange={(next) => onChange(next ? "true" : "false")}
+        />
+      </div>
+    );
+  }
+  if (control.controlType === "combo" && control.choices.length <= SEGMENTED_CHOICE_MAX) {
+    return (
+      <div className="hud-option">
+        <span>{control.label}</span>
+        <Segmented
+          label={control.label}
+          size="sm"
+          testIdPrefix={inputId}
+          options={control.choices.map((choice) => ({ id: choice.value, label: choice.label }))}
+          value={value}
+          onChange={onChange}
+        />
+      </div>
+    );
+  }
+  if (control.controlType === "combo" || control.controlType === "crosshair") {
+    const glyphs = control.controlType === "crosshair";
+    return (
+      <div className="hud-option hud-option-stacked">
+        <span>{glyphs ? `${control.label} · HUD overlay` : control.label}</span>
+        <ChoiceChips
+          label={control.label}
+          testId={inputId}
+          chipTestIdPrefix={inputId}
+          variant={glyphs ? "glyph" : "text"}
+          options={control.choices.map((choice) => ({
+            id: choice.value,
+            label: glyphs ? choice.value : choice.label,
+            title: choice.label,
+          }))}
+          value={value}
+          onChange={onChange}
+        />
+      </div>
+    );
+  }
+  if (control.controlType === "number") {
+    // The schema's own bounds — respected on the way out, not just advertised:
+    // `min`/`max` alone do not stop a typed value from being applied.
+    const minimum = Number(control.minimum);
+    const maximum = Number(control.maximum);
+    return (
+      <label className="hud-option" htmlFor={inputId}>
+        <span>{control.label}</span>
+        <input
+          id={inputId}
+          data-testid={inputId}
+          type="number"
+          value={value}
+          min={control.minimum}
+          max={control.maximum}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={(event) => {
+            const raw = Number(event.target.value);
+            if (!Number.isFinite(raw)) {
+              return;
+            }
+            let next = raw;
+            if (Number.isFinite(minimum)) {
+              next = Math.max(minimum, next);
+            }
+            if (Number.isFinite(maximum)) {
+              next = Math.min(maximum, next);
+            }
+            if (next !== raw) {
+              onChange(String(next));
+            }
+          }}
+          className="field w-20 px-2 py-1.5 text-[13px] text-ink focus:outline-none disabled:opacity-50"
+        />
+      </label>
+    );
+  }
+  const rgba = parseHudRgba(value);
+  return (
+    <div className="hud-option hud-option-stacked">
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={inputId}>{control.label}</label>
+        <input
+          id={inputId}
+          data-testid={inputId}
+          type="color"
+          value={rgbToHex(rgba.r, rgba.g, rgba.b)}
+          onChange={(event) => {
+            const rgb = hexToRgb(event.target.value);
+            if (!rgb) {
+              return;
+            }
+            onChange(formatHudRgba(rgb.r, rgb.g, rgb.b, rgba.a));
+          }}
+          className="h-7 w-10 cursor-pointer rounded-md border border-edge-strong bg-panel disabled:opacity-50"
+        />
+      </div>
+      <label className="grid grid-cols-[auto_minmax(0,1fr)_3rem] items-center gap-2 text-[12px] text-ink-muted">
+        <span>Opacity</span>
+        <input
+          data-testid={`${inputId}-alpha`}
+          aria-label={`${control.label} opacity`}
+          type="range"
+          min={0}
+          max={255}
+          value={rgba.a}
+          onChange={(event) =>
+            onChange(formatHudRgba(rgba.r, rgba.g, rgba.b, Number(event.target.value)))
+          }
+          className="range min-w-0"
+        />
+        {/* Percentage is what people mean by opacity; the raw 0–255 the HUD file stores rides along. */}
+        <span
+          data-testid={`${inputId}-alpha-value`}
+          className="text-right tabular-nums"
+          title={`${rgba.a} of 255`}
+        >
+          {alphaPercent(rgba.a)}%
+        </span>
+      </label>
+    </div>
   );
 }

@@ -1170,31 +1170,8 @@ a:focus-visible,
     background: var(--color-ink);
   }
 
-  /* ---- Disclosure -------------------------------------------------------
-     "Fine-tune…" / "Advanced" sections fold away by default. */
-
-  .disclosure > summary {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    list-style: none;
-    padding-block: 10px;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--color-ink-muted);
-    transition: color var(--motion) ease;
-  }
-
-  .disclosure > summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .disclosure > summary:hover {
-    color: var(--color-ink);
-  }
-
   /* ---- Caret ------------------------------------------------------------
-     One size, weight and colour for every chooser and fold (ui/Caret). */
+     One size, weight and colour for every menu button (ui/Caret). */
   .caret {
     flex: none;
     color: var(--color-ink-faint);
@@ -1205,43 +1182,240 @@ a:focus-visible,
   details[open] > summary .caret-menu {
     transform: rotate(180deg);
   }
-  .caret-fold[data-open],
-  details[open] > summary .caret-fold {
-    transform: rotate(90deg);
+
+  /* ---- Choice chips -----------------------------------------------------
+     A long single choice laid out on the page: the segmented pill, wrapping
+     onto further lines instead of folding into a menu (ui/ChoiceChips). */
+  .choice-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    padding: 2px;
+    border: 1px solid var(--color-edge);
+    border-radius: var(--radius-lg);
+    background: var(--color-bg);
   }
 
-  /* A small inline fold inside text: the app caret, never the browser's marker. */
-  .fold > summary {
+  .choice-chip {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    list-style: none;
-  }
-  .fold > summary::-webkit-details-marker {
-    display: none;
+    justify-content: center;
+    min-height: 28px;
+    border-radius: var(--radius-sm);
+    padding: 0.3125rem 0.625rem;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    color: var(--color-ink-muted);
+    transition:
+      background-color var(--motion) ease,
+      color var(--motion) ease,
+      box-shadow var(--motion) ease;
   }
 
-  /* A native select keeps its keyboard and screen reader behaviour but shows
-     the app caret instead of the platform arrow. */
-  .select-field {
-    position: relative;
+  .choice-chip:hover:not(:disabled) {
+    background: var(--color-panel-raised);
+    color: var(--color-ink);
+  }
+
+  .choice-chip:focus-visible {
+    outline-offset: 0;
+  }
+
+  .choice-chip[aria-pressed="true"] {
+    background: var(--color-panel-raised);
+    color: var(--color-ink);
+    box-shadow: inset 0 0 0 1px var(--color-brand);
+  }
+
+  .choice-chip[aria-pressed="true"][data-neutral="true"] {
+    box-shadow: inset 0 0 0 1px var(--color-edge-strong);
+  }
+
+  .choice-chip:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .choice-chips-glyph {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+  }
+
+  .choice-chips-glyph .choice-chip {
+    padding: 0;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Pane views -------------------------------------------------------
+     A pane with more than one job splits into named views under its title
+     (HUD, Mods, Comfig); each view shows everything it holds. The strip may
+     carry one quiet action or status on the right. */
+  .pane-views {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0 16px;
+    border-bottom: 1px solid var(--color-edge);
+  }
+
+  .pane-views > .class-tabs {
+    border-bottom: 0;
+    margin-bottom: -1px;
+  }
+
+  .pane-views-aside {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 36px;
+    padding-bottom: 4px;
+  }
+
+  /* ---- Choice matrix ----------------------------------------------------
+     Rows of one choice each, aligned under shared column headings, so a
+     slot and every weapon in it read as one table (Viewmodels). */
+  .choice-matrix {
+    --matrix-col: 84px;
     display: grid;
     min-width: 0;
-  }
-  .select-field > select {
-    appearance: none;
-    padding-right: 28px;
-  }
-  .select-field > .caret {
-    position: absolute;
-    top: 50%;
-    right: 10px;
-    translate: 0 -50%;
-    pointer-events: none;
+    max-width: 720px;
   }
 
-  .disclosure[open] > :not(summary) {
-    animation: enter-fade var(--motion) ease backwards;
+  .choice-matrix-row:not(.choice-matrix-head):hover {
+    background: color-mix(in srgb, var(--color-panel) 70%, transparent);
+  }
+
+  .choice-matrix-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(var(--matrix-cols, 3), var(--matrix-col));
+    align-items: center;
+    min-height: 34px;
+    border-bottom: 1px solid var(--color-edge);
+  }
+
+  .choice-matrix-head {
+    min-height: 28px;
+    border-bottom-color: var(--color-edge-strong);
+    color: var(--color-ink-faint);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .choice-matrix-head > span:not(:first-child) {
+    text-align: center;
+  }
+
+  .choice-matrix-group {
+    min-height: 44px;
+    padding-top: 6px;
+  }
+
+  .choice-matrix-row[data-member="true"] {
+    border-bottom-style: dashed;
+  }
+
+  .choice-matrix-row[data-member="true"]:has(+ .choice-matrix-group),
+  .choice-matrix-row[data-member="true"]:last-child {
+    border-bottom-style: solid;
+  }
+
+  .choice-matrix-label,
+  .choice-matrix-head > span:first-child {
+    min-width: 0;
+    padding: 6px 12px 6px 8px;
+  }
+
+  .choice-matrix-row[data-member="true"] .choice-matrix-label {
+    padding-left: 26px;
+  }
+
+  .choice-matrix-cell {
+    position: relative;
+    display: grid;
+    place-items: center;
+    align-self: stretch;
+  }
+
+  .choice-matrix-cell > input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .choice-matrix-cell > input:disabled {
+    cursor: not-allowed;
+  }
+
+  .choice-matrix-dot {
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--color-edge-strong);
+    border-radius: var(--radius-pill);
+    transition:
+      border-color var(--motion) ease,
+      background-color var(--motion) ease;
+  }
+
+  .choice-matrix-dot::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    transition:
+      background-color var(--motion) ease,
+      transform var(--motion-move) var(--ease-out);
+    transform: scale(0.4);
+  }
+
+  .choice-matrix-cell:hover > input:not(:disabled) + .choice-matrix-dot {
+    border-color: var(--color-ink-muted);
+  }
+
+  .choice-matrix-cell > input:checked + .choice-matrix-dot {
+    border-color: var(--color-brand);
+    background: color-mix(in srgb, var(--color-brand) 14%, transparent);
+  }
+
+  .choice-matrix-cell > input:checked + .choice-matrix-dot::after {
+    background: var(--color-brand);
+    transform: scale(1);
+  }
+
+  .choice-matrix-cell[data-neutral="true"] > input:checked + .choice-matrix-dot {
+    border-color: var(--color-ink-muted);
+    background: transparent;
+  }
+
+  .choice-matrix-cell[data-neutral="true"] > input:checked + .choice-matrix-dot::after {
+    background: var(--color-ink-muted);
+  }
+
+  .choice-matrix-cell > input:focus-visible + .choice-matrix-dot {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  .choice-matrix-cell > input:disabled + .choice-matrix-dot {
+    opacity: 0.4;
+  }
+
+  @media (max-width: 760px) {
+    .choice-matrix {
+      --matrix-col: 64px;
+    }
   }
 
   /* ---- Inventory ---------------------------------------------------------
@@ -2082,6 +2256,98 @@ a:focus-visible,
       column-gap: 32px;
     }
   }
+
+  /* A named group inside a section: small heading, optional count, and a
+     firmer rule above its rows. */
+  .sub-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-edge-strong);
+  }
+
+  /* Every module on one list, grouped by category: name on the left, its
+     levels as chips on the right. */
+  .comfig-module-group {
+    padding-top: 20px;
+  }
+
+  .comfig-module-group > .eyebrow {
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-edge-strong);
+  }
+
+  .comfig-module {
+    display: grid;
+    grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 20px;
+    padding-block: 10px;
+    border-bottom: 1px solid var(--color-edge);
+  }
+
+  .comfig-module > .choice-chips {
+    justify-self: start;
+  }
+
+  @media (max-width: 900px) {
+    .comfig-module {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* An installed HUD's options: one group per schema section, flowing into
+     columns so a long schema reads as a sheet rather than one tall list. */
+  .hud-option-groups {
+    columns: 2 300px;
+    column-gap: 40px;
+    margin-top: 4px;
+  }
+
+  .hud-option-group {
+    display: grid;
+    min-width: 0;
+    margin: 0;
+    padding: 12px 0 8px;
+    break-inside: avoid;
+  }
+
+  .hud-option-group > legend {
+    float: left;
+    width: 100%;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-edge-strong);
+  }
+
+  .hud-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+    padding-block: 6px;
+    border-bottom: 1px solid var(--color-edge);
+    font-size: 13.5px;
+    color: var(--color-ink);
+  }
+
+  .hud-option-stacked {
+    display: grid;
+    justify-content: stretch;
+    gap: 8px;
+    padding-block: 10px;
+  }
+
+  .hud-option-stacked > .choice-chips {
+    justify-self: start;
+  }
+
+  .hud-option-stacked > .choice-chips-glyph {
+    justify-self: stretch;
+  }
 }
 
 /* Two columns: the left cell of the last row drops its hairline too. Unlayered
@@ -2268,25 +2534,6 @@ a:focus-visible,
     right: 8px;
     margin-left: 0;
   }
-}
-
-/* Folds open and close smoothly where the engine can size to content
-   (Chromium/WebView2); elsewhere they switch instantly. Reduced motion
-   removes the transition through the global rules. */
-:root {
-  interpolate-size: allow-keywords;
-}
-
-.disclosure::details-content {
-  height: 0;
-  overflow: clip;
-  transition:
-    height var(--motion-move) var(--ease-out),
-    content-visibility var(--motion-move) allow-discrete;
-}
-
-.disclosure[open]::details-content {
-  height: auto;
 }
 
 @layer components {

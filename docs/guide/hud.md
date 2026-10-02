@@ -16,7 +16,7 @@ When you install or import a HUD over another one, the old HUD is kept as a back
 
 ## HUD options
 
-HUDs with a [TF2HUD.Editor](https://github.com/CriticalFlaw/TF2HUD.Editor) schema get an options panel. Some HUDs draw their own crosshair; that crosshair appears on top of TF2's, so it can show two at once. A HUD crosshair glyph picks a shape from the HUD's font, so the character shown in execs isn't a picture of it.
+HUDs with a [TF2HUD.Editor](https://github.com/CriticalFlaw/TF2HUD.Editor) schema list their options under **Installed**, grouped the way the HUD's author grouped them. Some HUDs draw their own crosshair; that crosshair appears on top of TF2's, so it can show two at once. A HUD crosshair glyph picks a shape from the HUD's font, so the character shown in execs isn't a picture of it.
 
 The author's screenshots show the HUD's defaults; open TF2 to see it with your options.
 

@@ -131,29 +131,37 @@ describe("ComfigPane workspaces", () => {
     expect(document.body.textContent).not.toContain("old-result");
   });
 
-  it("folds module overrides away by default while keeping every module and addon reachable", async () => {
+  it("keeps every module on its own view and every addon on the first, with no folds", async () => {
     await act(async () => render());
-    const fold = document.querySelector('[data-testid="comfig-modules"]')?.closest("details");
-    expect(fold).not.toBeNull();
-    expect(fold?.open).toBe(false);
+    expect(document.querySelector("details")).toBeNull();
+    const modules = document.querySelector('[data-testid="comfig-modules"]');
+    expect(modules?.hasAttribute("hidden")).toBe(true);
+    expect(document.getElementById("comfig-view-modules")?.textContent).toBe("Modules 1");
     expect(document.querySelector('[data-testid="comfig-modules-summary"]')?.textContent).toBe(
       "1 module changed from Medium",
     );
-    if (fold) fold.open = true;
+    await act(async () => document.getElementById("comfig-view-modules")?.click());
+    expect(modules?.hasAttribute("hidden")).toBe(false);
     for (const group of COMFIG_MODULE_GROUPS) {
-      await act(async () => document.getElementById(`comfig-module-tab-${group.id}`)?.click());
-      expect(
-        document.querySelector(`[data-testid="comfig-module-${group.modules[0].id}"]`),
-      ).not.toBeNull();
-      const more = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-        (button) =>
-          button.textContent?.startsWith("Show ") && button.textContent?.includes(" more "),
+      expect(document.getElementById(`comfig-module-group-${group.id}`)?.textContent).toBe(
+        group.label,
       );
-      if (more) await act(async () => more.click());
       for (const module of group.modules) {
         expect(document.querySelector(`[data-testid="comfig-module-${module.id}"]`)).not.toBeNull();
       }
     }
+    const filter = (id: string) =>
+      document.querySelector<HTMLInputElement>(`[data-testid="comfig-modules-filter-${id}"]`);
+    await act(async () => filter("changed")?.click());
+    expect(
+      [...document.querySelectorAll<HTMLElement>('[data-testid^="comfig-module-"]')].map(
+        (module) => module.dataset.testid,
+      ),
+    ).toEqual(["comfig-module-texture_quality"]);
+    await act(async () => filter("hud")?.click());
+    expect(document.querySelectorAll('[data-testid^="comfig-module-"]')).toHaveLength(
+      COMFIG_MODULE_GROUPS.find((group) => group.id === "hud")?.modules.length ?? -1,
+    );
     for (const addon of OFFICIAL_ADDONS) {
       expect(
         document.querySelector(`[data-testid="comfig-addon-${addon.id}"]`)?.getAttribute("role"),

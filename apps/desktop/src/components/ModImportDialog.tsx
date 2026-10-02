@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ModImportReview } from "../lib/bridge";
 import { formatModBytes } from "../lib/mods-ui";
-import { Caret } from "./ui/Caret";
+import { ClassTabs } from "./ui/ClassTabs";
 import { Modal } from "./ui/Modal";
 import { SwitchRow } from "./ui/Switch";
 
@@ -70,28 +70,7 @@ export function ModImportDialog({
             />
           ))}
         </div>
-        {review.readmes.length ? (
-          <aside aria-label="Author's instructions" className="min-w-0">
-            {review.readmes.map((readme, index) => (
-              <details
-                key={readme.path}
-                open={index === 0}
-                className="disclosure mb-3 rounded border border-edge p-3"
-              >
-                <summary className="t-row cursor-pointer break-words">
-                  <Caret fold />
-                  {readme.path}
-                </summary>
-                <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap break-words font-sans text-[13px] leading-5 text-ink-muted">
-                  {readme.text}
-                </pre>
-                {readme.truncated ? (
-                  <p className="t-meta mt-2">Showing the first 16 KiB of this file.</p>
-                ) : null}
-              </details>
-            ))}
-          </aside>
-        ) : null}
+        {review.readmes.length ? <ModReadmes readmes={review.readmes} /> : null}
       </div>
       <div className="pane-actions mt-5 justify-end">
         <button type="button" className="btn btn-ghost" onClick={onClose}>
@@ -107,5 +86,57 @@ export function ModImportDialog({
         </button>
       </div>
     </Modal>
+  );
+}
+
+function fileName(path: string): string {
+  return path.split(/[\\/]/).pop() || path;
+}
+
+/** The author's readmes, one at a time: a tab per file when there are several. */
+function ModReadmes({ readmes }: { readmes: ModImportReview["readmes"] }) {
+  const [index, setIndex] = useState(0);
+  const readme = readmes[Math.min(index, readmes.length - 1)];
+  const names = readmes.map((item) => fileName(item.path));
+  const labels = readmes.map((item, at) =>
+    names.indexOf(names[at]) === names.lastIndexOf(names[at]) ? names[at] : item.path,
+  );
+  const shown = Math.min(index, readmes.length - 1);
+  const body = (
+    <>
+      <p className="t-row break-words">{readme.path}</p>
+      <pre className="surface mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 font-sans text-[13px] leading-5 text-ink-muted">
+        {readme.text}
+      </pre>
+      {readme.truncated ? (
+        <p className="t-meta mt-2">Showing the first 16 KiB of this file.</p>
+      ) : null}
+    </>
+  );
+  return (
+    <aside aria-label="Author's instructions" className="min-w-0">
+      {readmes.length > 1 ? (
+        <>
+          <ClassTabs
+            tabs={readmes.map((_, at) => ({ id: String(at), label: labels[at] }))}
+            selected={String(shown)}
+            label="Author's files"
+            idPrefix="mod-readme"
+            panelId="mod-readme-panel"
+            onSelect={(id) => setIndex(Number(id))}
+          />
+          <div
+            id="mod-readme-panel"
+            role="tabpanel"
+            aria-labelledby={`mod-readme-${shown}`}
+            className="pt-3"
+          >
+            {body}
+          </div>
+        </>
+      ) : (
+        body
+      )}
+    </aside>
   );
 }

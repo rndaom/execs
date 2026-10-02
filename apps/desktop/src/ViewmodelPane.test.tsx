@@ -145,14 +145,15 @@ async function click(selector: string) {
   await act(async () => element(selector).click());
 }
 
-/** Set one weapon on its own from Customize weapons. */
+const WEAPON_MODES: Record<string, string> = {
+  Shown: "shown",
+  Hidden: "full",
+  "Hands only": "weapon",
+};
+
+/** Set one weapon on its own from its row under the slot. */
 async function chooseWeapon(groupId: string, label: string) {
-  await click(`[data-testid="viewmodel-weapon"][data-group-id="${groupId}"]`);
-  const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button')].find(
-    (button) => button.textContent?.startsWith(label),
-  );
-  if (!item) throw new Error(`Missing ${label} menu item`);
-  await act(async () => item.click());
+  await click(`[data-testid="viewmodel-weapon-choice-${groupId}-${WEAPON_MODES[label]}"]`);
 }
 
 describe("Viewmodels source-derived draft", () => {
@@ -239,7 +240,10 @@ describe("Viewmodels source-derived draft", () => {
     ).toBe(true);
     expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe("1 class changed");
     // The Shortstop was saved as shown, so it is kept as a weapon set on its own.
-    expect(element('[data-testid="viewmodel-weapons"]').textContent).toContain("1 set on its own");
+    expect(
+      element('[data-testid="viewmodel-weapon"][data-group-id="scout/b"]').dataset.choice,
+    ).toBe("shown");
+    expect(box.querySelector("details")).toBeNull();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
       "1 class changed · not built yet",

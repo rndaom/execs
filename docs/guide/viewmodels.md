@@ -10,7 +10,7 @@ These save on their own, like Gameplay.
 
 ## Per weapon
 
-Choose **Shown**, **Hidden** or **Hands only** for each class's weapon slots and inspect animations, then **Review and build**. execs builds `tf/custom/execs-viewmodels.vpk` from your own TF2 files; only your first-person view changes, and nothing is written until you build.
+Each class is one table: a row per weapon slot with its weapons listed beneath it, then inspect animations. Choose **Shown**, **Hidden** or **Hands only** for a whole slot or for one weapon, then **Review and build**. Changing a slot moves the weapons that follow it; a weapon you set on its own keeps its choice. execs builds `tf/custom/execs-viewmodels.vpk` from your own TF2 files; only your first-person view changes, and nothing is written until you build.
 
 **Every class…** applies one choice to the whole profile (show all, hide all, or keep melee visible) and shows exactly what changes before it applies.
 

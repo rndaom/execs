@@ -114,7 +114,8 @@ describe("HUD workspace interactions", () => {
     await click("hud-install-rayshud");
     expect(selectedSurface()).toBe("hud-surface-installed");
     expect(element("hud-installed").closest("[hidden]")).toBeNull();
-    expect(element("hud-options-disclosure").hasAttribute("open")).toBe(true);
+    expect(element("hud-options").closest("[hidden]")).toBeNull();
+    expect(element("hud-options").closest("details")).toBeNull();
     expect(props.onInstall).not.toHaveBeenCalled();
   });
 
@@ -341,12 +342,11 @@ describe("HUD workspace interactions", () => {
     expect(element("hud-options").textContent).toContain("This HUD draws its own crosshair");
     expect(element("hud-options").textContent).toContain("Menu Background - Unavailable");
     expect(container.querySelector('[data-testid="hud-opt-rh_val_main_menu_bg"]')).toBeNull();
-    const select = element("hud-opt-rh_val_xhair_style") as HTMLSelectElement;
-    await act(async () => {
-      select.value = "Z";
-      select.dispatchEvent(new window.Event("change", { bubbles: true }));
-    });
-    expect((element("hud-opt-rh_val_xhair_style") as HTMLSelectElement).value).toBe("Z");
+    expect(container.querySelector("select")).toBeNull();
+    expect(element("hud-opt-rh_val_xhair_style").dataset.value).toBe("<");
+    await click("hud-opt-rh_val_xhair_style-Z");
+    expect(element("hud-opt-rh_val_xhair_style").dataset.value).toBe("Z");
+    expect(element("hud-opt-rh_val_xhair_style-Z").getAttribute("aria-pressed")).toBe("true");
     expect(props.onApplyOptions).not.toHaveBeenCalled();
   });
 
