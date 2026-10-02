@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/media/promo.gif" width="960" alt="A tour of execs: switching profiles, then Comfig, Binds, Crosshair, Viewmodels, Sounds, Files and the Inventory">
+  <img src="docs/media/promo.gif" width="960" alt="A tour of execs: switching profiles, then Comfig, Binds, Crosshair, Viewmodels, Sounds and Files, what is new in 0.2.2, and the Inventory: inspecting, deleting, crafting a random hat, sorting and moving TF2 items">
 </p>
 
 ## What it does
@@ -38,18 +38,18 @@ Everything else is in the [changelog](CHANGELOG.md).
       <br><b>Profiles</b> · see what switching would change
     </td>
     <td width="50%" valign="top">
-      <img src="docs/media/screen-viewmodels-both.png" alt="Viewmodels per-weapon slots for Scout: Primary hidden, Secondary hands only, Melee and Inspect shown, under Scout and Spy class tabs with their TF2 emblems">
-      <br><b>Viewmodels</b> · shown, hidden or hands only, per weapon
+      <img src="docs/media/screen-crosshair-circle.png" alt="Crosshair gallery of TF2's own crosshairs and execs shapes, with Circle + dot selected and shown at actual size in the preview beside it">
+      <br><b>Crosshair</b> · TF2's crosshairs or yours, at true size
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/media/screen-inv-hover.png" alt="Inventory pane with a ten-by-five page of TF2 items in their quality colours and the hover card for an Unusual Nightcap">
-      <br><b>Inventory</b> · your backpack, with TF2's item art
+      <img src="docs/media/screen-sounds.png" alt="Sounds pane with Game volume and Music volume sliders above the hit and kill sound slots">
+      <br><b>Sounds</b> · game volume and hit sounds, per profile
     </td>
     <td width="50%" valign="top">
-      <img src="docs/media/screen-files-problems.png" alt="Files editor with autoexec.cfg open beside the file list, an unsaved change marked by an orange dot, and the Problems panel explaining a warning on line 3">
-      <br><b>Files</b> · a cfg editor that knows Source
+      <img src="docs/media/screen-inv-hover.png" alt="Inventory pane with a ten-by-five page of TF2 items in their quality colours and the hover card for an Unusual Nightcap">
+      <br><b>Inventory</b> · your backpack, with TF2's item art
     </td>
   </tr>
 </table>

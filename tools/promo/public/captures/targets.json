@@ -16,13 +16,13 @@
   "compare": {
     "dialog": {
       "x": 400,
-      "y": 80.5,
+      "y": 90.2,
       "width": 640,
-      "height": 739
+      "height": 719.5
     },
     "switch": {
       "x": 842.4,
-      "y": 754.8,
+      "y": 745.1,
       "width": 172.6,
       "height": 39.7
     }
@@ -37,10 +37,10 @@
   },
   "comfig-medium": {
     "high": {
-      "x": 435.7,
+      "x": 473,
       "y": 190.7,
-      "width": 178.7,
-      "height": 110.1
+      "width": 216,
+      "height": 45.6
     }
   },
   "binds": {
@@ -58,47 +58,47 @@
     }
   },
   "crosshair": {
-    "shapes": {
-      "x": 249,
-      "y": 281.6,
-      "width": 544,
-      "height": 155.9
+    "gallery": {
+      "x": 630,
+      "y": 969.8,
+      "width": 319,
+      "height": 576.5
+    },
+    "tf2": {
+      "x": 780,
+      "y": 203.6,
+      "width": 80.5,
+      "height": 102.2
     },
     "circle": {
-      "x": 663,
-      "y": 281.6,
-      "width": 130,
-      "height": 73.9
+      "x": 691.5,
+      "y": 350.9,
+      "width": 80.5,
+      "height": 86.6
     },
-    "chevron": {
-      "x": 387,
-      "y": 363.5,
-      "width": 130,
-      "height": 73.9
+    "x": {
+      "x": 780,
+      "y": 350.9,
+      "width": 80.5,
+      "height": 86.6
     },
-    "ring": {
-      "x": 663,
-      "y": 363.5,
-      "width": 130,
-      "height": 73.9
-    },
-    "sprite": {
-      "x": 925,
-      "y": 493.3,
-      "width": 87.2,
-      "height": 19.5
+    "preview": {
+      "x": 990,
+      "y": 348.5,
+      "width": 199.9,
+      "height": 21
     }
   },
   "viewmodels": {
     "primaryHidden": {
       "x": 1206,
-      "y": 423.4,
+      "y": 498,
       "width": 62.8,
       "height": 30
     },
     "toolbar": {
       "x": 249,
-      "y": 353.2,
+      "y": 427.8,
       "width": 1112,
       "height": 39.7
     }
@@ -106,7 +106,7 @@
   "viewmodels-primary": {
     "secondaryHands": {
       "x": 1270.8,
-      "y": 483.5,
+      "y": 623.1,
       "width": 87.2,
       "height": 30
     }
@@ -114,7 +114,7 @@
   "sounds": {
     "filter": {
       "x": 466.7,
-      "y": 574.8,
+      "y": 671.6,
       "width": 87.9,
       "height": 30
     }
@@ -122,7 +122,7 @@
   "sounds-comfig": {
     "use": {
       "x": 1309,
-      "y": 719.8,
+      "y": 816.6,
       "width": 48,
       "height": 36
     }
@@ -130,13 +130,13 @@
   "sounds-used": {
     "hitSlot": {
       "x": 249,
-      "y": 141,
+      "y": 237.7,
       "width": 544,
-      "height": 208.8
+      "height": 205.7
     },
     "hitToggle": {
       "x": 753,
-      "y": 141,
+      "y": 237.7,
       "width": 40,
       "height": 24
     }
@@ -3176,7 +3176,7 @@
       "height": 96,
       "label": "Genuine Jaunty Voyager, Genuine, slot 7"
     },
-    "11000001330": {
+    "11000001337": {
       "x": 1031.59375,
       "y": 198.1875,
       "width": 105.796875,
@@ -3515,7 +3515,7 @@
       "height": 96,
       "label": "Genuine Jaunty Voyager, Genuine, slot 7"
     },
-    "11000001330": {
+    "11000001337": {
       "x": 1031.59375,
       "y": 198.1875,
       "width": 105.796875,
@@ -3854,7 +3854,7 @@
       "height": 96,
       "label": "Genuine Jaunty Voyager, Genuine, slot 7"
     },
-    "11000001330": {
+    "11000001337": {
       "x": 1031.59375,
       "y": 198.1875,
       "width": 105.796875,
@@ -4361,7 +4361,7 @@
       "height": 96,
       "label": "Mann Co. Supply Crate Key, Unique, slot 31"
     },
-    "11000001330": {
+    "11000001337": {
       "x": 360.796875,
       "y": 502.1875,
       "width": 105.796875,
@@ -4700,7 +4700,7 @@
       "height": 96,
       "label": "Mann Co. Supply Crate Key, Unique, slot 31"
     },
-    "11000001330": {
+    "11000001337": {
       "x": 360.796875,
       "y": 502.1875,
       "width": 105.796875,
@@ -5045,7 +5045,7 @@
       "height": 96,
       "label": "Mann Co. Supply Crate Key, Unique, slot 31"
     },
-    "11000001330": {
+    "11000001337": {
       "x": 360.796875,
       "y": 502.1875,
       "width": 105.796875,
@@ -5376,7 +5376,7 @@
       "height": 96,
       "label": "Mann Co. Supply Crate Key, Unique, slot 31"
     },
-    "11000001330": {
+    "11000001337": {
       "x": 360.796875,
       "y": 504.1875,
       "width": 105.796875,

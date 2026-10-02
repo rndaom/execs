@@ -33,14 +33,17 @@ const CUTS = [
   TOTAL,
 ];
 
-const remotion = (...args) => execFileSync(process.execPath, [cli, ...args], { stdio: "inherit" });
+// Run from this folder so the frame directory can be passed relative: Remotion
+// rejects an absolute output path whose parent folders contain a dot.
+const remotion = (...args) =>
+  execFileSync(process.execPath, [cli, ...args], { stdio: "inherit", cwd: here });
 
 rmSync(work, { recursive: true, force: true });
 mkdirSync(frames, { recursive: true });
 remotion(
   "render",
   "Promo",
-  frames,
+  path.relative(here, frames),
   "--sequence",
   "--image-format=png",
   "--scale=0.5",
