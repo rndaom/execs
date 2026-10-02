@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const SHA = /^[0-9a-f]{40}$/;
-const DOCS_PREFIX = "docs/design/";
+const DOCS_PREFIX = "docs/guide/";
 
 function changedPaths(bytes) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.at(-1) !== 0) return null;

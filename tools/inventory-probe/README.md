@@ -1,20 +1,16 @@
-# Inventory development
+# Inventory Steam helper
 
-The app's **Inventory** pane connects through the existing signed-in
-Steam client. Read sessions return an account-bound snapshot and disconnect.
-Separate reviewed operation sessions support backpack moves, four basic metal
-conversions and one-item deletion. The owner reported live crafting working in the
-Windows development app; Linux and packaged builds have not been exercised live.
-The pane supports 50-slot pages, sorting, page jumps, search,
-quality filters, and item details. It refreshes on first visible, focused use,
-every two minutes while visible and focused, and after TF2 closes. Reads pause
-while the app is hidden, unfocused, busy, or in-game; failed connections back
-off from 30 seconds to five minutes. A failed read keeps the last snapshot
-marked stale and offers Retry. Refresh backpack also starts a manual read.
+The **Inventory** pane talks to TF2's item servers through the Steam client
+you're already signed in to. Read sessions return a snapshot of that
+account's backpack and disconnect. Separate, reviewed operation sessions
+make backpack moves, the four basic metal conversions, random hat crafting
+and single-item deletion.
 
-The owner requested this manager for 0.2.0 and decided on September 27, 2026 that it
-ships: release builds include the sidebar entry, the native commands and the helper
-entry points. It was published in v0.2.0 on September 27, 2026.
+The pane reads the backpack when it opens, after TF2 closes and from
+Refresh, never on a timer, because each read briefly shows the player as in
+TF2 on Steam. Reads pause while execs is hidden, unfocused, busy or TF2 is
+running; failed connections back off from 30 seconds to five minutes, and a
+failed read keeps the last snapshot marked stale with Retry.
 
 ## Architecture
 
@@ -66,7 +62,7 @@ entry points. It was published in v0.2.0 on September 27, 2026.
 cargo test --manifest-path tools/inventory-probe/Cargo.toml --locked
 cargo clippy --manifest-path tools/inventory-probe/Cargo.toml --all-targets --locked -- -D warnings
 cargo build --manifest-path tools/inventory-probe/Cargo.toml --locked
-tools/inventory-probe/target/debug/execs-inventory-probe.exe "H:\SteamLibrary\steamapps\common\Team Fortress 2\bin\x64\steam_api64.dll"
+tools/inventory-probe/target/debug/execs-inventory-probe.exe "C:\Program Files (x86)\Steam\steamapps\common\Team Fortress 2\bin\x64\steam_api64.dll"
 ```
 
 Use the absolute path to your installed Valve library. No arguments prints usage.
@@ -77,28 +73,17 @@ show the account as playing TF2 without launching the game. Use the same OS user
 elevation and package context as Steam (see the [architecture guide](../../docs/ARCHITECTURE.md#platform-constraints) Explorer launch rule).
 The transport currently targets x64; native Linux connectivity is not verified.
 
-## Verification recorded on 2026-09-19
+## Tests
 
-Windows live read succeeded through the existing Steam session: 1,111 items,
-1,700 slots, 34 pages. The coordinator sent subscription check 27; answering with
-refresh 28 yielded the complete cache 24. The native pane displayed real base
-artwork and names; search and item inspection were exercised without item writes.
-Local metadata verification decoded Scattergun and Refined Metal artwork.
-No account identifiers, private item records, or screenshots are committed.
-
-Automated coverage includes ownership, duplicate identities/slots, incomplete
+Automated tests cover ownership, duplicate identities and slots, incomplete
 capacity, 64-bit string identities, malformed envelopes, prefab inheritance,
-icon path limits, pagination/search, and failed-refresh snapshot clearing.
+icon path limits, pagination and search, and failed-refresh snapshot clearing.
+Fake sessions cover operations end to end; they don't replace trying a build
+against a real backpack.
 
-## Remaining milestones
-
-- Verify Linux, signed-out/disconnect/account-switch behavior and empty backpacks.
-- Qualify single moves, swaps, cross-page batches, unplaced items and full backpacks.
-- Qualify each metal conversion and one-item deletion with owner-selected disposable
-  items; verify persisted state after reconnect and in TF2.
-- Exercise interrupted sends, disconnects, account switches and restart reconciliation
-  on Windows/Linux packaged candidates. Automated fake sessions do not establish live
-  platform qualification.
+Not yet tried on a real account: Linux, signed-out and account-switch
+behaviour, empty and full backpacks, and interrupted operations on packaged
+builds.
 
 ## References and credits
 

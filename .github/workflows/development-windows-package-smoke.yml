@@ -13,7 +13,6 @@ on:
       - scripts/linux-native-*.mjs
       - scripts/release-version.mjs
       - scripts/verify-release.mjs
-      - docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/no-hud/exported-by-v0.1.8.zip
       - apps/desktop/src-tauri/tauri.conf.json
       - CHANGELOG.md
 

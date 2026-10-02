@@ -1,4 +1,4 @@
-//! Exact-replace profile switch with real progress steps (RND-149).
+//! Exact-replace profile switch with real progress steps.
 
 use std::collections::BTreeSet;
 use std::fs;

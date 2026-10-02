@@ -1,4 +1,4 @@
-//! Inventory the live file-safe TF2 surface for save-current (RND-148).
+//! Inventory the live file-safe TF2 surface for save-current.
 //!
 //! Read-only. Does not write the game folder or the profile library.
 

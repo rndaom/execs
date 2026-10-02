@@ -1,5 +1,4 @@
 //! Independently declared protocol facts; no transport, filesystem or Steam calls.
-//! Sources and unfinished native gates: docs/audits/2026-09-27-inventory-usability/reference-parity.md.
 use prost::Message;
 use std::collections::{BTreeMap, BTreeSet};
 

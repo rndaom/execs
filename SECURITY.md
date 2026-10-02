@@ -17,6 +17,7 @@ whether you have a crash log
 (`%AppData%\execs\logs\panic.log` or `~/.local/share/execs/logs/panic.log`).
 
 The in-app updater is signed with minisign. Installers are not
-Authenticode-signed yet; Windows SmartScreen will warn on first run.
+Authenticode-signed yet, so Windows SmartScreen may warn when you run a new
+version.
 Verify the SHA-256 listed on the GitHub release if you want to check the
 file before you run it.

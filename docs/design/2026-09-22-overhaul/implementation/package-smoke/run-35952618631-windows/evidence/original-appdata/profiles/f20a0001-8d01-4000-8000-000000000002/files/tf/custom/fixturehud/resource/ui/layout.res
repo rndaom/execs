@@ -1,1 +1,0 @@
-"fixture" { "xpos" "17" }

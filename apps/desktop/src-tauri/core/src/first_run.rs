@@ -1,4 +1,4 @@
-//! Classify a confirmed TF2 install for first launch (RND-152).
+//! Classify a confirmed TF2 install for first launch.
 //!
 //! Read-only. Never writes the game folder or the profile library.
 
