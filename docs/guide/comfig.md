@@ -25,7 +25,7 @@ The addon names say what they do. The less obvious ones:
 
 ## Modules
 
-**Fine-tune modules** lists every mastercomfig module. **Use preset** inherits the preset's value; **Module default** writes mastercomfig's own default for that module even when the preset would set something else.
+The **Modules** tab lists every mastercomfig module, grouped into Networking, Graphics, HUD and Sound. Search by name, or show one group or only the modules you changed. **Use preset** inherits the preset's value; **Module default** writes mastercomfig's own default for that module even when the preset would set something else.
 
 ## Updates
 

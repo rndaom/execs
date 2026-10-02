@@ -53,7 +53,8 @@ describe("profile import dialog", () => {
     expect(markup).toContain("Saved passwords and remote-console settings are kept");
     expect(markup).toContain("Your TF2 setup stays unchanged until you switch.");
     expect(markup).not.toContain("Your current profile stays active");
-    expect(markup).toContain("<details");
+    expect(markup).not.toContain("<details");
+    expect(markup).toContain("Config checks flagged 1 file");
     expect(markup).toContain("config.cfg contains");
   });
 

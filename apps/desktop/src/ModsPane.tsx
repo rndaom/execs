@@ -5,7 +5,6 @@ import { ModImport } from "./components/ModImport";
 import { ModList } from "./components/ModList";
 import { Alert } from "./components/ui/Alert";
 import { ClassTabs } from "./components/ui/ClassTabs";
-import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { PaneSection } from "./components/ui/PaneSection";
@@ -349,7 +348,7 @@ export function ModsPane({
           </span>
         </Alert>
       ) : null}
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-edge">
+      <div className="pane-views">
         <ClassTabs
           tabs={[
             { id: "browse", label: "Browse" },
@@ -564,7 +563,7 @@ export function ModsPane({
             onManageParticles={() => setTask("casual")}
             onBrowse={() => setTask("browse")}
           />
-          <ModContentAudit payload={payload} mods={mods} profileId={profileId} />
+          <ModContentAudit payload={payload} mods={mods} />
         </div>
 
         <div hidden={task !== "casual"}>
@@ -586,7 +585,6 @@ export function ModsPane({
               </span>
             </Alert>
           ) : null}
-          <ModContentAudit payload={payload} mods={mods} profileId={profileId} casual />
           {needsSteamLaunch ? (
             <Alert tone="warn" testId="mods-launch-warning" className="mb-4">
               <span className="flex flex-wrap items-center justify-between gap-3">
@@ -642,112 +640,105 @@ export function ModsPane({
 
             <div className="mt-4 grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_14rem]">
               <div className="min-w-0">
-                {catalog || savedLibraryAddons.length + savedLibraryParticles.length > 0 ? (
-                  <div className="grid gap-5">
-                    <Disclosure
-                      profileId={profileId}
-                      storageKey="mods-addons"
-                      summary={
-                        <span>
-                          Addons <span className="t-meta ml-2">{addons.length} selected</span>
-                        </span>
-                      }
-                    >
-                      <div>
-                        <p className="t-meta mt-2">
-                          <button
-                            type="button"
-                            className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
-                            onClick={() => void openExternal("https://gamebanana.com/mods/295065")}
-                          >
-                            Flat Textures
-                          </button>{" "}
-                          by flewvar (textures by JarateKing) ·{" "}
-                          <button
-                            type="button"
-                            className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
-                            onClick={() => void openExternal("https://gamebanana.com/mods/336110")}
-                          >
-                            Developer Textures Overhaul
-                          </button>{" "}
-                          by FPS_Engineer, from ayrtonSilna&apos;s reupload ·{" "}
-                          <button
-                            type="button"
-                            className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
-                            onClick={() => void openExternal("https://gamebanana.com/mods/435309")}
-                          >
-                            Square Series
-                          </button>{" "}
-                          overlays by ghytd
-                        </p>
-                        <ul className="mt-3 list-none p-0">
-                          {[...directAddons, ...savedLibraryAddons].map((addon) => (
-                            <AddonRow
-                              key={addon.id}
-                              addon={addon}
-                              legacy={!directIds.includes(addon.id)}
-                              checked={addons.includes(addon.id)}
-                              disabled={
-                                !payload ||
-                                busy ||
-                                payload.repairInProgress === true ||
-                                payload.recoveryRequired === true
-                              }
-                              onToggle={() =>
-                                setSelection((current) => ({
-                                  ...current,
-                                  addons: toggleName(current.addons, addon.id),
-                                }))
-                              }
-                            />
-                          ))}
-                        </ul>
-                      </div>
-                    </Disclosure>
-                    <Disclosure
-                      profileId={profileId}
-                      storageKey="mods-particles"
-                      defaultOpen
-                      summary={
-                        <span>
-                          Particle sources{" "}
-                          <span className="t-meta ml-2">{particleMods.length} selected</span>
-                        </span>
-                      }
-                    >
-                      <div>
-                        <ul className="mt-3 list-none p-0">
-                          {savedLibraryParticles.map((mod) => (
-                            <ParticleRow
-                              key={mod.name}
-                              mod={mod}
-                              legacy
-                              checked={particleMods.includes(mod.name)}
-                              disabled={
-                                !payload ||
-                                busy ||
-                                payload.repairInProgress === true ||
-                                payload.recoveryRequired === true
-                              }
-                              onToggle={() =>
-                                setSelection((current) => ({
-                                  ...current,
-                                  particleMods: toggleName(current.particleMods, mod.name),
-                                }))
-                              }
-                            />
-                          ))}
-                        </ul>
-                      </div>
-                    </Disclosure>
-                  </div>
+                {catalog || savedLibraryAddons.length > 0 ? (
+                  <section aria-labelledby="mods-addons-heading" data-testid="mods-addons">
+                    <div className="sub-heading">
+                      <h3 id="mods-addons-heading" className="eyebrow">
+                        Addons
+                      </h3>
+                      <span className="t-meta tnum">{addons.length} selected</span>
+                    </div>
+                    <p className="t-meta mt-2">
+                      <button
+                        type="button"
+                        className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
+                        onClick={() => void openExternal("https://gamebanana.com/mods/295065")}
+                      >
+                        Flat Textures
+                      </button>{" "}
+                      by flewvar (textures by JarateKing) ·{" "}
+                      <button
+                        type="button"
+                        className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
+                        onClick={() => void openExternal("https://gamebanana.com/mods/336110")}
+                      >
+                        Developer Textures Overhaul
+                      </button>{" "}
+                      by FPS_Engineer, from ayrtonSilna&apos;s reupload ·{" "}
+                      <button
+                        type="button"
+                        className="text-ink-muted underline decoration-edge-strong underline-offset-2 hover:text-ink"
+                        onClick={() => void openExternal("https://gamebanana.com/mods/435309")}
+                      >
+                        Square Series
+                      </button>{" "}
+                      overlays by ghytd
+                    </p>
+                    <ul className="mt-1 list-none p-0">
+                      {[...directAddons, ...savedLibraryAddons].map((addon) => (
+                        <AddonRow
+                          key={addon.id}
+                          addon={addon}
+                          legacy={!directIds.includes(addon.id)}
+                          checked={addons.includes(addon.id)}
+                          disabled={
+                            !payload ||
+                            busy ||
+                            payload.repairInProgress === true ||
+                            payload.recoveryRequired === true
+                          }
+                          onToggle={() =>
+                            setSelection((current) => ({
+                              ...current,
+                              addons: toggleName(current.addons, addon.id),
+                            }))
+                          }
+                        />
+                      ))}
+                    </ul>
+                  </section>
                 ) : null}
 
-                {/* Particles the user's own packs bring: same patching, same Apply. */}
-                {particleSources.length > 0 ? (
-                  <div data-testid="mods-profile-particles" className="mt-6">
-                    <h3 className="eyebrow">From your mods</h3>
-                    <ul className="mt-3 list-none p-0">
+                {/* Particles from saved library choices and the player's own packs: same patching, same Apply. */}
+                <section
+                  aria-labelledby="mods-particles-heading"
+                  data-testid="mods-particles"
+                  className="mt-8"
+                >
+                  <div className="sub-heading">
+                    <h3 id="mods-particles-heading" className="eyebrow">
+                      Particles
+                    </h3>
+                    <span className="t-meta tnum">
+                      {particleMods.length + profileParticleMods.length} selected
+                    </span>
+                  </div>
+                  {savedLibraryParticles.length > 0 ? (
+                    <ul className="list-none p-0">
+                      {savedLibraryParticles.map((mod) => (
+                        <ParticleRow
+                          key={mod.name}
+                          mod={mod}
+                          legacy
+                          checked={particleMods.includes(mod.name)}
+                          disabled={
+                            !payload ||
+                            busy ||
+                            payload.repairInProgress === true ||
+                            payload.recoveryRequired === true
+                          }
+                          onToggle={() =>
+                            setSelection((current) => ({
+                              ...current,
+                              particleMods: toggleName(current.particleMods, mod.name),
+                            }))
+                          }
+                        />
+                      ))}
+                    </ul>
+                  ) : null}
+                  {particleSources.length > 0 ? (
+                    <ul data-testid="mods-profile-particles" className="list-none p-0">
                       {particleSources.map((source) => (
                         <ProfileParticleRow
                           key={source.modId}
@@ -771,8 +762,11 @@ export function ModsPane({
                         />
                       ))}
                     </ul>
-                  </div>
-                ) : null}
+                  ) : null}
+                  {savedLibraryParticles.length + particleSources.length === 0 ? (
+                    <p className="t-meta mt-3">None of your mods has particle files.</p>
+                  ) : null}
+                </section>
 
                 {particleOverlaps.length > 0 ? (
                   <div data-testid="mods-particle-conflicts" className="mt-6">
@@ -909,6 +903,8 @@ export function ModsPane({
               </aside>
             </div>
           </PaneSection>
+
+          <ModContentAudit payload={payload} mods={mods} casual />
 
           {report ? (
             <section className="section" data-testid="mods-report">

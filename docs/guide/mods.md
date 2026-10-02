@@ -37,6 +37,8 @@ Valve's Casual servers use sv_pure, which normally blocks custom materials and p
 - **Material bypass**: edits one line in `gameinfo.txt` so preloaded materials stay active. The original is backed up first.
 - **Casual selection**: the addons (Flat Textures, Developer Textures, No Burning Overlay, No Sentry Shield Overlay) and particle sources from your installed mods. **Apply mods** downloads the addons' verified author files, packs them into your preload addon and patches the particle files. Applying turns Preload on.
 
+**Your packs on Casual** says what each custom pack in the profile can do on Casual servers.
+
 Each particle file comes whole from one mod; overlapping files aren't merged. When two sources supply the same file, execs shows which one wins and lets you choose. Particles from your own mods always win over library particles.
 
 **Restore stock files** puts back the original particle files and `gameinfo.txt` and removes the Casual addon pack. Your mods stay in the profile.

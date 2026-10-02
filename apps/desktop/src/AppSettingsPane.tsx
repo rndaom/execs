@@ -4,7 +4,6 @@ import { InstallHealthPanel } from "./components/InstallHealth";
 import { StorageUsage } from "./components/StorageUsage";
 import { UninstallSection } from "./components/UninstallSection";
 import { Alert } from "./components/ui/Alert";
-import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { Loading, Spinner } from "./components/ui/Spinner";
@@ -324,31 +323,27 @@ export function AppSettingsPane({
             ) : null}
           </div>
           <p className="t-meta mt-2">Diagnostics include your install path and profile name.</p>
-          <Disclosure
-            profileId={null}
-            storageKey="app-credits"
-            summary="Credits and third-party notices"
-            className="mt-4"
-          >
-            <div className="mt-3 space-y-3">
-              <p className="t-meta">
-                Built with the TF2 community: mastercomfig, hud-db, TF2HUD.Editor, casual-pre-loader
-                and GameBanana. Previously built viewmodel packs used CompVMInstaller; previously
-                installed Venom Crosshairs, TF2Hitsounds and comfig.app sounds remain credited.
-              </p>
-              <p className="t-meta">
-                Inter by Rasmus Andersson. Icons by Phosphor. execs is a fan project and is not
-                affiliated with Valve or Steam.
-              </p>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => void openLink(APP_NOTICES_URL)}
-              >
-                Read full notices <ArrowSquareOut size={15} aria-hidden="true" />
-              </button>
-            </div>
-          </Disclosure>
+        </SettingsSection>
+
+        <SettingsSection id="app-credits" title="Credits">
+          <div className="space-y-3">
+            <p className="t-meta">
+              Built with the TF2 community: mastercomfig, hud-db, TF2HUD.Editor, casual-pre-loader
+              and GameBanana. Previously built viewmodel packs used CompVMInstaller; previously
+              installed Venom Crosshairs, TF2Hitsounds and comfig.app sounds remain credited.
+            </p>
+            <p className="t-meta">
+              Inter by Rasmus Andersson. Icons by Phosphor. execs is a fan project and is not
+              affiliated with Valve or Steam.
+            </p>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => void openLink(APP_NOTICES_URL)}
+            >
+              Read full notices <ArrowSquareOut size={15} aria-hidden="true" />
+            </button>
+          </div>
         </SettingsSection>
 
         {onUninstall ? (
