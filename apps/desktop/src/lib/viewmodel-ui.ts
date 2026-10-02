@@ -466,6 +466,30 @@ export function viewmodelConflictRows(
   );
 }
 
+/**
+ * Hidden rows that share animations with a shown row in the same class. The
+ * build keeps a shared animation shown, so these rows stay partly visible.
+ */
+export function viewmodelPartlyShownRows(
+  catalog: ViewmodelSourceCatalog,
+  choices: ViewmodelDraftChoices,
+  className: string,
+): { row: ViewmodelRow; shownWith: ViewmodelRow[] }[] {
+  const rows = viewmodelRowsForClass(catalog, className);
+  const rowOf = new Map(rows.flatMap((row) => row.groups.map((group) => [group.id, row] as const)));
+  return rows.flatMap((row) => {
+    const shownWith = new Set<ViewmodelRow>();
+    for (const group of row.groups) {
+      if (!choices[group.id]) continue;
+      for (const other of group.overlaps) {
+        const otherRow = rowOf.get(other);
+        if (!choices[other] && otherRow && otherRow !== row) shownWith.add(otherRow);
+      }
+    }
+    return shownWith.size ? [{ row, shownWith: [...shownWith] }] : [];
+  });
+}
+
 /** Whole-profile starting points; every class and weapon row follows the same rule. */
 export type ViewmodelPreset = "show-all" | "hide-all" | "keep-melee";
 

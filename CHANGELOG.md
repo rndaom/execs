@@ -5,6 +5,14 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Viewmodels: hiding a weapon no longer hides another weapon you left shown when the two share
+  animations. Keep melee visible no longer hid Soldier's Shovel (through the Concheror) or melee
+  swings for Engineer, Demoman and Medic. A weapon that stays partly visible because of this is
+  named under its class. Packs built before this fix show as out of date; build again to update
+  them.
+
 ## [0.2.2] - 2026-10-01
 
 ### Added
