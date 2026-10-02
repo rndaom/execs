@@ -616,11 +616,11 @@ test("development transitions distinguish same-version replacement and refuse do
 
 test("development Linux baseline pins current public assets and refuses metadata drift", () => {
   const version = developmentPublicFixture.exporterTag.slice(1);
-  assert.equal(developmentPublicRelease.tagName, "v0.2.1");
-  assert.equal(developmentPublicRelease.publishedAt, "2026-09-28T23:37:58Z");
+  assert.equal(developmentPublicRelease.tagName, "v0.2.2");
+  assert.equal(developmentPublicRelease.publishedAt, "2026-10-02T01:03:22Z");
   assert.equal(
     developmentPublicRelease.exporterRevision,
-    "ebb2d507635f314675a481a0c8b5d683fb4502cf",
+    "95058a75f8183fb39eaa6efd33d8b44c47c03c1d",
   );
   for (const kind of ["appimage", "deb"]) {
     const pins = developmentPublicRelease.packages[kind];
@@ -642,10 +642,10 @@ test("development Linux baseline pins current public assets and refuses metadata
     );
     for (const edit of [
       (r) => {
-        r.tagName = "v0.2.0";
+        r.tagName = "v0.2.1";
       },
       (r) => {
-        r.tagName = "v0.2.2";
+        r.tagName = "v0.2.3";
       },
       (r) => {
         r.isDraft = true;
