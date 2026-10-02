@@ -1,339 +1,181 @@
 # Releases
 
-Users install published GitHub Releases. Development stays on Linear and
-`main`. This file is the playbook; [ARCHITECTURE.md](ARCHITECTURE.md) keeps the durable rules.
+How execs is versioned, built and published. The product rules behind it live in
+[ARCHITECTURE.md](ARCHITECTURE.md); what changed in each version is in the
+[changelog](../CHANGELOG.md) and on [GitHub Releases](https://github.com/rndaom/execs/releases).
 
-Current public version: **0.2.1** (`v0.2.1`), published September 28, 2026 at
-23:37:58 UTC (7:37 PM America/New_York) after the owner's go-ahead. The patch
-carries the three owner-assigned 0.2.1 issue lists.
-[Release PR #147](https://github.com/rndaom/execs/pull/147) was merged into `main`
-as `ebb2d507635f314675a481a0c8b5d683fb4502cf`, which immutable `v0.2.1` points to;
-its tree is the one the final private candidate
-[36491333342](https://github.com/rndaom/execs/actions/runs/36491333342) tested. Tagged workflow
-[36495684486](https://github.com/rndaom/execs/actions/runs/36495684486) passed every gate, including signed
-upgrades from public v0.2.0 on Windows and Linux with the profile library
-preserved, and published the release. Anonymous public endpoints return 0.2.1 in
-`latest.json` for all four updater platforms, downloadable installer URLs, and a
-`release-commit.json` naming that commit and run. [0.2.1 release](release-0.2.1.md)
-records the scope, compatibility walk and the checks left to hands-on use.
-
-Previous public version: **0.2.0** (`v0.2.0`), published September 28, 2026 at
-01:03:28 UTC (9:03 PM America/New_York, September 27) after the owner's go-ahead.
-[Release PR #136](https://github.com/rndaom/execs/pull/136) was squash-merged into
-`main` as `486070f6e60bbcb5879acb5ae527d659d9d60ac1`, which immutable `v0.2.0`
-points to; its tree is the one the final private candidate
-[36360609657](https://github.com/rndaom/execs/actions/runs/36360609657) tested. Tagged workflow
-[36362601224](https://github.com/rndaom/execs/actions/runs/36362601224) passed every gate, including signed
-upgrades from public v0.1.8 on Windows and Linux with the profile library
-preserved, and published the release. Anonymous public endpoints return 0.2.0 in
-`latest.json` for all four updater platforms, downloadable installer URLs, and a
-`release-commit.json` naming that commit and run. The published
-[release](https://github.com/rndaom/execs/releases/tag/v0.2.0) is the compatibility
-baseline for the next minor. [0.2.0 readiness](release-0.2.0-readiness.md) records
-the owner's decisions and the qualification limits.
-
-Earlier public version: **0.1.8** (`v0.1.8`), published September 21, 2026 at
-02:26:18 UTC. [Release PR #59](https://github.com/rndaom/execs/pull/59) merged the
-Mods discovery and removal-integrity update into maintenance. Immutable
-`v0.1.8` points to `85aaf6bc0dd28f43351d4cb5cdb62502737688d5`.
-
-Earlier public version: **0.1.7 Hotfix 2** (`0.1.7+2`), published September 20,
-2026 at 19:44:49 UTC (3:44 PM America/New_York), after the owner's explicit
-hotfix authorization. PR #56 merged the Files usability rebuild into maintenance;
-PR #57 fixed the release-only WebView2 qualification URL race. Immutable
-`v0.1.7+2` points to `15086ea569178402d927bf4990828dc436c8ec40`.
-Tagged workflow `35531372830` passed every gate, including both platforms'
-upgrades from public 0.1.7, packaged Files workers, signed-asset/feed verification
-and publication. Anonymous public endpoints independently return the exact tag,
-revision, four updater platforms and release provenance. The failed `v0.1.7+1`
-candidate remains an unpublished private draft and was never latest. See
-`docs/release-0.1.7+2.md` for evidence and qualification limits.
-
-Earlier public version: **0.1.7** (`v0.1.7`, published September 20, 2026 at
-06:55:58 UTC). PR #54 merged into maintenance and PR #55 carried the fixes into
-main. Its tagged workflow passed both platform upgrades from 0.1.6 and packaged
-Files workers. See `docs/release-0.1.7.md` for its evidence and limits.
-
-0.1.6 was published 2026-09-18 23:20:05 UTC. The owner assigned all 14
-milestone issues: sound identity/audition, creator ZIP import, Windows HUD paths,
-and HUD import/customization fixes. All 14 Linear milestone issues are Done.
-
-Frontend and Windows/Linux validation, signed packages, upgrades from public
-0.1.5, startup/notices, app-data preservation and no-repeat-offer checks pass.
-Anonymous downloads independently verify all three installer signatures and
-hashes, the public updater URLs and exact release provenance. Native NVDA/Orca
-announced-name checks and Windows retail HUD rendering pass within their
-recorded scopes. See `docs/release-0.1.6.md` for publication and acceptance evidence.
-
-PR #52 is merged into `rndaom/release-0.1`; immutable tag `v0.1.6` points to
-merge commit `871abd751d278ca5105b64e9cfe3ee9e7f3067bb`. PR #53 is merged into
-main, retaining unreleased 0.2.0 versions and profile-scoped preloader work.
-Creator-import PR #49 is incorporated into #52 and closed as superseded.
-
-0.1.5 shipped the cfg/profile integrity and mutation-outcome fixes. PR #47
-merged into maintenance and PR #48 carried those fixes into main. Its immutable
-tag, publication evidence and announcement remain in `docs/release-0.1.5.md`.
-
-0.1.4 shipped the owner-assigned crosshair update and Linux AppImage startup
-fix. Its publication and compatibility evidence remains in
-`docs/release-0.1.4.md`.
-
-0.1.3 was prepared from public 0.1.2 on a separate maintenance branch.
-Its bind scope is RND-212, RND-233 and RND-234. The September 6 audit
-also found three patch-class regressions in public 0.1.2: absorb must stop if
-TF2 starts mid-operation, a catalog-matched imported HUD must keep its editable
-local tree, and an exported profile with a small highly compressible asset must
-import again. At the 0.1.3 release, creator-profile ZIP imports and profile-scoped
-preloader metadata remained on the minor track. Creator ZIP import is included
-in the owner-assigned 0.1.6 scope; profile-scoped preloaders remain on 0.2.0.
-See `docs/audits/2026-09-06-0.1.3/README.md` for the audit and implementation evidence.
-0.2.0 shipped on September 27, 2026 (America/New_York): PR #60 merged the
-combined work into `main`, and the owner added Inventory to it. Next minor:
-**0.3.0**; its milestone theme and three-feature budget wait for the owner. The
-first-Thursday cadence remains the default.
-
-## Branch names and release history
-
-`main` remains the default development branch. All other branches use the
-owner's `rndaom/` prefix:
-
-| Branch | Purpose |
-| --- | --- |
-| `rndaom/release-0.1` | Shared maintenance line for published 0.1.x releases. |
-| `rndaom/release-X.Y.Z` | Temporary candidate for one named release. |
-| `rndaom/forwardport-X.Y.Z` | Temporary PR carrying that release's fixes into main. |
-| `rndaom/<topic>` | Temporary implementation work; delete remotely after integration. |
-
-The older `release-0.1.3` name was reused for 0.1.4 and 0.1.5. It has now been
-consolidated into `rndaom/release-0.1` without losing commits. Completed version
-branches are not an archive: immutable `v0.1.0` through `v0.1.8` tags, including
-`v0.1.3+1`, retain the published versions. Missing version branches therefore do
-not mean missing releases. Do not recreate old branches merely to fill gaps.
-
-The owner-requested 0.1.6 branch rename replaced draft PRs #50/#51 with #52/#53;
-the earlier reviews and successful CI remain available on the closed PRs.
-Release publication requires the owner's separate authorization; a branch
-rename does not grant it.
-
-## Who sees what
+## Where things live
 
 | Surface | Who | What it is |
 |---|---|---|
-| [GitHub Releases](https://github.com/rndaom/execs/releases) | Everyone | The only supported install. In-app updater reads `latest.json` from `/releases/latest`. |
-| [GitHub Issues](https://github.com/rndaom/execs/issues) | Everyone | Public inbox. Not the backlog. |
+| [GitHub Releases](https://github.com/rndaom/execs/releases) | Everyone | The only supported install. The in-app updater reads `latest.json` from the latest release. |
+| [Issues](https://github.com/rndaom/execs/issues) | Everyone | Bug reports and requests. |
 | [Discussions](https://github.com/rndaom/execs/discussions) | Everyone | Questions and ideas. Not a commitment to build. |
-| [Linear · execs](https://linear.app/rndaom/project/execs-a89f9a30e95c) | You | The backlog, the milestone, the work. |
-| `main` | You | Development. CI green. May be ahead of the last tag. |
-| Draft / `workflow_dispatch` builds | You | Installer smoke only. Never a download link. |
+| `main` | Contributors | Development. CI stays green; it may be ahead of the last release. |
+| Draft and `workflow_dispatch` builds | Maintainers | Private test builds. Never a download link. |
 
-No nightlies, no public prereleases, no "try this build" from `main`. A
-prerelease tag would hide `/releases/latest` only if it is marked
-prerelease; do not introduce that channel until there is a reason.
+There are no nightlies, public prereleases or "try this build" links from `main`.
 
-Unsolicited pull requests: thank them, move the idea to an issue, and
-decline anything that touches the write surface, the updater, or the
-profile format unless you asked for it.
+## Branches
+
+`main` is the default branch. Other branches use the `rndaom/` prefix:
+
+| Branch | Purpose |
+| --- | --- |
+| `rndaom/release-X.Y.Z` | The candidate for one release. |
+| `rndaom/release-0.1` | Maintenance line for 0.1.x patches. |
+| `rndaom/forwardport-X.Y.Z` | Carries a release's fixes into `main` when it was cut from elsewhere. |
+| `rndaom/<topic>` | Short-lived work, deleted after merging. |
+
+Released versions are kept by their immutable `vX.Y.Z` tags, not by branches.
 
 ## Versioning
 
-`0.Y.Z` until a yearly review promotes **1.0.0**. The four product files
-always match the release tag (without its `v` prefix):
+execs stays on `0.Y.Z` until a yearly review promotes **1.0.0**. Four files always
+match the release tag without its `v`:
 
 - `apps/desktop/package.json`
 - `apps/desktop/src-tauri/tauri.conf.json`
 - `apps/desktop/src-tauri/Cargo.toml`
 - `apps/desktop/src-tauri/core/Cargo.toml`
 
-An explicitly requested hotfix may retain the product version and increment
-only a build revision: **0.1.3 Hotfix 1** is `0.1.3+1` in these files, the
-changelog heading, updater manifest and new `v0.1.3+1` tag. Local bundle names
-retain `+1`. Upload paths can retain `+` or normalize it to `.`, so verification
-and previous-installer selection read the actual release asset names.
-Use positive numeric revisions from 1 through 65535, without leading zeros.
-The app footer stays `v0.1.3`; release notes and update copy identify the hotfix.
-Diagnostics, staged notes and install matching retain the complete revision.
-
-This works with the updater already shipped in 0.1.3: its pinned Rust semver
-comparison orders build metadata, even though general SemVer precedence does
-not. Numeric metadata also supplies the Windows installer's fourth version
-component. Keep both the native comparison probes and signed upgrade smoke
-green; do not assume another updater implementation treats metadata the same.
-The smoke source is the immediately preceding changelog release, so the first
-hotfix tests the actual 0.1.3 installer, and a second hotfix tests the first.
-An identical revision must not be offered again.
-
-Keep the original published tag and artifacts intact. Build the hotfix in its
-own private draft, then publish it as the latest stable release through the
-existing workflow, feed URL and signing key. This adds no prerelease channel.
-The owner requested this delivery for the September 7 0.1.3 fixes.
-
-GitHub can give a draft an `untagged-...` browser URL despite its exact
-`tag_name`. Verification binds that temporary URL to the draft's `html_url`,
-requires the feed to use the corresponding stable API asset URL, and still
-checks the exact product tag, file revision, signatures and bytes. A temporary
-draft browser URL must never be left in the published updater feed.
-
-| Bump | When | Features | Data / write surface |
+| Bump | When | What it can contain | Data and files written |
 |---|---|---|---|
-| **Patch** `0.Y.Z+1` | Anytime. Same day if install, updater, data-loss, or write-lock is broken. | Bug fixes by default. A bounded feature or polish item may ship when the owner explicitly assigns it to that named patch. | No incompatible schema or new write target. Older profiles and exports still work; additive internal recovery metadata is allowed. |
-| **Minor** `0.Y+1.0` | Monthly train (below). Skip if nothing is ready. | At most **three** planned user-visible features, or one large feature that is the whole release. | Additive only. A 0.1.0 profile still loads. |
-| **1.0.0** | Yearly review says the contracts are stable. | — | Profile format, write surface, updater URL, and OS matrix are promises. |
+| **Patch** `0.Y.Z+1` | Anytime; the same day if installing, updating, data or the write lock is broken. | Bug fixes, plus any small feature or polish item the maintainer deliberately puts in that patch. | Nothing incompatible and no new write target. Older profiles and exports keep working. |
+| **Minor** `0.Y+1.0` | The monthly train (below). Skipped if nothing is ready. | At most **three** planned user-visible features, or one large feature that is the whole release. | Additive only. A 0.1.0 profile still loads. |
+| **1.0.0** | When the yearly review says the contracts are stable. | — | Profile format, written files, updater URL and supported systems become promises. |
 
-A user-visible feature is something a player notices in a pane or on
-first run. Refactors, tests, copy, and process docs are not features and
-do not wait for a train.
+A user-visible feature is something a player notices in a pane or on first run.
+Refactors, tests, copy and process docs aren't features and never wait for a train.
+When a feature goes into a patch, record the patch's full scope in its milestone
+and ship exactly that.
 
-Patches stay small and bugfix-led; they are not a second feature train.
-The owner may nevertheless put a specific, bounded, non-breaking feature or
-polish change into a named patch when that update is the right delivery unit.
-Record that decision and the complete scope in the Linear milestone. The
-explicit assignment controls the update; do not move the item back to a minor
-solely because it is user-visible, and do not use the exception to infer extra
-scope the owner did not request.
+**Breaking changes** need at least a minor and a `Breaking:` line in the
+changelog: changing which files execs writes, a profile or manifest change an
+older execs can't read, a new updater URL or signing key, or dropping an
+operating system or glibc version. Never in a patch.
 
-**Breaking** (new minor at minimum, plus a migration note in
-`CHANGELOG.md`): changing which files we write, a profile or manifest
-change that an older execs cannot read, a new updater URL or signing
-key, or dropping an OS / glibc target. Never in a patch.
+### Hotfixes
 
-## Compatibility classes
+A hotfix that keeps the product version adds a numeric build revision:
+0.1.3 Hotfix 1 is `0.1.3+1` in the four version files, the changelog heading,
+the updater feed and a new `v0.1.3+1` tag. Revisions run from 1 to 65535 without
+leading zeros. The app shows `v0.1.3`; release notes, update prompts and
+diagnostics show the full revision.
 
-Label Linear issues `compat` when they touch profiles, the data dir, the
-write surface, or the updater. Those lines are required in the notes.
+The updater's Rust semver comparison orders build metadata, so `0.1.3+1` is
+offered to `0.1.3` and never offered twice. The numeric revision also becomes
+the Windows installer's fourth version number. Upload paths may keep `+` or turn
+it into `.`, so verification reads the actual asset names. The upgrade test
+installs the release immediately before it in the changelog, so a second hotfix
+tests the upgrade from the first.
 
-Before every tag, walk this list:
+Published tags and their files are never replaced. A hotfix is built as its own
+draft and published as the latest stable release, on the same feed URL and
+signing key.
+
+## Before every release
+
+Walk this list:
 
 - A profile exported from the last public version still imports.
-- Absorb still classifies packs the same way.
-- The write lock still refuses live-surface writes while TF2 runs.
-- Nothing new is written outside `tf/custom/`, `tf/cfg/overrides/` (or
-  vanilla user cfg), and the Steam Cloud `config.cfg` copy — except the
-  documented preloader exception.
+- Absorb still sorts packs the same way.
+- The write lock still refuses changes to TF2's files while it runs.
+- Nothing new is written outside `tf/custom/`, `tf/cfg/overrides/` (or the
+  plain `tf/cfg` user files without mastercomfig) and Steam Cloud's
+  `config.cfg` copy, apart from the documented Casual setup exception.
 - `tf2_misc_*_dir.vpk` is still never written.
 - `latest.json` will list both `windows-x86_64` and `linux-x86_64`.
+- `node scripts/pinned-sources.mjs` reports no change to comfig.app's hit
+  sound list or TF2HUD.Editor's schemas since their pins. If either changed,
+  review it, bump the pin and rerun the tests: new uploads and schema fixes
+  reach players only through a release.
 
-## GitHub and Linear
+## Shipping a minor
 
-Linear is private planning. GitHub is the public desk.
+The monthly train leaves on the first Thursday. Skip it when `[Unreleased]` has
+no user-facing feature and no fixes worth a release; empty months are fine.
 
-1. A GitHub issue or discussion arrives.
-2. Same day: reproduce, ask for a log, or close with a reason.
-3. If it is real work, open a Linear issue on the execs project, label
-   `from-github`, and paste the GitHub URL. Add `compat` when it applies.
-   Bug / Feature / Improvement stay the type labels.
-4. Commit it to a version milestone when it is in that minor's feature
-   budget, when it is a patch-class fix you will ship now, or when the owner
-   explicitly assigns the bounded work to a named patch.
-5. When the version that contains it is published, comment the version
-   on the GitHub thread and close it.
+1. Freeze the milestone. Anything over the three-feature budget moves to the
+   next minor.
+2. Walk the list above.
+3. Move the changelog's `[Unreleased]` entries into `## [0.Y.0] - YYYY-MM-DD`,
+   leaving an empty `[Unreleased]`.
+4. Bump the four version files on a `rndaom/release-0.Y.0` branch and open its
+   pull request.
+5. Run a private candidate (below) and try the installers.
+6. Merge, then tag the merge commit `v0.Y.0` and push the tag.
+7. The release workflow builds both platforms into a draft, checks everything
+   again, and publishes. Watch issues for 48 hours: a broken install or updater
+   is a same-day patch.
+8. Open the next milestone with a theme and at most three features.
 
-Do not keep a second backlog on GitHub. Issues you will not do are
-closed ("not planned") rather than left open as a wish list.
+## Shipping a patch
 
-Project milestones are the release buckets (`0.2.0`, `0.3.0`, …). Do not
-turn on Linear cycles — they are not tied to releases. Linear's Releases
-feature needs a Business plan and a CI key; skip it. The GitHub tag is
-the record of what users have.
+Bump `Z`, write the changelog section, and follow the same steps. Cut the patch
+from `main` unless `main` already holds a breaking change or work outside the
+patch; then branch from the last public tag and tag from that branch.
 
-## Cadence
+## Private candidates
 
-### Every day (about 15 minutes)
+`workflow_dispatch` on `release.yml` with `release_tag=vX.Y.Z` builds that
+version's private draft and never publishes. Candidate and tag runs for the same
+version share a lock, so they can't change one draft at once. Pushing the tag is
+what publishes.
 
-1. [GitHub Issues](https://github.com/rndaom/execs/issues) — new threads
-   and comments. Patch-class bugs leave this list as a Linear issue the
-   same day, not at the end of the month.
-2. [Discussions](https://github.com/rndaom/execs/discussions) — answer or
-   convert a real request into a GitHub issue, then into Linear.
-3. Linear execs project — triage, not a standup. Move work; do not
-   admire the board.
-4. If the last publish is less than 48 hours old, read new issues before
-   anything else.
+GitHub may give a draft a temporary `untagged-...` address. Verification accepts
+it only when it matches the draft's own page and the feed uses the stable asset
+URL; the tag, revision, signatures and bytes are always checked. A temporary
+address never reaches the published feed.
 
-Nothing else is daily. Download counts and stars wait for the month.
-
-### First Thursday of the month (the minor)
-
-Skip the train when the Unreleased section has no user-facing feature
-and no stacked fixes worth a tag. Empty months are correct.
-
-When you do ship:
-
-1. Freeze the milestone. Anything over the three-feature budget moves to
-   the next minor. Do not add "one more thing" on release day.
-2. Run the compatibility list, then `node scripts/pinned-sources.mjs`. New comfig.app uploads and
-   HUD schema fixes reach players only when a release bumps these pins, and a HUD from the live
-   catalog must not ship with a schema known to be outdated.
-3. Move `CHANGELOG.md` `[Unreleased]` into `## [0.Y.0] - YYYY-MM-DD`
-   and leave a fresh empty `[Unreleased]`.
-4. Bump the four version files. Commit. Tag `v0.Y.0` and push the tag.
-5. Wait for the Release workflow: both platforms, draft, notes from
-   the changelog, `latest.json` verified, then publish.
-6. Watch GitHub Issues for 48 hours. A broken install or updater is a
-   same-day patch, not a note on the next minor.
-7. Open the next milestone. Pick a theme and at most three features.
-   Leave the rest in the backlog.
-
-### Anytime (a patch)
-
-A patch is normally a focused set of bugs in the last public version. It may
-also contain a bounded, non-breaking feature or polish item that the owner
-explicitly assigned to that named patch. Freeze exactly that recorded milestone
-scope; an exception is not permission to sweep in adjacent backlog work.
-
-Bump `Z`, write the changelog section, tag, done. If `main` already has an
-unreleased breaking change or work outside the frozen patch scope, cut the patch
-branch from the last public tag and tag from that branch. Otherwise patch from
-`main`. Older profiles and exports must remain readable, write targets must not
-expand, and every breaking change still waits for a minor.
-
-### Once a year (the first Thursday of September)
-
-1. Compatibility: profile format, data dir layout, write surface,
-   updater URL and signing, OS matrix (Windows 10 1803+, Linux glibc
-   2.35+). Decide what is now a promise.
-2. **1.0.0** — only if those promises can be kept. Otherwise stay on
-   `0.Y.Z` and say so in the notes of the next minor.
-3. Signing / SmartScreen (Authenticode, SignPath).
-4. Dependency and advisory pass (`pnpm`, `cargo`).
-5. `THIRD_PARTY.md` still matches what we fetch.
-6. What to stop supporting. Dropping a target is a minor with a warning
-   in the previous minor's notes.
-
-## Ship checklist
-
-Candidate preparation and platform evidence may be completed before the tag.
-Tag, workflow publication, public-inbox closure, and milestone closure remain
-unchecked until the owner authorizes the release and the publish succeeds.
+## Checklist
 
 - [ ] Milestone frozen; leftover issues moved off it
-- [ ] Compatibility list walked
-- [ ] Pinned sources current: `node scripts/pinned-sources.mjs` reports no change to comfig.app's
-      hit sound list or TF2HUD.Editor's schemas since `COMFIG_INDEX_COMMIT` and `SCHEMA_COMMIT`;
-      otherwise review the change, bump the pin and rerun the tests
+- [ ] "Before every release" list walked, including pinned sources
 - [ ] `CHANGELOG.md` has a non-empty `## [X.Y.Z]` section
-- [ ] Four version files equal `X.Y.Z`
-- [ ] Tag is `vX.Y.Z` on that commit
-- [ ] Release workflow published; both platforms in `latest.json`
-- [ ] GitHub issues that shipped are commented and closed
-- [ ] Linear milestone issues are Done
-- [ ] Next milestone exists with a theme and a budget of three
+- [ ] The four version files equal `X.Y.Z`
+- [ ] Private candidate passed and its installers were tried
+- [ ] Tag `vX.Y.Z` is on the release commit
+- [ ] Release published, with both platforms in `latest.json`
+- [ ] Issues fixed in the release are commented and closed
+- [ ] Next milestone opened
 
-`workflow_dispatch` requires the matching `vX.Y.Z` release tag as its
-`release_tag` input, builds that version's private draft, and never publishes.
-The input gives candidate and tag runs the same concurrency lock, so they cannot
-mutate one draft at the same time. Use it to inspect installers. To ship, push
-the tag.
+## Issues and requests
+
+1. Reply to a new issue or discussion the same day: reproduce it, ask for
+   diagnostics, or close it with a reason.
+2. Real work goes on the backlog and into a milestone when it fits that
+   release's budget, or into the next patch if it's a fix.
+3. When a release containing the fix is published, comment the version on
+   the issue and close it.
+
+Issues that won't be done are closed as "not planned" rather than kept as a
+wish list. Unsolicited pull requests are welcome as ideas: changes to which
+files execs writes, the updater or the profile format are discussed in an
+issue first.
+
+## Once a year (first Thursday of September)
+
+1. Review compatibility: profile format, data folder layout, written files,
+   updater URL and signing, supported systems (Windows 10 1803+, Linux glibc
+   2.35+). Decide what becomes a promise.
+2. Promote to **1.0.0** only if those promises can be kept; otherwise say why
+   in the next minor's notes.
+3. Revisit Windows signing.
+4. Run a dependency and advisory pass (`pnpm`, `cargo`).
+5. Check that `THIRD_PARTY.md` still matches what execs downloads.
+6. Decide what to stop supporting. Dropping a system is a minor, announced in
+   the previous minor's notes.
 
 ## Changelog
 
-`CHANGELOG.md` is the source of the GitHub release body (and therefore
-the updater notes field). User-facing only. A line a player cannot see
-does not belong.
+`CHANGELOG.md` becomes the GitHub release text and the updater's notes, so it
+holds only what players can see.
 
 Groups, in this order when present: **Added**, **Fixed**, **Changed**,
-**Security**. Sentence case. Name the pane or the file when it helps.
-Breaking changes go first under **Changed** and start with `Breaking:`.
+**Security**. Sentence case; name the pane or file when it helps. Breaking
+changes go first under **Changed** and start with `Breaking:`.
 
-Every user-facing pull request adds its line under `[Unreleased]` in the
-same commit as the change. The release workflow fails the publish if
-that version's section is missing or empty.
+Every user-facing pull request adds its line under `[Unreleased]` in the same
+commit. The release workflow refuses to publish when the version's section is
+missing or empty.
