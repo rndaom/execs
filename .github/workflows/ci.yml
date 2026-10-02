@@ -54,7 +54,7 @@ jobs:
     steps:
       - name: Documentation-only PR
         if: needs.classify.outputs.docs_only == 'true'
-        run: echo "Markdown under docs/design changed; full tests are unnecessary."
+        run: echo "Only guide pages changed; full tests are unnecessary."
       - uses: actions/checkout@v4
         if: needs.classify.outputs.docs_only != 'true'
       - uses: dtolnay/rust-toolchain@stable
@@ -80,7 +80,7 @@ jobs:
     steps:
       - name: Documentation-only PR
         if: needs.classify.outputs.docs_only == 'true'
-        run: echo "Markdown under docs/design changed; full tests are unnecessary."
+        run: echo "Only guide pages changed; full tests are unnecessary."
       - uses: actions/checkout@v4
         if: needs.classify.outputs.docs_only != 'true'
       - uses: pnpm/action-setup@v4
@@ -109,7 +109,7 @@ jobs:
     steps:
       - name: Documentation-only PR
         if: needs.classify.outputs.docs_only == 'true'
-        run: echo "Markdown under docs/design changed; full tests are unnecessary."
+        run: echo "Only guide pages changed; full tests are unnecessary."
       - uses: actions/checkout@v4
         if: needs.classify.outputs.docs_only != 'true'
       - name: Install Linux dependencies
@@ -154,7 +154,7 @@ jobs:
     steps:
       - name: Documentation-only PR
         if: needs.classify.outputs.docs_only == 'true'
-        run: echo "Markdown under docs/design changed; full tests are unnecessary."
+        run: echo "Only guide pages changed; full tests are unnecessary."
       - uses: actions/checkout@v4
         if: needs.classify.outputs.docs_only != 'true'
       - uses: dtolnay/rust-toolchain@stable
@@ -180,7 +180,7 @@ jobs:
     steps:
       - name: Documentation-only PR
         if: needs.classify.outputs.docs_only == 'true'
-        run: echo "Markdown under docs/design changed; full tests are unnecessary."
+        run: echo "Only guide pages changed; full tests are unnecessary."
       - uses: actions/checkout@v4
         if: needs.classify.outputs.docs_only != 'true'
       - uses: dtolnay/rust-toolchain@stable
@@ -209,7 +209,7 @@ jobs:
     steps:
       - name: Documentation-only PR
         if: needs.classify.outputs.docs_only == 'true'
-        run: echo "Markdown under docs/design changed; full tests are unnecessary."
+        run: echo "Only guide pages changed; full tests are unnecessary."
       - uses: actions/checkout@v4
         if: needs.classify.outputs.docs_only != 'true'
       - uses: dtolnay/rust-toolchain@stable

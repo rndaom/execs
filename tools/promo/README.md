@@ -35,14 +35,14 @@ here, after `pnpm install` at the repository root.
 
 ## Local sources
 
-Two inputs stay on the owner's machine and reach only rendered media:
+Two inputs stay on the maintainer's machine and reach only rendered media:
 
 - **Class emblems.** Put the `get_class_icons` result in
   `capture/class-icons.local.json`; the capture server and `capture/emblems.mjs`
   read it. Without it the class row shows names.
 - **The backpack.** `capture/backpack.ts` builds the Inventory scenes from the
   Inventory art cache in the execs data dir (`EXECS_DATA_DIR` overrides it):
-  Valve's item images and descriptions for the owner's public inventory, with
+  Valve's item images and descriptions for the maintainer's public inventory, with
   synthetic item IDs and no Steam persona, avatar, account ID or "Crafted by"
   lines. Everything past page one is protected, and the crafted hat is one of
   the backpack's own. Without a cache the preview's test backpack appears.

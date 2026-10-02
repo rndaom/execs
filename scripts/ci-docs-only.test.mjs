@@ -21,29 +21,24 @@ function classify(paths, overrides = {}) {
   });
 }
 
-test("only Markdown changes below docs/design use the fast path", () => {
-  assert.equal(classify(["docs/design/README.md", "docs/design/plan/review.md"]), true);
-  assert.equal(classify(["docs/design/review.png"]), false);
-  assert.equal(
-    classify([
-      "docs/design/2026-09-22-overhaul/implementation/profile-management/compatibility-v018/no-hud/exported-by-v0.1.8.zip",
-    ]),
-    false,
-  );
+test("only Markdown changes below docs/guide use the fast path", () => {
+  assert.equal(classify(["docs/guide/README.md", "docs/guide/plan/review.md"]), true);
+  assert.equal(classify(["docs/guide/review.png"]), false);
+  assert.equal(classify(["docs/guide/profile-export.zip"]), false);
   assert.equal(classify(["docs/RELEASE.md"]), false);
-  assert.equal(classify(["docs/design/review.md", "apps/desktop/src/main.tsx"]), false);
-  assert.equal(classify(["docs/design/review.md", ".github/workflows/ci.yml"]), false);
-  assert.equal(classify(["apps/desktop/src/main.tsx", "docs/design/review.md"]), false);
+  assert.equal(classify(["docs/guide/review.md", "apps/desktop/src/main.tsx"]), false);
+  assert.equal(classify(["docs/guide/review.md", ".github/workflows/ci.yml"]), false);
+  assert.equal(classify(["apps/desktop/src/main.tsx", "docs/guide/review.md"]), false);
 });
 
 test("a code rename or deletion cannot be hidden by a new Markdown path", () => {
   let diffArgs;
   assert.equal(
-    classify(["apps/desktop/src/old.ts", "docs/design/new.md"], {
+    classify(["apps/desktop/src/old.ts", "docs/guide/new.md"], {
       git: (args) => {
         if (args[0] === "rev-list") return Buffer.from(`${merge} ${base} ${head}\n`);
         diffArgs = args;
-        return Buffer.from("apps/desktop/src/old.ts\0docs/design/new.md\0");
+        return Buffer.from("apps/desktop/src/old.ts\0docs/guide/new.md\0");
       },
     }),
     false,
@@ -55,24 +50,24 @@ test("empty, malformed and uncertain diffs run full CI", () => {
   assert.equal(classify([]), false);
   assert.equal(classify([], { git: gitWithDiff(Buffer.from("not NUL terminated")) }), false);
   assert.equal(classify([], { git: gitWithDiff(Buffer.from([0xff, 0])) }), false);
-  assert.equal(classify(["docs/design/review.md"], { checkoutSha: base }), false);
+  assert.equal(classify(["docs/guide/review.md"], { checkoutSha: base }), false);
   assert.equal(
-    classify(["docs/design/review.md"], {
+    classify(["docs/guide/review.md"], {
       git: () => Buffer.from(`${merge}\n`),
     }),
     false,
   );
   assert.equal(
-    classify(["docs/design/review.md"], {
+    classify(["docs/guide/review.md"], {
       git: (args) =>
         args[0] === "rev-list"
           ? Buffer.from(`${merge} ${head} ${base}\n`)
-          : Buffer.from("docs/design/review.md\0"),
+          : Buffer.from("docs/guide/review.md\0"),
     }),
     false,
   );
   assert.equal(
-    classify(["docs/design/review.md"], {
+    classify(["docs/guide/review.md"], {
       git: () => {
         throw new Error("git unavailable");
       },
@@ -84,7 +79,7 @@ test("empty, malformed and uncertain diffs run full CI", () => {
 test("push, dispatch and reusable release calls always run full CI", () => {
   for (const eventName of ["push", "workflow_dispatch", "workflow_call"]) {
     assert.equal(
-      classify(["docs/design/review.md"], {
+      classify(["docs/guide/review.md"], {
         eventName,
         git: () => {
           throw new Error("Git should not run for this event");

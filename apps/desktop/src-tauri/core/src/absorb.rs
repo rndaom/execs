@@ -1,4 +1,4 @@
-//! Absorb live drift into the active profile (RND-150).
+//! Absorb live drift into the active profile.
 //!
 //! Owned-file and `config.cfg` changes update the library automatically.
 //! New or deleted `tf/custom/` packs wait for an Update / Keep choice.
