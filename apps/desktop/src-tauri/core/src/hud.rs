@@ -2170,7 +2170,7 @@ mod tests {
         ".git/HEAD",
     ];
 
-    /// Opt-in real-package regression; see docs/hud-import-0.1.6.md.
+    /// Opt-in regression against real catalog HUD archives in `EXECS_HUD_FIXTURES`.
     fn verify_pinned_catalog_hud(name: &str, expected: &str) {
         let archives =
             PathBuf::from(std::env::var_os("EXECS_HUD_FIXTURES").expect("EXECS_HUD_FIXTURES"));

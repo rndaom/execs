@@ -1,6 +1,0 @@
-execs 0.2.0 is out.
-
-Your TF2 backpack is now in execs: inspect, sort, move, craft and delete items. Also new: compare before you switch, restore points, a new cfg editor, per-weapon viewmodels and a health check.
-
-Update in-app or download:
-https://github.com/rndaom/execs/releases/tag/v0.2.0

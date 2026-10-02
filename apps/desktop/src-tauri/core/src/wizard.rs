@@ -1,4 +1,4 @@
-//! Materialize a wizard profile in the library (RND-152 / RND-153).
+//! Materialize a wizard profile in the library.
 //!
 //! Does not write the live TF2 folder. Apply uses `switch_profile` after this.
 

@@ -1,4 +1,4 @@
-//! Comfig pane helpers: preset, modules, official addons, and package apply (RND-154).
+//! Comfig pane helpers: preset, modules, official addons, and package apply.
 //!
 //! Network-free. Fetch GitHub Release bytes in the Tauri host, then call these.
 

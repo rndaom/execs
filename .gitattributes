@@ -10,12 +10,3 @@
 apps/desktop/src-tauri/vendor/unrar-ng-sys/vendor/** -text
 apps/desktop/src-tauri/vendor/unrar-ng-sys/execs-crate-changes.patch -text
 
-# Archived CI evidence is byte-preserved; provenance hashes include original line endings.
-docs/design/2026-09-22-overhaul/implementation/linux-native/run-*/** -text
-docs/design/2026-09-22-overhaul/implementation/package-smoke/run-*/** -text
-
-# Retained machine evidence stays byte-identical and accessible, but GitHub
-# collapses its generated diffs so source and review notes remain navigable.
-docs/design/2026-09-22-overhaul/implementation/**/evidence/** linguist-generated
-docs/design/2026-09-22-overhaul/implementation/**/run-*/** linguist-generated
-docs/design/2026-09-22-overhaul/implementation/**/run-*/README.md -linguist-generated

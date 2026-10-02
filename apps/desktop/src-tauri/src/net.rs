@@ -1822,7 +1822,7 @@ mod tests {
                 }
                 println!("PROXY_AUTH_REJECTED");
             }
-            _ => panic!("unknown D8 fixture case"),
+            _ => panic!("unknown proxy fixture case"),
         }
     }
 

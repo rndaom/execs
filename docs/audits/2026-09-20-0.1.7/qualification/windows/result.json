@@ -1,6 +1,0 @@
-{
-  "physicalTabReachedEditor": true,
-  "physicalTabExitedEditor": true,
-  "completionOfferedAndAccepted": true,
-  "scope": "WebView2 production fixture with product CSP; no packaged IPC/disk/Cloud claims"
-}

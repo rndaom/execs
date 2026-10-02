@@ -57,11 +57,8 @@ same commit.
 
 ## Commits
 
-Use your own git identity. Do not add `Co-authored-by` trailers for agents
-or tools. Enable the repository commit hook with
-`git config --local core.hooksPath .githooks` (see `.githooks/commit-msg`).
-Local assistant instructions and settings are ignored; durable product decisions
-belong in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Commit under your own git identity, one change per pull request, with a
+description that says what broke, why, and what changed.
 
 ## Releases
 

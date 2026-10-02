@@ -30,7 +30,11 @@ function visit(id) {
 visit(metadata.resolve.root);
 const packages = metadata.packages.filter((pkg) => reachable.has(pkg.id));
 const glib = packages.find((pkg) => pkg.name === "glib");
-assert.equal(glib?.version, "0.18.5", "Reassess RND-205 when the Linux glib version changes");
+assert.equal(
+  glib?.version,
+  "0.18.5",
+  "Reassess the glib advisory RUSTSEC-2024-0429 when the Linux glib version changes",
+);
 const references = [];
 function inspect(directory, pkg) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -48,7 +52,11 @@ for (const pkg of packages.filter((pkg) => pkg.id !== glib.id)) {
   // Only inspect each workspace package's own source; the Tauri root contains core and generated output.
   inspect(pkg.source ? dirname(pkg.manifest_path) : join(dirname(pkg.manifest_path), "src"), pkg);
 }
-assert.deepEqual(references, [], `Reassess RND-205: affected API references found: ${references}`);
+assert.deepEqual(
+  references,
+  [],
+  `Reassess RUSTSEC-2024-0429: affected glib API references found: ${references}`,
+);
 console.log(
   JSON.stringify(
     {
