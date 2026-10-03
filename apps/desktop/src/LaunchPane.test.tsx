@@ -211,7 +211,7 @@ describe("Launch workspace", () => {
     await click('[data-testid="launch-steam-retry"]');
     expect(save).toHaveBeenCalledTimes(2);
     expect(element('[data-testid="launch-steam-status"]').textContent).toContain(
-      "Steam is open with different options",
+      "Steam has different options and is open",
     );
     sync = { ...sync, inSync: true, steamRunning: false };
     status = "written";
@@ -368,12 +368,15 @@ it("offers only a fresh check while Steam is open, because execs never writes th
     reviewToken: "review-a",
   };
   await render();
-  expect(element('[data-testid="launch-steam-retry"]').textContent).toBe("Check Steam again");
+  expect(element('[data-testid="launch-steam-retry"]').textContent).toBe("Check again");
   await click('[data-testid="launch-steam-retry"]');
   expect(document.body.textContent).not.toContain("Replace Steam launch options?");
   expect(save).toHaveBeenCalledTimes(1);
   expect(writeSteam).not.toHaveBeenCalled();
   sync = { ...sync, steamRunning: false };
   await render();
-  expect(element('[data-testid="launch-steam-retry"]').textContent).toBe("Write to Steam");
+  expect(element('[data-testid="launch-steam-retry"]').textContent).toBe(
+    "Use this profile's options",
+  );
+  expect(element('[data-testid="launch-steam-compare"]').textContent).toContain("-console");
 });

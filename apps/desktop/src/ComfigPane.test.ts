@@ -13,6 +13,11 @@ vi.mock("./hooks/useAppStatus", () => ({ useAppStatus: () => status }));
 let dom: JSDOM;
 let root: Root;
 
+/** A mastercomfig profile with its base package installed. */
+const BASE_FILES = [
+  { path: "tf/custom/mastercomfig-base.vpk", sha256: "base", storage: "exclusive" as const },
+];
+
 beforeEach(() => {
   status.running = false;
   status.busy = false;
@@ -37,7 +42,13 @@ function render(
 ) {
   root.render(
     createElement(ComfigPane, {
-      detail: { id: "profile", name: "Main", layer: "comfig", launchOptions: "", files: [] },
+      detail: {
+        id: "profile",
+        name: "Main",
+        layer: "comfig",
+        launchOptions: "",
+        files: BASE_FILES,
+      },
       state,
       onApplyPreset,
       onApplyModules: async () => false,
@@ -94,6 +105,40 @@ describe("ComfigPane workspaces", () => {
     );
     expect(document.body.textContent).toContain("mastercomfig 9.100.0");
     expect(document.body.textContent).toContain("Update available: 9.100.1");
+    const update = document.querySelector<HTMLButtonElement>('[data-testid="comfig-update"]');
+    expect(update?.textContent).toBe("Update to 9.100.1");
+    expect(update?.className).toContain("btn-primary");
+  });
+
+  it("shows no update button when the packages are current, and one place to add comfig-custom", async () => {
+    await act(async () =>
+      render(
+        undefined,
+        { ...PREVIEW_COMFIG_STATE, release: { version: "9.100.1", packages: {} } },
+        { onCheckRelease: async () => "9.100.1" },
+      ),
+    );
+    expect(document.querySelector('[data-testid="comfig-release-status"]')?.textContent).toBe(
+      "Up to date.",
+    );
+    expect(document.querySelector('[data-testid="comfig-update"]')).toBeNull();
+    expect(document.querySelector('[data-testid="comfig-import"]')?.textContent).toBe(
+      "Add folder…",
+    );
+    expect(document.querySelector('[data-testid="comfig-extras"]')?.className).toContain(
+      "text-link",
+    );
+  });
+
+  it("offers installing missing packages first", async () => {
+    await act(async () =>
+      render(undefined, PREVIEW_COMFIG_STATE, {
+        detail: { id: "bare", name: "Bare", layer: "comfig", launchOptions: "", files: [] },
+      }),
+    );
+    const update = document.querySelector<HTMLButtonElement>('[data-testid="comfig-update"]');
+    expect(update?.textContent).toBe("Install packages");
+    expect(update?.className).toContain("btn-primary");
   });
 
   it("keeps an unknown version explicit and reports a failed check", async () => {
@@ -120,7 +165,13 @@ describe("ComfigPane workspaces", () => {
     );
     await act(async () =>
       render(undefined, PREVIEW_COMFIG_STATE, {
-        detail: { id: "second", name: "Second", layer: "comfig", launchOptions: "", files: [] },
+        detail: {
+          id: "second",
+          name: "Second",
+          layer: "comfig",
+          launchOptions: "",
+          files: BASE_FILES,
+        },
         onCheckRelease: async () => "9.100.1",
       }),
     );

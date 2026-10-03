@@ -501,14 +501,14 @@ export function launchSteamCopy(state: LaunchSteamState, running: boolean): stri
     case "in-steam":
       return "Saved to this profile and in Steam.";
     case "steam-open":
-      return "Saved to this profile. Steam is open with different options. Copy them in, or Launch TF2 can restart Steam to write them.";
+      return "Steam has different options and is open. Close Steam to use this profile's options, or Launch TF2 restarts Steam and writes them.";
     case "steam-closed":
-      return "Saved to this profile. Steam has different options. Review them before writing, or choose which options to use when launching.";
+      return "Steam has different options. Choose which ones to keep.";
     case "write-failed":
-      return "Saved to this profile. Steam could not be updated. Retry, or copy them into Steam.";
+      return "Steam could not be updated. Try again, or paste the options into Steam yourself.";
     case "no-account":
-      return "Saved to this profile. No Steam account found, so copy them into Steam yourself.";
+      return "Saved to this profile. No Steam account found, so paste them into Steam yourself.";
     case "unknown":
-      return "Saved to this profile. Review Steam’s options before updating them.";
+      return "Saved to this profile. Steam's options have not been checked yet.";
   }
 }

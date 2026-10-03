@@ -967,7 +967,7 @@ export function SettingsHost({
               async () => {
                 await api.updateComfigVpks();
               },
-              { success: "Packages up to date", failure: "Could not update" },
+              { success: "mastercomfig updated", failure: "Could not update" },
             );
           }}
           onImportCustom={() => {
@@ -975,7 +975,7 @@ export function SettingsHost({
               async () => {
                 if ((await api.importComfigCustom()) === null) return null;
               },
-              { success: "comfig-custom imported", failure: "Could not import" },
+              { success: "comfig-custom folder added", failure: "Could not add the folder" },
               { picker: true },
             );
           }}
@@ -1019,7 +1019,6 @@ export function SettingsHost({
           layer={layer}
           effective={maps.effective}
           managedText={files.find((file) => file.path === path)?.text ?? ""}
-          onOpenViewmodels={() => onNavigate?.("viewmodels")}
           onSave={(gameplayText) =>
             write(
               async () => {
@@ -1207,7 +1206,6 @@ export function SettingsHost({
             cfgReady: maps.complete && !filesLimited,
             transparentViewmodels: comfig.addons.includes("transparent-viewmodels"),
             canUseComfigAddons: canUseTransparentViewmodels(detail?.layer ?? null),
-            onOpenComfig: () => onNavigate?.("comfig"),
             onToggleTransparentViewmodels: () => {
               const addons = toggleComfigAddon(comfig.addons, "transparent-viewmodels");
               void write(async () => {
@@ -1239,7 +1237,7 @@ export function SettingsHost({
               async () => {
                 await api.buildSelectedViewmodelPack(request);
               },
-              { success: "Pack built", failure: "Could not build" },
+              { success: "Viewmodels applied", failure: "Could not apply viewmodels" },
             )
           }
           onRemove={() => {

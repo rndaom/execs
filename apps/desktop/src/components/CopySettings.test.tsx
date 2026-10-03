@@ -36,7 +36,7 @@ it("reviews profiles, preselects the ones that change and copies to the chosen o
   await act(async () =>
     root.render(<CopySettings scope="binds" source={{ review, copy }} blockedReason={null} />),
   );
-  await act(async () => button("Copy to profiles…")?.click());
+  await act(async () => button("Copy to other profiles…")?.click());
   expect(review).toHaveBeenCalledOnce();
   expect(document.body.textContent).toContain("Already has these settings.");
   const switches = [...document.body.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
@@ -69,7 +69,7 @@ it("explains why copying waits", async () => {
       />,
     ),
   );
-  const trigger = button("Copy to profiles…");
+  const trigger = button("Copy to other profiles…");
   expect(trigger?.disabled).toBe(true);
   expect(trigger?.title).toContain("Close TF2");
 });
