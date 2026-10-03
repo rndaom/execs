@@ -57,6 +57,68 @@ export function comfigUpdateAvailable(installed: string, latest: string): boolea
   return false;
 }
 
+export type ComfigReleaseView = {
+  /** One short line on where this profile's packages stand. */
+  status: string;
+  checking: boolean;
+  /** The one action that helps right now; orange only when there is something to get. */
+  action: { label: string; primary: boolean } | null;
+};
+
+/**
+ * The packages row: the profile's mastercomfig release against the latest one,
+ * with an update button only when it would change something.
+ */
+export function comfigReleaseView({
+  installed,
+  packagesInstalled,
+  latest,
+  error,
+  checking,
+  checkable,
+}: {
+  installed: string | null;
+  packagesInstalled: boolean;
+  latest: string | null;
+  error: string | null;
+  checking: boolean;
+  checkable: boolean;
+}): ComfigReleaseView {
+  if (!packagesInstalled) {
+    return {
+      status: error ?? (checking ? "Checking for the latest release…" : "Packages are missing."),
+      checking,
+      action: { label: "Install packages", primary: true },
+    };
+  }
+  if (error)
+    return { status: error, checking: false, action: { label: "Update packages", primary: false } };
+  if (checking) return { status: "Checking for updates…", checking: true, action: null };
+  if (!latest) {
+    return {
+      status: checkable ? "Updates not checked yet." : "Updates have not been checked.",
+      checking: false,
+      action: { label: "Update packages", primary: false },
+    };
+  }
+  if (!installed) {
+    return {
+      status: `Latest is ${latest}. Update before adding addons.`,
+      checking: false,
+      action: { label: `Update to ${latest}`, primary: true },
+    };
+  }
+  if (installed === latest) return { status: "Up to date.", checking: false, action: null };
+  if (comfigUpdateAvailable(installed, latest)) {
+    return {
+      status: `Update available: ${latest}.`,
+      checking: false,
+      action: { label: `Update to ${latest}`, primary: true },
+    };
+  }
+  return { status: `Latest release: ${latest}.`, checking: false, action: null };
+}
+
 export function setModuleLevel(
   modules: Record<string, string>,
   id: string,

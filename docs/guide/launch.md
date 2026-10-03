@@ -6,8 +6,10 @@ Launch options are saved with the profile. **Add option** offers a searchable li
 
 Steam keeps its own copy of TF2's launch options and only reads it while closed.
 
-- With Steam closed, **Write to Steam** saves them directly.
-- With Steam open, **Launch TF2** offers **Restart Steam and launch**: execs closes Steam, writes the options, then starts Steam and TF2.
+When they differ, the **Steam** section shows both and lets you choose:
+
+- **Use this profile's options** writes this profile's options to Steam. Steam has to be closed; with Steam open, close it and press **Check again**, or use **Launch TF2**, which offers **Restart Steam and launch**: execs closes Steam, writes the options, then starts Steam and TF2.
+- **Use Steam's options** keeps Steam's options and saves them to this profile instead.
 - Copying the options to the clipboard never marks Steam as updated.
 
 The header warns when the active profile's options differ from Steam's copy.

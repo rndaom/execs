@@ -14,6 +14,15 @@ User-facing changes only. The release workflow publishes the matching
   Hidden or Hands only choice, instead of menus behind Customize weapons.
 - HUD options with long lists of choices, including HUD crosshair glyphs, show every choice on the
   page instead of a drop-down menu.
+- Crosshair, Viewmodels and Mods' Casual setup show the same bar while changes aren't in TF2 yet,
+  with Discard changes and Apply changes. Viewmodels applies straight from that bar, without a
+  separate review window.
+- Comfig shows an update button only when a newer mastercomfig is out, and keeps the comfig.app
+  customizer next to the comfig-custom folder it makes. Removing the crosshair pack is a button at
+  the bottom of the Crosshair page instead of a hidden menu, and buttons that repeated a switch or
+  the sidebar (Open Comfig addons, Open Viewmodels) are gone.
+- Launch shows this profile's and Steam's options side by side when they differ, with Use this
+  profile's options and Use Steam's options.
 
 ## [0.2.2] - 2026-10-01
 

@@ -88,8 +88,7 @@ describe("GameplayPane weapon controls", () => {
 
   it("keeps advanced tracers available while TF2 runs and routes viewmodel controls to Viewmodels", async () => {
     status.running = true;
-    const onOpenViewmodels = vi.fn();
-    await act(async () => render({ onOpenViewmodels }));
+    await act(async () => render());
     expect(control("gameplay-tracers-fp")?.disabled).toBe(false);
     expect(control("gameplay-tracers")).toBeNull();
     expect(control("gameplay-flip")).toBeNull();
@@ -97,8 +96,8 @@ describe("GameplayPane weapon controls", () => {
     expect(control("gameplay-draw-viewmodel")).toBeNull();
     // Tracers sit with the weapon switches; there is no Advanced fold for one switch.
     expect(document.querySelector('[data-testid="gameplay-advanced"]')).toBeNull();
-    await act(async () => control("gameplay-open-viewmodels")?.click());
-    expect(onOpenViewmodels).toHaveBeenCalledOnce();
+    // Viewmodels has its own pane in the sidebar; Gameplay does not repeat a link to it.
+    expect(control("gameplay-open-viewmodels")).toBeNull();
     expect(
       document.querySelector('[aria-label="Field of view values"]')?.textContent,
     ).not.toContain("These values describe the cfg settings");

@@ -1,11 +1,12 @@
-import { ArrowClockwise } from "@phosphor-icons/react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ApplyBar } from "./components/ui/ApplyBar";
 import { ChoiceMatrixHead, ChoiceMatrixRow } from "./components/ui/ChoiceMatrix";
 import { ClassIcon } from "./components/ui/ClassIcon";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { Modal } from "./components/ui/Modal";
 import { Segmented } from "./components/ui/Segmented";
-import { Loading, Spinner } from "./components/ui/Spinner";
+import { Loading } from "./components/ui/Spinner";
 import { useExplicitDraft } from "./hooks/useExplicitDraft";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type {
@@ -102,12 +103,24 @@ export function ViewmodelBuilder({
   profilePreload,
   savedRecipe,
   locked = false,
+  running = false,
+  barSlot = null,
   loadCatalog,
   onBuild,
+  onRemovePack,
 }: {
   active: boolean;
   /** Keys the unbuilt draft to the profile. */
   profileId?: string | null;
+  /** TF2 is running, so applying waits for it to close. */
+  running?: boolean;
+  /**
+   * Where the pane keeps its apply bar: the end of the whole pane, so the bar
+   * stays in view from the first section to the last.
+   */
+  barSlot?: HTMLElement | null;
+  /** Applying "everything shown" over a built pack removes it. */
+  onRemovePack?: () => void;
   loadCatalog: () => Promise<ViewmodelSourceCatalog>;
   profilePreload: boolean | null;
   /** The saved locally built recipe, used to show its choices when the sources still match. */
@@ -289,12 +302,13 @@ export function ViewmodelBuilder({
           profileId={profileId}
           editable={editable}
           active={active}
-          busy={busy}
           profilePreload={profilePreload}
           savedRecipe={savedRecipe}
           locked={locked}
+          running={running}
+          barSlot={barSlot}
           onBuild={onBuild}
-          onRefresh={() => refreshCatalog()}
+          onRemovePack={onRemovePack}
           onPendingChange={reportDraft}
         />
       ) : null}
@@ -332,24 +346,26 @@ function ViewmodelCatalogChoices({
   profileId,
   editable,
   active,
-  busy,
   profilePreload,
   savedRecipe,
   locked,
+  running,
+  barSlot,
   onBuild,
-  onRefresh,
+  onRemovePack,
   onPendingChange,
 }: {
   catalog: ViewmodelSourceCatalog;
   profileId: string | null;
   editable: boolean;
   active: boolean;
-  busy: boolean;
   profilePreload: boolean | null;
   savedRecipe?: ViewmodelBuildRecipe;
   locked: boolean;
+  running: boolean;
+  barSlot: HTMLElement | null;
   onBuild: (request: ViewmodelBuildRequest) => Promise<boolean>;
-  onRefresh: () => void;
+  onRemovePack?: () => void;
   onPendingChange: (pending: boolean) => void;
 }) {
   const classes = viewmodelClasses(catalog);
@@ -367,7 +383,6 @@ function ViewmodelCatalogChoices({
     serializeChoices,
     draftRecordKey(profileId, "viewmodel-builder"),
   );
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
   const [preset, setPreset] = useState<ViewmodelPreset>("keep-melee");
   const [presetMode, setPresetMode] = useState<ViewmodelHideMode>("full");
@@ -393,12 +408,12 @@ function ViewmodelCatalogChoices({
     reviewRequest !== null &&
     selected.length > 0 &&
     conflicts.size === 0;
+  // Showing everything again over a built pack means the pack goes.
+  const removesPack =
+    changed && selected.length === 0 && Object.keys(saved).length > 0 && Boolean(onRemovePack);
 
   useEffect(() => {
-    if (!active || !editable) {
-      setReviewOpen(false);
-      setPresetOpen(false);
-    }
+    if (!active || !editable) setPresetOpen(false);
   }, [active, editable]);
 
   const proposed = presetOpen ? viewmodelPresetChoices(catalog, preset, presetMode) : null;
@@ -424,7 +439,6 @@ function ViewmodelCatalogChoices({
     try {
       if (await onBuild(reviewRequest)) {
         setBaseline((current) => ({ ...current, choices: sent }));
-        setReviewOpen(false);
       }
     } catch {
       // The host reports failures. Keep the exact draft available for retry.
@@ -437,7 +451,7 @@ function ViewmodelCatalogChoices({
   const hiddenRows = classes.flatMap((name) =>
     (rowsByClass.get(name) ?? []).filter((row) => viewmodelRowChoice(choices, row) !== "shown"),
   );
-  // Review and the class tabs read per class, the way the choices are made.
+  // The summary and the class tabs read per class, the way the choices are made.
   const summaries = classes.flatMap((name) => {
     const classLayout = layouts.get(name);
     const summary = classLayout ? viewmodelClassSummary(choices, classLayout) : null;
@@ -486,32 +500,20 @@ function ViewmodelCatalogChoices({
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              data-testid="viewmodel-catalog-refresh"
-              className="btn btn-ghost"
-              title="Reread your TF2 files"
-              aria-label="Reread your TF2 files"
-              disabled={!active || busy}
-              aria-busy={busy || undefined}
-              onClick={onRefresh}
-            >
-              {busy ? <Spinner size={15} /> : <ArrowClockwise size={15} />}
-            </button>
-            <button
-              type="button"
               data-testid="viewmodel-presets"
               className="btn btn-ghost whitespace-nowrap"
               disabled={!editable}
               onClick={() => setPresetOpen(true)}
             >
-              Every class…
+              Set every class…
             </button>
             <p
               className="t-meta ml-2 min-w-0 flex-1 whitespace-nowrap"
               data-testid="viewmodel-choice-summary"
             >
               {hiddenRows.length
-                ? `${summaries.length} ${summaries.length === 1 ? "class" : "classes"} changed${changed ? " · not built yet" : ""}`
-                : `Everything shown${changed ? " · not built yet" : ""}`}
+                ? `${summaries.length} ${summaries.length === 1 ? "class" : "classes"} changed`
+                : "Everything shown"}
             </p>
             {undo ? (
               <button
@@ -527,36 +529,7 @@ function ViewmodelCatalogChoices({
                 Undo
               </button>
             ) : null}
-            {changed ? (
-              <button
-                type="button"
-                data-testid="viewmodel-discard-draft"
-                className="btn btn-quiet whitespace-nowrap"
-                disabled={building || locked}
-                onClick={() => {
-                  setChoices(saved);
-                  setUndo(null);
-                }}
-              >
-                Discard choices
-              </button>
-            ) : null}
-            <button
-              type="button"
-              data-testid="viewmodel-review-build"
-              className="btn btn-primary whitespace-nowrap"
-              disabled={!editable || reviewRequest === null || selected.length === 0}
-              onClick={() => setReviewOpen(true)}
-            >
-              Review and build
-            </button>
           </div>
-
-          {changed && selected.length === 0 && Object.keys(saved).length > 0 ? (
-            <p className="t-meta mt-3" data-testid="viewmodel-draft-notice">
-              To show every weapon, remove the saved pack below.
-            </p>
-          ) : null}
 
           {layout ? (
             <ViewmodelClassChoices
@@ -574,7 +547,7 @@ function ViewmodelCatalogChoices({
 
       <Modal
         open={presetOpen && active && editable}
-        title="Change every class"
+        title="Set every class"
         testId="viewmodel-preset-review"
         className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
         onClose={() => setPresetOpen(false)}
@@ -622,7 +595,7 @@ function ViewmodelCatalogChoices({
         ) : null}
         {proposedConflicts ? (
           <p role="alert" className="t-meta mt-3 text-warn">
-            Some weapons share animations with a melee weapon. Make them match before building.
+            Some weapons share animations with a melee weapon. Make them match before applying.
           </p>
         ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -636,60 +609,55 @@ function ViewmodelCatalogChoices({
             className="btn btn-primary"
             onClick={applyPreset}
           >
-            Apply to draft
+            Set every class
           </button>
         </div>
       </Modal>
 
-      <Modal
-        open={reviewOpen && active && editable}
-        title="Build viewmodels"
-        testId="viewmodel-build-review"
-        className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(520px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
-        onClose={() => {
-          if (!building) setReviewOpen(false);
-        }}
-      >
-        <ul className="mt-4 grid max-h-64 gap-1.5 overflow-y-auto">
-          {summaries.map(({ name, summary }) => (
-            <li key={name} className="flex justify-between gap-3 t-meta">
-              <span className="text-ink">{viewmodelClassLabel(name)}</span>
-              <span className="text-right">{summary}</span>
-            </li>
-          ))}
-        </ul>
-        {conflicts.size ? (
-          <p role="alert" className="t-meta mt-3 text-warn">
-            Some choices share animations but are set differently. Make them match to build.
-          </p>
-        ) : null}
-        <p role="status" data-testid="viewmodel-build-progress" className="t-meta mt-3">
-          {building ? (
-            <Loading>Building from your TF2 files…</Loading>
-          ) : locked ? (
-            "Close TF2 before building."
-          ) : null}
-        </p>
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={building}
-            onClick={() => setReviewOpen(false)}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            data-testid="viewmodel-build"
-            disabled={!canBuild}
-            className="btn btn-primary"
-            onClick={() => void build()}
-          >
-            {building ? <Loading>Building…</Loading> : "Build pack"}
-          </button>
-        </div>
-      </Modal>
+      {barSlot && (changed || building)
+        ? createPortal(
+            <ApplyBar
+              testId="viewmodel-build"
+              status={
+                <span data-testid="viewmodel-build-progress">
+                  {building ? (
+                    <Loading>Applying… building from your TF2 files.</Loading>
+                  ) : conflicts.size ? (
+                    "Weapons that share animations must match before you apply."
+                  ) : removesPack ? (
+                    "Everything is shown again. Applying removes your viewmodel pack."
+                  ) : (
+                    "Your viewmodel changes aren't in TF2 yet."
+                  )}
+                </span>
+              }
+              actionLabel={building ? "Applying…" : "Apply changes"}
+              lockedLabel="Close TF2 to apply"
+              running={running}
+              locked={removesPack ? locked || building || !editable : !canBuild}
+              dirty
+              extra={
+                <button
+                  type="button"
+                  data-testid="viewmodel-discard-draft"
+                  className="btn btn-ghost"
+                  disabled={building || locked}
+                  onClick={() => {
+                    setChoices(saved);
+                    setUndo(null);
+                  }}
+                >
+                  Discard changes
+                </button>
+              }
+              onApply={() => {
+                if (removesPack) onRemovePack?.();
+                else void build();
+              }}
+            />,
+            barSlot,
+          )
+        : null}
     </div>
   );
 }

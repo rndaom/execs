@@ -563,6 +563,25 @@ a:focus-visible,
     padding-block: 12px;
   }
 
+  .apply-bar-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: var(--color-ink);
+  }
+
+  /* The execs change dot: what this bar applies has not reached TF2 yet. */
+  .apply-bar-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: var(--radius-pill);
+    background: var(--color-brand);
+    animation: dot-arrive var(--motion-move) var(--ease-out) backwards;
+  }
+
   /* Flat content section separated by a hairline — the default page rhythm. */
   .section {
     border-top: 1px solid var(--color-edge);
@@ -833,6 +852,28 @@ a:focus-visible,
 
   .btn-ghost:not(:disabled):hover {
     background: var(--color-panel-raised);
+  }
+
+  /* An inline action or outside link: underlined text, never a box. Opening
+     another page or site is a link, not a button. */
+  .text-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-ink-muted);
+    text-decoration: underline;
+    text-decoration-color: var(--color-edge-strong);
+    text-underline-offset: 2px;
+    transition: color var(--motion) ease;
+  }
+
+  .text-link:not(:disabled):hover {
+    color: var(--color-ink);
+  }
+
+  .text-link:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
   }
 
   /* A quiet text-only action for inline links inside body copy. */
@@ -2255,6 +2296,36 @@ a:focus-visible,
       grid-template-columns: repeat(2, minmax(0, 1fr));
       column-gap: 32px;
     }
+  }
+
+  /* Two launch strings side by side in rows, so a difference is easy to read
+     before choosing which one to keep. */
+  .launch-compare {
+    display: grid;
+    margin: 0;
+  }
+
+  .launch-compare > div {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: 12px;
+    padding: 10px 14px;
+  }
+
+  .launch-compare > div + div {
+    border-top: 1px solid var(--color-edge);
+  }
+
+  .launch-compare dt {
+    color: var(--color-ink-muted);
+    font-size: 12.5px;
+  }
+
+  .launch-compare dd {
+    margin: 0;
+    color: var(--color-ink);
+    font-size: 13px;
+    overflow-wrap: anywhere;
   }
 
   /* A named group inside a section: small heading, optional count, and a

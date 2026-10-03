@@ -1,6 +1,7 @@
 import { DownloadSimple, Trash } from "@phosphor-icons/react";
+import { useState } from "react";
 import { PaneHeader } from "./components/ui/PaneHeader";
-import { useCanWrite } from "./hooks/useAppStatus";
+import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import type { ViewmodelBuildRequest, ViewmodelRecord, ViewmodelSourceCatalog } from "./lib/bridge";
 import { legacyViewmodelSelectionCount } from "./lib/viewmodel-ui";
 import { ViewmodelBuilder } from "./ViewmodelBuilder";
@@ -30,6 +31,8 @@ export function ViewmodelPane({
   onRemove: () => void;
 }) {
   const locked = !useCanWrite();
+  const { running } = useAppStatus();
+  const [barSlot, setBarSlot] = useState<HTMLDivElement | null>(null);
   const previouslyBuilt = record?.source === "compiled";
   const locallyBuilt = record?.source === "stockBuilt";
   const legacyChoices = legacyViewmodelSelectionCount(record);
@@ -38,23 +41,14 @@ export function ViewmodelPane({
       ? `Built with the previous builder · ${legacyChoices} ${legacyChoices === 1 ? "choice" : "choices"}`
       : "Built with the previous builder"
     : locallyBuilt
-      ? "Built in execs"
+      ? "Built in execs from your TF2 files."
       : record
-        ? "Imported VPK"
-        : "No pack";
+        ? "Your own VPK."
+        : "None. TF2 shows its normal viewmodels.";
 
   return (
     <section data-testid="settings-viewmodels" className="min-w-0 text-left">
-      <PaneHeader
-        title="Viewmodels"
-        actions={
-          record ? (
-            <span data-testid="viewmodel-pack-status" className="badge" title={packLabel}>
-              {previouslyBuilt ? "Previous build" : locallyBuilt ? "Built pack" : "Imported pack"}
-            </span>
-          ) : null
-        }
-      />
+      <PaneHeader title="Viewmodels" />
       {record?.sourceChanged ? (
         <p data-testid="viewmodel-source-changed" role="alert" className="t-meta mb-4 text-warn">
           This pack was changed outside execs. Replace or remove it.
@@ -78,17 +72,25 @@ export function ViewmodelPane({
         profilePreload={profilePreload}
         savedRecipe={locallyBuilt ? record?.buildRecipe : undefined}
         locked={locked}
+        running={running}
+        barSlot={barSlot}
         loadCatalog={loadCatalog}
         onBuild={onBuild}
+        onRemovePack={onRemove}
       />
 
-      <div
+      <section
         data-testid="viewmodel-saved-pack"
-        className="flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4"
+        aria-labelledby="viewmodel-pack-heading"
+        className="flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-5"
       >
         <div className="min-w-0">
-          <h2 className="eyebrow">Saved pack</h2>
-          <p className="t-meta mt-1">{packLabel}</p>
+          <h2 id="viewmodel-pack-heading" className="t-section">
+            Viewmodel pack
+          </h2>
+          <p className="t-meta mt-1" data-testid="viewmodel-pack-status">
+            {packLabel}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -97,10 +99,10 @@ export function ViewmodelPane({
             disabled={locked || profilePreload === null}
             onClick={() => onImport(profilePreload ?? false)}
             className="btn btn-ghost"
-            title="Use a model-only VPK. Packs with cfg, HUD or sound files belong in Mods."
+            title="A model-only VPK. Packs with cfg, HUD or sound files belong in Mods."
           >
-            <DownloadSimple size={15} />
-            {record ? "Replace with VPK…" : "Import VPK…"}
+            <DownloadSimple size={15} aria-hidden="true" />
+            {record ? "Replace with your own VPK…" : "Use your own VPK…"}
           </button>
           {record ? (
             <button
@@ -108,13 +110,15 @@ export function ViewmodelPane({
               data-testid="viewmodel-remove"
               disabled={locked}
               onClick={onRemove}
-              className="btn btn-quiet"
+              className="btn btn-ghost"
             >
-              <Trash size={14} /> Remove pack
+              <Trash size={14} aria-hidden="true" /> Remove pack
             </button>
           ) : null}
         </div>
-      </div>
+      </section>
+      {/* The apply bar sits at the end of the pane so it stays in view throughout. */}
+      <div ref={setBarSlot} className="contents" />
     </section>
   );
 }

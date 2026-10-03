@@ -30,7 +30,7 @@ const COPY: Record<SettingsCopyScope, { title: string; description: string }> = 
 };
 
 /**
- * "Copy to profiles…" for a settings pane. It copies the active profile's
+ * "Copy to other profiles…" for a settings pane. It copies the active profile's
  * saved settings, so it waits for unsaved changes, TF2 and other writes.
  */
 export function CopySettings({
@@ -87,7 +87,7 @@ export function CopySettings({
         onClick={start}
       >
         <Copy size={15} aria-hidden="true" />
-        Copy to profiles…
+        Copy to other profiles…
       </button>
       <Modal
         open={open}
