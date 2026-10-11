@@ -142,3 +142,13 @@ it("refuses save after TF2 starts while the exit decision is open", async () => 
   await click("Cancel");
   expect(editor().state.doc.toString()).toContain("79");
 });
+it("returns to the current install from the finder with Keep current install", async () => {
+  await click("Change install");
+  expect(box.querySelector('[data-testid="finder-keep-current"]')).not.toBeNull();
+  await click("Keep current install");
+  expect(box.querySelector('[data-testid="finder-keep-current"]')).toBeNull();
+  expect(box.querySelector('[data-testid="files-exit-guard"]')).toBeNull();
+  expect([...box.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Files")).toBe(
+    true,
+  );
+});

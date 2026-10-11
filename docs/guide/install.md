@@ -29,7 +29,7 @@ x86_64 with glibc 2.35 or newer (Ubuntu 22.04, Debian 12, Fedora 36 or later).
 
 ## First launch
 
-execs finds TF2 through Steam and asks you to confirm the folder before writing anything. If TF2 already has your own files, execs saves them as your first profile. Otherwise it helps you set one up.
+execs finds TF2 through Steam and asks you to confirm the folder before writing anything. If TF2 already has your own files, execs saves them as your first profile. Otherwise it helps you set one up. To use a different TF2 folder later, open App settings and choose **Change install**; **Keep current install** goes back without changing anything.
 
 ## Where execs keeps things
 

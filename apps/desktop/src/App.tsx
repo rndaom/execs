@@ -1034,6 +1034,7 @@ export function App({
                   waitingFor={handoffSettled ? null : handoff.status}
                   missing={install.missing}
                   onRetryMissing={() => void install.retryMissing()}
+                  onKeepCurrent={install.previous ? install.keepCurrent : undefined}
                 />
               )}
 
