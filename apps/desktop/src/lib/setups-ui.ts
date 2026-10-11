@@ -92,6 +92,15 @@ function numberLabel(value: string | null, unit = ""): string {
   return parsed === null ? value : `${parsed}${unit}`;
 }
 
+/** The pack's crosshair, under its saved name when it is one of the player's designs. */
+function crosshairFact({ crosshair, crosshairDesign }: SetupOverview): string {
+  if (crosshair === null) return TF2_OWN;
+  return crosshairLabel(
+    crosshair,
+    crosshairDesign === null ? {} : { [crosshair]: crosshairDesign },
+  );
+}
+
 export function factValue(
   key: SetupFactKey,
   overview: SetupOverview,
@@ -101,7 +110,7 @@ export function factValue(
     case "hud":
       return hudLabel(overview.hud, catalog);
     case "crosshair":
-      return overview.crosshair === null ? TF2_OWN : crosshairLabel(overview.crosshair);
+      return crosshairFact(overview);
     case "fov":
       return numberLabel(overview.fov, "°");
     case "sensitivity":
@@ -135,7 +144,7 @@ export function sameFact(key: SetupFactKey, a: SetupOverview, b: SetupOverview):
     case "hud":
       return sameText(a.hud, b.hud, true);
     case "crosshair":
-      return sameText(a.crosshair, b.crosshair);
+      return sameText(a.crosshair, b.crosshair) && a.crosshairDesign === b.crosshairDesign;
     case "fov":
       return sameNumber(a.fov, b.fov);
     case "sensitivity":

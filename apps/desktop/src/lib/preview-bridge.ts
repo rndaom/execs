@@ -167,6 +167,7 @@ const PREVIEW_SETUP_FACTS: Omit<SetupOverview, "id">[] = [
   {
     hud: "rayshud",
     crosshair: "dot",
+    crosshairDesign: null,
     fov: "90",
     sensitivity: "2.5",
     hitSound: "Quake hit",
@@ -177,6 +178,7 @@ const PREVIEW_SETUP_FACTS: Omit<SetupOverview, "id">[] = [
   {
     hud: "budhud",
     crosshair: "dot",
+    crosshairDesign: null,
     fov: "90",
     sensitivity: "1.8",
     hitSound: "Quake hit",
@@ -187,6 +189,7 @@ const PREVIEW_SETUP_FACTS: Omit<SetupOverview, "id">[] = [
   {
     hud: null,
     crosshair: null,
+    crosshairDesign: null,
     fov: "110",
     sensitivity: "2.5",
     hitSound: null,
@@ -197,6 +200,7 @@ const PREVIEW_SETUP_FACTS: Omit<SetupOverview, "id">[] = [
   {
     hud: "m0rehud",
     crosshair: "ring",
+    crosshairDesign: null,
     fov: "100",
     sensitivity: "2.5",
     hitSound: "Bonk",
