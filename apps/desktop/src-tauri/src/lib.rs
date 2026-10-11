@@ -728,6 +728,7 @@ pub fn run() {
             commands::library::duplicate_profile,
             commands::library::delete_profile,
             commands::compare::compare_profile_switch,
+            commands::compare::get_setup_overviews,
             commands::restore_points::list_restore_points,
             commands::restore_points::create_restore_point,
             commands::restore_points::delete_restore_point,

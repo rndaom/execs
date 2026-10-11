@@ -414,6 +414,32 @@ export function compareProfileSwitch(targetId: string): Promise<ProfileCompariso
   return call("compare_profile_switch", { targetId });
 }
 
+/**
+ * What each saved profile holds, read from the library for the Setups page.
+ * `null` means the profile leaves that part as TF2 has it.
+ */
+export type SetupOverview = {
+  id: string;
+  /** HUD catalog id or folder name. */
+  hud: string | null;
+  /** Custom crosshair id; `null` when the crosshair pack is off. */
+  crosshair: string | null;
+  /** `fov_desired`, from the Gameplay cfg or else the profile's config.cfg. */
+  fov: string | null;
+  sensitivity: string | null;
+  hitSound: string | null;
+  killSound: string | null;
+  /** mastercomfig preset alias (`high`, `low`…); `null` without mastercomfig. */
+  performance: string | null;
+  /** Mods the user added plus Casual setup choices. */
+  mods: number;
+};
+
+/** Read-only: every saved profile's overview, in library order. */
+export function getSetupOverviews(): Promise<SetupOverview[]> {
+  return call("get_setup_overviews");
+}
+
 export function getUninstallInfo(): Promise<UninstallInfo> {
   return call("get_uninstall_info");
 }

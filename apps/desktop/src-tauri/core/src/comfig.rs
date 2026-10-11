@@ -356,6 +356,29 @@ pub fn read_comfig_state_from(
     })
 }
 
+/// The preset a saved profile's setup hook selects, or `None` when the profile
+/// has no mastercomfig base package. An unreadable hook reads as the default.
+pub(crate) fn saved_preset(
+    profiles_dir: &Path,
+    manifest: &ProfileManifest,
+) -> Option<ComfigPreset> {
+    if !manifest
+        .files
+        .iter()
+        .any(|file| is_shared_rel_path(&file.path))
+    {
+        return None;
+    }
+    let hook = read_profile_text(profiles_dir, &manifest.id, &manifest.files, SETUP_HOOK)
+        .ok()
+        .flatten();
+    Some(
+        hook.as_deref()
+            .map(parse_setup_hook)
+            .unwrap_or(ComfigPreset::Medium),
+    )
+}
+
 pub fn write_comfig_preset(
     tf2_root: &Path,
     profile_id: &str,
