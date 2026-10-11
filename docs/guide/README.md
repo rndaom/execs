@@ -3,15 +3,15 @@
 How execs works, one page per part of the app. The app itself keeps to short labels; the details are here. The **Guide** button in the app's sidebar opens the page for the pane you are on.
 
 - [Installing and removing](install.md): downloads, the Windows warning, Linux, where files live
-- [Profiles](profiles.md): saving, switching, comparing and restoring your setups
-- [Comfig](comfig.md): mastercomfig presets, addons and modules
-- [Binds](binds.md)
-- [Gameplay](gameplay.md): FOV, mouse, weapons and combat feedback
+- [Profiles](profiles.md): the Setups and Edit pages, saving, switching, comparing and restoring your setups
 - [HUD](hud.md)
 - [Crosshair](crosshair.md)
 - [Viewmodels](viewmodels.md)
+- [Gameplay](gameplay.md): FOV, mouse, weapons and combat feedback
+- [Binds](binds.md)
 - [Sounds](sounds.md): game and music volume, hit and kill sounds
 - [Mods](mods.md): GameBanana, custom packs and Casual setup
+- [Performance](comfig.md): mastercomfig presets, addons and modules
 - [Files](files.md): editing cfgs directly
 - [Launch](launch.md): launch options
 - [Inventory](inventory.md)

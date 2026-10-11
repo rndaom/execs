@@ -66,6 +66,7 @@ import {
 import { createSettingsDraftStore } from "./lib/settings-drafts";
 import {
   browserStorage,
+  editLabel,
   readLastPane,
   SETTINGS_TAB_LABELS,
   type SettingsTab,
@@ -117,6 +118,8 @@ export function App({
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   // The workspace opens on Setups; a fixture that picks a pane opens on that.
   const [setupsOpen, setSetupsOpen] = useState(() => previewSettingsTab(preview) === null);
+  // The Edit page: every setting of the setup in the game, one row per setting.
+  const [sheetOpen, setSheetOpen] = useState(() => preview === "settings-edit");
   const [launchSync, setLaunchSync] = useState<LaunchSyncStatus | null>(null);
   const [launchSyncPrompt, setLaunchSyncPrompt] = useState<LaunchSyncStatus | null>(null);
   const appSettingsButton = useRef<HTMLButtonElement>(null);
@@ -136,11 +139,18 @@ export function App({
   const navigateSettings = useCallback((tab: SettingsTab) => {
     setAppSettingsOpen(false);
     setSetupsOpen(false);
+    setSheetOpen(false);
     setSettingsTab(tab);
   }, []);
   const openSetups = useCallback(() => {
     setAppSettingsOpen(false);
+    setSheetOpen(false);
     setSetupsOpen(true);
+  }, []);
+  const openSheet = useCallback(() => {
+    setAppSettingsOpen(false);
+    setSetupsOpen(false);
+    setSheetOpen(true);
   }, []);
   const reviewSettings = useCallback(
     (tab: SettingsTab) => {
@@ -289,6 +299,15 @@ export function App({
     if (filesVersion >= 0 && filesDraftStore.hasDirty(changedProfileId)) tabs.add("files");
     return tabs;
   }, [settingsDrafts, filesVersion, filesDraftStore, changedProfileId]);
+  const activeProfileName =
+    profiles.library?.profiles.find((profile) => profile.id === profiles.library?.activeProfileId)
+      ?.name ?? null;
+  // What the workspace shows when App settings is closed.
+  const workspaceName = setupsOpen
+    ? "Setups"
+    : sheetOpen
+      ? editLabel(activeProfileName)
+      : SETTINGS_TAB_LABELS[settingsTab];
   const pendingPanes = [
     ...new Set(settingsDrafts.map((entry) => SETTINGS_TAB_LABELS[entry.tab])),
   ].join(", ");
@@ -452,7 +471,7 @@ export function App({
     surface,
     settingsOpen,
     settingsSettled,
-    paneLabel: setupsOpen ? "Setups" : SETTINGS_TAB_LABELS[settingsTab],
+    paneLabel: sheetOpen ? (activeProfileName ?? "Edit") : workspaceName,
     failed: error !== null,
   };
   const boot = bootStage(stageInput);
@@ -585,9 +604,7 @@ export function App({
         backAction={
           <button type="button" className="btn btn-ghost" onClick={closeAppSettings}>
             <ArrowLeft size={15} aria-hidden="true" />
-            {settingsOpen
-              ? `Back to ${setupsOpen ? "Setups" : SETTINGS_TAB_LABELS[settingsTab]}`
-              : "Back to setup"}
+            {settingsOpen ? `Back to ${workspaceName}` : "Back to setup"}
           </button>
         }
         onChangeInstall={() =>
@@ -766,7 +783,9 @@ export function App({
                 <SettingsLayout
                   tab={settingsTab}
                   changed={changedTabs}
-                  page={appSettingsOpen ? "app" : setupsOpen ? "setups" : null}
+                  page={appSettingsOpen ? "app" : setupsOpen ? "setups" : sheetOpen ? "edit" : null}
+                  editLabel={editLabel(activeProfileName)}
+                  onEdit={openSheet}
                   onTab={navigateSettings}
                   onSetups={openSetups}
                   scrollIdentity={`${path}:${profiles.library?.activeProfileId ?? "none"}`}
@@ -776,13 +795,13 @@ export function App({
                         type="button"
                         data-testid="guide-open"
                         className="settings-nav-item"
-                        title={`Guide for ${appSettingsOpen ? "App settings" : setupsOpen ? "Setups" : SETTINGS_TAB_LABELS[settingsTab]}`}
+                        title={`Guide for ${appSettingsOpen ? "App settings" : workspaceName}`}
                         onClick={() =>
                           void openExternal(
                             guideUrl(
                               appSettingsOpen
                                 ? "app-settings"
-                                : setupsOpen
+                                : setupsOpen || sheetOpen
                                   ? "profiles"
                                   : settingsTab,
                               update.version,
@@ -813,17 +832,16 @@ export function App({
                     <SettingsHost
                       api={api}
                       visible={!appSettingsOpen && !setupsOpen}
+                      sheet={sheetOpen}
+                      changed={changedTabs}
+                      onBack={openSetups}
                       filesDraftStore={filesDraftStore}
                       filesSaver={filesExit.saver}
                       filesCloseReady={filesExit.ready}
                       settingsDraftStore={settingsDraftStore}
                       tab={settingsTab}
                       activeProfileId={profiles.library?.activeProfileId ?? null}
-                      activeProfileName={
-                        profiles.library?.profiles.find(
-                          (profile) => profile.id === profiles.library?.activeProfileId,
-                        )?.name ?? null
-                      }
+                      activeProfileName={activeProfileName}
                       onNavigate={navigateSettings}
                       onTryComfig={tryComfig}
                       running={lock.running}
@@ -859,7 +877,7 @@ export function App({
                       onSwitch={requestSwitch}
                       onSwitchAndPlay={switchAndPlay}
                       onPlay={launchNow}
-                      onEdit={() => navigateSettings(settingsTab)}
+                      onEdit={openSheet}
                       onCreateNew={() => filesExit.request(firstRun.openCreate)}
                       onCompare={openCompare}
                     />
@@ -889,11 +907,7 @@ export function App({
       <ToastProvider>
         <WelcomeTour
           open={welcome !== null && settingsOpen && !progress.state.active}
-          profileName={
-            profiles.library?.profiles.find(
-              (profile) => profile.id === profiles.library?.activeProfileId,
-            )?.name ?? null
-          }
+          profileName={activeProfileName}
           origin={welcome ?? "saved"}
           offerComfig={welcomeOffersComfig}
           onClose={() => setWelcome(null)}

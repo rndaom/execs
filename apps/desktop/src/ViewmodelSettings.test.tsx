@@ -112,7 +112,7 @@ describe("Viewmodels in-game settings", () => {
     const save = vi.fn(async (_text: string) => undefined);
     await render({ canUseComfigAddons: false, cfgReady: false, onSave: save });
     expect(control("viewmodel-transparent").disabled).toBe(true);
-    expect(box.textContent).toContain("Available with a Comfig profile.");
+    expect(box.textContent).toContain("Available with mastercomfig.");
     expect(control("viewmodel-min").disabled).toBe(true);
     expect((control("viewmodel-fov") as unknown as HTMLInputElement).disabled).toBe(true);
     await act(async () => vi.advanceTimersByTimeAsync(2000));

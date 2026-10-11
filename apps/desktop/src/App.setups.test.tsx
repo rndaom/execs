@@ -76,11 +76,26 @@ it("opens on Setups with the panes kept, hidden, behind it", async () => {
   expect(text(".setups-name")).toBe("Main");
 });
 
-it("goes to the last pane from Edit and back with the Setups entry", async () => {
+it("opens the Edit page from Edit, a pane from its rows, and back with the Setups entry", async () => {
   await click('[data-testid="setups-edit"]');
   expect(q('[data-testid="setups-home"]')).toBeNull();
-  expect(current("settings-tab-comfig")).toBe("page");
-  expect(q('[data-testid="settings-pane-comfig"] > [hidden]')).toBeNull();
+  expect(q('[data-testid="setup-sheet"]')).not.toBeNull();
+  expect(current("settings-tab-edit")).toBe("page");
+  expect(text('[data-testid="settings-tab-edit"]')).toBe("Edit Main");
+  expect(text(".setup-sheet-name")).toBe("Main");
+  expect(
+    Array.from(box.querySelectorAll(".setup-group-title")).map((title) => title.textContent),
+  ).toEqual(["Look", "Feel", "Sound", "Mods", "Performance", "Advanced"]);
+
+  await click('[data-testid="setup-row-fov"]');
+  expect(q('[data-testid="setup-sheet"]')).toBeNull();
+  expect(current("settings-tab-gameplay")).toBe("page");
+  expect(q('[data-testid="settings-pane-gameplay"] > [hidden]')).toBeNull();
+
+  await click('[data-testid="settings-tab-edit"]');
+  expect(q('[data-testid="setup-sheet"]')).not.toBeNull();
+  await click('[data-testid="setup-row-launch"]');
+  expect(current("settings-tab-launch")).toBe("page");
 
   await click('[data-testid="settings-tab-binds"]');
   expect(current("settings-tab-binds")).toBe("page");
@@ -100,6 +115,10 @@ it("opens the guide's profiles page from Setups and the pane's page elsewhere", 
   await click('[data-testid="settings-tab-binds"]');
   await click('[data-testid="guide-open"]');
   expect(external).toHaveBeenLastCalledWith(expect.stringMatching(/\/docs\/guide\/binds\.md$/));
+  // The Edit page is described with the setups.
+  await click('[data-testid="settings-tab-edit"]');
+  await click('[data-testid="guide-open"]');
+  expect(external).toHaveBeenLastCalledWith(expect.stringMatching(/\/docs\/guide\/profiles\.md$/));
 });
 
 it("returns to Setups from App settings", async () => {

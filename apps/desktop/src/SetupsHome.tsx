@@ -26,7 +26,7 @@ import {
 } from "./lib/setups-ui";
 
 /** A HUD picture that falls back to a flat block when it is missing or will not load. */
-function Picture({
+export function Picture({
   src,
   alt,
   className,

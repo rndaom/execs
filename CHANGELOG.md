@@ -9,6 +9,9 @@ User-facing changes only. The release workflow publishes the matching
 
 - A Setups page that opens first: every setup with its HUD's picture and key details, and
   one click to switch, or to switch and play.
+- An Edit page for the setup in the game: every setting on one page, grouped as Look, Feel,
+  Sound, Mods, Performance and Advanced, each showing its current value. Click a row to open the
+  page that changes it.
 
 ### Fixed
 
@@ -22,7 +25,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Changed
 
-- No more fold-out sections: every setting is on the page. Comfig's modules have their own tab
+- Comfig is now called Performance, and the sidebar uses the Edit page's groups: Look (HUD,
+  Crosshair, Viewmodels), Feel (Gameplay, Binds), then Sounds, Mods and Performance, Advanced
+  (Files, Launch) and Inventory.
+- No more fold-out sections: every setting is on the page. Performance's modules have their own tab
   with search and category filters; HUD options, Mods' file check, Casual addons and particles,
   and App settings' credits are always shown; Sounds puts pitch and repeat delay with each sound.
 - Viewmodels shows each class as one table, with every weapon under its slot and its own Shown,
@@ -32,7 +38,7 @@ User-facing changes only. The release workflow publishes the matching
 - Crosshair, Viewmodels and Mods' Casual setup show the same bar while changes aren't in TF2 yet,
   with Discard changes and Apply changes. Viewmodels applies straight from that bar, without a
   separate review window.
-- Comfig shows an update button only when a newer mastercomfig is out, and keeps the comfig.app
+- Performance shows an update button only when a newer mastercomfig is out, and keeps the comfig.app
   customizer next to the comfig-custom folder it makes. Removing the crosshair pack is a button at
   the bottom of the Crosshair page instead of a hidden menu, and buttons that repeated a switch or
   the sidebar (Open Comfig addons, Open Viewmodels) are gone.

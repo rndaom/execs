@@ -1351,7 +1351,7 @@ function owningPane(path: string): { tab: SettingsTab; label: string } {
   if (path.includes("execs_binds")) return { tab: "binds", label: "Open Binds" };
   if (path.includes("execs_gameplay")) return { tab: "gameplay", label: "Open Gameplay" };
   if (path.includes("execs_preload")) return { tab: "mods", label: "Open Mods" };
-  return { tab: "comfig", label: "Open Comfig" };
+  return { tab: "comfig", label: "Open Performance" };
 }
 
 function FindingRow({

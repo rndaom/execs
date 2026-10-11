@@ -151,8 +151,8 @@ export function WelcomeTour({
 }
 
 const SIDEBAR: { group: string; tabs: SettingsTab[] }[] = [
-  { group: "Setup", tabs: ["comfig", "binds"] },
-  { group: "Look", tabs: ["hud", "crosshair", "sounds"] },
+  { group: "Look", tabs: ["hud", "crosshair", "viewmodels"] },
+  { group: "Feel", tabs: ["gameplay", "binds"] },
 ];
 
 function WelcomePicture({ id, profileName }: { id: WelcomeStepId; profileName: string | null }) {
@@ -188,7 +188,7 @@ function WelcomePicture({ id, profileName }: { id: WelcomeStepId; profileName: s
                     <span key={tab} className="wp-tab" data-tab={tab}>
                       <Icon size={13} />
                       {SETTINGS_TAB_LABELS[tab]}
-                      {tab === "sounds" ? <span className="wp-dot wp-dot-late" /> : null}
+                      {tab === "binds" ? <span className="wp-dot wp-dot-late" /> : null}
                     </span>
                   );
                 })}

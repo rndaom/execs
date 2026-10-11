@@ -2,14 +2,14 @@ import type { ProfileLibrary } from "./bridge";
 import { canWrite } from "./write-gate";
 
 export const SETTINGS_TABS = [
-  "comfig",
-  "binds",
-  "gameplay",
   "hud",
   "crosshair",
   "viewmodels",
+  "gameplay",
+  "binds",
   "sounds",
   "mods",
+  "comfig",
   "files",
   "launch",
   "inventory",
@@ -18,7 +18,7 @@ export const SETTINGS_TABS = [
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
-  comfig: "Comfig",
+  comfig: "Performance",
   binds: "Binds",
   gameplay: "Gameplay",
   hud: "HUD",
@@ -32,16 +32,44 @@ export const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
 };
 
 /**
- * The sidebar reads as short groups instead of one long list: what you set up,
- * how it looks, everything else, and the Steam account's own Inventory. A group
- * with no label shows no heading.
+ * What a setup is made of, in the order the Edit page and the sidebar list it.
+ * The ids name the Edit page's sections.
  */
-export const SETTINGS_TAB_GROUPS: { label: string; tabs: readonly SettingsTab[] }[] = [
-  { label: "Setup", tabs: ["comfig", "binds", "gameplay"] },
-  { label: "Look", tabs: ["hud", "crosshair", "viewmodels", "sounds"] },
-  { label: "More", tabs: ["mods", "files", "launch"] },
-  { label: "Steam", tabs: ["inventory"] },
-];
+export const SETUP_GROUPS = [
+  { id: "look", label: "Look", tabs: ["hud", "crosshair", "viewmodels"] },
+  { id: "feel", label: "Feel", tabs: ["gameplay", "binds"] },
+  { id: "sound", label: "Sound", tabs: ["sounds"] },
+  { id: "mods", label: "Mods", tabs: ["mods"] },
+  { id: "performance", label: "Performance", tabs: ["comfig"] },
+  { id: "advanced", label: "Advanced", tabs: ["files", "launch"] },
+] as const satisfies readonly { id: string; label: string; tabs: readonly SettingsTab[] }[];
+
+export type SetupGroupId = (typeof SETUP_GROUPS)[number]["id"];
+
+function sidebarGroups(): { label: string; tabs: readonly SettingsTab[] }[] {
+  const groups: { label: string; tabs: SettingsTab[] }[] = [];
+  for (const group of SETUP_GROUPS) {
+    // A heading over a single pane only repeats its name, so neighbouring
+    // one-pane groups share one group without a heading.
+    const last = groups.at(-1);
+    if (group.tabs.length === 1 && last?.label === "") last.tabs.push(...group.tabs);
+    else if (group.tabs.length === 1) groups.push({ label: "", tabs: [...group.tabs] });
+    else groups.push({ label: group.label, tabs: [...group.tabs] });
+  }
+  return [...groups, { label: "Steam", tabs: ["inventory"] }];
+}
+
+/**
+ * The sidebar: the setup's groups, then the Steam account's own Inventory,
+ * which belongs to no setup. A group with no label shows no heading.
+ */
+export const SETTINGS_TAB_GROUPS = sidebarGroups();
+
+/** The sidebar item and title for the Edit page of the setup in the game. */
+export function editLabel(name: string | null): string {
+  const trimmed = name?.trim();
+  return trimmed ? `Edit ${trimmed}` : "Edit";
+}
 
 export function showSettingsChrome(library: ProfileLibrary | null): boolean {
   return (
@@ -84,7 +112,7 @@ export function writeLastPane(storage: Pick<Storage, "setItem"> | null, tab: Set
   try {
     storage?.setItem(LAST_PANE_KEY, tab);
   } catch {
-    // Remembering the pane is a convenience; opening on Comfig is fine.
+    // Remembering the pane is a convenience; opening on Performance is fine.
   }
 }
 
