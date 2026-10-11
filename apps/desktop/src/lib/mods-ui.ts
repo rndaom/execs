@@ -290,25 +290,26 @@ export function modsApplyEnabled(
 }
 
 /** The one-line reason under the Apply button. */
+/**
+ * The Casual setup apply bar's one line: what is waiting to reach TF2, or
+ * what has to happen before it can.
+ */
 export function modsStatusLine(
   status: PreloaderStatusPayload | null,
   selection: ModSelection,
-  running: boolean,
+  preloadOff = false,
 ): string {
-  if (running) {
-    return "Draft kept until TF2 closes";
-  }
   if (status?.recoveryRequired) {
-    return "Finish interrupted recovery first";
+    return "Finish the interrupted recovery before applying.";
   }
   if (status && !status.modsCached && needsCuekiLibrary(selection)) {
-    return "Saved library source unavailable on this device — remove those choices or restore the verified cache";
+    return "A saved cueki choice needs its original download. Remove it, or restore that download.";
   }
   if (selectionDirty(status, selection)) {
-    return "Unsaved changes";
+    return `Your Casual setup changes aren't in TF2 yet.${preloadOff ? " Applying turns Preload on." : ""}`;
   }
   if (status?.status.stale) {
-    return "TF2 updated — re-apply to put these mods back";
+    return "TF2 updated, so your Casual setup needs applying again.";
   }
   return "Up to date";
 }

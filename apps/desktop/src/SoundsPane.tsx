@@ -479,6 +479,24 @@ export function SoundsPane({
         ))}
       </div>
 
+      {record ? (
+        <div
+          data-testid="sounds-files"
+          className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4"
+        >
+          <p className="t-meta min-w-0">Your own sound files are saved in this profile.</p>
+          <button
+            type="button"
+            data-testid="sounds-remove"
+            disabled={removeLocked}
+            onClick={onRemove}
+            className="btn btn-ghost"
+          >
+            <Trash size={14} aria-hidden="true" /> Remove sound files
+          </button>
+        </div>
+      ) : null}
+
       {dormantSounds.length ? (
         <section data-testid="sounds-saved-inactive" className="pane-note mt-4">
           <p>
@@ -607,17 +625,6 @@ export function SoundsPane({
               {picking ? <Spinner size={14} /> : <UploadSimple size={14} />}
               {picking ? "Reading…" : "Add a sound file…"}
             </button>
-            {record ? (
-              <button
-                type="button"
-                data-testid="sounds-remove"
-                disabled={removeLocked}
-                onClick={onRemove}
-                className="btn btn-ghost"
-              >
-                <Trash size={14} /> Remove sound files
-              </button>
-            ) : null}
           </div>
         </div>
         {pickError ? (

@@ -27,7 +27,7 @@ import {
 import {
   type ComfigUiState,
   canUseTransparentViewmodels,
-  comfigUpdateAvailable,
+  comfigReleaseView,
   hasBaseVpk,
   hasComfigCustom,
   OFFICIAL_ADDON_DETAILS,
@@ -170,6 +170,18 @@ export function ComfigPane({
     };
   }, [supported, detail?.id, releaseKey]);
   const checkedRelease = releaseCheck?.key === releaseKey ? releaseCheck : null;
+  const release = comfigReleaseView({
+    installed: state.release?.version ?? null,
+    packagesInstalled: hasBaseVpk(detail?.files.map((file) => file.path) ?? []),
+    latest: checkedRelease?.latest ?? null,
+    error: checkedRelease?.error ?? null,
+    checking:
+      Boolean(onCheckRelease) &&
+      checkedRelease !== null &&
+      !checkedRelease.latest &&
+      !checkedRelease.error,
+    checkable: Boolean(onCheckRelease),
+  });
   const installedVersion = state.release?.version;
   const paths = detail?.files.map((file) => file.path) ?? [];
   const packagesInstalled = hasBaseVpk(paths);
@@ -347,76 +359,79 @@ export function ComfigPane({
             </div>
           </PaneSection>
 
-          <section className="section" aria-label="Comfig packages">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="min-w-0">
-                <h2 className="t-section">Packages and extras</h2>
-                <p className="t-meta mt-1">
-                  {installedVersion
-                    ? `mastercomfig ${installedVersion}`
-                    : packagesInstalled
-                      ? "mastercomfig version unknown"
-                      : "No mastercomfig packages installed."}
-                </p>
-                {supported ? (
-                  <p data-testid="comfig-release-status" className="t-meta mt-1" aria-live="polite">
-                    {checkedRelease?.error
-                      ? checkedRelease.error
-                      : checkedRelease?.latest
-                        ? installedVersion === checkedRelease.latest
-                          ? "Packages are up to date."
-                          : installedVersion
-                            ? comfigUpdateAvailable(installedVersion, checkedRelease.latest)
-                              ? `Update available: ${checkedRelease.latest}.`
-                              : `Latest release: ${checkedRelease.latest}.`
-                            : `Latest release: ${checkedRelease.latest}. Update packages before adding addons.`
-                        : onCheckRelease
-                          ? "Checking for updates…"
-                          : "Updates have not been checked."}
+          <section className="section" aria-labelledby="comfig-packages-heading">
+            <h2 id="comfig-packages-heading" className="t-section">
+              Packages
+            </h2>
+            <div className="mt-2">
+              <div className="row flex-wrap" data-testid="comfig-release">
+                <div className="min-w-0">
+                  <p className="t-row">
+                    {installedVersion
+                      ? `mastercomfig ${installedVersion}`
+                      : packagesInstalled
+                        ? "mastercomfig"
+                        : "mastercomfig isn't installed"}
                   </p>
-                ) : null}
-              </div>
-
-              <div className="pane-actions">
-                <button
-                  type="button"
-                  data-testid="comfig-update"
-                  disabled={locked}
-                  onClick={onUpdatePackages}
-                  className="btn btn-primary"
-                >
-                  {busy ? "Working…" : "Update packages"}
-                </button>
-                {supported && onCheckRelease ? (
+                  {supported ? (
+                    <p className="t-meta mt-0.5 flex flex-wrap items-baseline gap-x-2">
+                      <span data-testid="comfig-release-status" aria-live="polite">
+                        {release.status}
+                      </span>
+                      {onCheckRelease && !release.checking ? (
+                        <button
+                          type="button"
+                          data-testid="comfig-check-release"
+                          className="text-link"
+                          onClick={() => setCheckAttempt((value) => value + 1)}
+                        >
+                          Check again
+                        </button>
+                      ) : null}
+                    </p>
+                  ) : null}
+                </div>
+                {release.action ? (
                   <button
                     type="button"
-                    className="btn btn-ghost"
-                    disabled={
-                      checkedRelease !== null && !checkedRelease.latest && !checkedRelease.error
-                    }
-                    onClick={() => setCheckAttempt((value) => value + 1)}
+                    data-testid="comfig-update"
+                    disabled={locked}
+                    onClick={onUpdatePackages}
+                    className={`btn ${release.action.primary ? "btn-primary" : "btn-ghost"}`}
                   >
-                    Check for updates
+                    {busy ? "Working…" : release.action.label}
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  data-testid="comfig-import"
-                  disabled={locked}
-                  onClick={onImportCustom}
-                  className="btn btn-ghost"
-                >
-                  {customImported ? "Replace comfig-custom…" : "Import comfig-custom…"}
-                </button>
-                <button
-                  type="button"
-                  data-testid="comfig-extras"
-                  onClick={() => void openEmbeddedPage("comfig-extras")}
-                  className="btn btn-ghost"
-                >
-                  Open extras
-                  <ArrowSquareOut size={13} />
-                </button>
+              </div>
+              <div className="row flex-wrap" data-testid="comfig-custom">
+                <div className="min-w-0">
+                  <p className="t-row">comfig-custom folder</p>
+                  <p className="t-meta mt-0.5">
+                    {customImported
+                      ? "Added to this profile."
+                      : "Extra settings made on comfig.app come as this folder."}
+                  </p>
+                </div>
+                <div className="pane-actions">
+                  <button
+                    type="button"
+                    data-testid="comfig-extras"
+                    onClick={() => void openEmbeddedPage("comfig-extras")}
+                    className="text-link"
+                  >
+                    Open comfig.app
+                    <ArrowSquareOut size={13} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="comfig-import"
+                    disabled={locked}
+                    onClick={onImportCustom}
+                    className="btn btn-ghost"
+                  >
+                    {customImported ? "Replace folder…" : "Add folder…"}
+                  </button>
+                </div>
               </div>
             </div>
           </section>

@@ -156,10 +156,20 @@ async function chooseWeapon(groupId: string, label: string) {
   await click(`[data-testid="viewmodel-weapon-choice-${groupId}-${WEAPON_MODES[label]}"]`);
 }
 
+/** Come back to execs after the last read went stale: the pane reads TF2's files again. */
+async function rereadAfterAWhile() {
+  focused = false;
+  await act(async () => window.dispatchEvent(new Event("blur")));
+  now += 3 * 60_000;
+  focused = true;
+  await act(async () => window.dispatchEvent(new Event("focus")));
+}
+
 describe("Viewmodels source-derived draft", () => {
-  it("shows class sections and short labels while release Build stays unavailable", async () => {
+  it("shows class sections and short labels, and an apply bar only once something changed", async () => {
     await render(false, false);
-    expect(box.textContent).toContain("Import VPK");
+    expect(box.textContent).toContain("Use your own VPK");
+    expect(box.textContent).not.toContain("Open Comfig addons");
     expect(box.textContent).not.toContain("being prepared for 0.2.0");
     expect(box.textContent).not.toContain("Casual preload");
     expect(box.textContent).toContain("Every viewmodel is hidden in game");
@@ -168,15 +178,14 @@ describe("Viewmodels source-derived draft", () => {
       "Primary",
     );
     expect(box.textContent).toContain("Everything shown");
-    expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
-      true,
-    );
+    expect(box.querySelector('[data-testid="viewmodel-build"]')).toBeNull();
+    expect(element('[data-testid="viewmodel-presets"]').textContent).toBe("Set every class…");
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
-    expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
-      false,
+    expect(element('[data-testid="viewmodel-build-progress"]').textContent).toBe(
+      "Your viewmodel changes aren't in TF2 yet.",
     );
-    await click('[data-testid="viewmodel-review-build"]');
-    expect(box.textContent).toContain("Build pack");
+    expect(element('[data-testid="viewmodel-build"]').textContent).toBe("Apply changes");
+    expect(element('[data-testid="viewmodel-discard-draft"]').textContent).toBe("Discard changes");
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(false);
     expect(box.querySelector("img")).toBeNull();
     await click('[data-testid="viewmodel-import"]');
@@ -191,9 +200,6 @@ describe("Viewmodels source-derived draft", () => {
       options: { hidden: "scout/scatterguns,scout/melee", mode: "full", schema: "yttrium-1" },
     };
     await render();
-    expect(element('[data-testid="viewmodel-pack-status"]').textContent).toContain(
-      "Previous build",
-    );
     expect(element('[data-testid="viewmodel-saved-pack"]').textContent).toContain(
       "Built with the previous builder · 2 choices",
     );
@@ -215,8 +221,8 @@ describe("Viewmodels source-derived draft", () => {
     expect(element('[data-testid="viewmodel-source-changed"]').textContent).toContain(
       "This pack was changed outside execs",
     );
-    expect(box.textContent).toContain("Replace with VPK");
-    expect(element('[data-testid="viewmodel-pack-status"]').textContent).toContain("Imported");
+    expect(box.textContent).toContain("Replace with your own VPK");
+    expect(element('[data-testid="viewmodel-pack-status"]').textContent).toBe("Your own VPK.");
   });
 
   it("shows a locally built recipe's choices when the installed sources still match", async () => {
@@ -244,10 +250,10 @@ describe("Viewmodels source-derived draft", () => {
       element('[data-testid="viewmodel-weapon"][data-group-id="scout/b"]').dataset.choice,
     ).toBe("shown");
     expect(box.querySelector("details")).toBeNull();
+    expect(box.querySelector('[data-testid="viewmodel-build"]')).toBeNull();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
-    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
-      "1 class changed · not built yet",
-    );
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe("1 class changed");
+    expect(box.querySelector('[data-testid="viewmodel-build"]')).not.toBeNull();
     expect(
       element('[data-testid="viewmodel-weapon"][data-group-id="scout/b"]').dataset.choice,
     ).toBe("shown");
@@ -272,12 +278,10 @@ describe("Viewmodels source-derived draft", () => {
   it("keeps a failed refresh stale and protects choices until an updated catalog is explicitly accepted", async () => {
     await render();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
-    expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
-      false,
-    );
+    expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(false);
 
     getCatalog.mockRejectedValueOnce(new Error("TF2 source read failed"));
-    await click('[data-testid="viewmodel-catalog-refresh"]');
+    await rereadAfterAWhile();
     expect(box.textContent).toContain("TF2 source read failed");
     expect(box.textContent).toContain("Scattergun");
     expect(
@@ -288,15 +292,13 @@ describe("Viewmodels source-derived draft", () => {
       ...catalog,
       sourceFingerprints: [{ id: "models/weapons/c_models/c_scout_animations.mdl", sha256: "new" }],
     });
-    await click('[data-testid="viewmodel-catalog-refresh"]');
+    await click('[data-testid="viewmodel-catalog-error"] button');
     expect(box.textContent).toContain("these choices can't be built");
     expect(
       element<HTMLInputElement>('[data-testid="viewmodel-slot-choice-primary-full"]').checked,
     ).toBe(true);
     expect(drafts.getSnapshot()).toHaveLength(1);
-    expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
-      true,
-    );
+    expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
     expect(buildPack).not.toHaveBeenCalled();
     await click('[data-testid="viewmodel-discard-reload"]');
     expect(
@@ -305,7 +307,7 @@ describe("Viewmodels source-derived draft", () => {
     expect(drafts.getSnapshot()).toHaveLength(0);
   });
 
-  it("reads only on focused active use, keeps drafts while hidden, and closes review", async () => {
+  it("reads only on focused active use and keeps drafts while hidden", async () => {
     paneActive = false;
     await render();
     expect(getCatalog).not.toHaveBeenCalled();
@@ -322,11 +324,8 @@ describe("Viewmodels source-derived draft", () => {
     expect(getCatalog).toHaveBeenCalledTimes(1);
 
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
-    await click('[data-testid="viewmodel-review-build"]');
-    expect(box.querySelector('[data-testid="viewmodel-build-review"]')).not.toBeNull();
     paneActive = false;
     await render();
-    expect(box.querySelector('[data-testid="viewmodel-build-review"]')).toBeNull();
     expect(drafts.getSnapshot()).toHaveLength(1);
     focused = false;
     await act(async () => window.dispatchEvent(new Event("blur")));
@@ -359,14 +358,10 @@ describe("Viewmodels source-derived draft", () => {
   it("starts a fresh planning draft after switching profiles", async () => {
     await render();
     await click('[data-testid="viewmodel-slot-choice-primary-weapon"]');
-    expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
-      false,
-    );
+    expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(false);
     profileId = "profile-two";
     await render();
-    expect(element<HTMLButtonElement>('[data-testid="viewmodel-review-build"]').disabled).toBe(
-      true,
-    );
+    expect(box.querySelector('[data-testid="viewmodel-build"]')).toBeNull();
     // The new profile reuses the recent catalog read instead of waiting on TF2's files.
     expect(getCatalog).toHaveBeenCalledTimes(1);
   });
@@ -387,21 +382,18 @@ describe("Viewmodels source-derived draft", () => {
       (button) => button.textContent === "Cancel",
     );
     await act(async () => cancel?.click());
-    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
-      "1 class changed · not built yet",
-    );
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe("1 class changed");
 
     await click('[data-testid="viewmodel-presets"]');
     await click('[data-testid="viewmodel-preset-hide-all"]');
+    expect(element('[data-testid="viewmodel-preset-apply"]').textContent).toBe("Set every class");
     await click('[data-testid="viewmodel-preset-apply"]');
     expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
-      "2 classes changed · not built yet",
+      "2 classes changed",
     );
     expect(buildPack).not.toHaveBeenCalled();
     await click('[data-testid="viewmodel-preset-undo"]');
-    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe(
-      "1 class changed · not built yet",
-    );
+    expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe("1 class changed");
     expect(box.querySelector('[data-testid="viewmodel-preset-undo"]')).toBeNull();
 
     // Show all is a no-op review when nothing is hidden, and a row edit ends undo.
@@ -421,19 +413,20 @@ describe("Viewmodels source-derived draft", () => {
     );
   });
 
-  it("identifies overlapping modes during review", async () => {
+  it("identifies overlapping modes before applying", async () => {
     await render();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     await chooseWeapon("scout/b", "Hands only");
     expect(element('[data-testid="viewmodel-conflict"]').textContent).toContain(
       "Scattergun and Shortstop share animations",
     );
-    await click('[data-testid="viewmodel-review-build"]');
-    expect(box.textContent).toContain("set differently");
+    expect(element('[data-testid="viewmodel-build-progress"]').textContent).toBe(
+      "Weapons that share animations must match before you apply.",
+    );
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
   });
 
-  it("builds the reviewed request", async () => {
+  it("applies the exact request from the bar", async () => {
     let finish: (ok: boolean) => void = () => {};
     const handler = vi.fn(
       (_request: ViewmodelBuildRequest) =>
@@ -444,8 +437,6 @@ describe("Viewmodels source-derived draft", () => {
     buildPack = handler;
     await render(true);
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
-    await click('[data-testid="viewmodel-review-build"]');
-    expect(box.textContent).toContain("Build pack");
     const build = element<HTMLButtonElement>('[data-testid="viewmodel-build"]');
     expect(build.disabled).toBe(false);
     await act(async () => build.click());
@@ -459,33 +450,28 @@ describe("Viewmodels source-derived draft", () => {
       ],
       preload: true,
     });
-    expect(box.textContent).toContain("Building from your TF2 files");
+    expect(box.textContent).toContain("building from your TF2 files");
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
     await act(async () => finish(false));
-    expect(box.querySelector('[data-testid="viewmodel-build-review"]')).not.toBeNull();
+    expect(box.querySelector('[data-testid="viewmodel-build"]')).not.toBeNull();
     expect(drafts.getSnapshot()).toHaveLength(1);
     await click('[data-testid="viewmodel-build"]');
     await act(async () => finish(true));
-    expect(box.querySelector('[data-testid="viewmodel-build-review"]')).toBeNull();
+    expect(box.querySelector('[data-testid="viewmodel-build"]')).toBeNull();
     expect(drafts.getSnapshot()).toHaveLength(0);
-    expect(box.textContent).not.toContain("not built yet");
   });
 
-  it("keeps Build disabled while TF2 runs or choices conflict", async () => {
+  it("keeps Apply disabled while TF2 runs or choices conflict", async () => {
     buildPack = vi.fn(async () => true);
     running = true;
     await render();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
-    await click('[data-testid="viewmodel-review-build"]');
-    expect(box.textContent).toContain("Close TF2 before building");
+    expect(element('[data-testid="viewmodel-build"]').textContent).toBe("Close TF2 to apply");
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
     running = false;
     await render();
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(false);
-    await click('[data-testid="viewmodel-build-review"] .btn-ghost');
-    expect(box.querySelector('[data-testid="viewmodel-build-review"]')).toBeNull();
     await chooseWeapon("scout/b", "Hands only");
-    await click('[data-testid="viewmodel-review-build"]');
     expect(element<HTMLButtonElement>('[data-testid="viewmodel-build"]').disabled).toBe(true);
     expect(buildPack).not.toHaveBeenCalled();
   });
@@ -516,7 +502,6 @@ describe("Viewmodels source-derived draft", () => {
     );
     await render();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
-    await click('[data-testid="viewmodel-review-build"]');
     await click('[data-testid="viewmodel-build"]');
     // Simulate the user's newer selection while the asynchronous write is pending.
     await click('[data-testid="viewmodel-slot-choice-primary-weapon"]');
@@ -549,8 +534,14 @@ describe("Viewmodels source-derived draft", () => {
     await click('[data-testid="viewmodel-presets"]');
     await click('[data-testid="viewmodel-preset-show-all"]');
     await click('[data-testid="viewmodel-preset-apply"]');
-    expect(box.textContent).toContain("remove the saved pack below");
+    // Showing everything again over a built pack: applying removes the pack.
+    expect(element('[data-testid="viewmodel-build-progress"]').textContent).toBe(
+      "Everything is shown again. Applying removes your viewmodel pack.",
+    );
     expect(drafts.getSnapshot()).toHaveLength(1);
+    await click('[data-testid="viewmodel-build"]');
+    expect(removePack).toHaveBeenCalledOnce();
+    expect(buildPack).toHaveBeenCalledOnce();
     await click('[data-testid="viewmodel-preset-undo"]');
     expect(drafts.getSnapshot()).toHaveLength(0);
   });
@@ -559,7 +550,6 @@ describe("Viewmodels source-derived draft", () => {
     buildPack = vi.fn().mockRejectedValueOnce(new Error("disk refused")).mockResolvedValue(true);
     await render();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
-    await click('[data-testid="viewmodel-review-build"]');
     await click('[data-testid="viewmodel-build"]');
     expect(drafts.getSnapshot()).toHaveLength(1);
     await click('[data-testid="viewmodel-build"]');
@@ -591,7 +581,6 @@ describe("Viewmodels source-derived draft", () => {
   it("keeps a newer edit when the saved recipe arrives after build completion", async () => {
     await render();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
-    await click('[data-testid="viewmodel-review-build"]');
     await click('[data-testid="viewmodel-build"]');
     expect(drafts.getSnapshot()).toHaveLength(0);
     await click('[data-testid="viewmodel-slot-choice-primary-weapon"]');
@@ -622,7 +611,7 @@ describe("Viewmodels source-derived draft", () => {
     expect(drafts.getSnapshot()).toHaveLength(0);
   });
 
-  it("opens ready from the app's background read, then rechecks only on refresh", async () => {
+  it("opens ready from the app's background read, then rechecks only once it is stale", async () => {
     const { prefetchViewmodelCatalog } = await import("./lib/viewmodel-catalog-cache");
     prefetchViewmodelCatalog(getCatalog);
     await act(async () => {});
@@ -631,7 +620,8 @@ describe("Viewmodels source-derived draft", () => {
     expect(box.querySelector('[data-testid="viewmodel-catalog-status"]')).toBeNull();
     expect(box.textContent).toContain("Scattergun");
     expect(getCatalog).toHaveBeenCalledTimes(1);
-    await click('[data-testid="viewmodel-catalog-refresh"]');
+    expect(box.querySelector('[data-testid="viewmodel-catalog-refresh"]')).toBeNull();
+    await rereadAfterAWhile();
     expect(getCatalog).toHaveBeenCalledTimes(2);
   });
 });

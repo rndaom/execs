@@ -28,7 +28,6 @@ export type ViewmodelSettingsProps = {
   /** Official addon belongs to a Comfig profile. */
   canUseComfigAddons: boolean;
   onToggleTransparentViewmodels: () => void;
-  onOpenComfig?: () => void;
   /** Resolves when the write settles. */
   onSave: (gameplayText: string) => Promise<unknown>;
 };
@@ -42,7 +41,6 @@ export function ViewmodelSettings({
   transparentViewmodels,
   canUseComfigAddons,
   onToggleTransparentViewmodels,
-  onOpenComfig,
   onSave,
 }: ViewmodelSettingsProps) {
   const { running, busy } = useAppStatus();
@@ -130,11 +128,6 @@ export function ViewmodelSettings({
             note={canUseComfigAddons ? undefined : "Available with a Comfig profile."}
             onChange={() => onToggleTransparentViewmodels()}
           />
-          {onOpenComfig ? (
-            <button type="button" className="btn btn-ghost mt-2" onClick={onOpenComfig}>
-              Open Comfig addons
-            </button>
-          ) : null}
         </div>
       </div>
     </PaneSection>

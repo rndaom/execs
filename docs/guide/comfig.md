@@ -29,7 +29,11 @@ The **Modules** tab lists every mastercomfig module, grouped into Networking, Gr
 
 ## Updates
 
-**Update packages** downloads the current mastercomfig release for this profile only. Other profiles keep the version they have until you update them too.
+**Packages** shows this profile's mastercomfig release. When a newer one is out, **Update to** that version downloads it for this profile only; other profiles keep the version they have until you update them too. **Check again** looks for a new release.
+
+## comfig-custom folder
+
+The [comfig.app](https://comfig.app/app/) customizer saves extra settings as a `comfig-custom` folder. **Open comfig.app** opens it, and **Add folder…** copies that folder into this profile.
 
 ## Profiles without mastercomfig
 

@@ -10,16 +10,16 @@ These save on their own, like Gameplay.
 
 ## Per weapon
 
-Each class is one table: a row per weapon slot with its weapons listed beneath it, then inspect animations. Choose **Shown**, **Hidden** or **Hands only** for a whole slot or for one weapon, then **Review and build**. Changing a slot moves the weapons that follow it; a weapon you set on its own keeps its choice. execs builds `tf/custom/execs-viewmodels.vpk` from your own TF2 files; only your first-person view changes, and nothing is written until you build.
+Each class is one table: a row per weapon slot with its weapons listed beneath it, then inspect animations. Choose **Shown**, **Hidden** or **Hands only** for a whole slot or for one weapon. Changing a slot moves the weapons that follow it; a weapon you set on its own keeps its choice. Your choices wait in a bar at the bottom of the page until you press **Apply changes**, or **Discard changes** to go back. Applying builds `tf/custom/execs-viewmodels.vpk` from your own TF2 files; only your first-person view changes, and nothing is written until you apply.
 
-**Every class…** applies one choice to the whole profile (show all, hide all, or keep melee visible) and shows exactly what changes before it applies.
+**Set every class…** applies one choice to the whole profile (show all, hide all, or keep melee visible) and shows exactly what changes first.
 
-Some weapons share animations; those must be set the same before the pack can build.
+Some weapons share animations; those must be set the same before you can apply.
 
-If TF2 updates its files while you have unbuilt choices, execs keeps them but can't build them against the new files. Discard them to load the new weapons.
+If TF2 updates its files while you have choices waiting, execs keeps them but can't apply them to the new files. Discard them to load the new weapons.
 
 ## Packs you already have
 
-You can import a viewmodel VPK instead of building one. Profile exports carry the build recipe, not the built model files, so whoever imports the profile builds it from their own TF2.
+**Use your own VPK…** installs a viewmodel VPK instead of the one execs builds. Showing every weapon again and applying removes the pack; **Remove pack** does that directly. Profile exports carry the build recipe, not the built model files, so whoever imports the profile builds it from their own TF2.
 
 Custom viewmodels on Valve Casual need the profile's preload launch option; see [Mods → Casual setup](mods.md#casual-setup).

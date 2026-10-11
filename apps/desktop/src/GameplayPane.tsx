@@ -29,8 +29,6 @@ export type GameplayPaneProps = {
   layer: GameplayLayer;
   effective: Record<string, string>;
   managedText: string;
-  /** Viewmodel FOV, visibility and transparency live in the Viewmodels pane. */
-  onOpenViewmodels?: () => void;
   /** Resolves when the write settles; the toast reports it. */
   onSave: (gameplayText: string) => Promise<unknown>;
   /** Copy the saved Gameplay settings to other profiles; offered only when provided. */
@@ -42,7 +40,6 @@ export function GameplayPane({
   layer,
   effective,
   managedText,
-  onOpenViewmodels,
   onSave,
   copySettings,
 }: GameplayPaneProps) {
@@ -199,21 +196,6 @@ export function GameplayPane({
             checked={draft.hud_combattext_healing === 1}
             onChange={(next) => patch({ hud_combattext_healing: next ? 1 : 0 })}
           />
-        </PaneSection>
-      </div>
-
-      <div className="section pane-split">
-        <PaneSection id="gameplay-viewmodels" title="Viewmodels" first>
-          {onOpenViewmodels ? (
-            <button
-              type="button"
-              data-testid="gameplay-open-viewmodels"
-              className="btn btn-ghost mt-3"
-              onClick={onOpenViewmodels}
-            >
-              Open Viewmodels
-            </button>
-          ) : null}
         </PaneSection>
       </div>
     </section>

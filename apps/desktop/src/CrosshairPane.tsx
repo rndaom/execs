@@ -1,12 +1,7 @@
-import { DotsThree } from "@phosphor-icons/react";
+import { Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "./components/ui/Alert";
 import { ApplyBar } from "./components/ui/ApplyBar";
-import {
-  ContextMenu,
-  ContextMenuItem,
-  type ContextMenuPosition,
-} from "./components/ui/ContextMenu";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { CrosshairDesigner, type CrosshairDesignerDraft } from "./crosshair/CrosshairDesigner";
@@ -273,7 +268,6 @@ export function CrosshairPane({
     saved: gameResolution,
     monitor: monitorSize(),
   });
-  const [menu, setMenu] = useState<ContextMenuPosition | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -495,54 +489,22 @@ export function CrosshairPane({
     crosshairLibraryDirty(plainDraft, plainSeed);
   const barStatus =
     plan.kind === "deactivate"
-      ? "TF2 will draw its own crosshair again. Your custom crosshairs stay saved in this profile."
+      ? "Your crosshair changes aren't in TF2 yet. Your designs stay saved."
       : libraryOnly
-        ? "Build the pack to keep your new crosshairs in this profile."
-        : packLive
-          ? "These changes are not in TF2 yet."
-          : "Custom crosshairs need a small pack. Nothing changes in TF2 until you build it.";
+        ? "Your new crosshairs aren't saved yet."
+        : "Your crosshair changes aren't in TF2 yet.";
 
   return (
     <section data-testid="settings-crosshair" className="min-w-0 text-left">
-      <PaneHeader
-        title="Crosshair"
-        actions={
-          <>
-            <span
-              className="badge"
-              data-live={packLive}
-              data-testid="crosshair-live-state"
-              title={
-                packLive
-                  ? "A custom crosshair pack is installed for this profile."
-                  : "TF2 draws its own crosshair; no custom pack is installed."
-              }
-            >
-              {packLive ? "Custom pack on" : "TF2 draws its own crosshair"}
-            </span>
-            {record ? (
-              <button
-                type="button"
-                className="btn btn-ghost px-2.5"
-                aria-label="More crosshair actions"
-                data-testid="crosshair-more"
-                aria-haspopup="menu"
-                onClick={(event) => {
-                  const bounds = event.currentTarget.getBoundingClientRect();
-                  setMenu({ x: bounds.right - 256, y: bounds.bottom + 6 });
-                }}
-              >
-                <DotsThree size={18} weight="bold" />
-              </button>
-            ) : null}
-          </>
-        }
-      />
+      <PaneHeader title="Crosshair" />
 
       <div className="grid gap-3 empty:hidden" data-testid="crosshair-notices">
         {record?.sourceChanged ? (
           <div className="pane-note" data-testid="crosshair-source-changed">
-            <p>This pack was changed outside execs. Rebuild it, or remove it from the ⋯ menu.</p>
+            <p>
+              Your crosshair pack was changed outside execs. Repair it, or remove it at the bottom
+              of this page.
+            </p>
             {!designer ? (
               <button
                 type="button"
@@ -550,7 +512,7 @@ export function CrosshairPane({
                 disabled={running || busy || working}
                 onClick={() => void build()}
               >
-                Rebuild crosshair pack
+                Repair pack
               </button>
             ) : null}
           </div>
@@ -559,9 +521,9 @@ export function CrosshairPane({
           <div className="pane-note" data-testid="crosshair-script-source-status">
             <p>
               {sourceStatus.state === "changed"
-                ? "TF2's weapon scripts changed. Rebuild to pick up the update."
+                ? "TF2 updated its weapon files. Update your crosshair pack to match."
                 : sourceStatus.state === "unverified"
-                  ? "Rebuild to check this pack against the current game."
+                  ? "Your crosshair pack may not match this version of TF2."
                   : `Could not check TF2's weapon scripts: ${sourceStatus.reason ?? "the source is unavailable"}.`}
             </p>
             {sourceStatus.state !== "unavailable" && !record?.sourceChanged ? (
@@ -571,7 +533,7 @@ export function CrosshairPane({
                 disabled={running || busy || working}
                 onClick={() => void build()}
               >
-                Rebuild crosshair pack
+                Update pack
               </button>
             ) : null}
           </div>
@@ -713,6 +675,36 @@ export function CrosshairPane({
                 labelFor={labelFor}
                 onChange={(next: CrosshairDraft) => setDraft(next)}
               />
+
+              {record ? (
+                <section
+                  className="section"
+                  aria-labelledby="crosshair-pack-heading"
+                  data-testid="crosshair-pack"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 id="crosshair-pack-heading" className="t-section">
+                        Crosshair pack
+                      </h2>
+                      <p className="t-meta mt-1" data-testid="crosshair-live-state">
+                        {packLive ? "On in TF2." : "Off. TF2 draws its own crosshair."}
+                        {yours.length ? ` Keeps ${yours.length} of your crosshairs.` : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      data-testid="crosshair-remove-pack"
+                      disabled={running || busy || working}
+                      onClick={() => setConfirmRemove(true)}
+                    >
+                      <Trash size={14} aria-hidden="true" />
+                      Remove pack…
+                    </button>
+                  </div>
+                </section>
+              ) : null}
             </>
           )}
         </div>
@@ -771,16 +763,8 @@ export function CrosshairPane({
         <ApplyBar
           testId={plan.kind === "build" ? "crosshair-build" : "crosshair-use-tf2"}
           status={<span data-testid="crosshair-pending">{barStatus}</span>}
-          actionLabel={
-            working
-              ? plan.kind === "build"
-                ? "Building…"
-                : "Switching…"
-              : plan.kind === "build"
-                ? "Build crosshair pack"
-                : "Switch to TF2's crosshair"
-          }
-          lockedLabel="Waiting for TF2 to close"
+          actionLabel={working ? "Applying…" : "Apply changes"}
+          lockedLabel="Close TF2 to apply"
           running={running}
           locked={running || busy || working}
           dirty
@@ -802,20 +786,6 @@ export function CrosshairPane({
         />
       ) : null}
 
-      {menu ? (
-        <ContextMenu label="Crosshair actions" position={menu} onClose={() => setMenu(null)}>
-          <ContextMenuItem
-            data-testid="crosshair-remove-pack"
-            disabled={running || busy}
-            onSelect={() => {
-              setMenu(null);
-              setConfirmRemove(true);
-            }}
-          >
-            Remove crosshair pack…
-          </ContextMenuItem>
-        </ContextMenu>
-      ) : null}
       <Modal
         open={confirmRemove}
         title="Remove the crosshair pack?"

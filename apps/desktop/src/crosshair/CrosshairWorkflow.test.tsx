@@ -173,7 +173,9 @@ describe("crosshair choice and what applying it takes", () => {
     expect(maybe('[data-testid="crosshair-import"]')).not.toBeNull();
     expect(box.querySelector("select")).toBeNull();
     expect(maybe('[data-testid="crosshair-build"]')).toBeNull();
-    expect(text('[data-testid="crosshair-live-state"]')).toBe("Custom pack on");
+    expect(text('[data-testid="crosshair-live-state"]')).toBe(
+      "On in TF2. Keeps 1 of your crosshairs.",
+    );
   });
 
   it("lets TF2 draw its own sprite with no pack: the choice autosaves like size and colour", async () => {
@@ -195,7 +197,11 @@ describe("crosshair choice and what applying it takes", () => {
     await render();
     await click('[data-testid="crosshair-shape-shape-dot"]');
     expect(pending).toHaveBeenLastCalledWith(expect.any(String), true);
-    expect(text('[data-testid="crosshair-pending"]')).toContain("Nothing changes in TF2");
+    expect(text('[data-testid="crosshair-pending"]')).toBe(
+      "Your crosshair changes aren't in TF2 yet.",
+    );
+    expect(text('[data-testid="crosshair-build"]')).toBe("Apply changes");
+    expect(text('[data-testid="crosshair-discard"]')).toBe("Discard changes");
     await input("#stock-crosshair-scale", "40");
     await elapsed();
     expect(save).not.toHaveBeenCalled();
@@ -220,7 +226,8 @@ describe("crosshair choice and what applying it takes", () => {
   it("switches back to TF2's crosshair in one action that carries the sprite and size", async () => {
     await render();
     await click('[data-testid="crosshair-shape-tf-crosshair5"]');
-    expect(text('[data-testid="crosshair-pending"]')).toContain("TF2 will draw its own crosshair");
+    expect(text('[data-testid="crosshair-pending"]')).toContain("Your designs stay saved");
+    expect(text('[data-testid="crosshair-use-tf2"]')).toBe("Apply changes");
     await elapsed();
     expect(save).not.toHaveBeenCalled();
     await click('[data-testid="crosshair-use-tf2"]');
@@ -258,7 +265,7 @@ describe("crosshair choice and what applying it takes", () => {
     await click('[data-testid="crosshair-shape-shape-circle"]');
     await click('[data-testid="crosshair-build"]');
     expect(checked("shape-circle")).toBe(true);
-    expect(text('[data-testid="crosshair-pending"]')).toContain("not in TF2 yet");
+    expect(text('[data-testid="crosshair-pending"]')).toContain("aren't in TF2 yet");
   });
 
   it("defers size edits while the game runs and keeps the pack builder locked", async () => {
@@ -564,7 +571,9 @@ describe("older packs and notices", () => {
     managed = "cl_crosshair_file crosshair3\ncl_crosshair_scale 32\n";
     await render();
     expect(checked("tf-crosshair3")).toBe(true);
-    expect(text('[data-testid="crosshair-live-state"]')).toBe("TF2 draws its own crosshair");
+    expect(text('[data-testid="crosshair-live-state"]')).toContain(
+      "Off. TF2 draws its own crosshair.",
+    );
     expect(maybe('[data-testid="crosshair-build"]')).toBeNull();
     await act(async () =>
       [...box.querySelectorAll("button")].find((b) => b.textContent === "Restore them")?.click(),
@@ -631,18 +640,21 @@ describe("older packs and notices", () => {
   it("warns when TF2 updates the scripts used to build a live pack", async () => {
     sourceStatus = { state: "changed" };
     await render();
-    expect(box.textContent).toContain("TF2's weapon scripts changed. Rebuild");
+    expect(box.textContent).toContain("TF2 updated its weapon files. Update your crosshair pack");
+    expect(text('[data-testid="crosshair-script-source-status"] button')).toBe("Update pack");
     sourceStatus = { state: "unverified" };
     await render();
-    expect(box.textContent).toContain("Rebuild to check this pack against the current game");
+    expect(box.textContent).toContain("may not match this version of TF2");
     record = { ...saved(), inactive: true };
     await render();
     expect(maybe('[data-testid="crosshair-script-source-status"]')).toBeNull();
   });
 
-  it("removes the pack only after confirming", async () => {
+  it("removes the pack from its own section, only after confirming", async () => {
     await render();
-    await click('[data-testid="crosshair-more"]');
+    // No hidden menu: the pack and its Remove button sit at the end of the pane.
+    expect(maybe('[data-testid="crosshair-more"]')).toBeNull();
+    expect(text('[data-testid="crosshair-pack"] h2')).toBe("Crosshair pack");
     await click('[data-testid="crosshair-remove-pack"]');
     expect(remove).not.toHaveBeenCalled();
     await click('[data-testid="crosshair-remove-confirm"]');

@@ -4,6 +4,7 @@ import { ModContentAudit } from "./components/ModContentAudit";
 import { ModImport } from "./components/ModImport";
 import { ModList } from "./components/ModList";
 import { Alert } from "./components/ui/Alert";
+import { ApplyBar } from "./components/ui/ApplyBar";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
@@ -827,8 +828,8 @@ export function ModsPane({
                   {!payload
                     ? "Selection unavailable"
                     : selectionDirty(payload, selection)
-                      ? "Ready to apply"
-                      : "Applied selection"}
+                      ? "After you apply"
+                      : "In TF2 now"}
                 </h3>
                 {addons.length + particleMods.length + profileParticleMods.length > 0 ? (
                   <ul className="t-meta mt-3 list-none space-y-3 p-0">
@@ -862,33 +863,7 @@ export function ModsPane({
                       : "Waiting for this profile’s installed selection."}
                   </p>
                 )}
-                {selectionDirty(payload, selection) ? (
-                  <button
-                    type="button"
-                    className="btn btn-quiet mt-4"
-                    disabled={busy}
-                    onClick={() => setSelection(installed)}
-                  >
-                    Reset selection
-                  </button>
-                ) : null}
-                <div className="mt-4 grid gap-2 border-t border-edge pt-3">
-                  {showApply ? (
-                    <>
-                      <button
-                        type="button"
-                        data-testid="mods-apply"
-                        className="btn btn-primary w-full"
-                        disabled={locked || !canApply}
-                        onClick={() => onApply(addons, particleMods, profileParticleMods)}
-                      >
-                        {running ? "Close TF2 to apply" : "Apply mods"}
-                      </button>
-                      <p className="t-meta" aria-live="polite">
-                        {modsStatusLine(payload, selection, running)}
-                      </p>
-                    </>
-                  ) : null}
+                <div className="mt-4 border-t border-edge pt-3">
                   <button
                     type="button"
                     data-testid="mods-revert"
@@ -896,9 +871,8 @@ export function ModsPane({
                     disabled={locked || !anythingInstalled}
                     onClick={() => setConfirmRestore(true)}
                   >
-                    Restore stock files
+                    Restore stock files…
                   </button>
-                  <p className="t-meta">Apply turns Preload on.</p>
                 </div>
               </aside>
             </div>
@@ -949,6 +923,35 @@ export function ModsPane({
               casual-pre-loader on GitHub
             </button>
           </p>
+          {showApply ? (
+            <ApplyBar
+              testId="mods-apply"
+              status={
+                <span data-testid="mods-apply-status">
+                  {modsStatusLine(payload, selection, payload?.profilePreload === false)}
+                </span>
+              }
+              actionLabel="Apply changes"
+              lockedLabel="Close TF2 to apply"
+              running={running}
+              locked={locked || !canApply}
+              dirty
+              extra={
+                dirty ? (
+                  <button
+                    type="button"
+                    data-testid="mods-discard"
+                    className="btn btn-ghost"
+                    disabled={busy}
+                    onClick={() => setSelection(installed)}
+                  >
+                    Discard changes
+                  </button>
+                ) : null
+              }
+              onApply={() => onApply(addons, particleMods, profileParticleMods)}
+            />
+          ) : null}
         </div>
       </div>
       <Modal
