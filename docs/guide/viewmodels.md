@@ -14,7 +14,9 @@ Each class is one table: a row per weapon slot with its weapons listed beneath i
 
 **Set every class…** applies one choice to the whole profile (show all, hide all, or keep melee visible) and shows exactly what changes first.
 
-Some weapons share animations; those must be set the same before you can apply.
+Some weapons share animations. A weapon you leave shown always stays fully visible, so a hidden weapon that shares animations with it stays partly visible; execs names these under the class. For example, Soldier's Concheror reuses the Shovel's swings, so hiding Secondary while keeping melee leaves those swings on screen. Weapons that share animations can't be set to Hidden and Hands only at the same time.
+
+If your built pack is out of date, its choices come back as unbuilt choices; apply again to update it.
 
 If TF2 updates its files while you have choices waiting, execs keeps them but can't apply them to the new files. Discard them to load the new weapons.
 

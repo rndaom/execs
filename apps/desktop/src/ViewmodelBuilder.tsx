@@ -40,6 +40,7 @@ import {
   viewmodelDraftBuildRequest,
   viewmodelExceptions,
   viewmodelInspectChoice,
+  viewmodelPartlyShownRows,
   viewmodelPresetChoices,
   viewmodelRowChoice,
   viewmodelRowItemNames,
@@ -320,7 +321,23 @@ function savedChoices(
   catalog: ViewmodelSourceCatalog,
   recipe: ViewmodelBuildRecipe | undefined,
 ): ViewmodelDraftChoices {
-  if (!recipe || recipe.catalog.catalogSha256 !== catalog.catalog.catalogSha256) return {};
+  if (!recipe || recipeOutdated(catalog, recipe)) return {};
+  return recipeChoices(catalog, recipe);
+}
+
+/** A pack built from other TF2 files or an earlier build rule needs building again. */
+function recipeOutdated(
+  catalog: ViewmodelSourceCatalog,
+  recipe: ViewmodelBuildRecipe | undefined,
+): boolean {
+  return Boolean(recipe && recipe.catalog.catalogSha256 !== catalog.catalog.catalogSha256);
+}
+
+/** The recipe's choices for groups this catalog still has. */
+function recipeChoices(
+  catalog: ViewmodelSourceCatalog,
+  recipe: ViewmodelBuildRecipe,
+): ViewmodelDraftChoices {
   const known = new Set(catalog.groups.map((group) => group.id));
   return Object.fromEntries(
     recipe.choices
@@ -378,8 +395,11 @@ function ViewmodelCatalogChoices({
     saved = incoming;
     setBaseline({ key: incomingKey, choices: incoming });
   }
+  // An outdated pack offers its choices again as an unbuilt draft.
+  const outdated = recipeOutdated(catalog, savedRecipe);
+  const seed = outdated && savedRecipe ? recipeChoices(catalog, savedRecipe) : saved;
   const [choices, setChoices] = useSeededDraft(
-    saved,
+    seed,
     serializeChoices,
     draftRecordKey(profileId, "viewmodel-builder"),
   );
@@ -626,6 +646,8 @@ function ViewmodelCatalogChoices({
                     "Weapons that share animations must match before you apply."
                   ) : removesPack ? (
                     "Everything is shown again. Applying removes your viewmodel pack."
+                  ) : outdated ? (
+                    "Your built pack is out of date. Apply to update it."
                   ) : (
                     "Your viewmodel changes aren't in TF2 yet."
                   )}
@@ -685,6 +707,7 @@ function ViewmodelClassChoices({
   const classLabel = viewmodelClassLabel(className);
   const inspect = viewmodelInspectChoice(choices, layout.inspect);
   const conflicts = viewmodelConflictRows(catalog, choices, className);
+  const partlyShown = viewmodelPartlyShownRows(catalog, choices, className);
 
   function weaponRow(row: ViewmodelRow, base: ViewmodelChoice) {
     const choice = viewmodelRowChoice(choices, row);
@@ -777,6 +800,12 @@ function ViewmodelClassChoices({
           Set them the same to build.
         </p>
       ) : null}
+      {partlyShown.map(({ row, shownWith }) => (
+        <p key={row.id} data-testid="viewmodel-partly-shown" className="t-meta mt-3">
+          {viewmodelRowLabel(row)} stays partly visible: it shares animations with{" "}
+          {shownWith.map(viewmodelRowLabel).join(" and ")}.
+        </p>
+      ))}
     </div>
   );
 }

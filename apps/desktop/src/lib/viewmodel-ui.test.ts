@@ -17,6 +17,7 @@ import {
   viewmodelGroupsForClass,
   viewmodelInspectChoice,
   viewmodelItemName,
+  viewmodelPartlyShownRows,
   viewmodelPresetChoices,
   viewmodelRowItemNames,
   viewmodelRowLabel,
@@ -432,5 +433,18 @@ describe("slot-level viewmodel choices", () => {
     expect(viewmodelClassSummary(viewmodelWithRows(choices, [primary[2]], "shown"), layout)).toBe(
       "Primary hidden, Inspect hidden, Shortstop shown",
     );
+  });
+});
+
+describe("animations shared with a shown weapon", () => {
+  it("lists hidden rows that share animations with a shown row", () => {
+    expect(viewmodelPartlyShownRows(catalog, {}, "scout")).toEqual([]);
+    const partly = viewmodelPartlyShownRows(catalog, { "scout/two": "full" }, "scout");
+    expect(
+      partly.map(({ row, shownWith }) => [row.id, shownWith.map((other) => other.id)]),
+    ).toEqual([["scout/two", ["scout/one"]]]);
+    expect(
+      viewmodelPartlyShownRows(catalog, { "scout/one": "full", "scout/two": "full" }, "scout"),
+    ).toEqual([]);
   });
 });
