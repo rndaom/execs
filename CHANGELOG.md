@@ -12,6 +12,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Setups page: Crosshair now names the crosshair the setup uses, with your own designs under
+  the names you saved them with, instead of reading "Execs crosshairs" for every setup.
 - Viewmodels: hiding a weapon no longer hides another weapon you left shown when the two share
   animations. Keep melee visible no longer hid Soldier's Shovel (through the Concheror) or melee
   swings for Engineer, Demoman and Medic. A weapon that stays partly visible because of this is

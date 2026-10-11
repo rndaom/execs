@@ -21,6 +21,7 @@ function overview(patch: Partial<SetupOverview> = {}): SetupOverview {
     id: "main",
     hud: "rayshud",
     crosshair: "dot",
+    crosshairDesign: null,
     fov: "90",
     sensitivity: "2.5",
     hitSound: "Quake hit",
@@ -126,6 +127,14 @@ describe("fact values", () => {
     expect(value("hud")).toBe("Ray's HUD");
     expect(value("crosshair")).toBe("Small dot");
     expect(value("crosshair", { crosshair: "design-my-ring" })).toBe("My ring");
+    const named = JSON.stringify({ style: "ring", label: "Tournament ring" });
+    expect(value("crosshair", { crosshair: "design-my-ring", crosshairDesign: named })).toBe(
+      "Tournament ring",
+    );
+    expect(value("crosshair", { crosshair: "designed", crosshairDesign: named })).toBe(
+      "Tournament ring",
+    );
+    expect(value("crosshair", { crosshair: "designed" })).toBe("My crosshair");
     expect(value("fov")).toBe("90°");
     expect(value("fov", { fov: "90.0" })).toBe("90°");
     expect(value("sensitivity", { sensitivity: "1.800000" })).toBe("1.8");
@@ -138,6 +147,7 @@ describe("fact values", () => {
     const bare = {
       hud: null,
       crosshair: null,
+      crosshairDesign: null,
       fov: null,
       sensitivity: null,
       hitSound: null,
@@ -187,6 +197,13 @@ describe("differences from the setup in the game", () => {
     expect(differingFacts(overview({ crosshair: null }), overview())).toEqual(["crosshair"]);
     expect(differingFacts(overview({ fov: null }), overview({ fov: null }))).toEqual([]);
     expect(differingFacts(overview({ fov: "wide" }), overview({ fov: "90" }))).toEqual(["fov"]);
+  });
+
+  it("tells two different designs saved under the same name apart", () => {
+    const design = (label: string) =>
+      overview({ crosshair: "designed", crosshairDesign: JSON.stringify({ style: "dot", label }) });
+    expect(differingFacts(design("A"), design("B"))).toEqual(["crosshair"]);
+    expect(differingFacts(design("A"), design("A"))).toEqual([]);
   });
 
   it("summarises the count against the active setup's name", () => {

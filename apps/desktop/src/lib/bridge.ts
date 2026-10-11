@@ -422,8 +422,13 @@ export type SetupOverview = {
   id: string;
   /** HUD catalog id or folder name. */
   hud: string | null;
-  /** Custom crosshair id; `null` when the crosshair pack is off. */
+  /**
+   * The crosshair the pack gives every weapon (per-weapon picks aside);
+   * `null` when the crosshair pack is off.
+   */
   crosshair: string | null;
+  /** Saved designer parameters when `crosshair` is one of the player's designs. */
+  crosshairDesign: string | null;
   /** `fov_desired`, from the Gameplay cfg or else the profile's config.cfg. */
   fov: string | null;
   sensitivity: string | null;

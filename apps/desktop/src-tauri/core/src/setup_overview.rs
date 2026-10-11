@@ -7,7 +7,9 @@ use std::path::Path;
 use serde::Serialize;
 
 use crate::apply::profile_file_bytes_from;
-use crate::profile::{load_library_from, load_manifest, ProfileError, ProfileManifest};
+use crate::profile::{
+    load_library_from, load_manifest, CrosshairRecord, ProfileError, ProfileManifest,
+};
 use crate::profile_compare::{casual_names, managed_text, managed_values, sound_names};
 
 const CONFIG_CFG: &str = "tf/cfg/config.cfg";
@@ -17,8 +19,12 @@ const CONFIG_CFG: &str = "tf/cfg/config.cfg";
 pub struct SetupOverview {
     pub id: String,
     pub hud: Option<String>,
-    /// The custom crosshair pack; `None` when it is off.
+    /// The crosshair every weapon gets from the custom pack (its `shape`;
+    /// per-weapon assignments aside); `None` when the pack is off.
     pub crosshair: Option<String>,
+    /// Saved designer parameters when `crosshair` is one of the player's
+    /// designs, so it can be shown under its saved name.
+    pub crosshair_design: Option<String>,
     pub fov: Option<String>,
     pub sensitivity: Option<String>,
     pub hit_sound: Option<String>,
@@ -51,6 +57,18 @@ pub fn setup_overviews(
         .collect())
 }
 
+/// The stored design behind `record.shape`. `design` holds either a single
+/// design (for the `designed` entry) or a map of library name to design.
+fn shape_design(record: &CrosshairRecord) -> Option<String> {
+    let raw = record.design.as_deref()?;
+    let value: serde_json::Value = serde_json::from_str(raw).ok()?;
+    let entries = value.as_object()?;
+    if entries.contains_key("style") {
+        return (record.shape == "designed").then(|| raw.to_string());
+    }
+    entries.get(&record.shape)?.as_str().map(str::to_string)
+}
+
 /// Values in the profile's saved `config.cfg`; empty when it has none.
 fn config_values(profiles_dir: &Path, manifest: &ProfileManifest) -> BTreeMap<String, String> {
     if !manifest.files.iter().any(|file| file.path == CONFIG_CFG) {
@@ -80,14 +98,17 @@ fn overview(profiles_dir: &Path, manifest: &ProfileManifest) -> SetupOverview {
     let fov = value("fov_desired");
     let sensitivity = value("sensitivity");
     let (hit_sound, kill_sound) = sound_names(manifest.hitsound.as_ref());
+    // `id` names the pack itself; `shape` is the crosshair it gives every
+    // weapon. Very old records may have no shape to name.
+    let pack = manifest
+        .crosshair
+        .as_ref()
+        .filter(|record| !record.inactive && !record.shape.is_empty());
     SetupOverview {
         id: manifest.id.clone(),
         hud: manifest.hud.as_ref().map(|hud| hud.id.clone()),
-        crosshair: manifest
-            .crosshair
-            .as_ref()
-            .filter(|record| !record.inactive)
-            .map(|record| record.id.clone()),
+        crosshair: pack.map(|record| record.shape.clone()),
+        crosshair_design: pack.and_then(shape_design),
         fov,
         sensitivity,
         hit_sound,
@@ -209,8 +230,7 @@ mod tests {
     fn crosshair_hud_sounds_and_mods_come_from_the_manifest() {
         let dir = crate::test_temp_dir();
         let (profiles, root, id) = saved(&dir, &[], false);
-        let edit = |active: bool| {
-            let crosshair = serde_json::json!({ "id": "dot", "inactive": !active });
+        let edit = |crosshair: serde_json::Value| {
             let hitsound = serde_json::json!({
                 "hit": { "name": "ding", "source": "file" },
                 "kill": { "name": "bell", "source": "community" },
@@ -253,10 +273,22 @@ mod tests {
             .unwrap();
         };
 
-        edit(true);
+        let pack = |shape: &str, design: Option<&str>, active: bool| {
+            serde_json::json!({
+                "id": "execs-crosshairs",
+                "inactive": !active,
+                "shape": shape,
+                "assignments": { "tf_weapon_sniperrifle": "circle" },
+                "design": design,
+            })
+        };
+
+        edit(pack("dot", None, true));
         let on = only(&profiles, &root);
         assert_eq!(on.hud.as_deref(), Some("flawhud"));
+        // The shape every weapon gets, not the pack's id or an assignment.
         assert_eq!(on.crosshair.as_deref(), Some("dot"));
+        assert_eq!(on.crosshair_design, None);
         assert_eq!(on.hit_sound.as_deref(), Some("ding"));
         assert_eq!(on.kill_sound.as_deref(), Some("bell"));
         // Two mods, plus two Casual addons and one particle mod (named "skin"
@@ -264,8 +296,27 @@ mod tests {
         assert_eq!(on.mods, 2 + 3);
         assert_eq!(on.performance, None);
 
-        edit(false);
-        assert_eq!(only(&profiles, &root).crosshair, None);
+        // A design is passed along with its saved parameters, whether the
+        // record holds one design or a library of them.
+        let single = r#"{"style":"dot","label":"Mine"}"#;
+        edit(pack("designed", Some(single), true));
+        let designed = only(&profiles, &root);
+        assert_eq!(designed.crosshair.as_deref(), Some("designed"));
+        assert_eq!(designed.crosshair_design.as_deref(), Some(single));
+        let ring = r#"{"style":"ring","label":"Ring"}"#;
+        let library = serde_json::json!({ "design-ring": ring, "design-x": "{}" }).to_string();
+        edit(pack("design-ring", Some(&library), true));
+        assert_eq!(
+            only(&profiles, &root).crosshair_design.as_deref(),
+            Some(ring)
+        );
+        edit(pack("dot", Some(single), true));
+        assert_eq!(only(&profiles, &root).crosshair_design, None);
+
+        edit(pack("dot", None, false));
+        let off = only(&profiles, &root);
+        assert_eq!(off.crosshair, None);
+        assert_eq!(off.crosshair_design, None);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
