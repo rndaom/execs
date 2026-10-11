@@ -1,6 +1,5 @@
 import { Check } from "@phosphor-icons/react";
 import type { ProfileLibraryState } from "../hooks/useProfileLibrary";
-import { Caret } from "./ui/Caret";
 import { Modal } from "./ui/Modal";
 import { OptionTile } from "./ui/OptionTile";
 import { Loading } from "./ui/Spinner";
@@ -147,14 +146,17 @@ export function ProfileImportDialog({
             </p>
           ) : null}
           {review.creator || review.notes.length > 0 || review.warnings.length > 0 ? (
-            <details className="fold mt-4 border-t border-edge pt-4">
-              <summary className="t-body cursor-pointer text-ink">
-                <Caret fold />
+            <section
+              data-testid="profile-import-details"
+              aria-labelledby="profile-import-details-heading"
+              className="mt-4 border-t border-edge pt-4"
+            >
+              <h3 id="profile-import-details-heading" className="t-row">
                 {review.warnings.length > 0
                   ? `Config checks flagged ${review.warnings.length} ${review.warnings.length === 1 ? "file" : "files"}`
                   : "Import details"}
-              </summary>
-              <div className="t-meta mt-3 space-y-3 break-words">
+              </h3>
+              <div className="t-meta mt-2 max-h-48 space-y-3 overflow-y-auto break-words">
                 {review.creator ? (
                   <p>Launch options start empty. Extras outside cfg and custom stay in the ZIP.</p>
                 ) : null}
@@ -168,7 +170,7 @@ export function ProfileImportDialog({
                   <p key={warning}>{warning}</p>
                 ))}
               </div>
-            </details>
+            </section>
           ) : null}
         </>
       ) : null}

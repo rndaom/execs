@@ -127,6 +127,13 @@ export function LaunchPane({
   const steamState = launchSteamState(value, saved, steamSync, steamWrite ?? null);
   const steamSettled = steamState === "in-steam" || steamState === "no-account";
   const steamOpen = steamState === "steam-open";
+  // Both strings are known and saved, so the player can compare before choosing.
+  const steamDiffers =
+    value === saved &&
+    steamSync !== null &&
+    steamSync.profileOptions === saved &&
+    !steamSync.inSync &&
+    steamSync.steamOptions !== null;
   const { feedback, copy } = useCopyFeedback();
   // Typing is a draft: the lock defers the write, it does not lock the field.
   const { flush } = useAutosave({
@@ -525,78 +532,99 @@ export function LaunchPane({
               {strippedLaunchNotice(stripped)}
             </Alert>
           ) : null}
+        </section>
 
-          <div className="surface mt-4 flex flex-wrap items-center justify-between gap-3 p-4">
-            <p
-              data-testid="launch-steam-status"
-              aria-live="polite"
-              className="t-meta flex min-w-60 flex-1 items-center gap-2"
-            >
-              {retrying ? (
-                <Spinner size={16} />
-              ) : retryFailed || steamState === "write-failed" ? (
-                <WarningCircle size={16} className="shrink-0 text-warn" aria-hidden="true" />
-              ) : steamState === "in-steam" ? (
-                <CheckCircle size={16} className="shrink-0 text-ok" weight="fill" />
-              ) : (
-                <Info size={16} aria-hidden="true" className="shrink-0" />
-              )}
-              {retrying
-                ? "Checking whether Steam can be updated…"
-                : retryFailed
-                  ? "Could not confirm the Steam update. Copy the launch options or retry."
-                  : launchSteamCopy(steamState, running)}
-            </p>
-            {onAdoptSteam &&
-            steamSync?.reviewToken &&
-            !steamSync.inSync &&
-            steamSync.steamOptions !== null ? (
-              <button
-                type="button"
-                className="btn btn-ghost"
-                data-testid="launch-steam-adopt"
-                disabled={running || busy || retrying || value !== saved || composerPending}
-                onClick={() => {
-                  const token = steamSync.reviewToken;
-                  if (token) void onAdoptSteam(token);
-                }}
-              >
-                Use Steam options for this profile
-              </button>
-            ) : null}
-            {steamSettled && !retryFailed ? null : (
-              <button
-                type="button"
-                data-testid="launch-steam-retry"
-                disabled={running || busy || retrying || value !== saved || composerPending}
-                title={
-                  running
-                    ? "Available after TF2 closes."
-                    : composerPending
-                      ? "Add or cancel the option first."
-                      : value !== saved
-                        ? "Wait for the profile save to finish."
-                        : steamOpen
-                          ? "execs writes Steam's options only while Steam is closed. Close Steam, then check again."
-                          : "Review the current Steam options before replacing them."
-                }
-                onClick={() => {
-                  // With Steam open nothing can be written: only re-read its state.
-                  if (onWriteSteam && steamSync && !steamOpen) setSteamReview(steamSync);
-                  else void retrySteamWrite();
-                }}
-                className="btn btn-ghost shrink-0"
-              >
-                {retrying ? (
-                  <Loading>Checking Steam…</Loading>
-                ) : steamOpen ? (
-                  "Check Steam again"
-                ) : (
-                  "Write to Steam"
-                )}
-              </button>
+        <section className="section" aria-labelledby="launch-steam-heading">
+          <h2 id="launch-steam-heading" className="t-section">
+            Steam
+          </h2>
+          <p
+            data-testid="launch-steam-status"
+            aria-live="polite"
+            className="t-meta mt-1 flex items-center gap-2"
+          >
+            {retrying ? (
+              <Spinner size={16} />
+            ) : retryFailed || steamState === "write-failed" ? (
+              <WarningCircle size={16} className="shrink-0 text-warn" aria-hidden="true" />
+            ) : steamState === "in-steam" ? (
+              <CheckCircle size={16} className="shrink-0 text-ok" weight="fill" />
+            ) : (
+              <Info size={16} aria-hidden="true" className="shrink-0" />
             )}
-          </div>
+            {retrying
+              ? "Checking whether Steam can be updated…"
+              : retryFailed
+                ? "Could not confirm the Steam update. Try again, or paste the options into Steam yourself."
+                : launchSteamCopy(steamState, running)}
+          </p>
+          {steamDiffers ? (
+            <dl data-testid="launch-steam-compare" className="launch-compare surface mt-3">
+              <div>
+                <dt>This profile</dt>
+                <dd>{saved || "No launch options"}</dd>
+              </div>
+              <div>
+                <dt>Steam now</dt>
+                <dd>{steamSync?.steamOptions || "No launch options"}</dd>
+              </div>
+            </dl>
+          ) : null}
+          {steamSettled && !retryFailed && !steamDiffers ? null : (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {steamSettled && !retryFailed ? null : (
+                <button
+                  type="button"
+                  data-testid="launch-steam-retry"
+                  disabled={running || busy || retrying || value !== saved || composerPending}
+                  title={
+                    running
+                      ? "Available after TF2 closes."
+                      : composerPending
+                        ? "Add or cancel the option first."
+                        : value !== saved
+                          ? "Wait for the profile save to finish."
+                          : steamOpen
+                            ? "execs writes Steam's options only while Steam is closed. Close Steam, then check again."
+                            : "Review the current Steam options before replacing them."
+                  }
+                  onClick={() => {
+                    // With Steam open nothing can be written: only re-read its state.
+                    if (onWriteSteam && steamSync && !steamOpen) setSteamReview(steamSync);
+                    else void retrySteamWrite();
+                  }}
+                  className={`btn shrink-0 ${steamOpen || retryFailed ? "btn-ghost" : "btn-primary"}`}
+                >
+                  {retrying ? (
+                    <Loading>Checking Steam…</Loading>
+                  ) : steamOpen ? (
+                    "Check again"
+                  ) : retryFailed || steamState === "write-failed" ? (
+                    "Try again"
+                  ) : (
+                    "Use this profile's options"
+                  )}
+                </button>
+              )}
+              {onAdoptSteam &&
+              steamSync?.reviewToken &&
+              !steamSync.inSync &&
+              steamSync.steamOptions !== null ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  data-testid="launch-steam-adopt"
+                  disabled={running || busy || retrying || value !== saved || composerPending}
+                  onClick={() => {
+                    const token = steamSync.reviewToken;
+                    if (token) void onAdoptSteam(token);
+                  }}
+                >
+                  Use Steam's options
+                </button>
+              ) : null}
+            </div>
+          )}
         </section>
         {steamState === "steam-open" ||
         steamState === "write-failed" ||

@@ -1,6 +1,5 @@
 import { BookmarkSimple, X } from "@phosphor-icons/react";
 import { useMemo, useRef, useState } from "react";
-import { Caret } from "./components/ui/Caret";
 import { Segmented } from "./components/ui/Segmented";
 import type { InventorySnapshot } from "./lib/bridge";
 import {
@@ -380,13 +379,15 @@ function AccountInventoryPolish({
                   </time>
                 </div>
                 <p className="t-meta break-words">{operation.summary}</p>
-                <details className="fold t-meta">
-                  <summary className="cursor-pointer text-ink-faint hover:text-ink">
-                    <Caret fold />
-                    {operation.itemIds.length} item identities
-                  </summary>
-                  <p className="mt-1 break-all">{operation.itemIds.join(", ") || "None"}</p>
-                </details>
+                {operation.itemIds.length ? (
+                  <p
+                    className="t-meta line-clamp-2 break-all text-ink-faint"
+                    title={operation.itemIds.join(", ")}
+                  >
+                    {operation.itemIds.length === 1 ? "Item" : `${operation.itemIds.length} items`}:{" "}
+                    {operation.itemIds.join(", ")}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ol>

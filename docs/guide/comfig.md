@@ -25,11 +25,15 @@ The addon names say what they do. The less obvious ones:
 
 ## Modules
 
-**Fine-tune modules** lists every mastercomfig module. **Use preset** inherits the preset's value; **Module default** writes mastercomfig's own default for that module even when the preset would set something else.
+The **Modules** tab lists every mastercomfig module, grouped into Networking, Graphics, HUD and Sound. Search by name, or show one group or only the modules you changed. **Use preset** inherits the preset's value; **Module default** writes mastercomfig's own default for that module even when the preset would set something else.
 
 ## Updates
 
-**Update packages** downloads the current mastercomfig release for this profile only. Other profiles keep the version they have until you update them too.
+**Packages** shows this profile's mastercomfig release. When a newer one is out, **Update to** that version downloads it for this profile only; other profiles keep the version they have until you update them too. **Check again** looks for a new release.
+
+## comfig-custom folder
+
+The [comfig.app](https://comfig.app/app/) customizer saves extra settings as a `comfig-custom` folder. **Open comfig.app** opens it, and **Add folder…** copies that folder into this profile.
 
 ## Profiles without mastercomfig
 

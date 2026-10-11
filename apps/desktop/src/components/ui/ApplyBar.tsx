@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 
 /**
- * The sticky "status text + primary action" footer every editing pane ends
- * with. Disabled while the profile is locked or nothing changed. A sticky bar
- * keeps its place in normal flow, so no second copy of its height is needed.
+ * The sticky bar a pane shows while it holds changes that are not in TF2 yet
+ * (the panes that write packs rather than autosave): the orange change dot,
+ * one line saying what is waiting, and the action that applies it. Discard
+ * and other secondary actions sit before it. A sticky bar keeps its place in
+ * normal flow, so no second copy of its height is needed.
  */
 export function ApplyBar({
   status,
@@ -33,8 +35,9 @@ export function ApplyBar({
 }) {
   return (
     <div className="apply-bar">
-      <p className="t-meta min-w-0" aria-live="polite">
-        {status}
+      <p className="apply-bar-status min-w-0" aria-live="polite">
+        {dirty ? <span aria-hidden="true" className="apply-bar-dot" /> : null}
+        <span className="min-w-0">{status}</span>
       </p>
       <div className="pane-actions">
         {extra}

@@ -29,6 +29,10 @@ execs keeps Steam's local copy of `config.cfg` up to date; Steam uploads it when
 
 **Copy diagnostics** copies a short report for a bug report. It includes your install path and active profile name, and never your file contents or passwords.
 
+## Credits
+
+The community projects execs builds on. **Read full notices** opens every credit and licence.
+
 ## Uninstall
 
 Uninstalling execs leaves your TF2 setup as it is: cfg files, HUD and custom files stay in TF2.

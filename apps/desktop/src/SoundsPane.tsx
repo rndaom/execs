@@ -14,7 +14,6 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CopySettings, type CopySettingsSource } from "./components/CopySettings";
-import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { Loading, Spinner } from "./components/ui/Spinner";
@@ -99,11 +98,12 @@ const TARGET_OPTIONS: { id: HitsoundKind; label: string }[] = [
 const ROLE_NOUNS: Record<HitsoundKind, string> = { hit: "hits", kill: "kills" };
 
 /**
- * The Sounds pane: a hit sound and a kill sound, each an on/off, the chosen
- * sound with a play button, and a volume; pitch-by-damage and the repeat
- * delay fold under Advanced. Below sits the library of built-in effects and
- * user-picked WAVs, always choosing for one slot at a time. Files go into the profile's sound pack; the cvars ride the
- * same managed gameplay cfg the Crosshair pane writes.
+ * The Sounds pane: a hit sound and a kill sound side by side, each with an
+ * on/off, the chosen sound with a play button, volume, boost and pitch by
+ * damage (the hit sound also its repeat delay). Below sits the library of
+ * built-in effects and user-picked WAVs, always choosing for one slot at a
+ * time. Files go into the profile's sound pack; the cvars ride the same
+ * managed gameplay cfg the Crosshair pane writes.
  */
 export function SoundsPane({
   api,
@@ -468,6 +468,8 @@ export function SoundsPane({
             playing={player.playing}
             onPlay={(choice) => toggle(kind, choice)}
             onChange={(update) => patchSlot(kind, update)}
+            repeatDelay={kind === "hit" ? draft.repeatDelay : undefined}
+            onRepeatDelay={(repeatDelay) => setDraft((current) => ({ ...current, repeatDelay }))}
             onBrowse={() => {
               setTarget(kind);
               searchRef.current?.focus();
@@ -476,6 +478,24 @@ export function SoundsPane({
           />
         ))}
       </div>
+
+      {record ? (
+        <div
+          data-testid="sounds-files"
+          className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4"
+        >
+          <p className="t-meta min-w-0">Your own sound files are saved in this profile.</p>
+          <button
+            type="button"
+            data-testid="sounds-remove"
+            disabled={removeLocked}
+            onClick={onRemove}
+            className="btn btn-ghost"
+          >
+            <Trash size={14} aria-hidden="true" /> Remove sound files
+          </button>
+        </div>
+      ) : null}
 
       {dormantSounds.length ? (
         <section data-testid="sounds-saved-inactive" className="pane-note mt-4">
@@ -575,57 +595,6 @@ export function SoundsPane({
         </p>
       ) : null}
 
-      <section className="mt-4">
-        <Disclosure
-          profileId={profileId}
-          storageKey="sounds-advanced"
-          summary="Pitch and repeat timing"
-          testId="sounds-advanced"
-        >
-          <div className="pane-split mt-3 gap-y-4">
-            {(["hit", "kill"] as const).map((kind) => (
-              <fieldset key={kind} className="min-w-0">
-                <legend className="eyebrow mb-3">{SLOT_TITLES[kind]} pitch</legend>
-                <Slider
-                  id={`sounds-${kind}-pitch-min`}
-                  label="Pitch at 10 damage"
-                  hint="100 is normal."
-                  value={draft[kind].pitchMin}
-                  min={PITCH_MIN}
-                  max={PITCH_MAX}
-                  disabled={locked}
-                  onChange={(pitchMin) => patchSlot(kind, { pitchMin })}
-                />
-                <Slider
-                  id={`sounds-${kind}-pitch-max`}
-                  label="Pitch at 150 damage"
-                  value={draft[kind].pitchMax}
-                  min={PITCH_MIN}
-                  max={PITCH_MAX}
-                  disabled={locked}
-                  onChange={(pitchMax) => patchSlot(kind, { pitchMax })}
-                />
-              </fieldset>
-            ))}
-            <div className="min-w-0">
-              <Slider
-                id="sounds-repeat-delay"
-                label="Hit sound repeat delay"
-                hint="0 plays every hit."
-                value={Math.round(draft.repeatDelay * 100)}
-                min={0}
-                max={100}
-                disabled={locked}
-                format={(value) => `${(value / 100).toFixed(2)} s`}
-                onChange={(value) =>
-                  setDraft((current) => ({ ...current, repeatDelay: value / 100 }))
-                }
-              />
-            </div>
-          </div>
-        </Disclosure>
-      </section>
-
       <section
         id="sound-library"
         className="mt-5 scroll-mt-4 border-t border-edge pt-3"
@@ -656,17 +625,6 @@ export function SoundsPane({
               {picking ? <Spinner size={14} /> : <UploadSimple size={14} />}
               {picking ? "Reading…" : "Add a sound file…"}
             </button>
-            {record ? (
-              <button
-                type="button"
-                data-testid="sounds-remove"
-                disabled={removeLocked}
-                onClick={onRemove}
-                className="btn btn-ghost"
-              >
-                <Trash size={14} /> Remove sound files
-              </button>
-            ) : null}
           </div>
         </div>
         {pickError ? (
@@ -1050,6 +1008,8 @@ function SoundSlot({
   onPlay,
   onChange,
   onBrowse,
+  repeatDelay,
+  onRepeatDelay,
 }: {
   kind: HitsoundKind;
   slot: SlotDraft;
@@ -1059,6 +1019,9 @@ function SoundSlot({
   onPlay: (choice: SoundChoice) => void;
   onChange: (update: Partial<SlotDraft>) => void;
   onBrowse: () => void;
+  /** Hit sounds only: seconds before the next hit can play the sound again. */
+  repeatDelay?: number;
+  onRepeatDelay: (seconds: number) => void;
 }) {
   const title = SLOT_TITLES[kind];
   const key = soundKey(pickForChoice(kind, slot.choice));
@@ -1112,6 +1075,7 @@ function SoundSlot({
           id={`sounds-${kind}-volume`}
           label="Volume"
           accessibleLabel={`${title} volume`}
+          wideLabel
           value={slot.volume}
           min={0}
           max={100}
@@ -1143,6 +1107,46 @@ function SoundSlot({
           value={slot.choice.kind === "stock" ? "0" : (String(slot.boost) as "0" | "6" | "12")}
           onChange={(id) => onChange({ boost: Number(id) as BoostDb })}
         />
+      </div>
+      <div className="mt-2 border-t border-edge pt-1">
+        <Slider
+          id={`sounds-${kind}-pitch-min`}
+          label="Pitch at 10 damage"
+          accessibleLabel={`${title} pitch at 10 damage`}
+          hint="100 is normal."
+          wideLabel
+          value={slot.pitchMin}
+          min={PITCH_MIN}
+          max={PITCH_MAX}
+          disabled={locked}
+          onChange={(pitchMin) => onChange({ pitchMin })}
+        />
+        <Slider
+          id={`sounds-${kind}-pitch-max`}
+          label="Pitch at 150 damage"
+          accessibleLabel={`${title} pitch at 150 damage`}
+          wideLabel
+          value={slot.pitchMax}
+          min={PITCH_MIN}
+          max={PITCH_MAX}
+          disabled={locked}
+          onChange={(pitchMax) => onChange({ pitchMax })}
+        />
+        {repeatDelay === undefined ? null : (
+          <Slider
+            id="sounds-repeat-delay"
+            label="Repeat delay"
+            accessibleLabel="Hit sound repeat delay"
+            hint="0 plays every hit."
+            wideLabel
+            value={Math.round(repeatDelay * 100)}
+            min={0}
+            max={100}
+            disabled={locked}
+            format={(value) => `${(value / 100).toFixed(2)} s`}
+            onChange={(value) => onRepeatDelay(value / 100)}
+          />
+        )}
       </div>
     </section>
   );
@@ -1226,12 +1230,15 @@ function Slider({
   max,
   disabled,
   format,
+  wideLabel = false,
   onChange,
 }: {
   id: string;
   label: string;
   accessibleLabel?: string;
   hint?: string;
+  /** Lines the track up under longer labels in the same column. */
+  wideLabel?: boolean;
   value: number;
   min: number;
   max: number;
@@ -1241,7 +1248,13 @@ function Slider({
 }) {
   return (
     <div className="min-w-0 py-2">
-      <div className="grid min-h-8 grid-cols-[minmax(5rem,auto)_minmax(0,1fr)_3rem] items-center gap-3">
+      <div
+        className={`grid min-h-8 items-center gap-3 ${
+          wideLabel
+            ? "grid-cols-[8.75rem_minmax(0,1fr)_3.5rem]"
+            : "grid-cols-[minmax(5rem,auto)_minmax(0,1fr)_3rem]"
+        }`}
+      >
         <label htmlFor={id} className="t-row">
           {label}
         </label>

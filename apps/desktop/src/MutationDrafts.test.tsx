@@ -306,10 +306,7 @@ describe("sound acknowledgements through the real host", () => {
       await elapsed();
       expect(api.applyHitsoundsWithSettings).toHaveBeenCalledTimes(1);
       if (field === "volume") await input("#sounds-hit-volume", "40");
-      if (field === "pitch") {
-        await click('[data-testid="sounds-advanced"] summary');
-        await input("#sounds-hit-pitch-min", "80");
-      }
+      if (field === "pitch") await input("#sounds-hit-pitch-min", "80");
       if (field === "boost") await click('[data-testid="sounds-hit-boost-12"]');
       if (field === "source") {
         await click('[data-testid="sounds-choose-file"]');

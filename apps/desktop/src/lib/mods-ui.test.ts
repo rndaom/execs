@@ -213,13 +213,15 @@ describe("mods apply gating", () => {
     // The stale notice tells the user to re-apply; the button has to agree.
     expect(selectionDirty(stale, INSTALLED)).toBe(false);
     expect(modsApplyEnabled(stale, INSTALLED)).toBe(true);
-    expect(modsStatusLine(stale, INSTALLED, false)).toContain("TF2 updated");
+    expect(modsStatusLine(stale, INSTALLED)).toContain("TF2 updated");
   });
 
   it("routes an interrupted transaction through the dedicated recovery action", () => {
     const recovering = { ...status, recoveryRequired: true };
     expect(modsApplyEnabled(recovering, { ...INSTALLED, addons: [] })).toBe(false);
-    expect(modsStatusLine(recovering, INSTALLED, false)).toBe("Finish interrupted recovery first");
+    expect(modsStatusLine(recovering, INSTALLED)).toBe(
+      "Finish the interrupted recovery before applying.",
+    );
   });
 
   it("requires the cached library only when selecting its content", () => {
@@ -227,7 +229,9 @@ describe("mods apply gating", () => {
     expect(modsApplyEnabled(uncached, selection())).toBe(true);
     const directFlat = selection({ addons: [DIRECT_FLAT_TEXTURES_ID] });
     expect(modsApplyEnabled(uncached, directFlat)).toBe(true);
-    expect(modsStatusLine(uncached, directFlat, false)).toBe("Unsaved changes");
+    expect(modsStatusLine(uncached, directFlat)).toBe(
+      "Your Casual setup changes aren't in TF2 yet.",
+    );
     const directDeveloper = selection({ addons: [DIRECT_DEVELOPER_TEXTURES_ID] });
     expect(modsApplyEnabled(uncached, directDeveloper)).toBe(true);
     expect(modsApplyEnabled(uncached, selection({ addons: [DIRECT_BURNING_OVERLAY_ID] }))).toBe(
@@ -257,15 +261,24 @@ describe("mods apply gating", () => {
     ).toBe(false);
     expect(modsApplyEnabled(uncached, INSTALLED)).toBe(false);
     expect(modsApplyEnabled(null, selection())).toBe(false);
-    expect(modsStatusLine(uncached, INSTALLED, false)).toContain("restore the verified cache");
-    expect(modsStatusLine(uncached, selection(), false)).toBe("Unsaved changes");
+    expect(modsStatusLine(uncached, INSTALLED)).toContain("needs its original download");
+    expect(modsStatusLine(uncached, selection())).toBe(
+      "Your Casual setup changes aren't in TF2 yet.",
+    );
   });
 
-  it("says the draft is kept before anything else", () => {
-    // The same three lines every pane with a button now uses.
-    expect(modsStatusLine(stale, INSTALLED, true)).toBe("Draft kept until TF2 closes");
-    expect(modsStatusLine(status, INSTALLED, false)).toBe("Up to date");
-    expect(modsStatusLine(status, selection(), false)).toBe("Unsaved changes");
+  it("says what is waiting for TF2, and that applying turns Preload on when it is off", () => {
+    // The apply bar's line, worded like the Crosshair and Viewmodels bars.
+    expect(modsStatusLine(status, INSTALLED)).toBe("Up to date");
+    expect(modsStatusLine(status, selection())).toBe(
+      "Your Casual setup changes aren't in TF2 yet.",
+    );
+    expect(modsStatusLine(status, selection(), true)).toBe(
+      "Your Casual setup changes aren't in TF2 yet. Applying turns Preload on.",
+    );
+    expect(modsStatusLine(stale, INSTALLED)).toBe(
+      "TF2 updated, so your Casual setup needs applying again.",
+    );
   });
 });
 

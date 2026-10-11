@@ -31,7 +31,6 @@ import {
 import { GameBananaCard, type GameBananaInstallState } from "./GameBananaCard";
 import { GameBananaPagination } from "./GameBananaPagination";
 import { Alert } from "./ui/Alert";
-import { Caret } from "./ui/Caret";
 import { Modal } from "./ui/Modal";
 import { OptionTile } from "./ui/OptionTile";
 import { Segmented } from "./ui/Segmented";
@@ -393,15 +392,6 @@ export function GameBananaBrowser({
               />
             ) : null}
           </div>
-          {scopeNote ? (
-            <details className="fold t-meta mt-2">
-              <summary className="w-fit cursor-pointer text-ink-muted hover:text-ink">
-                <Caret fold />
-                About these results
-              </summary>
-              <p className="mt-1 max-w-[76ch]">{scopeNote}</p>
-            </details>
-          ) : null}
         </div>
       ) : null}
 
@@ -415,6 +405,7 @@ export function GameBananaBrowser({
                 ? "Nothing to show on this page."
                 : "No mods match that search."}
           </p>
+          {scopeNote ? <p className="t-meta mt-1">{scopeNote}</p> : null}
           <button
             type="button"
             className="btn btn-ghost mt-4"

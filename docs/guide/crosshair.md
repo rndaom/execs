@@ -4,7 +4,9 @@
 
 **TF2's own crosshairs** apply as soon as you pick them; they are just the `cl_crosshair_file` setting. Size and colour save on their own.
 
-**Anything else** (execs shapes, your designs, imported PNGs and VTFs) or **a different crosshair for some weapons** needs the custom pack. **Build crosshair pack** writes a small pack to `tf/custom/execs-crosshairs` from your own copy of TF2's weapon scripts; no Valve art is copied. **Switch to TF2's crosshair** turns the pack off and keeps your custom crosshairs saved.
+**Anything else** (execs shapes, your designs, imported PNGs and VTFs) or **a different crosshair for some weapons** needs the custom crosshair pack, so it waits for you: a bar at the bottom of the page says your changes aren't in TF2 yet. **Apply changes** writes a small pack to `tf/custom/execs-crosshairs` from your own copy of TF2's weapon scripts; no Valve art is copied. **Discard changes** puts back what TF2 has. Picking one of TF2's crosshairs again and applying turns the pack off and keeps your custom crosshairs saved.
+
+**Crosshair pack**, at the bottom of the page, says whether the pack is on. **Remove pack…** deletes it with every design and image saved in it.
 
 Custom crosshairs usually work on Valve Casual servers.
 
@@ -22,8 +24,8 @@ Imported PNGs larger than 64 × 64 are fitted into 64 × 64, keeping their shape
 
 ## Messages you may see
 
-- **This pack was changed outside execs**: its pictures may not match what TF2 draws. Rebuild it, or remove it from the ⋯ menu.
-- **TF2's weapon scripts changed**: a TF2 update changed them. Rebuild to pick up the update. An older pack without a recorded script version asks you to rebuild once to check it.
+- **Your crosshair pack was changed outside execs**: its pictures may not match what TF2 draws. **Repair pack** writes it again, or remove it at the bottom of the page.
+- **TF2 updated its weapon files**: **Update pack** writes the pack again from the new files. An older pack without a recorded script version asks you to update it once to check it.
 - **Another pack also replaces a crosshair image**: TF2 may show that pack's art instead of the picture in execs.
 - **A HUD's crosshair overlay**: it draws on top of the crosshair here; turn it off in the HUD's options.
 

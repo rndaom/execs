@@ -94,23 +94,18 @@ describe("Viewmodels in-game settings", () => {
     expect(save).not.toHaveBeenCalled();
   });
 
-  it("reuses the Comfig addon with its real prerequisites and a route to Comfig", async () => {
+  it("reuses the Comfig addon with its real prerequisites, switched right here", async () => {
     const toggle = vi.fn();
-    const onOpenComfig = vi.fn();
     await render({
       transparentViewmodels: true,
       onToggleTransparentViewmodels: toggle,
-      onOpenComfig,
     });
     expect(control("viewmodel-transparent").getAttribute("aria-checked")).toBe("true");
     expect(box.textContent).toContain(OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]);
     await act(async () => control("viewmodel-transparent").click());
     expect(toggle).toHaveBeenCalledOnce();
-    const open = [...box.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === "Open Comfig addons",
-    );
-    await act(async () => open?.click());
-    expect(onOpenComfig).toHaveBeenCalledOnce();
+    // The switch is the control; no second button sends the player to Comfig for it.
+    expect(box.querySelectorAll("button.btn")).toHaveLength(0);
   });
 
   it("offers the addon only to Comfig profiles and waits for a complete cfg read", async () => {

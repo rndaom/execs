@@ -1,17 +1,12 @@
-import { ArrowClockwise } from "@phosphor-icons/react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Caret } from "./components/ui/Caret";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ApplyBar } from "./components/ui/ApplyBar";
+import { ChoiceMatrixHead, ChoiceMatrixRow } from "./components/ui/ChoiceMatrix";
 import { ClassIcon } from "./components/ui/ClassIcon";
 import { ClassTabs } from "./components/ui/ClassTabs";
-import {
-  ContextMenu,
-  ContextMenuItem,
-  type ContextMenuPosition,
-} from "./components/ui/ContextMenu";
-import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { Segmented } from "./components/ui/Segmented";
-import { Loading, Spinner } from "./components/ui/Spinner";
+import { Loading } from "./components/ui/Spinner";
 import { useExplicitDraft } from "./hooks/useExplicitDraft";
 import { draftRecordKey, useSeededDraft } from "./hooks/useSeededDraft";
 import type {
@@ -93,11 +88,6 @@ const MODE_OPTIONS: { id: "shown" | ViewmodelHideMode; label: string; title: str
   { id: "weapon", label: "Hands only", title: "Hide the weapon and keep the hands" },
 ];
 
-const INSPECT_OPTIONS: { id: "shown" | "full"; label: string; title: string }[] = [
-  { id: "shown", label: "Shown", title: "Keep inspect animations" },
-  { id: "full", label: "Hidden", title: "Hide the hands and weapon while inspecting" },
-];
-
 const PRESET_OPTIONS: { id: ViewmodelPreset; label: string }[] = (
   ["show-all", "hide-all", "keep-melee"] as const
 ).map((id) => ({ id, label: VIEWMODEL_PRESET_LABELS[id] }));
@@ -107,10 +97,6 @@ const HIDE_OPTIONS = MODE_OPTIONS.filter(
     option.id !== "shown",
 );
 
-function choiceLabel(mode: ViewmodelHideMode | "shown"): string {
-  return MODE_OPTIONS.find((option) => option.id === mode)?.label ?? mode;
-}
-
 /** Per-class viewmodel choices built from the player's installed TF2 files. */
 export function ViewmodelBuilder({
   active,
@@ -118,12 +104,24 @@ export function ViewmodelBuilder({
   profilePreload,
   savedRecipe,
   locked = false,
+  running = false,
+  barSlot = null,
   loadCatalog,
   onBuild,
+  onRemovePack,
 }: {
   active: boolean;
-  /** Remembers whether Customize weapons is open, per profile. */
+  /** Keys the unbuilt draft to the profile. */
   profileId?: string | null;
+  /** TF2 is running, so applying waits for it to close. */
+  running?: boolean;
+  /**
+   * Where the pane keeps its apply bar: the end of the whole pane, so the bar
+   * stays in view from the first section to the last.
+   */
+  barSlot?: HTMLElement | null;
+  /** Applying "everything shown" over a built pack removes it. */
+  onRemovePack?: () => void;
   loadCatalog: () => Promise<ViewmodelSourceCatalog>;
   profilePreload: boolean | null;
   /** The saved locally built recipe, used to show its choices when the sources still match. */
@@ -305,12 +303,13 @@ export function ViewmodelBuilder({
           profileId={profileId}
           editable={editable}
           active={active}
-          busy={busy}
           profilePreload={profilePreload}
           savedRecipe={savedRecipe}
           locked={locked}
+          running={running}
+          barSlot={barSlot}
           onBuild={onBuild}
-          onRefresh={() => refreshCatalog()}
+          onRemovePack={onRemovePack}
           onPendingChange={reportDraft}
         />
       ) : null}
@@ -364,24 +363,26 @@ function ViewmodelCatalogChoices({
   profileId,
   editable,
   active,
-  busy,
   profilePreload,
   savedRecipe,
   locked,
+  running,
+  barSlot,
   onBuild,
-  onRefresh,
+  onRemovePack,
   onPendingChange,
 }: {
   catalog: ViewmodelSourceCatalog;
   profileId: string | null;
   editable: boolean;
   active: boolean;
-  busy: boolean;
   profilePreload: boolean | null;
   savedRecipe?: ViewmodelBuildRecipe;
   locked: boolean;
+  running: boolean;
+  barSlot: HTMLElement | null;
   onBuild: (request: ViewmodelBuildRequest) => Promise<boolean>;
-  onRefresh: () => void;
+  onRemovePack?: () => void;
   onPendingChange: (pending: boolean) => void;
 }) {
   const classes = viewmodelClasses(catalog);
@@ -402,7 +403,6 @@ function ViewmodelCatalogChoices({
     serializeChoices,
     draftRecordKey(profileId, "viewmodel-builder"),
   );
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
   const [preset, setPreset] = useState<ViewmodelPreset>("keep-melee");
   const [presetMode, setPresetMode] = useState<ViewmodelHideMode>("full");
@@ -428,12 +428,12 @@ function ViewmodelCatalogChoices({
     reviewRequest !== null &&
     selected.length > 0 &&
     conflicts.size === 0;
+  // Showing everything again over a built pack means the pack goes.
+  const removesPack =
+    changed && selected.length === 0 && Object.keys(saved).length > 0 && Boolean(onRemovePack);
 
   useEffect(() => {
-    if (!active || !editable) {
-      setReviewOpen(false);
-      setPresetOpen(false);
-    }
+    if (!active || !editable) setPresetOpen(false);
   }, [active, editable]);
 
   const proposed = presetOpen ? viewmodelPresetChoices(catalog, preset, presetMode) : null;
@@ -459,7 +459,6 @@ function ViewmodelCatalogChoices({
     try {
       if (await onBuild(reviewRequest)) {
         setBaseline((current) => ({ ...current, choices: sent }));
-        setReviewOpen(false);
       }
     } catch {
       // The host reports failures. Keep the exact draft available for retry.
@@ -472,7 +471,7 @@ function ViewmodelCatalogChoices({
   const hiddenRows = classes.flatMap((name) =>
     (rowsByClass.get(name) ?? []).filter((row) => viewmodelRowChoice(choices, row) !== "shown"),
   );
-  // Review and the class tabs read per class, the way the choices are made.
+  // The summary and the class tabs read per class, the way the choices are made.
   const summaries = classes.flatMap((name) => {
     const classLayout = layouts.get(name);
     const summary = classLayout ? viewmodelClassSummary(choices, classLayout) : null;
@@ -521,32 +520,20 @@ function ViewmodelCatalogChoices({
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              data-testid="viewmodel-catalog-refresh"
-              className="btn btn-ghost"
-              title="Reread your TF2 files"
-              aria-label="Reread your TF2 files"
-              disabled={!active || busy}
-              aria-busy={busy || undefined}
-              onClick={onRefresh}
-            >
-              {busy ? <Spinner size={15} /> : <ArrowClockwise size={15} />}
-            </button>
-            <button
-              type="button"
               data-testid="viewmodel-presets"
               className="btn btn-ghost whitespace-nowrap"
               disabled={!editable}
               onClick={() => setPresetOpen(true)}
             >
-              Every class…
+              Set every class…
             </button>
             <p
               className="t-meta ml-2 min-w-0 flex-1 whitespace-nowrap"
               data-testid="viewmodel-choice-summary"
             >
               {hiddenRows.length
-                ? `${summaries.length} ${summaries.length === 1 ? "class" : "classes"} changed${changed ? " · not built yet" : ""}`
-                : `Everything shown${changed ? " · not built yet" : ""}`}
+                ? `${summaries.length} ${summaries.length === 1 ? "class" : "classes"} changed`
+                : "Everything shown"}
             </p>
             {undo ? (
               <button
@@ -562,40 +549,7 @@ function ViewmodelCatalogChoices({
                 Undo
               </button>
             ) : null}
-            <button
-              type="button"
-              data-testid="viewmodel-review-build"
-              className="btn btn-primary whitespace-nowrap"
-              disabled={!editable || reviewRequest === null || selected.length === 0}
-              onClick={() => setReviewOpen(true)}
-            >
-              Review and build
-            </button>
           </div>
-
-          {changed ? (
-            <div className="pane-note mb-4" data-testid="viewmodel-draft-notice">
-              <p>
-                {selected.length === 0 && Object.keys(saved).length > 0
-                  ? "To show every weapon, remove the saved pack below."
-                  : outdated
-                    ? "Your built pack is out of date. Build again to update it."
-                    : "Not built yet."}
-              </p>
-              <button
-                type="button"
-                data-testid="viewmodel-discard-draft"
-                className="btn btn-ghost mt-2"
-                disabled={building || locked}
-                onClick={() => {
-                  setChoices(saved);
-                  setUndo(null);
-                }}
-              >
-                Discard choices
-              </button>
-            </div>
-          ) : null}
 
           {layout ? (
             <ViewmodelClassChoices
@@ -605,7 +559,6 @@ function ViewmodelCatalogChoices({
               layout={layout}
               choices={choices}
               editable={editable}
-              profileId={profileId}
               onEdit={edit}
             />
           ) : null}
@@ -614,7 +567,7 @@ function ViewmodelCatalogChoices({
 
       <Modal
         open={presetOpen && active && editable}
-        title="Change every class"
+        title="Set every class"
         testId="viewmodel-preset-review"
         className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
         onClose={() => setPresetOpen(false)}
@@ -662,7 +615,7 @@ function ViewmodelCatalogChoices({
         ) : null}
         {proposedConflicts ? (
           <p role="alert" className="t-meta mt-3 text-warn">
-            Some weapons share animations with a melee weapon. Make them match before building.
+            Some weapons share animations with a melee weapon. Make them match before applying.
           </p>
         ) : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -676,77 +629,72 @@ function ViewmodelCatalogChoices({
             className="btn btn-primary"
             onClick={applyPreset}
           >
-            Apply to draft
+            Set every class
           </button>
         </div>
       </Modal>
 
-      <Modal
-        open={reviewOpen && active && editable}
-        title="Build viewmodels"
-        testId="viewmodel-build-review"
-        className="fixed top-1/2 left-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[min(520px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
-        onClose={() => {
-          if (!building) setReviewOpen(false);
-        }}
-      >
-        <ul className="mt-4 grid max-h-64 gap-1.5 overflow-y-auto">
-          {summaries.map(({ name, summary }) => (
-            <li key={name} className="flex justify-between gap-3 t-meta">
-              <span className="text-ink">{viewmodelClassLabel(name)}</span>
-              <span className="text-right">{summary}</span>
-            </li>
-          ))}
-        </ul>
-        {conflicts.size ? (
-          <p role="alert" className="t-meta mt-3 text-warn">
-            Some choices share animations but are set differently. Make them match to build.
-          </p>
-        ) : null}
-        <p role="status" data-testid="viewmodel-build-progress" className="t-meta mt-3">
-          {building ? (
-            <Loading>Building from your TF2 files…</Loading>
-          ) : locked ? (
-            "Close TF2 before building."
-          ) : null}
-        </p>
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={building}
-            onClick={() => setReviewOpen(false)}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            data-testid="viewmodel-build"
-            disabled={!canBuild}
-            className="btn btn-primary"
-            onClick={() => void build()}
-          >
-            {building ? <Loading>Building…</Loading> : "Build pack"}
-          </button>
-        </div>
-      </Modal>
+      {barSlot && (changed || building)
+        ? createPortal(
+            <ApplyBar
+              testId="viewmodel-build"
+              status={
+                <span data-testid="viewmodel-build-progress">
+                  {building ? (
+                    <Loading>Applying… building from your TF2 files.</Loading>
+                  ) : conflicts.size ? (
+                    "Weapons that share animations must match before you apply."
+                  ) : removesPack ? (
+                    "Everything is shown again. Applying removes your viewmodel pack."
+                  ) : outdated ? (
+                    "Your built pack is out of date. Apply to update it."
+                  ) : (
+                    "Your viewmodel changes aren't in TF2 yet."
+                  )}
+                </span>
+              }
+              actionLabel={building ? "Applying…" : "Apply changes"}
+              lockedLabel="Close TF2 to apply"
+              running={running}
+              locked={removesPack ? locked || building || !editable : !canBuild}
+              dirty
+              extra={
+                <button
+                  type="button"
+                  data-testid="viewmodel-discard-draft"
+                  className="btn btn-ghost"
+                  disabled={building || locked}
+                  onClick={() => {
+                    setChoices(saved);
+                    setUndo(null);
+                  }}
+                >
+                  Discard changes
+                </button>
+              }
+              onApply={() => {
+                if (removesPack) onRemovePack?.();
+                else void build();
+              }}
+            />,
+            barSlot,
+          )
+        : null}
     </div>
   );
 }
 
-function slotWeaponNames(rows: ViewmodelRow[]): string {
-  const names = rows.map(viewmodelRowLabel);
-  return names.length > 4 ? `${names.slice(0, 4).join(", ")} and more` : names.join(", ");
-}
-
-/** One class: a line per slot, one for inspect animations, and per-weapon exceptions folded away. */
+/**
+ * One class as a table: a row per slot with its weapons listed beneath it,
+ * then inspect animations and weapons outside the slots. Each row is one
+ * choice under shared Shown / Hidden / Hands only columns.
+ */
 function ViewmodelClassChoices({
   catalog,
   className,
   layout,
   choices,
   editable,
-  profileId,
   onEdit,
 }: {
   catalog: ViewmodelSourceCatalog;
@@ -754,85 +702,97 @@ function ViewmodelClassChoices({
   layout: ViewmodelClassLayout;
   choices: ViewmodelDraftChoices;
   editable: boolean;
-  profileId: string | null;
   onEdit: (change: (current: ViewmodelDraftChoices) => ViewmodelDraftChoices) => void;
 }) {
-  const [menu, setMenu] = useState<{
-    row: ViewmodelRow;
-    base: ViewmodelChoice;
-    position: ContextMenuPosition;
-  } | null>(null);
   const classLabel = viewmodelClassLabel(className);
   const inspect = viewmodelInspectChoice(choices, layout.inspect);
-  const exceptions = viewmodelExceptions(choices, layout);
   const conflicts = viewmodelConflictRows(catalog, choices, className);
   const partlyShown = viewmodelPartlyShownRows(catalog, choices, className);
-  const lines = [
-    ...layout.slots.map((slot) => ({
-      id: slot.id as string,
-      label: slot.label,
-      rows: slot.rows,
-      base: viewmodelSlotChoice(choices, slot.rows),
-    })),
-    ...(layout.other.length
-      ? [{ id: "other", label: "Other", rows: layout.other, base: "shown" as ViewmodelChoice }]
-      : []),
-  ];
+
+  function weaponRow(row: ViewmodelRow, base: ViewmodelChoice) {
+    const choice = viewmodelRowChoice(choices, row);
+    const names = viewmodelRowItemNames(row);
+    const label = viewmodelRowLabel(row);
+    return (
+      <ChoiceMatrixRow<ViewmodelChoice>
+        key={row.id}
+        kind="member"
+        name={`viewmodel-${row.id}`}
+        label={<span className={choice === base ? "text-ink-muted" : "text-ink"}>{label}</span>}
+        accessibleLabel={`${classLabel} ${label}`}
+        title={names.length > 1 ? names.join(", ") : undefined}
+        columns={MODE_OPTIONS}
+        value={choice}
+        neutralValue="shown"
+        disabled={!editable}
+        testId="viewmodel-weapon"
+        testIdPrefix={`viewmodel-weapon-choice-${row.id}`}
+        data={{ "group-id": row.id, choice }}
+        onChange={(mode) => onEdit((current) => viewmodelWithRows(current, [row], mode))}
+      />
+    );
+  }
 
   return (
     <div className="mt-4">
-      {layout.slots.map((slot) => (
-        <div
-          key={slot.id}
-          data-testid={`viewmodel-slot-${slot.id}`}
-          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-edge py-2.5"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="t-row">{slot.label}</p>
-            <p
-              className="t-meta truncate"
-              title={slot.rows.flatMap(viewmodelRowItemNames).join(", ")}
-            >
-              {slotWeaponNames(slot.rows)}
-            </p>
-          </div>
-          <Segmented<ViewmodelChoice>
-            label={`${classLabel} ${slot.label}`}
-            size="sm"
+      <div className="choice-matrix" data-testid="viewmodel-matrix">
+        <ChoiceMatrixHead columns={MODE_OPTIONS} />
+        {layout.slots.map((slot) => {
+          const base = viewmodelSlotChoice(choices, slot.rows);
+          const single = slot.rows.length === 1;
+          return (
+            <Fragment key={slot.id}>
+              <ChoiceMatrixRow<ViewmodelChoice>
+                kind={single ? "item" : "group"}
+                name={`viewmodel-${className}-${slot.id}`}
+                label={slot.label}
+                accessibleLabel={`${classLabel} ${slot.label}`}
+                detail={single ? viewmodelRowLabel(slot.rows[0]) : undefined}
+                title={single ? viewmodelRowItemNames(slot.rows[0]).join(", ") : undefined}
+                columns={MODE_OPTIONS}
+                value={base}
+                neutralValue="shown"
+                disabled={!editable}
+                testId={`viewmodel-slot-${slot.id}`}
+                testIdPrefix={`viewmodel-slot-choice-${slot.id}`}
+                onChange={(mode) =>
+                  onEdit((current) => viewmodelWithSlot(current, slot.rows, mode))
+                }
+              />
+              {single ? null : slot.rows.map((row) => weaponRow(row, base))}
+            </Fragment>
+          );
+        })}
+        {layout.inspect.length ? (
+          <ChoiceMatrixRow<ViewmodelChoice>
+            kind="item"
+            name={`viewmodel-${className}-inspect`}
+            label="Inspect"
+            accessibleLabel={`${classLabel} inspect`}
+            detail={inspect === "mixed" ? "Some inspect animations are hidden." : undefined}
+            columns={MODE_OPTIONS}
+            available={["shown", "full"]}
+            value={inspect === "mixed" ? null : inspect}
             neutralValue="shown"
-            options={MODE_OPTIONS}
-            value={viewmodelSlotChoice(choices, slot.rows)}
             disabled={!editable}
-            testIdPrefix={`viewmodel-slot-choice-${slot.id}`}
-            onChange={(mode) => onEdit((current) => viewmodelWithSlot(current, slot.rows, mode))}
-          />
-        </div>
-      ))}
-      {layout.inspect.length ? (
-        <div
-          data-testid="viewmodel-slot-inspect"
-          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-edge py-2.5"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="t-row">Inspect</p>
-            <p className="t-meta">
-              {inspect === "mixed" ? "Some inspect animations are hidden." : null}
-            </p>
-          </div>
-          <Segmented<"shown" | "full">
-            label={`${classLabel} inspect`}
-            size="sm"
-            neutralValue="shown"
-            options={INSPECT_OPTIONS}
-            value={inspect === "mixed" ? ("mixed" as "shown") : inspect}
-            disabled={!editable}
+            testId="viewmodel-slot-inspect"
             testIdPrefix="viewmodel-slot-choice-inspect"
             onChange={(mode) =>
               onEdit((current) => viewmodelWithRows(current, layout.inspect, mode))
             }
           />
-        </div>
-      ) : null}
+        ) : null}
+        {layout.other.length ? (
+          <>
+            <div className="choice-matrix-row choice-matrix-group">
+              <div className="choice-matrix-label">
+                <p className="t-row">Other</p>
+              </div>
+            </div>
+            {layout.other.map((row) => weaponRow(row, "shown"))}
+          </>
+        ) : null}
+      </div>
 
       {conflicts.length ? (
         <p role="alert" data-testid="viewmodel-conflict" className="t-meta mt-3 text-warn">
@@ -846,102 +806,6 @@ function ViewmodelClassChoices({
           {shownWith.map(viewmodelRowLabel).join(" and ")}.
         </p>
       ))}
-
-      <Disclosure
-        profileId={profileId}
-        storageKey="viewmodel-weapons"
-        testId="viewmodel-weapons"
-        className="mt-4"
-        summary={
-          <span className="flex min-w-0 flex-1 items-baseline justify-between gap-3">
-            <span>Customize weapons</span>
-            <span className="t-meta">
-              {exceptions.length
-                ? `${exceptions.length} set on ${exceptions.length === 1 ? "its" : "their"} own`
-                : "Every weapon follows its slot"}
-            </span>
-          </span>
-        }
-      >
-        <div className="mt-2 grid gap-2">
-          {lines.map((line) => (
-            <div
-              key={line.id}
-              data-testid={`viewmodel-weapons-${line.id}`}
-              className="flex min-w-0 items-baseline gap-3"
-            >
-              <span className="t-meta w-20 shrink-0">{line.label}</span>
-              <div className="flex min-w-0 flex-wrap gap-1.5">
-                {line.rows.map((row) => {
-                  const choice = viewmodelRowChoice(choices, row);
-                  const own = choice !== line.base;
-                  const names = viewmodelRowItemNames(row);
-                  return (
-                    <button
-                      key={row.id}
-                      type="button"
-                      data-testid="viewmodel-weapon"
-                      data-group-id={row.id}
-                      data-choice={choice}
-                      disabled={!editable}
-                      aria-haspopup="menu"
-                      aria-label={`${viewmodelRowLabel(row)}: ${choiceLabel(choice)}`}
-                      title={names.length > 1 ? names.join(", ") : undefined}
-                      onClick={(event) => {
-                        const bounds = event.currentTarget.getBoundingClientRect();
-                        setMenu({
-                          row,
-                          base: line.base,
-                          position: { x: bounds.left, y: bounds.bottom + 4 },
-                        });
-                      }}
-                      className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12.5px] transition-colors duration-150 disabled:opacity-40 ${
-                        own
-                          ? "border-brand bg-brand/10 text-ink"
-                          : "border-edge text-ink-muted hover:border-edge-strong hover:text-ink"
-                      }`}
-                    >
-                      {viewmodelRowLabel(row)}
-                      {own ? <span className="text-ink-faint">· {choiceLabel(choice)}</span> : null}
-                      <Caret />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Disclosure>
-
-      {menu ? (
-        <ContextMenu
-          label={`${viewmodelRowLabel(menu.row)} viewmodel`}
-          position={menu.position}
-          onClose={() => setMenu(null)}
-        >
-          {MODE_OPTIONS.map((option) => (
-            <ContextMenuItem
-              key={option.id}
-              checked={viewmodelRowChoice(choices, menu.row) === option.id}
-              detail={option.id === menu.base ? "Same as slot" : undefined}
-              onSelect={() => {
-                onEdit((current) => viewmodelWithRows(current, [menu.row], option.id));
-                setMenu(null);
-              }}
-            >
-              <span className="flex items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className={`size-1.5 rounded-full ${
-                    viewmodelRowChoice(choices, menu.row) === option.id ? "bg-brand" : ""
-                  }`}
-                />
-                {option.label}
-              </span>
-            </ContextMenuItem>
-          ))}
-        </ContextMenu>
-      ) : null}
     </div>
   );
 }

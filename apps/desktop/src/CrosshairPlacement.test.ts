@@ -109,7 +109,7 @@ describe("crosshair settings placement", () => {
       expect(markup).not.toContain("Install pack");
       expect(markup).not.toContain("Save crosshair");
     }
-    expect(renderCrosshair(false, 'cl_crosshair_file ""\n', true)).toContain("Custom pack on");
+    expect(renderCrosshair(false, 'cl_crosshair_file ""\n', true)).toContain("On in TF2.");
   });
 
   it("keeps the controls live while TF2 is running so a draft can be made", () => {

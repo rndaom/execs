@@ -44,7 +44,7 @@ const cases = [
   ["mods", "onImportArchive", "prepareImportModArchive", "Mod imported"],
   ["mods", "onImportFolder", "prepareImportModFolder", "Mod imported"],
   ["viewmodels", "onImport", "importViewmodels", "Pack imported"],
-  ["comfig", "onImportCustom", "importComfigCustom", "comfig-custom imported"],
+  ["comfig", "onImportCustom", "importComfigCustom", "comfig-custom folder added"],
 ] as const;
 
 beforeEach(() => {
