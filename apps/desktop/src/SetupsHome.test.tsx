@@ -107,7 +107,7 @@ function makeApi({
       if (fail) throw new Error("unreadable");
       return overviews;
     }),
-    getHudCatalog: vi.fn(async () => ({ entries: CATALOG, warning: null })),
+    getCachedHudCatalog: vi.fn(async () => ({ entries: CATALOG, warning: null })),
   } as unknown as Api;
 }
 
@@ -439,13 +439,24 @@ describe("the picture", () => {
 
   it("still lists setups when the HUD catalog cannot be read", async () => {
     const api = makeApi();
-    (api.getHudCatalog as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("offline"),
+    (api.getCachedHudCatalog as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("unreadable"),
     );
     await show({ api });
     expect(fact("hud")?.querySelector("dd")?.textContent).toBe("rayshud");
     expect(q(".setups-shot img")).toBeNull();
     expect(item("casual")).not.toBeNull();
+  });
+
+  it("uses only the saved catalog and shows HUD ids before one exists", async () => {
+    const api = makeApi();
+    (api.getCachedHudCatalog as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    const fetchCatalog = vi.fn();
+    (api as unknown as { getHudCatalog: unknown }).getHudCatalog = fetchCatalog;
+    await show({ api });
+    expect(fact("hud")?.querySelector("dd")?.textContent).toBe("rayshud");
+    expect(q(".setups-shot img")).toBeNull();
+    expect(fetchCatalog).not.toHaveBeenCalled();
   });
 });
 

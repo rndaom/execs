@@ -1100,6 +1100,11 @@ export async function getHudCatalog(refresh = false): Promise<HudCatalogPayload>
   return call<HudCatalogPayload>("get_hud_catalog", { refresh });
 }
 
+/** The catalog as last saved, without going online; null before the first fetch. */
+export async function getCachedHudCatalog(): Promise<HudCatalogPayload | null> {
+  return call<HudCatalogPayload | null>("get_cached_hud_catalog");
+}
+
 export async function getHudState(): Promise<HudStatePayload> {
   return call<HudStatePayload>("get_hud_state");
 }

@@ -106,10 +106,11 @@ export function SetupsHome({
   useEffect(() => {
     let cancelled = false;
     // Names and pictures are a nicety: without the catalog the raw HUD id shows.
+    // Only the saved copy is read, so opening execs never goes online for it.
     api
-      .getHudCatalog(false)
+      .getCachedHudCatalog()
       .then((result) => {
-        if (!cancelled) setCatalog(result.entries);
+        if (!cancelled) setCatalog(result?.entries ?? []);
       })
       .catch(() => {});
     return () => {

@@ -58,6 +58,15 @@ pub async fn get_hud_catalog(
     blocking(move || Ok(crate::hud_fetch::load_catalog_payload(refresh)?)).await
 }
 
+/// The catalog as last saved, without going online; `None` before the first
+/// fetch. Pages that only use it for names and pictures read this, so opening
+/// them neither fetches nor writes.
+#[tauri::command]
+pub async fn get_cached_hud_catalog(
+) -> Result<Option<crate::hud_fetch::HudCatalogPayload>, CommandError> {
+    blocking(|| Ok(crate::hud_fetch::load_cached_catalog_payload()?)).await
+}
+
 /// `HudUiState` plus one honest bit. When the catalog cannot be read (offline
 /// with a cold cache), a state computed against an empty catalog would have
 /// the pane say "up to date" while it knows nothing.

@@ -1091,6 +1091,9 @@ export function createPreviewApi(state: PreviewState): Api {
     async getHudCatalog() {
       return { entries: hudCatalog, warning: null };
     },
+    async getCachedHudCatalog() {
+      return { entries: hudCatalog, warning: null };
+    },
     async getHudState() {
       return { ...hudState, profileId: requireDetail().id };
     },

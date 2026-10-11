@@ -781,6 +781,7 @@ pub fn run() {
             commands::lifecycle::get_lifecycle_status,
             commands::lifecycle::install_app_update,
             commands::hud::get_hud_catalog,
+            commands::hud::get_cached_hud_catalog,
             commands::hud::get_hud_state,
             commands::hud::get_hud_ownership,
             commands::hud::select_profile_hud,
