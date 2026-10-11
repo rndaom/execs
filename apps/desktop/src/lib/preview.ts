@@ -3,6 +3,7 @@ import {
   emptyLibrary,
   previewImportedLibrary,
   previewSavedLibrary,
+  previewSavedProfile,
   previewSwitchLibrary,
 } from "./library-ui";
 import type { SettingsTab } from "./settings-ui";
@@ -17,6 +18,7 @@ export const PREVIEW_STATES = [
   "library",
   "inactive-library",
   "saved",
+  "setups",
   "absorb",
   "switch",
   "import",
@@ -70,6 +72,7 @@ const READY: PreviewState[] = [
   "library",
   "inactive-library",
   "saved",
+  "setups",
   "absorb",
   "switch",
   "import",
@@ -176,6 +179,13 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   }
   if (state === "switch") {
     return previewSwitchLibrary(ONE.path);
+  }
+  if (state === "setups") {
+    // Several profiles, so the Setups page has something to choose between.
+    const profiles = ["Main", "Casual", "Vanilla", "Comp"].map((name, index) =>
+      previewSavedProfile(name, index + 1),
+    );
+    return { ...emptyLibrary(ONE.path, true), activeProfileId: profiles[0].id, profiles };
   }
   if (state === "import") {
     return previewImportedLibrary(ONE.path);

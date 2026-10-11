@@ -1,13 +1,15 @@
+import { SquaresFour } from "@phosphor-icons/react";
 import { Component, createRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { DotBackdrop } from "./components/DotBackdrop";
 import { SETTINGS_TAB_ICONS } from "./components/ui/tabIcons";
 import { contentBlocks, revealBlocks } from "./lib/entrance";
 import { SETTINGS_TAB_GROUPS, SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 
-type WorkspaceTab = SettingsTab | "app";
+type WorkspaceTab = SettingsTab | "app" | "setups";
 
 function workspaceLabel(tab: WorkspaceTab) {
-  return tab === "app" ? "App settings" : SETTINGS_TAB_LABELS[tab];
+  if (tab === "app") return "App settings";
+  return tab === "setups" ? "Setups" : SETTINGS_TAB_LABELS[tab];
 }
 
 type ScrollRegionProps = {
@@ -119,6 +121,7 @@ export function SettingsLayout({
   scrollIdentity = null,
   utility,
   page = null,
+  onSetups,
   changed,
 }: {
   tab: SettingsTab;
@@ -129,12 +132,15 @@ export function SettingsLayout({
   /** Global actions, such as App settings, remain reachable below the nav. */
   utility?: ReactNode;
   /** A global page can share the shell without becoming a profile pane. */
-  page?: "app" | null;
+  page?: "setups" | "app" | null;
+  /** Opens the Setups page; its entry tops the sidebar when provided. */
+  onSetups?: () => void;
   /** Panes with changes that have not reached the profile yet. */
   changed?: ReadonlySet<SettingsTab>;
 }) {
   const nav = useRef<HTMLElement | null>(null);
-  const activeTab = page === null ? tab : null;
+  // App settings sits below the nav, so it has no item here to travel to.
+  const activeTab = page === null ? tab : page === "setups" ? "setups" : null;
   const [indicator, setIndicator] = useState<{
     top: number;
     height: number;
@@ -181,6 +187,24 @@ export function SettingsLayout({
               data-ready={indicator.ready ? "true" : "false"}
               style={{ transform: `translateY(${indicator.top}px)`, height: indicator.height }}
             />
+          ) : null}
+          {onSetups ? (
+            <div className="settings-nav-group">
+              <button
+                type="button"
+                data-testid="settings-tab-setups"
+                data-active={page === "setups" ? "true" : "false"}
+                aria-current={page === "setups" ? "page" : undefined}
+                title="Setups"
+                onClick={onSetups}
+                className="settings-nav-item"
+              >
+                <span aria-hidden="true" className="shrink-0">
+                  <SquaresFour size={16} weight="regular" />
+                </span>
+                <span className="settings-nav-label">Setups</span>
+              </button>
+            </div>
           ) : null}
           {SETTINGS_TAB_GROUPS.map((group) => (
             <div key={group.label} className="settings-nav-group">

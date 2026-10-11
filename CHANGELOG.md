@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Added
+
+- A Setups page that opens first: every setup with its HUD's picture and key details, and
+  one click to switch, or to switch and play.
+
 ### Fixed
 
 - Viewmodels: hiding a weapon no longer hides another weapon you left shown when the two share

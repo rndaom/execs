@@ -190,6 +190,40 @@ describe("pane scroll retention", () => {
     );
   });
 
+  it("leads the sidebar with Setups, which takes the highlight while it is open", async () => {
+    const onSetups = vi.fn();
+    const show = async (page: "setups" | "app" | null) =>
+      act(async () => {
+        root.render(
+          <SettingsLayout tab="hud" page={page} onTab={() => undefined} onSetups={onSetups}>
+            <Content tab={page ?? "hud"} />
+          </SettingsLayout>,
+        );
+      });
+    const items = () =>
+      Array.from(box.querySelectorAll<HTMLElement>('[data-testid^="settings-tab-"]'));
+
+    await show("setups");
+    expect(items()[0]?.dataset.testid).toBe("settings-tab-setups");
+    expect(items()[0]?.getAttribute("aria-current")).toBe("page");
+    expect(box.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    expect(box.querySelector(".settings-nav-indicator")).not.toBeNull();
+    expect(box.querySelector('[data-testid="settings-pane-setups"]')).not.toBeNull();
+
+    await show(null);
+    expect(items()[0]?.getAttribute("aria-current")).toBeNull();
+    expect(
+      box.querySelector('[data-testid="settings-tab-hud"]')?.getAttribute("aria-current"),
+    ).toBe("page");
+
+    await show("app");
+    expect(box.querySelectorAll('[aria-current="page"]')).toHaveLength(0);
+    expect(box.querySelector(".settings-nav-indicator")).toBeNull();
+
+    await act(async () => items()[0]?.click());
+    expect(onSetups).toHaveBeenCalledOnce();
+  });
+
   it("releases its layout observer on unmount", async () => {
     await render("comfig");
     await act(async () => root.render(null));

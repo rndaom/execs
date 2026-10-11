@@ -11,6 +11,12 @@ describe("guide links", () => {
     );
   });
 
+  it("opens the profiles page for the Setups home", () => {
+    expect(guideUrl("profiles", "0.2.2", false)).toBe(
+      "https://github.com/rndaom/execs/blob/v0.2.2/docs/guide/profiles.md",
+    );
+  });
+
   it("uses main for development builds and an unknown version", () => {
     expect(guideUrl("mods", "0.2.2", true)).toContain("/blob/main/docs/guide/mods.md");
     expect(guideUrl("mods", "", false)).toContain("/blob/main/docs/guide/mods.md");
