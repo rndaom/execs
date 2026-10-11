@@ -64,7 +64,7 @@ export function hudPicture(id: string | null, catalog: readonly HudCatalogEntry[
   );
 }
 
-/** mastercomfig's preset aliases, said the way the Comfig pane says them. */
+/** mastercomfig's preset aliases, said the way the Performance pane says them. */
 export function performanceLabel(alias: string | null): string {
   if (alias === null) return "Off";
   const key = alias.trim().toLowerCase().replaceAll("-", "_");
@@ -76,7 +76,7 @@ export function modsLabel(count: number): string {
   return count === 1 ? "1 mod" : `${count} mods`;
 }
 
-function soundLabel(id: string | null): string {
+export function soundLabel(id: string | null): string {
   if (id === null) return TF2_OWN;
   // Names are kept as saved, so "Half-Life" stays hyphenated.
   const text = id

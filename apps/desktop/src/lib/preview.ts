@@ -44,6 +44,7 @@ export const PREVIEW_STATES = [
   "settings-mods",
   "settings-files",
   "settings-launch",
+  "settings-edit",
   "settings-locked",
   "settings-app-failure",
   "update-available",
@@ -97,6 +98,7 @@ const READY: PreviewState[] = [
   "settings-mods",
   "settings-files",
   "settings-launch",
+  "settings-edit",
   "settings-locked",
   "settings-app-failure",
   "update-available",
@@ -234,6 +236,7 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
       return "inventory";
     case "settings-comfig":
     case "settings-comfig-vanilla":
+    case "settings-edit":
     case "welcome":
     case "folder-repair":
     case "profile-import-huds":

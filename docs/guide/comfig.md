@@ -1,6 +1,6 @@
-# Comfig
+# Performance
 
-Comfig manages [mastercomfig](https://comfig.app) for the active profile: the preset, official addons and individual modules. execs downloads mastercomfig's own release packages; it is not affiliated with mastercomfig.
+Performance manages [mastercomfig](https://comfig.app) for the active profile: the preset, official addons and individual modules. execs downloads mastercomfig's own release packages; it is not affiliated with mastercomfig.
 
 ## Presets
 

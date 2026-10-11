@@ -278,12 +278,14 @@ export function createPreviewApi(state: PreviewState): Api {
   let launchOptions = recommendedLaunchOptions();
   let steamLaunchOptions = "-novid";
   let hudState: HudUiState =
-    state === "settings-hud-installed" || state === "hud-ownership"
+    state === "settings-hud-installed" || state === "hud-ownership" || state === "settings-edit"
       ? previewInstalledState()
       : emptyHudState();
   let hudOwnershipPending = state === "hud-ownership";
   let mods: ModRecord[] =
-    state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
+    state === "settings-mods" || state === "settings-edit"
+      ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m }))
+      : [];
   const savedMods = new Map<string, ModRecord[]>();
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
   let pendingModImport: {
@@ -293,10 +295,13 @@ export function createPreviewApi(state: PreviewState): Api {
     section: GameBananaSection;
   } | null = null;
   const crosshairPixels: Record<string, { width: number; height: number; rgba: number[] }> = {};
-  let crosshair = state === "settings-crosshair" ? previewCrosshairRecord() : null;
+  let crosshair =
+    state === "settings-crosshair" || state === "settings-edit" ? previewCrosshairRecord() : null;
   let viewmodel = state === "settings-viewmodels" ? previewViewmodelRecord() : null;
   let hitsound: HitsoundRecord | null =
-    state === "settings-sounds" ? { hit: { name: "quack", source: "community" } } : null;
+    state === "settings-sounds" || state === "settings-edit"
+      ? { hit: { name: "quack", source: "community" } }
+      : null;
   let importReadingHandler: (() => void) | null = null;
   let progressHandler: ((progress: SwitchProgress) => void) | null = null;
   let hudProgressHandler: ((progress: HudInstallProgress) => void) | null = null;

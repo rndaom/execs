@@ -3,11 +3,11 @@ import {
   Crosshair,
   FolderOpen,
   GameController,
+  Gauge,
   Keyboard,
   Monitor,
   Package,
   Play,
-  SlidersHorizontal,
   SpeakerHigh,
   UserFocus,
 } from "@phosphor-icons/react";
@@ -18,7 +18,7 @@ export type TabIcon = ComponentType<{ size?: number; weight?: "regular" | "bold"
 
 /** One icon per pane, shared by the sidebar and pane headings. */
 export const SETTINGS_TAB_ICONS: Record<SettingsTab, TabIcon> = {
-  comfig: SlidersHorizontal,
+  comfig: Gauge,
   binds: Keyboard,
   gameplay: GameController,
   hud: Monitor,
