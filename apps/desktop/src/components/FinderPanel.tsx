@@ -24,6 +24,7 @@ export function FinderPanel({
   waitingFor = null,
   missing = null,
   onRetryMissing,
+  onKeepCurrent,
 }: {
   scanning: boolean;
   installs: Tf2Install[];
@@ -42,6 +43,8 @@ export function FinderPanel({
   /** The saved TF2 folder when it no longer holds TF2, such as a disconnected drive. */
   missing?: string | null;
   onRetryMissing?: () => void;
+  /** Set while Change install is open: goes back to the install it left. */
+  onKeepCurrent?: () => void;
 }) {
   return (
     <OnboardingFrame
@@ -146,6 +149,17 @@ export function FinderPanel({
           </div>
         ) : (
           <div className="flex flex-wrap items-center justify-end gap-3 border-t border-edge py-4">
+            {onKeepCurrent ? (
+              <button
+                type="button"
+                data-testid="finder-keep-current"
+                onClick={onKeepCurrent}
+                disabled={busy}
+                className="btn btn-ghost mr-auto"
+              >
+                Keep current install
+              </button>
+            ) : null}
             <button type="button" onClick={onBrowse} disabled={busy} className="btn btn-ghost">
               Browse…
             </button>

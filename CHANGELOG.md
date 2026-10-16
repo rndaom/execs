@@ -22,6 +22,8 @@ User-facing changes only. The release workflow publishes the matching
   swings for Engineer, Demoman and Medic. A weapon that stays partly visible because of this is
   named under its class. Packs built before this fix show as out of date; apply again to update
   them.
+- Change install has a Keep current install button, so you can back out without choosing a
+  folder again.
 
 ### Changed
 
