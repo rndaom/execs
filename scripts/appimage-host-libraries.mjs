@@ -9,6 +9,7 @@ import {
   readdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -17,13 +18,15 @@ import { fileURLToPath } from "node:url";
 
 const script = fileURLToPath(import.meta.url);
 const root = resolve(dirname(script), "..");
-// Same output plugin as Tauri, pinned so a moved continuous asset fails closed.
-// Upstream's scheduled CI rebuilds `continuous` on the 1st of each month, so
-// this pin needs a reviewed update then. This hash is the 2026-10-01 rebuild
-// (upstream run 36815339264) of commit 536b0687, the source of the previous pin.
-const pluginUrl =
-  "https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage";
-const pluginSha256 = "49d6a17160675a6bd1781699aae6bdf7692d98552e02a3671d2183d10547842e";
+// The AppImage output plugin built into linuxdeploy. Upstream's standalone
+// plugin is only published as `continuous` and rebuilt every month, so use the
+// fixed linuxdeploy copy Tauri pins: the x86_64 artifact of linuxdeploy run
+// 30674699502 (commit 07333c6), uploaded to tauri-apps/binary-releases.
+const linuxdeployUrl =
+  "https://github.com/tauri-apps/binary-releases/releases/download/linuxdeploy-07333c6/linuxdeploy-x86_64.AppImage";
+const linuxdeploySha256 = "36a2d7e274d12e1050d0e9ecfe11d339ed54720b2bec464c286d53f8b07f5c62";
+// The plugin finds appimagetool next to its own executable, so run it in place.
+const bundledPlugin = "plugins/linuxdeploy-plugin-appimage/usr/bin/linuxdeploy-plugin-appimage";
 
 // These belong with the host EGL drivers. The older bundled Wayland lacks
 // wl_fixes_interface / wl_display_create_queue_with_name used by newer drivers.
@@ -71,22 +74,37 @@ async function prepare() {
   // bundle.useLocalToolsDir makes Tauri use this project-scoped tool directory.
   const tools = join(metadata.target_directory, ".tauri");
   mkdirSync(tools, { recursive: true });
-  const upstream = join(tools, "execs-appimage-output.AppImage");
+  const image = join(tools, "execs-linuxdeploy.AppImage");
   let bytes;
-  if (existsSync(upstream)) bytes = readFileSync(upstream);
+  if (existsSync(image)) bytes = readFileSync(image);
   else {
-    const response = await fetch(pluginUrl, { signal: AbortSignal.timeout(120000) });
-    assert(response.ok, `AppImage output plugin download failed: HTTP ${response.status}`);
+    const response = await fetch(linuxdeployUrl, { signal: AbortSignal.timeout(120000) });
+    assert(response.ok, `linuxdeploy download failed: HTTP ${response.status}`);
     bytes = Buffer.from(await response.arrayBuffer());
   }
   assert.equal(
     createHash("sha256").update(bytes).digest("hex"),
-    pluginSha256,
-    "AppImage output plugin checksum mismatch",
+    linuxdeploySha256,
+    "linuxdeploy checksum mismatch",
   );
-  writeFileSync(`${upstream}.part`, bytes, { mode: 0o755 });
-  renameSync(`${upstream}.part`, upstream);
-  chmodSync(upstream, 0o755);
+  writeFileSync(`${image}.part`, bytes, { mode: 0o755 });
+  renameSync(`${image}.part`, image);
+  chmodSync(image, 0o755);
+  // Unpack beside the image; a marker names the verified hash it came from.
+  const extracted = join(tools, "execs-linuxdeploy");
+  const marker = join(extracted, ".execs-sha256");
+  if (!existsSync(marker) || readFileSync(marker, "utf8") !== linuxdeploySha256) {
+    const staging = join(tools, "execs-linuxdeploy.part");
+    rmSync(staging, { recursive: true, force: true });
+    rmSync(extracted, { recursive: true, force: true });
+    mkdirSync(staging);
+    execFileSync(image, ["--appimage-extract"], { cwd: staging, stdio: "ignore" });
+    renameSync(join(staging, "squashfs-root"), extracted);
+    rmSync(staging, { recursive: true });
+    writeFileSync(marker, linuxdeploySha256);
+  }
+  const upstream = join(extracted, bundledPlugin);
+  assert(existsSync(upstream), "linuxdeploy has no built-in AppImage output plugin");
   // Run after GTK/GStreamer deployment, before SquashFS creation and Tauri signing.
   const wrapper = join(tools, "linuxdeploy-plugin-appimage.AppImage");
   const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
