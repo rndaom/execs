@@ -19,6 +19,10 @@ export type Tf2InstallState = {
   browse: () => Promise<void>;
   confirm: () => Promise<void>;
   change: () => void;
+  /** The install that was open when Change install was chosen, until another is confirmed. */
+  previous: Tf2Install | null;
+  /** Go back to the install Change install left, without writing anything. */
+  keepCurrent: () => void;
 };
 
 /** Finder state and the confirmed TF2 root. No write happens before Confirm. */
@@ -44,6 +48,7 @@ export function useTf2Install(
   const [selected, setSelected] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<Tf2Install | null>(null);
   const [missing, setMissing] = useState<string | null>(null);
+  const [previous, setPrevious] = useState<Tf2Install | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,6 +151,7 @@ export function useTf2Install(
       const stored = await api.confirmTf2Root(selected);
       onConfirmed?.();
       setMissing(null);
+      setPrevious(null);
       setConfirmed(stored);
       setScreen("ready");
       setError(null, "install:confirm");
@@ -160,6 +166,7 @@ export function useTf2Install(
   }, [api, selected, setError, setBusy, onConfirmed]);
 
   const change = useCallback(() => {
+    if (confirmed) setPrevious(confirmed);
     setScreen("finder");
     setConfirmed(null);
     setSelected((current) => {
@@ -169,7 +176,17 @@ export function useTf2Install(
       return installs.length === 1 ? installs[0].path : null;
     });
     onChanged();
-  }, [installs, onChanged]);
+  }, [confirmed, installs, onChanged]);
+
+  const keepCurrent = useCallback(() => {
+    if (!previous) return;
+    onConfirmed?.();
+    setConfirmed(previous);
+    setSelected(previous.path);
+    setPrevious(null);
+    setScreen("ready");
+    setError(null, "install:keep");
+  }, [previous, onConfirmed, setError]);
 
   return {
     screen,
@@ -183,5 +200,7 @@ export function useTf2Install(
     browse,
     confirm,
     change,
+    previous,
+    keepCurrent,
   };
 }
