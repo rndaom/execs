@@ -36,6 +36,7 @@ import { useOperationErrors } from "./hooks/useOperationErrors";
 import { useProfileLibrary } from "./hooks/useProfileLibrary";
 import { useReleaseNotes } from "./hooks/useReleaseNotes";
 import { useStartupTidy } from "./hooks/useStartupTidy";
+import { useSwitchAndPlay } from "./hooks/useSwitchAndPlay";
 import { useSwitchProgress } from "./hooks/useSwitchProgress";
 import { useTf2Install } from "./hooks/useTf2Install";
 import { useWriteLock } from "./hooks/useWriteLock";
@@ -65,6 +66,7 @@ import {
 import { createSettingsDraftStore } from "./lib/settings-drafts";
 import {
   browserStorage,
+  editLabel,
   readLastPane,
   SETTINGS_TAB_LABELS,
   type SettingsTab,
@@ -74,6 +76,7 @@ import {
 import type { WelcomeOrigin } from "./lib/welcome-tour";
 import { SettingsHost } from "./SettingsHost";
 import { SettingsLayout } from "./SettingsLayout";
+import { SetupsHome } from "./SetupsHome";
 import { SetupWizard } from "./SetupWizard";
 
 export function App({
@@ -113,6 +116,10 @@ export function App({
   const [launching, setLaunching] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
+  // The workspace opens on Setups; a fixture that picks a pane opens on that.
+  const [setupsOpen, setSetupsOpen] = useState(() => previewSettingsTab(preview) === null);
+  // The Edit page: every setting of the setup in the game, one row per setting.
+  const [sheetOpen, setSheetOpen] = useState(() => preview === "settings-edit");
   const [launchSync, setLaunchSync] = useState<LaunchSyncStatus | null>(null);
   const [launchSyncPrompt, setLaunchSyncPrompt] = useState<LaunchSyncStatus | null>(null);
   const appSettingsButton = useRef<HTMLButtonElement>(null);
@@ -131,7 +138,19 @@ export function App({
   }, [settingsTab]);
   const navigateSettings = useCallback((tab: SettingsTab) => {
     setAppSettingsOpen(false);
+    setSetupsOpen(false);
+    setSheetOpen(false);
     setSettingsTab(tab);
+  }, []);
+  const openSetups = useCallback(() => {
+    setAppSettingsOpen(false);
+    setSheetOpen(false);
+    setSetupsOpen(true);
+  }, []);
+  const openSheet = useCallback(() => {
+    setAppSettingsOpen(false);
+    setSetupsOpen(false);
+    setSheetOpen(true);
   }, []);
   const reviewSettings = useCallback(
     (tab: SettingsTab) => {
@@ -280,6 +299,15 @@ export function App({
     if (filesVersion >= 0 && filesDraftStore.hasDirty(changedProfileId)) tabs.add("files");
     return tabs;
   }, [settingsDrafts, filesVersion, filesDraftStore, changedProfileId]);
+  const activeProfileName =
+    profiles.library?.profiles.find((profile) => profile.id === profiles.library?.activeProfileId)
+      ?.name ?? null;
+  // What the workspace shows when App settings is closed.
+  const workspaceName = setupsOpen
+    ? "Setups"
+    : sheetOpen
+      ? editLabel(activeProfileName)
+      : SETTINGS_TAB_LABELS[settingsTab];
   const pendingPanes = [
     ...new Set(settingsDrafts.map((entry) => SETTINGS_TAB_LABELS[entry.tab])),
   ].join(", ");
@@ -443,7 +471,7 @@ export function App({
     surface,
     settingsOpen,
     settingsSettled,
-    paneLabel: SETTINGS_TAB_LABELS[settingsTab],
+    paneLabel: sheetOpen ? (activeProfileName ?? "Edit") : workspaceName,
     failed: error !== null,
   };
   const boot = bootStage(stageInput);
@@ -541,6 +569,30 @@ export function App({
       });
   }
 
+  // The header's Play, the Setups page's Play and Switch and play all start here.
+  function launchNow() {
+    setLaunching(true);
+    void refreshLaunchSync().then((status) => {
+      const action = launchSyncAction(status);
+      if (action === "ask") {
+        setLaunching(false);
+        setLaunchSyncPrompt(status);
+        return;
+      }
+      startLaunch(action === "write-then-launch");
+    });
+  }
+  const requestSwitch = (id: string) => filesExit.request(() => profiles.switchProfile(id));
+  const switchAndPlay = useSwitchAndPlay({
+    request: filesExit.request,
+    switchProfile: profiles.switchProfile,
+    activeProfileId,
+    switching: progress.state.active,
+    launchBlockReason,
+    launch: launchNow,
+    onBlocked: (reason) => setError(reason, "tf2:launch"),
+  });
+
   function renderAppPreferences() {
     return (
       <AppSettingsPane
@@ -552,7 +604,7 @@ export function App({
         backAction={
           <button type="button" className="btn btn-ghost" onClick={closeAppSettings}>
             <ArrowLeft size={15} aria-hidden="true" />
-            {settingsOpen ? `Back to ${SETTINGS_TAB_LABELS[settingsTab]}` : "Back to setup"}
+            {settingsOpen ? `Back to ${workspaceName}` : "Back to setup"}
           </button>
         }
         onChangeInstall={() =>
@@ -673,7 +725,7 @@ export function App({
         profiles={{
           ...profiles,
           switchProfile: async (id) => {
-            filesExit.request(() => profiles.switchProfile(id));
+            requestSwitch(id);
           },
           repairFolders: async () => {
             filesExit.request(() => profiles.repairFolders());
@@ -705,18 +757,7 @@ export function App({
               : undefined
         }
         launchWarning={launchSyncWarning(launchSync)}
-        onLaunch={() => {
-          setLaunching(true);
-          void refreshLaunchSync().then((status) => {
-            const action = launchSyncAction(status);
-            if (action === "ask") {
-              setLaunching(false);
-              setLaunchSyncPrompt(status);
-              return;
-            }
-            startLaunch(action === "write-then-launch");
-          });
-        }}
+        onLaunch={launchNow}
         onCancelLaunch={() => {
           void api
             .cancelTf2Launch()
@@ -737,90 +778,113 @@ export function App({
         onCompareSwitch={(id) => api.compareProfileSwitch(id)}
         restoreApi={api}
         settings={
-          showSettingsChrome(profiles.library) ? (
-            <SettingsLayout
-              tab={settingsTab}
-              changed={changedTabs}
-              page={appSettingsOpen ? "app" : null}
-              onTab={navigateSettings}
-              scrollIdentity={`${path}:${profiles.library?.activeProfileId ?? "none"}`}
-              utility={
-                <>
-                  <button
-                    type="button"
-                    data-testid="guide-open"
-                    className="settings-nav-item"
-                    title={`Guide for ${appSettingsOpen ? "App settings" : SETTINGS_TAB_LABELS[settingsTab]}`}
-                    onClick={() =>
-                      void openExternal(
-                        guideUrl(
-                          appSettingsOpen ? "app-settings" : settingsTab,
-                          update.version,
-                          import.meta.env.DEV,
-                        ),
-                      ).catch(() => {})
-                    }
-                  >
-                    <BookOpen size={16} aria-hidden="true" />
-                    <span className="settings-nav-label">Guide</span>
-                  </button>
-                  <button
-                    ref={appSettingsButton}
-                    type="button"
-                    data-testid="app-settings-open"
-                    aria-current={appSettingsOpen ? "page" : undefined}
-                    data-active={appSettingsOpen ? "true" : "false"}
-                    className="settings-nav-item"
-                    onClick={openAppSettings}
-                  >
-                    <GearSix size={16} aria-hidden="true" />
-                    <span className="settings-nav-label">App settings</span>
-                  </button>
-                </>
-              }
-            >
-              <div ref={profileSettings} hidden={appSettingsOpen}>
-                <SettingsHost
-                  api={api}
-                  visible={!appSettingsOpen}
-                  filesDraftStore={filesDraftStore}
-                  filesSaver={filesExit.saver}
-                  filesCloseReady={filesExit.ready}
-                  settingsDraftStore={settingsDraftStore}
+          showSettingsChrome(profiles.library)
+            ? ({ openCompare }) => (
+                <SettingsLayout
                   tab={settingsTab}
-                  activeProfileId={profiles.library?.activeProfileId ?? null}
-                  activeProfileName={
-                    profiles.library?.profiles.find(
-                      (profile) => profile.id === profiles.library?.activeProfileId,
-                    )?.name ?? null
+                  changed={changedTabs}
+                  page={appSettingsOpen ? "app" : setupsOpen ? "setups" : sheetOpen ? "edit" : null}
+                  editLabel={editLabel(activeProfileName)}
+                  onEdit={openSheet}
+                  onTab={navigateSettings}
+                  onSetups={openSetups}
+                  scrollIdentity={`${path}:${profiles.library?.activeProfileId ?? "none"}`}
+                  utility={
+                    <>
+                      <button
+                        type="button"
+                        data-testid="guide-open"
+                        className="settings-nav-item"
+                        title={`Guide for ${appSettingsOpen ? "App settings" : workspaceName}`}
+                        onClick={() =>
+                          void openExternal(
+                            guideUrl(
+                              appSettingsOpen
+                                ? "app-settings"
+                                : setupsOpen || sheetOpen
+                                  ? "profiles"
+                                  : settingsTab,
+                              update.version,
+                              import.meta.env.DEV,
+                            ),
+                          ).catch(() => {})
+                        }
+                      >
+                        <BookOpen size={16} aria-hidden="true" />
+                        <span className="settings-nav-label">Guide</span>
+                      </button>
+                      <button
+                        ref={appSettingsButton}
+                        type="button"
+                        data-testid="app-settings-open"
+                        aria-current={appSettingsOpen ? "page" : undefined}
+                        data-active={appSettingsOpen ? "true" : "false"}
+                        className="settings-nav-item"
+                        onClick={openAppSettings}
+                      >
+                        <GearSix size={16} aria-hidden="true" />
+                        <span className="settings-nav-label">App settings</span>
+                      </button>
+                    </>
                   }
-                  onNavigate={navigateSettings}
-                  onTryComfig={tryComfig}
-                  running={lock.running}
-                  externalBusy={
-                    busy ||
-                    hudReviewBusy ||
-                    progress.state.active ||
-                    recoveryTargetId !== null ||
-                    lifecycleBusy
-                  }
-                  refreshKey={`${profiles.refreshKey}:${hudReviewRevision}:${tidyRevision}`}
-                  bindSyncRequest={profiles.bindSyncRequest}
-                  bindSyncChanges={profiles.bindSyncChanges}
-                  onBindSyncHandled={profiles.onBindSyncHandled}
-                  onBusyChange={setSettingsBusy}
-                  onSettledChange={setSettingsSettled}
-                  onWriteBusyChange={setSettingsWriting}
-                  onRecoveryChange={setPreloaderRecovery}
-                  onHudReviewRequired={setHudReviewId}
-                  onError={setError}
-                  launchSync={launchSync}
-                  onLaunchOptionsSaved={() => void refreshLaunchSync()}
-                />
-              </div>
-              {appSettingsOpen ? renderAppPreferences() : null}
-            </SettingsLayout>
-          ) : null
+                >
+                  <div ref={profileSettings} hidden={appSettingsOpen || setupsOpen}>
+                    <SettingsHost
+                      api={api}
+                      visible={!appSettingsOpen && !setupsOpen}
+                      sheet={sheetOpen}
+                      changed={changedTabs}
+                      onBack={openSetups}
+                      filesDraftStore={filesDraftStore}
+                      filesSaver={filesExit.saver}
+                      filesCloseReady={filesExit.ready}
+                      settingsDraftStore={settingsDraftStore}
+                      tab={settingsTab}
+                      activeProfileId={profiles.library?.activeProfileId ?? null}
+                      activeProfileName={activeProfileName}
+                      onNavigate={navigateSettings}
+                      onTryComfig={tryComfig}
+                      running={lock.running}
+                      externalBusy={
+                        busy ||
+                        hudReviewBusy ||
+                        progress.state.active ||
+                        recoveryTargetId !== null ||
+                        lifecycleBusy
+                      }
+                      refreshKey={`${profiles.refreshKey}:${hudReviewRevision}:${tidyRevision}`}
+                      bindSyncRequest={profiles.bindSyncRequest}
+                      bindSyncChanges={profiles.bindSyncChanges}
+                      onBindSyncHandled={profiles.onBindSyncHandled}
+                      onBusyChange={setSettingsBusy}
+                      onSettledChange={setSettingsSettled}
+                      onWriteBusyChange={setSettingsWriting}
+                      onRecoveryChange={setPreloaderRecovery}
+                      onHudReviewRequired={setHudReviewId}
+                      onError={setError}
+                      launchSync={launchSync}
+                      onLaunchOptionsSaved={() => void refreshLaunchSync()}
+                    />
+                  </div>
+                  {appSettingsOpen ? renderAppPreferences() : null}
+                  {setupsOpen && !appSettingsOpen ? (
+                    <SetupsHome
+                      api={api}
+                      library={profiles.library}
+                      launching={launchPending}
+                      launchBlockReason={launchBlockReason}
+                      recoveryTargetId={recoveryTargetId}
+                      onSwitch={requestSwitch}
+                      onSwitchAndPlay={switchAndPlay}
+                      onPlay={launchNow}
+                      onEdit={openSheet}
+                      onCreateNew={() => filesExit.request(firstRun.openCreate)}
+                      onCompare={openCompare}
+                    />
+                  ) : null}
+                </SettingsLayout>
+              )
+            : null
         }
         onDraftName={setDraftName}
         onSave={() => filesExit.request(onSaveCurrent)}
@@ -843,11 +907,7 @@ export function App({
       <ToastProvider>
         <WelcomeTour
           open={welcome !== null && settingsOpen && !progress.state.active}
-          profileName={
-            profiles.library?.profiles.find(
-              (profile) => profile.id === profiles.library?.activeProfileId,
-            )?.name ?? null
-          }
+          profileName={activeProfileName}
           origin={welcome ?? "saved"}
           offerComfig={welcomeOffersComfig}
           onClose={() => setWelcome(null)}

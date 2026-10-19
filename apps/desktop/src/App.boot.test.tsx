@@ -48,7 +48,7 @@ it("holds the startup screen over an inert app until the first pane has loaded",
   await act(async () => root.render(<App api={api} preview="settings-comfig" bootSplash />));
 
   const splash = box.querySelector('[data-testid="boot-splash"]');
-  expect(splash?.textContent).toContain("Loading Comfig…");
+  expect(splash?.textContent).toContain("Loading Performance…");
   expect(splash?.nextElementSibling?.hasAttribute("inert")).toBe(true);
 
   await act(async () => finishRead());

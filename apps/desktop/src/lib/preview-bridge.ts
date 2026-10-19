@@ -29,6 +29,7 @@ import {
   type ProfileDetail,
   type ProfileLibrary,
   type SettingsCopyScope,
+  type SetupOverview,
   type SwitchProgress,
   type Tf2Install,
   type TidyReport,
@@ -158,6 +159,76 @@ const PREVIEW_PACKAGES = [
   "tf/custom/mastercomfig-addon-no-tutorial.vpk",
 ];
 
+/**
+ * What the preview profiles hold, by library position. The first matches the
+ * usual active profile; the rest share some facts with it and differ in others.
+ */
+const PREVIEW_SETUP_FACTS: Omit<SetupOverview, "id">[] = [
+  {
+    hud: "rayshud",
+    crosshair: "dot",
+    crosshairDesign: null,
+    fov: "90",
+    sensitivity: "2.5",
+    hitSound: "Quake hit",
+    killSound: "Bell",
+    performance: "high",
+    mods: 2,
+  },
+  {
+    hud: "budhud",
+    crosshair: "dot",
+    crosshairDesign: null,
+    fov: "90",
+    sensitivity: "1.8",
+    hitSound: "Quake hit",
+    killSound: null,
+    performance: "medium",
+    mods: 0,
+  },
+  {
+    hud: null,
+    crosshair: null,
+    crosshairDesign: null,
+    fov: "110",
+    sensitivity: "2.5",
+    hitSound: null,
+    killSound: null,
+    performance: null,
+    mods: 4,
+  },
+  {
+    hud: "m0rehud",
+    crosshair: "ring",
+    crosshairDesign: null,
+    fov: "100",
+    sensitivity: "2.5",
+    hitSound: "Bonk",
+    killSound: "Bell",
+    performance: "low",
+    mods: 1,
+  },
+];
+
+/** The Setups page shows in-game pictures, which the browser fixtures leave out. */
+const PREVIEW_SETUPS_HUD_CATALOG = PREVIEW_HUD_BROWSER_CATALOG.map((entry) => {
+  const play: Record<string, string> = {
+    rayshud: "rayshud/hud.webp",
+    budhud: "budhud/budhud-04-player.webp",
+    m0rehud: "m0rehud/m0rehud-buff.webp",
+  };
+  const shot = play[entry.id];
+  return shot
+    ? {
+        ...entry,
+        screenshots: [
+          ...entry.screenshots,
+          `https://raw.githubusercontent.com/mastercomfig/hud-db/main/hud-resources/${shot}`,
+        ],
+      }
+    : entry;
+});
+
 const BROWSED: Tf2Install = {
   path: "/home/user/.local/share/Steam/steamapps/common/Team Fortress 2",
 };
@@ -190,7 +261,11 @@ export function createPreviewApi(state: PreviewState): Api {
   let previewRetiredBytes = 20_159_439;
   let failNextAppPreferenceSave = state === "settings-app-failure";
   const hudCatalog =
-    state === "settings-hud-browser" ? PREVIEW_HUD_BROWSER_CATALOG : PREVIEW_HUD_CATALOG;
+    state === "settings-hud-browser"
+      ? PREVIEW_HUD_BROWSER_CATALOG
+      : state === "setups"
+        ? PREVIEW_SETUPS_HUD_CATALOG
+        : PREVIEW_HUD_CATALOG;
   let installs = previewInstalls(state);
   let library: ProfileLibrary | null = previewLibrary(state);
   let restorePoints: RestorePoint[] = [];
@@ -207,12 +282,14 @@ export function createPreviewApi(state: PreviewState): Api {
   let launchOptions = recommendedLaunchOptions();
   let steamLaunchOptions = "-novid";
   let hudState: HudUiState =
-    state === "settings-hud-installed" || state === "hud-ownership"
+    state === "settings-hud-installed" || state === "hud-ownership" || state === "settings-edit"
       ? previewInstalledState()
       : emptyHudState();
   let hudOwnershipPending = state === "hud-ownership";
   let mods: ModRecord[] =
-    state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
+    state === "settings-mods" || state === "settings-edit"
+      ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m }))
+      : [];
   const savedMods = new Map<string, ModRecord[]>();
   let modsPayload: PreloaderStatusPayload = PREVIEW_MODS_STATUS;
   let pendingModImport: {
@@ -222,10 +299,13 @@ export function createPreviewApi(state: PreviewState): Api {
     section: GameBananaSection;
   } | null = null;
   const crosshairPixels: Record<string, { width: number; height: number; rgba: number[] }> = {};
-  let crosshair = state === "settings-crosshair" ? previewCrosshairRecord() : null;
+  let crosshair =
+    state === "settings-crosshair" || state === "settings-edit" ? previewCrosshairRecord() : null;
   let viewmodel = state === "settings-viewmodels" ? previewViewmodelRecord() : null;
   let hitsound: HitsoundRecord | null =
-    state === "settings-sounds" ? { hit: { name: "quack", source: "community" } } : null;
+    state === "settings-sounds" || state === "settings-edit"
+      ? { hit: { name: "quack", source: "community" } }
+      : null;
   let importReadingHandler: (() => void) | null = null;
   let progressHandler: ((progress: SwitchProgress) => void) | null = null;
   let hudProgressHandler: ((progress: HudInstallProgress) => void) | null = null;
@@ -585,6 +665,12 @@ export function createPreviewApi(state: PreviewState): Api {
         casual: { added: ["Flat Textures v1"], removed: [], changed: [] },
         blocked: null,
       };
+    },
+    async getSetupOverviews() {
+      return (library?.profiles ?? []).map((profile, index) => ({
+        id: profile.id,
+        ...PREVIEW_SETUP_FACTS[index % PREVIEW_SETUP_FACTS.length],
+      }));
     },
     async getUninstallInfo() {
       return {
@@ -1012,6 +1098,9 @@ export function createPreviewApi(state: PreviewState): Api {
 
     // --- HUD ----------------------------------------------------------------
     async getHudCatalog() {
+      return { entries: hudCatalog, warning: null };
+    },
+    async getCachedHudCatalog() {
       return { entries: hudCatalog, warning: null };
     },
     async getHudState() {

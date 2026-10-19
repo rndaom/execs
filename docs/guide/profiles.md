@@ -11,6 +11,32 @@ execs finds TF2 through your Steam libraries. You can also browse to the folder 
 
 If TF2 has not been played on this PC for a while, its `config.cfg` may exist only in Steam Cloud's copy. execs saves that copy into the profile and reads it until TF2 writes its own file.
 
+## Setups page
+
+Setups is the first entry in the sidebar, and where execs opens. The list shows every profile as a setup with its HUD. Pick one to see it large, with its HUD's picture and its main details: HUD, crosshair, field of view, sensitivity, hit and kill sounds, performance and mods.
+
+- The setup in the game is marked **In the game now**. **Edit** opens its Edit page, and **Play** starts TF2.
+- For any other setup, **Switch** puts it in the game, and **Switch and play** switches, then starts TF2.
+- A line like "3 changes from Main" counts how many of those details differ from the setup in the game. Click it to open **Compare with current…**. Details shown in grey are the same as now.
+- **New setup**, at the end of the list, makes a new profile.
+
+Switching works only while TF2 is closed. With TF2 running, the buttons stay off and say so.
+
+## Edit page
+
+The Edit page lists every setting of the setup in the game on one page, each with its current value. **Edit** on the Setups page opens it, and so does the **Edit** entry under Setups in the sidebar, which names the setup. Settings are grouped the way the sidebar groups the pages that change them:
+
+| Group | Settings | Opens |
+|---|---|---|
+| Look | HUD, crosshair, viewmodels | HUD, Crosshair, Viewmodels |
+| Feel | Field of view, sensitivity, weapon helpers, keys | Gameplay, Binds |
+| Sound | Volume, hit sound, kill sound | Sounds |
+| Mods | Mods in the setup and Casual setup choices | Mods |
+| Performance | The mastercomfig preset and addons | Performance |
+| Advanced | Launch options, config files | Launch, Files |
+
+Click a row to open the page that changes it. The Edit page only shows values; it changes nothing itself. A row whose page has changes that are not saved yet shows the orange dot. If execs can't read the setup's cfg files, rows that come from them say **Can't read**, and **Review in Files** shows the file at fault.
+
 ## Switching
 
 Switching replaces the whole live setup with the chosen profile, exactly. Files from the old profile are removed only if they are unchanged, then the new profile's files are written. If a switch is ever cut off, execs says so and lets you finish it.

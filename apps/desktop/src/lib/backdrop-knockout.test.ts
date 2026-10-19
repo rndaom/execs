@@ -94,6 +94,24 @@ describe("readKnockouts", () => {
     expect(tops).toEqual([30, 70, 90].map((top) => top - TEXT_PAD_Y));
   });
 
+  it("clears a setup's HUD picture as one frame, however its image drifts", () => {
+    const { scope, backdrop } = mount(
+      '<div id="shot" class="setups-shot"><img id="image" alt=""><span>TF2\'s own HUD</span></div>',
+    );
+    lines = { "TF2's own HUD": [box(300, 300, 60, 16)] };
+    const shot = document.getElementById("shot") as HTMLElement;
+    shot.getBoundingClientRect = () => box(200, 300, 400, 225);
+    const image = document.getElementById("image") as HTMLElement;
+    image.getBoundingClientRect = () => box(190, 290, 424, 238);
+
+    expect(readKnockouts(scope, backdrop, frame)).toEqual([
+      100 - CONTROL_PAD,
+      100 - CONTROL_PAD,
+      500 + CONTROL_PAD,
+      325 + CONTROL_PAD,
+    ]);
+  });
+
   it("drops boxes that lie wholly outside the frame", () => {
     const { scope, backdrop } = mount("<p>Line</p>");
     lines = {

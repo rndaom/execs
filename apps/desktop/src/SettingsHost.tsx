@@ -55,7 +55,7 @@ import {
 } from "./lib/files-drafts";
 import { cfgHudFolder } from "./lib/files-reference";
 import { blockingFindingsForFile, cfgFileMeta, hitAnalysisLimit } from "./lib/files-ui";
-import { gameplayPath } from "./lib/gameplay-ui";
+import { gameplayPath, seedGameplay } from "./lib/gameplay-ui";
 import { hudOverlayCrosshairState } from "./lib/hud-ui";
 import { recommendedLaunchOptions } from "./lib/launch-ui";
 import { type ModInstallResult, type ModSelection, PRELOADER_REPO_URL } from "./lib/mods-ui";
@@ -66,6 +66,7 @@ import { SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 import type { IncomingSounds } from "./lib/sound-library";
 import { prefetchViewmodelCatalog } from "./lib/viewmodel-catalog-cache";
 import { ModsPane } from "./ModsPane";
+import { SetupSheet } from "./SetupSheet";
 import { SoundsPane } from "./SoundsPane";
 import { ViewmodelPane } from "./ViewmodelPane";
 
@@ -82,7 +83,10 @@ export function SettingsHost({
   tab,
   activeProfileId,
   activeProfileName,
-  visible = true,
+  visible: hostVisible = true,
+  sheet = false,
+  changed,
+  onBack,
   running,
   externalBusy,
   refreshKey,
@@ -112,6 +116,12 @@ export function SettingsHost({
   activeProfileName?: string | null;
   /** Global pages retain drafts but release auditions, key capture and reads. */
   visible?: boolean;
+  /** Show the Edit page instead of the pane; the panes keep their drafts. */
+  sheet?: boolean;
+  /** Panes with changes that have not reached the profile yet. */
+  changed?: ReadonlySet<SettingsTab>;
+  /** Leaves the Edit page for the Setups page. */
+  onBack?: () => void;
   running: boolean;
   externalBusy: boolean;
   refreshKey: string | number;
@@ -136,6 +146,9 @@ export function SettingsHost({
   onLaunchOptionsSaved?: () => void;
 }) {
   const { error, dismissError } = useAppStatus();
+  // The Edit page shows no pane: panes release their reads as on a global page.
+  const visible = hostVisible && !sheet;
+  const sheetShown = hostVisible && sheet;
   const toast = useToast();
   const [queueBusy, setQueueBusy] = useState(false);
   const [loadedDetail, setDetail] = useState<ProfileDetail | null>(null);
@@ -288,6 +301,8 @@ export function SettingsHost({
     () => mapsFromFiles(files, layer, detail?.files, detail ?? undefined),
     [files, layer, detail],
   );
+  // Values on the Edit page come only from a complete read of this profile.
+  const cfgReadable = maps.complete && !filesLimited && cfgSnapshotProfileId === profileId;
   // Only the visible pane pays for the extra override probe.
   const provenanceTab = visible && !filesLimited ? tab : null;
   const provenance = useMemo(
@@ -1672,10 +1687,10 @@ export function SettingsHost({
           </button>
         </div>
       ) : null}
-      {filesLimited && (usesCfgState(tab) || tab === "files") ? (
+      {filesLimited && (sheetShown || usesCfgState(tab) || tab === "files") ? (
         <div role="alert" className="mb-4 text-warn">
           <p>{cfgReadProblem}</p>
-          {usesCfgState(tab) && cfgSnapshotProfileId === profileId ? (
+          {(sheetShown || usesCfgState(tab)) && cfgSnapshotProfileId === profileId ? (
             <p>Values below are from the last complete read and may be stale.</p>
           ) : null}
           <div className="pane-actions mt-2">
@@ -1687,7 +1702,7 @@ export function SettingsHost({
             >
               Retry loading settings
             </button>
-            {tab !== "files" && onNavigate ? (
+            {(sheetShown || tab !== "files") && onNavigate ? (
               <button type="button" className="btn btn-ghost" onClick={() => onNavigate("files")}>
                 Review in Files
               </button>
@@ -1716,7 +1731,7 @@ export function SettingsHost({
       {!profileId && loading && !identityPending ? (
         <LoadingState>Loading settings…</LoadingState>
       ) : null}
-      {!identityPending && !filesLimited && !maps.complete && usesCfgState(tab) ? (
+      {!identityPending && !filesLimited && !maps.complete && (sheetShown || usesCfgState(tab)) ? (
         <div role="alert" className="mb-4 text-warn">
           <p>{maps.reason ?? CFG_INCOMPLETE_MESSAGE}</p>
           {onNavigate && (
@@ -1734,6 +1749,28 @@ export function SettingsHost({
             </button>
           )}
         </div>
+      ) : null}
+      {sheetShown && detail && !identityPending ? (
+        <SetupSheet
+          api={api}
+          input={{
+            detail,
+            gameplay: cfgReadable
+              ? seedGameplay(
+                  files.find((file) => file.path === gameplayPath(layer))?.text ?? "",
+                  maps.effective,
+                )
+              : null,
+            boundKeys: cfgReadable ? Object.keys(maps.binds).length : null,
+            comfig,
+            launchOptions: launchSeed,
+            cfgFiles: files.length,
+          }}
+          refreshKey={`${refreshKey}:${profileId}`}
+          changed={changed}
+          onOpen={(next) => onNavigate?.(next)}
+          onBack={() => onBack?.()}
+        />
       ) : null}
       <div hidden={!visible || tab !== "inventory"}>
         <AutosaveActivity.Provider value={visible && tab === "inventory"}>
