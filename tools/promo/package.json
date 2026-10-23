@@ -24,5 +24,14 @@
     "@types/react-dom": "^19.1.0",
     "puppeteer-core": "24",
     "typescript": "^5.9.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "basic-ftp@<6.2.1": "6.2.1",
+      "fast-uri@<3.1.8": "3.1.8",
+      "ip-address@<10.7.4": "10.7.4",
+      "postcss-selector-parser@<7.1.6": "7.1.6",
+      "source-map-js@<1.2.2": "1.2.2"
+    }
   }
 }

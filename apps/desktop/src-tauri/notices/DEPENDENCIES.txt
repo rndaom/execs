@@ -43525,7 +43525,7 @@ DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
 
-rustls 0.23.45
+rustls 0.23.46
 Source: https://github.com/rustls/rustls
 Declared license: Apache-2.0 OR ISC OR MIT
 
@@ -44499,7 +44499,7 @@ SOFTWARE.
 
 ==============================================================================
 
-rustls-webpki 0.103.15
+rustls-webpki 0.103.16
 Source: https://github.com/rustls/webpki
 Declared license: ISC
 
