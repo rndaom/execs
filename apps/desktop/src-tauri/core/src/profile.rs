@@ -3965,10 +3965,20 @@ fn scan_profile_mutations_to(
         ));
     }
     if !roots_match(&index.tf2_root, tf2_root) {
-        return Err(ProfileError::RootMismatch {
-            library_root: index.tf2_root,
-            confirmed_root: user_path_string(tf2_root),
-        });
+        // A library made for another folder (TF2 moved) has nothing to recover
+        // here. Refusing anyway would block every write and library read,
+        // including confirming the new folder and moving the library to it.
+        // Unfinished journals still fail closed: they can only finish in the
+        // folder they were written for.
+        for profile in &index.profiles {
+            if checked_mutation_journal_path(profiles_dir, &profile.id)?.is_some() {
+                return Err(ProfileError::RootMismatch {
+                    library_root: index.tf2_root,
+                    confirmed_root: user_path_string(tf2_root),
+                });
+            }
+        }
+        return Ok(Vec::new());
     }
     let mut pending = Vec::new();
     for profile in &index.profiles {
@@ -6883,6 +6893,31 @@ mod tests {
         let err = init_library_to(&profiles, &root, [tf2_name()]).unwrap_err();
         assert_eq!(err, ProfileError::GameRunning);
         assert!(!profiles.exists());
+        cleanup(&dir);
+    }
+
+    #[test]
+    fn moved_library_without_journals_needs_no_recovery() {
+        let dir = crate::test_temp_dir();
+        let profiles = dir.join("execs").join("profiles");
+        let old = dir.join("old").join("Team Fortress 2");
+        let new = dir.join("new").join("Team Fortress 2");
+        create_profile_record_to(&profiles, &old, "Old", unlocked()).unwrap();
+
+        // The write gate and library reads scan for recovery against the newly
+        // confirmed folder; a plain mismatch must not block them.
+        assert_eq!(
+            profile_mutation_status_to(&profiles, &new).unwrap(),
+            ProfileMutationRecoveryState::Clean
+        );
+
+        // An unfinished update for the old folder still fails closed.
+        let id = load_index(&profiles).unwrap().unwrap().profiles[0]
+            .id
+            .clone();
+        fs::write(mutation_journal_file(&profiles, &id), b"{}").unwrap();
+        let err = profile_mutation_status_to(&profiles, &new).unwrap_err();
+        assert!(matches!(err, ProfileError::RootMismatch { .. }));
         cleanup(&dir);
     }
 
