@@ -1440,13 +1440,7 @@ export async function openExternal(url: string): Promise<void> {
     window.open(url, "_blank", "noreferrer");
     return;
   }
-  try {
-    const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(url);
-  } catch (error) {
-    const { code, message } = parseInvokeError(error);
-    throw new BridgeError(message, code);
-  }
+  return call<void>("open_external_url", { url });
 }
 
 export type EmbeddedPage = "comfig-extras" | "comfig-docs";
