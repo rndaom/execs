@@ -138,7 +138,7 @@ pub async fn launch_tf2(
     let handoff_data_dir = data_dir.clone();
     let launch = super::shared::blocking(move || {
         handoff_durable_operation(&handoff_data_dir, &handoff_token, || {
-            tauri_plugin_opener::open_url("steam://rungameid/440", None::<&str>).map_err(|err| {
+            crate::external_open::open_url("steam://rungameid/440").map_err(|err| {
                 CommandError::unknown(format!("Could not ask Steam to launch TF2 ({err})"))
             })
         })
@@ -192,7 +192,7 @@ fn write_steam_launch_options(token: &str) -> Result<(), CommandError> {
     };
     execs_core::launch::validate_launch_review(&root, &profile_id, token)?;
     if steam_running() {
-        tauri_plugin_opener::open_url("steam://exit", None::<&str>).map_err(|err| {
+        crate::external_open::open_url("steam://exit").map_err(|err| {
             CommandError::unknown(format!("Could not ask Steam to close ({err})"))
         })?;
         if !wait_until(|| !steam_running(), 120) {

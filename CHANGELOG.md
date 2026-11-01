@@ -15,6 +15,10 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Linux AppImage: Steam started by Launch TF2, Verify game files or Steam closing no longer
+  inherits execs's own libraries and Python setup, which made every Proton game (Deadlock, for
+  one) close right after it started until Steam was restarted. Links opened in the browser get
+  the same clean environment.
 - Setups page: Crosshair now names the crosshair the setup uses, with your own designs under
   the names you saved them with, instead of reading "Execs crosshairs" for every setup.
 - Viewmodels: hiding a weapon no longer hides another weapon you left shown when the two share

@@ -69,6 +69,19 @@ pub async fn open_embedded_page(app: AppHandle, page: String) -> Result<(), Comm
     Ok(())
 }
 
+/// Open an `https://` link in the system browser.
+#[tauri::command]
+pub async fn open_external_url(url: String) -> Result<(), CommandError> {
+    let parsed: tauri::Url = url
+        .parse()
+        .map_err(|_| CommandError::unknown("Invalid URL."))?;
+    if parsed.scheme() != "https" {
+        return Err(CommandError::unknown("Only https links can be opened."));
+    }
+    crate::external_open::open_url(parsed.as_str())
+        .map_err(|err| CommandError::unknown(format!("Could not open the link ({err})")))
+}
+
 /// The only destinations the embedded mastercomfig windows may navigate to.
 fn embedded_url_allowed(url: &tauri::Url) -> bool {
     url.scheme() == "https"

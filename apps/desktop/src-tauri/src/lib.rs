@@ -3,6 +3,7 @@ mod bind_mouse;
 mod comfig_fetch;
 mod commands;
 mod error;
+mod external_open;
 mod gamebanana;
 mod hitsound_fetch;
 mod hud_fetch;
@@ -820,6 +821,7 @@ pub fn run() {
             commands::hitsound::apply_hitsounds_with_settings,
             commands::hitsound::remove_hitsounds,
             commands::open_embedded_page,
+            commands::open_external_url,
             commands::diagnostics::get_diagnostics,
             commands::health::get_install_health,
             commands::preloader::get_preloader_status,

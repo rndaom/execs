@@ -564,7 +564,7 @@ pub async fn repair_game_files(gate: tauri::State<'_, WriteGate>) -> Result<(), 
     let handoff_token = operation.clone();
     let result = blocking(move || {
         handoff_durable_operation(&data_dir, &handoff_token, || {
-            tauri_plugin_opener::open_url("steam://validate/440", None::<&str>).map_err(|err| {
+            crate::external_open::open_url("steam://validate/440").map_err(|err| {
                 CommandError::unknown(format!("Could not ask Steam to verify ({err})"))
             })
         })
