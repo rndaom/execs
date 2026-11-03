@@ -24,6 +24,9 @@ User-facing changes only. The release workflow publishes the matching
   them.
 - Change install has a Keep current install button, so you can back out without choosing a
   folder again.
+- After Steam moves TF2 to another library or drive, confirming the new folder no longer fails
+  with "This library belongs to another TF2 install". execs now offers to move your profiles to
+  the new folder, as intended.
 
 ### Changed
 
