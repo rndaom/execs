@@ -48,6 +48,9 @@ tokio = { version = "1", features = ["rt", "sync"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+# Already in the tree through tauri-plugin-opener; used directly to start the
+# URL opener with the host environment inside an AppImage.
+open = "5"
 
 [features]
 release-probes = ["tauri/test"]
