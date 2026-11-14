@@ -41,12 +41,6 @@ pub fn normalize_pinned_duplicates(raw: &mut serde_json::Value) {
     }
     for (name, first_hash, second_hash, action) in [
         (
-            "rh_toggle_center_class",
-            "68e9e9e6637f54784dc270a5024989fd65b4407f1577c005cf3be9958e6b3af3",
-            "0875daa4222dfddd2249d342881e421a12bacb1f825cc34de27733edc7220636",
-            0,
-        ),
-        (
             "rh_val_health_style",
             "4ee3ec835169e2dcf8fc45ca416b617f18011749ed380d1d90a158b21ca3f846",
             "1983bcc6774607930eb5ee66628681ab75e823520507aa810a29933ac7e0e0c7",
@@ -88,18 +82,7 @@ pub fn normalize_pinned_duplicates(raw: &mut serde_json::Value) {
             .filter_map(serde_json::Value::as_array_mut)
         {
             controls.retain_mut(|control| {
-                if action == 0 {
-                    if control == second {
-                        return false;
-                    }
-                    if control == first {
-                        control["Label"] = "Centered class and team select".into();
-                        control["Files"]
-                            .as_object_mut()
-                            .unwrap()
-                            .extend(second["Files"].as_object().unwrap().clone());
-                    }
-                } else if action == 1 && control == first {
+                if action == 1 && control == first {
                     // The old FileName variants are absent from the current HUD.
                     // Keep the later control that edits the loaded health resource.
                     return false;
@@ -120,6 +103,14 @@ pub fn migrate_saved_options(
     if hud_id.eq_ignore_ascii_case("kbnhud") && !migrated.contains_key("kbn_low_ammo_blink_2") {
         if let Some(value) = options.get("kbn_low_ammo_blink_1") {
             migrated.insert("kbn_low_ammo_blink_2".into(), value.clone());
+        }
+    }
+    // rayshud's class and team select toggles used to share one name and were
+    // shown as one control. A value saved for it covers both until the team
+    // toggle is saved on its own.
+    if hud_id.eq_ignore_ascii_case("rayshud") && !migrated.contains_key("rh_toggle_center_team") {
+        if let Some(value) = options.get("rh_toggle_center_class") {
+            migrated.insert("rh_toggle_center_team".into(), value.clone());
         }
     }
     migrated
@@ -148,7 +139,15 @@ pub fn unavailable_reason(control: &HudControl) -> Option<&'static str> {
     if control.special.is_some() || control.special_parameters.is_some() {
         return Some("This option uses a HUD editor Special operation that execs cannot apply. Use the HUD author's instructions. Previously saved values are retained but are not applied.");
     }
-    if control.write_file.is_some() {
+    // The HUD editor's WriteCfg puts a file under tf/cfg/<hud>/ for the HUD to
+    // include. Only a console .cfg can be run from the managed autoexec line;
+    // any other target is the same unsupported wiring as WriteFile.
+    if control.write_file.is_some()
+        || control
+            .write_cfg
+            .as_ref()
+            .is_some_and(|write| !is_console_cfg(&write.file_name))
+    {
         return Some("This option requires the HUD editor's log-based customization wiring, which execs does not support. Use the HUD author's instructions. Previously saved values are retained but are not applied.");
     }
     if control.pulse.is_some() || control.shadow.is_some() {
@@ -173,6 +172,10 @@ pub fn unavailable_reason(control: &HudControl) -> Option<&'static str> {
         .and_then(|options| options.iter().find_map(unavailable_reason))
 }
 
+fn is_console_cfg(file_name: &str) -> bool {
+    file_name.to_ascii_lowercase().ends_with(".cfg")
+}
+
 /// A combo choice may omit Type because it inherits the parent operation.
 /// Only a top-level nameless-type control lacks a usable editor widget.
 pub fn unavailable_top_level_reason(control: &HudControl) -> Option<&'static str> {
@@ -183,12 +186,74 @@ pub fn unavailable_top_level_reason(control: &HudControl) -> Option<&'static str
     })
 }
 
-/// These two copy/pasted paths are wrong in schema commit
-/// 17bccd15d818d12707ce89574318acbc23c85a9f. Match the exact old data before
+/// budhud's YouTuber profile choices: label, the value saved profiles hold,
+/// and the value in schema commit c87968920fdfa289018b43de6fca69e08c8f988e.
+/// Upstream renumbered them for its index-based editor. execs selects a choice
+/// by value, so the saved numbers stay and a stored choice keeps its profile.
+const BUDHUD_PROFILE_CHOICES: [(&str, &str, &str); 7] = [
+    ("No Profile", "0", "0"),
+    ("Uncle Dane", "1", "1"),
+    ("jayhyunpae", "2", "2"),
+    ("truktruk", "5", "3"),
+    ("Whisker", "6", "4"),
+    ("zenith", "7", "5"),
+    ("powah", "8", "6"),
+];
+
+/// Match the exact pinned choices before renumbering them; an unexpected list
+/// must not silently change which profile a saved value selects.
+fn keep_saved_budhud_profile_values(schema: &mut HudSchema) -> Result<(), ProfileError> {
+    let name = "bh_youtuber_select";
+    let changed = || {
+        ProfileError::Io(format!(
+            "The pinned budhud choices for {name} changed. Options were not applied."
+        ))
+    };
+    let choices = schema
+        .controls
+        .values_mut()
+        .flatten()
+        .find(|control| control.name == name)
+        .ok_or_else(|| ProfileError::Io(format!("The pinned budhud schema is missing {name}.")))?
+        .options
+        .as_mut()
+        .ok_or_else(changed)?;
+    // Every known label exactly once, all with saved values or all with the
+    // pinned ones.
+    let all_match = |choices: &[HudControl], saved: bool| {
+        choices.len() == BUDHUD_PROFILE_CHOICES.len()
+            && BUDHUD_PROFILE_CHOICES.iter().all(|(label, kept, pinned)| {
+                let value = if saved { kept } else { pinned };
+                choices
+                    .iter()
+                    .any(|choice| choice.label == *label && choice.value == *value)
+            })
+    };
+    if all_match(choices, true) {
+        return Ok(());
+    }
+    if !all_match(choices, false) {
+        return Err(changed());
+    }
+    for choice in choices {
+        let (_, kept, _) = BUDHUD_PROFILE_CHOICES
+            .iter()
+            .find(|(label, _, _)| choice.label == *label)
+            .ok_or_else(changed)?;
+        choice.value = (*kept).into();
+    }
+    Ok(())
+}
+
+/// Two copy/pasted kbnhud paths are wrong in schema commit
+/// c87968920fdfa289018b43de6fca69e08c8f988e. Match the exact old data before
 /// adapting it; unexpected data must not silently receive a guessed rewrite.
 pub fn adapt_pinned_schema(id: &str, schema: &mut HudSchema) -> Result<(), ProfileError> {
     check_catalog_schema(id)?;
     validate_identities(schema)?;
+    if id.eq_ignore_ascii_case("budhud") {
+        return keep_saved_budhud_profile_values(schema);
+    }
     if !id.eq_ignore_ascii_case("kbnhud") {
         return Ok(());
     }
@@ -431,20 +496,9 @@ mod tests {
         let raw = include_str!("../fixtures/hud-options/rayshud-duplicate-controls.json");
         let schema = parse_hud_schema(raw).unwrap();
         let controls: Vec<_> = schema.controls.values().flatten().collect();
-        assert_eq!(controls.len(), 2);
-        let centered = controls
-            .iter()
-            .find(|c| c.name == "rh_toggle_center_class")
-            .unwrap();
-        assert_eq!(centered.label, "Centered class and team select");
-        assert_eq!(
-            centered.files.as_ref().unwrap().as_object().unwrap().len(),
-            2
-        );
-        let health = controls
-            .iter()
-            .find(|c| c.name == "rh_val_health_style")
-            .unwrap();
+        assert_eq!(controls.len(), 1);
+        let health = controls[0];
+        assert_eq!(health.name, "rh_val_health_style");
         for choice in health.options.as_ref().unwrap() {
             assert!(choice.file_name.is_none());
             assert!(choice
@@ -455,7 +509,7 @@ mod tests {
                 .is_some());
         }
         // Hash matching must reject a changed upstream record, not bless a name.
-        assert!(parse_hud_schema(&raw.replace("Centered Team Select", "Changed")).is_err());
+        assert!(parse_hud_schema(&raw.replace("Health Style", "Changed")).is_err());
 
         let kbn = parse_hud_schema(include_str!(
             "../fixtures/hud-options/kbnhud-duplicate-controls.json"
@@ -472,6 +526,104 @@ mod tests {
         migrated.insert("kbn_low_ammo_blink_2".into(), "4 5 6 255".into());
         assert_eq!(migrate_saved_options("kbnhud", &migrated), migrated);
         assert!(migrate_saved_options("kbnhud", &BTreeMap::new()).is_empty());
+    }
+
+    #[test]
+    fn rayshud_team_select_follows_the_value_saved_for_the_shared_toggle() {
+        let old = BTreeMap::from([("rh_toggle_center_class".into(), "true".into())]);
+        let mut migrated = migrate_saved_options("rayshud", &old);
+        assert_eq!(migrated["rh_toggle_center_team"], "true");
+        assert_eq!(migrated["rh_toggle_center_class"], "true");
+        migrated.insert("rh_toggle_center_team".into(), "false".into());
+        assert_eq!(migrate_saved_options("rayshud", &migrated), migrated);
+        assert!(migrate_saved_options("rayshud", &BTreeMap::new()).is_empty());
+        assert_eq!(migrate_saved_options("budhud", &old), old);
+    }
+
+    #[test]
+    fn budhud_profile_choices_keep_the_values_saved_profiles_hold() {
+        let control: serde_json::Value = serde_json::from_str(include_str!(
+            "../fixtures/hud-options/budhud-youtuber-profile.json"
+        ))
+        .unwrap();
+        let raw = serde_json::json!({"Controls":{"General UI":[control]}});
+        let mut schema = parse_hud_schema(&raw.to_string()).unwrap();
+        adapt_pinned_schema("budhud", &mut schema).unwrap();
+        let once = schema.clone();
+        adapt_pinned_schema("budhud", &mut schema).unwrap();
+        assert_eq!(schema, once);
+        let choices: Vec<_> = schema.controls["General UI"][0]
+            .options
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|choice| {
+                let folder = choice
+                    .rename_file
+                    .as_ref()
+                    .map(|rename| rename.new_name.as_str());
+                (choice.label.as_str(), choice.value.as_str(), folder)
+            })
+            .collect();
+        assert_eq!(
+            choices,
+            [
+                ("No Profile", "0", None),
+                ("Uncle Dane", "1", Some("#users/dane/")),
+                ("jayhyunpae", "2", Some("#users/jayhyunpae/")),
+                ("truktruk", "5", Some("#users/truktruk/")),
+                ("Whisker", "6", Some("#users/whisker/")),
+                ("zenith", "7", Some("#users/zenith/")),
+                ("powah", "8", Some("#users/powah/")),
+            ]
+        );
+
+        // A changed upstream list is refused, not renumbered by guesswork.
+        for change in [
+            |raw: &mut serde_json::Value| raw["Options"][3]["Value"] = "9".into(),
+            |raw: &mut serde_json::Value| raw["Options"][3]["Label"] = "someone".into(),
+            |raw: &mut serde_json::Value| {
+                raw["Options"].as_array_mut().unwrap().pop();
+            },
+            |raw: &mut serde_json::Value| {
+                raw.as_object_mut().unwrap().remove("Options");
+            },
+        ] {
+            let mut control: serde_json::Value = serde_json::from_str(include_str!(
+                "../fixtures/hud-options/budhud-youtuber-profile.json"
+            ))
+            .unwrap();
+            change(&mut control);
+            let raw = serde_json::json!({"Controls":{"General UI":[control]}});
+            let mut schema = parse_hud_schema(&raw.to_string()).unwrap();
+            assert!(adapt_pinned_schema("budhud", &mut schema).is_err());
+        }
+        let mut missing = parse_hud_schema(r#"{"Controls":{"General UI":[]}}"#).unwrap();
+        assert!(adapt_pinned_schema("budhud", &mut missing).is_err());
+    }
+
+    #[test]
+    fn write_cfg_is_available_only_for_a_console_cfg() {
+        let control = |file: &str| {
+            let raw = serde_json::json!({"Controls":{"Extras":[{
+                "Name":"toggle","Label":"Toggle","Type":"Checkbox","Value":"false",
+                "WriteCfg":{"FileName":file,"TrueText":"x{Speedometer{visible 1}}","FalseText":""}
+            }]}});
+            parse_hud_schema(&raw.to_string()).unwrap()
+        };
+        for file in ["hud_minmode.cfg", "HUD_MINMODE.CFG"] {
+            assert!(unavailable_reason(&control(file).controls["Extras"][0]).is_none());
+        }
+        for file in ["hud_speedometer.txt", "hud_speedometer", "cfg"] {
+            let schema = control(file);
+            assert!(unavailable_reason(&schema.controls["Extras"][0]).is_some());
+            let mut tree = HudTree::default();
+            let options = BTreeMap::from([("toggle".into(), "true".into())]);
+            let applied = apply_hud_options(&mut tree, &schema, "flawhud", &options).unwrap();
+            assert!(applied.cfg_writes.is_empty());
+            assert!(applied.exec_stems.is_empty());
+            assert!(tree.files.is_empty());
+        }
     }
 
     #[test]

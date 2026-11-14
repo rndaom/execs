@@ -341,17 +341,27 @@ export function seedHudOptions(
   if (!schema) {
     return next;
   }
+  const sharedNames = SHARED_OPTION_NAMES[record?.id.toLowerCase() ?? ""] ?? {};
   for (const section of schema.sections) {
     for (const control of section.controls) {
+      const sharedName = sharedNames[control.name];
       const legacyValue =
-        record?.id.toLowerCase() === "kbnhud" && control.name === "kbn_low_ammo_blink_2"
-          ? (record.options.kbn_low_ammo_blink_1 ?? control.value)
-          : control.value;
+        (sharedName === undefined ? undefined : record?.options[sharedName]) ?? control.value;
       next[control.name] = optionValue(record, control.name, legacyValue);
     }
   }
   return next;
 }
+
+/**
+ * Controls that once shared another control's name in the HUD's schema, by HUD
+ * id. Until one is saved on its own it follows the value saved under the
+ * shared name (the core's `migrate_saved_options` applies the same rule).
+ */
+const SHARED_OPTION_NAMES: Record<string, Record<string, string>> = {
+  kbnhud: { kbn_low_ammo_blink_2: "kbn_low_ammo_blink_1" },
+  rayshud: { rh_toggle_center_team: "rh_toggle_center_class" },
+};
 
 export function hudOptionsDirty(
   draft: Record<string, string>,

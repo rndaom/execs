@@ -66,6 +66,46 @@ describe("hud catalog helpers", () => {
       "255 100 100 255",
     );
   });
+  it("seeds rayshud's team select toggle from the toggle it used to share a name with", () => {
+    const toggle = (name: string, label: string) => ({
+      name,
+      label,
+      controlType: "checkbox",
+      choices: [],
+      value: "false",
+    });
+    const schema = {
+      author: "fixture",
+      sections: [
+        {
+          name: "Options",
+          controls: [
+            toggle("rh_toggle_center_class", "Centered Class Select"),
+            toggle("rh_toggle_center_team", "Centered Team Select"),
+          ],
+        },
+      ],
+    };
+    const record = {
+      id: "rayshud",
+      hash: null,
+      source: "hudDb" as const,
+      options: { rh_toggle_center_class: "true" },
+    };
+    expect(seedHudOptions(schema, record)).toEqual({
+      rh_toggle_center_class: "true",
+      rh_toggle_center_team: "true",
+    });
+    expect(
+      seedHudOptions(schema, {
+        ...record,
+        options: { ...record.options, rh_toggle_center_team: "false" },
+      }).rh_toggle_center_team,
+    ).toBe("false");
+    expect(seedHudOptions(schema, { ...record, options: {} }).rh_toggle_center_team).toBe("false");
+    // Another HUD's control of the same name keeps its own default.
+    expect(seedHudOptions(schema, { ...record, id: "budhud" }).rh_toggle_center_team).toBe("false");
+  });
   it("filters by name and author", () => {
     expect(filterHudCatalog(PREVIEW_HUD_CATALOG, "toon")).toEqual([PREVIEW_HUD_CATALOG[1]]);
     expect(filterHudCatalog(PREVIEW_HUD_CATALOG, "Toon HUD")).toEqual([PREVIEW_HUD_CATALOG[1]]);

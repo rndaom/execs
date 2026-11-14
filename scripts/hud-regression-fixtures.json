@@ -3,42 +3,42 @@
     "id": "kbnhud",
     "archiveUrl": "https://codeload.github.com/Jotunn/kbnHud/legacy.zip/daeda0c20310a54646253f7dfdc9536ae7acdfb6",
     "archiveSha256": "829e58d87556555a1ad7b6da088f5c76252955fc64e75b0fc754d34c84c6e15f",
-    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/kbnhud.json",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/kbnhud.json",
     "schemaSha256": "e41144032f6bc198b0c6de31b667fb10592a5be34fcabd9c8dfabf5f1c8adf40"
   },
   {
     "id": "hypnotizehud",
     "archiveUrl": "https://codeload.github.com/Hypnootize/hypnotizehud/legacy.zip/82d332540a82ab085ff1a14b9aef774982ac5b9e",
     "archiveSha256": "07d4385993349514150e4fc94a3068207d90e9d589225a68d1e90aef985ac246",
-    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/hypnotize-hud.json",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/hypnotize-hud.json",
     "schemaSha256": "44eafa23a59a71dd577bb69db04a1f143d92f464c24333a07d7a371f20851abb"
   },
   {
     "id": "rayshud",
     "archiveUrl": "https://codeload.github.com/raysfire/rayshud/legacy.zip/a22ede014e4f3b1260aa8fd657ff0757d9d006b8",
     "archiveSha256": "63190652527b2bd16249c576c016ca14599e4ca746aed1a0c43d92b1c9513df9",
-    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/rayshud.json",
-    "schemaSha256": "db790856cba47d1eed4eb0dd580b73816ecc79d5ac40590c60f8706f681dcc44"
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/rayshud.json",
+    "schemaSha256": "de0fba380ba9c4eb1e3284a3ade302eda8b1b718688201fc4380cc20836714cd"
   },
   {
     "id": "budhud",
     "archiveUrl": "https://codeload.github.com/rbjaxter/budhud/legacy.zip/16f7be2bb4f0dcbe46ec5f444486ab6a6ea4c7e6",
     "archiveSha256": "e1ec9d49c1a564007e5e85ccc4fa32a024ebdd258e2480139bbe005d3fbee353",
-    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/budhud.json",
-    "schemaSha256": "6d21e251d434a1c0fe02eabff545405823f1bef361c43b13e4049c7bb0a9ee1a"
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/budhud.json",
+    "schemaSha256": "ef8ef1914b2c8c9e60cbc88228493a1f237e21f6a39c2252d4b636dea3f3ad10"
   },
   {
     "id": "flawhud",
     "archiveUrl": "https://codeload.github.com/CriticalFlaw/flawhud/legacy.zip/6282582e531ec1ca20b0ab85f9f1511be2f346df",
     "archiveSha256": "274a3724686145036505eba329a45fc02ef91558335487be08f881f34a3123cb",
-    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/flawhud.json",
-    "schemaSha256": "18bbc2d67b9a80ea626f53ae3875aebc83748be682b654bb2f4843d2a2d33d1e"
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/flawhud.json",
+    "schemaSha256": "06e767cf7a4774793d3a4cc258fcfe9b1975c4f6e828d9f241ac7cc54d0e8b33"
   },
   {
     "id": "eve-plus",
     "archiveUrl": "https://codeload.github.com/RoseyLemonz/eve-plus/legacy.zip/2ca73c1227276fa0f6234b0ead9ec4b92ce30d09",
     "archiveSha256": "3bc50bda8d20ba3ea5d3db16bcf8d9f87ea9a23f9057c0499113af136109baec",
-    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/17bccd15d818d12707ce89574318acbc23c85a9f/src/HUDEditor/JSON/eve-plus.json",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/eve-plus.json",
     "schemaSha256": "8e2e37b9719ff6cd10da02f82aee97cebe22114d63cbcaf8c56c6308a58287e8"
   }
 ]

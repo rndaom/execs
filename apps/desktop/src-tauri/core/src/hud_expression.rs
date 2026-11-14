@@ -300,7 +300,7 @@ mod tests {
 
     #[test]
     fn all_four_pinned_font_templates_follow_size_and_outline_in_both_directions() {
-        // TF2HUD.Editor 17bccd15: kbnhud.json and hypnotize-hud.json.
+        // TF2HUD.Editor c8796892: kbnhud.json and hypnotize-hud.json.
         for outline in [
             "kbn_crosshair1_outline",
             "kbn_crosshair2_outline",

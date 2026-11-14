@@ -2,7 +2,7 @@
 
 `rayshud-duplicate-controls.json` and `kbnhud-duplicate-controls.json` contain
 unaltered control records (grouped by duplicate name for the test) from
-CriticalFlaw/TF2HUD.Editor commit `17bccd15d818d12707ce89574318acbc23c85a9f`,
+CriticalFlaw/TF2HUD.Editor commit `c87968920fdfa289018b43de6fca69e08c8f988e`,
 `src/HUDEditor/JSON/{rayshud,kbnhud}.json`.
 
 These MIT-licensed data excerpts verify exact duplicate normalization and are
@@ -21,3 +21,10 @@ from the same pinned MIT schema. Its nonexistent `hudplayerclass_left.res`
 FileName is redundant with its complete direct `Files` instructions. The
 normalizer removes only that exact pinned record's stale filename; both states
 continue to edit the loaded model and disguise resources.
+
+# Renumbered profile choices
+
+`budhud-youtuber-profile.json` is the exact YouTuber Profile control from the
+same pinned MIT schema. Upstream renumbered its choices; the adapter keeps the
+values that saved profiles already hold, so a stored choice selects the same
+profile folder as before.

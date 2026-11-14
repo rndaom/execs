@@ -20,7 +20,7 @@ const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db"
 /// in it, a bad fetch is served for good and an upstream fix never arrives.
 /// The SHA is part of the cache filename, so bumping this constant invalidates
 /// the cache by construction.
-const SCHEMA_COMMIT: &str = "17bccd15d818d12707ce89574318acbc23c85a9f";
+const SCHEMA_COMMIT: &str = "c87968920fdfa289018b43de6fca69e08c8f988e";
 const RAW_SCHEMA_BASE: &str = "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor";
 
 const CATALOG_WORKERS: usize = 12;
