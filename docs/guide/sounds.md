@@ -1,5 +1,7 @@
 # Sounds
 
+Sounds has two tabs. **Hit and kill sound** holds the volume sliders and the two sounds you use; **Sound library** is where you search for and pick a sound. **Browse** on a sound opens the library for it.
+
 ## Game and music volume
 
 The **Game volume** and **Music volume** sliders save with the profile, so each profile keeps its own levels and a replaced `config.cfg` can't reset TF2 to full volume. If you change the volume in TF2's own options, execs keeps the new levels after the game closes. A profile that has never had a volume set in execs uses whatever TF2 last saved.
@@ -11,11 +13,11 @@ Each slot plays one of TF2's built-in effects, a [comfig.app](https://comfig.app
 Custom hit and kill sounds play on Valve Casual: TF2 exempts these two file names from sv_pure.
 
 - **Boost** (+6 or +12 dB) makes your own file louder, since TF2 caps hit sound volume at 100%. Built-in effects can't be boosted, and sounds from retired catalogs keep the boost they were saved with.
-- **Pitch** at 10 and 150 damage, set for each sound: 100 is normal and lower is deeper. The pitch rises with damage when the 150-damage pitch is higher.
-- **Repeat delay** (hit sound): 0 plays a sound for every hit; miniguns get loud.
+- **Pitch** at 10 and 150 damage, set for each sound under **Pitch and repeat timing**: 100 is normal and lower is deeper. The pitch rises with damage when the 150-damage pitch is higher.
+- **Repeat delay** (hit sound), in the same place: 0 plays a sound for every hit; miniguns get loud.
 - **Preview volume** only affects previews in execs. TF2 plays each sound at its slot's volume.
 
-Favorites are saved in execs itself, not in a profile.
+In the library, point at a sound (or tab to it) to show its star and **Use** button. Favorites are saved in execs itself, not in a profile.
 
 ## GameBanana hit and kill sounds
 

@@ -5,22 +5,12 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
-### Added
-
-- A Setups page that opens first: every setup with its HUD's picture and key details, and
-  one click to switch, or to switch and play.
-- An Edit page for the setup in the game: every setting on one page, grouped as Look, Feel,
-  Sound, Mods, Performance and Advanced, each showing its current value. Click a row to open the
-  page that changes it.
-
 ### Fixed
 
 - Linux AppImage: Steam started by Launch TF2, Verify game files or Steam closing no longer
   inherits execs's own libraries and Python setup, which made every Proton game (Deadlock, for
   one) close right after it started until Steam was restarted. Links opened in the browser get
   the same clean environment.
-- Setups page: Crosshair now names the crosshair the setup uses, with your own designs under
-  the names you saved them with, instead of reading "Execs crosshairs" for every setup.
 - Viewmodels: hiding a weapon no longer hides another weapon you left shown when the two share
   animations. Keep melee visible no longer hid Soldier's Shovel (through the Concheror) or melee
   swings for Engineer, Demoman and Medic. A weapon that stays partly visible because of this is
@@ -34,20 +24,25 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Changed
 
-- Comfig is now called Performance, and the sidebar uses the Edit page's groups: Look (HUD,
-  Crosshair, Viewmodels), Feel (Gameplay, Binds), then Sounds, Mods and Performance, Advanced
-  (Files, Launch) and Inventory.
-- No more fold-out sections: every setting is on the page. Performance's modules have their own tab
-  with search and category filters; HUD options, Mods' file check, Casual addons and particles,
-  and App settings' credits are always shown; Sounds puts pitch and repeat delay with each sound.
-- Viewmodels shows each class as one table, with every weapon under its slot and its own Shown,
-  Hidden or Hands only choice, instead of menus behind Customize weapons.
+- Calmer pages: settings sit in a narrower column that is easier to read on a wide window, the
+  sidebar is split into short groups, and the dot backdrop stays on the first-run and library
+  screens only.
+- Sounds has two tabs. Hit and kill sound holds the volume sliders and your two sounds, with
+  Pitch and repeat timing folded underneath; Sound library holds the search, filters and list.
+  Browse on a sound opens the library for it. The list has one page control at the bottom, and
+  a row's star and Use button appear when you point at or tab to it.
+- Viewmodels has two tabs, In game and Per weapon. Each class is one table with a row per
+  weapon slot; single weapons sit under Customize weapons, which opens by itself when a weapon
+  is set on its own, and each has its own Shown, Hidden or Hands only choice instead of a menu.
+- Fewer fold-out sections: Comfig's modules have their own tab with search and category
+  filters, and HUD options, Mods' file check, Casual addons and particles, and App settings'
+  credits are always shown.
 - HUD options with long lists of choices, including HUD crosshair glyphs, show every choice on the
   page instead of a drop-down menu.
 - Crosshair, Viewmodels and Mods' Casual setup show the same bar while changes aren't in TF2 yet,
   with Discard changes and Apply changes. Viewmodels applies straight from that bar, without a
   separate review window.
-- Performance shows an update button only when a newer mastercomfig is out, and keeps the comfig.app
+- Comfig shows an update button only when a newer mastercomfig is out, and keeps the comfig.app
   customizer next to the comfig-custom folder it makes. Removing the crosshair pack is a button at
   the bottom of the Crosshair page instead of a hidden menu, and buttons that repeated a switch or
   the sidebar (Open Comfig addons, Open Viewmodels) are gone.

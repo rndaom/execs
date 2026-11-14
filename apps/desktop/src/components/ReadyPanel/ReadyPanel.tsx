@@ -21,12 +21,6 @@ import { PackPrompt } from "./PackPrompt";
 import { ProfileMenu } from "./ProfileMenu";
 import { ReadyHeader } from "./ReadyHeader";
 
-/** What the settings area can use from the panel around it. */
-export type ReadyPanelTools = {
-  /** Opens the switch preview for a profile; absent when previews are unavailable. */
-  openCompare?: (id: string) => void;
-};
-
 /** The main surface once a profile exists: chrome, prompts and the settings host. */
 export function ReadyPanel({
   path,
@@ -66,8 +60,7 @@ export function ReadyPanel({
   launchBlockAction?: string;
   launchWarning?: string | null;
   onLaunchBlocked?: () => void;
-  /** The settings area, or a function of the panel's tools that returns it. */
-  settings?: ReactNode | ((tools: ReadyPanelTools) => ReactNode);
+  settings?: ReactNode;
   onDraftName: (name: string) => void;
   onSave: () => void;
   onCreateNew: () => void;
@@ -120,10 +113,6 @@ export function ReadyPanel({
   const controlsBusy = busy || progress.state.active;
   const visibleExportPacks = exportReview?.customPacks.slice(0, 50) ?? [];
   const { library } = profiles;
-  const settingsArea =
-    typeof settings === "function"
-      ? settings({ openCompare: onCompareSwitch ? setCompareTargetId : undefined })
-      : settings;
   const hasInactiveLibrary =
     library?.initialized &&
     library.usable &&
@@ -536,7 +525,7 @@ export function ReadyPanel({
         </div>
       </Modal>
 
-      {settingsArea ?? (
+      {settings ?? (
         <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
           {hasInactiveLibrary ? (
             <>

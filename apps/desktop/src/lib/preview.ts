@@ -3,7 +3,6 @@ import {
   emptyLibrary,
   previewImportedLibrary,
   previewSavedLibrary,
-  previewSavedProfile,
   previewSwitchLibrary,
 } from "./library-ui";
 import type { SettingsTab } from "./settings-ui";
@@ -18,7 +17,6 @@ export const PREVIEW_STATES = [
   "library",
   "inactive-library",
   "saved",
-  "setups",
   "absorb",
   "switch",
   "import",
@@ -44,7 +42,6 @@ export const PREVIEW_STATES = [
   "settings-mods",
   "settings-files",
   "settings-launch",
-  "settings-edit",
   "settings-locked",
   "settings-app-failure",
   "update-available",
@@ -73,7 +70,6 @@ const READY: PreviewState[] = [
   "library",
   "inactive-library",
   "saved",
-  "setups",
   "absorb",
   "switch",
   "import",
@@ -98,7 +94,6 @@ const READY: PreviewState[] = [
   "settings-mods",
   "settings-files",
   "settings-launch",
-  "settings-edit",
   "settings-locked",
   "settings-app-failure",
   "update-available",
@@ -182,13 +177,6 @@ export function previewLibrary(state: PreviewState): ProfileLibrary | null {
   if (state === "switch") {
     return previewSwitchLibrary(ONE.path);
   }
-  if (state === "setups") {
-    // Several profiles, so the Setups page has something to choose between.
-    const profiles = ["Main", "Casual", "Vanilla", "Comp"].map((name, index) =>
-      previewSavedProfile(name, index + 1),
-    );
-    return { ...emptyLibrary(ONE.path, true), activeProfileId: profiles[0].id, profiles };
-  }
   if (state === "import") {
     return previewImportedLibrary(ONE.path);
   }
@@ -236,7 +224,6 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
       return "inventory";
     case "settings-comfig":
     case "settings-comfig-vanilla":
-    case "settings-edit":
     case "welcome":
     case "folder-repair":
     case "profile-import-huds":

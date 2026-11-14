@@ -43,7 +43,6 @@ pub mod profile_compare;
 pub mod restore_points;
 pub mod settings;
 pub mod settings_copy;
-pub mod setup_overview;
 pub mod steam_inf;
 pub mod storage;
 pub mod surface;

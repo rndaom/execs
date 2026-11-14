@@ -14,6 +14,8 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CopySettings, type CopySettingsSource } from "./components/CopySettings";
+import { ClassTabs } from "./components/ui/ClassTabs";
+import { Disclosure } from "./components/ui/Disclosure";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
 import { Loading, Spinner } from "./components/ui/Spinner";
@@ -83,6 +85,9 @@ import {
   writeSoundFavorites,
   writeSoundPreviewLevel,
 } from "./lib/sound-library";
+
+/** The pane's two views: the sounds in use, and the library to pick them from. */
+type SoundsView = "sounds" | "library";
 
 const SLOT_TITLES: Record<HitsoundKind, string> = {
   hit: "Hit sound",
@@ -188,6 +193,14 @@ export function SoundsPane({
   const [favorites, setFavorites] = useState<Set<string>>(readSoundFavorites);
   const [previewLevel, setPreviewLevel] = useState(readSoundPreviewLevel);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [view, setView] = useState<SoundsView>("sounds");
+  // Browse on a slot opens the library and lands in its search box.
+  const focusSearch = useRef(false);
+  useEffect(() => {
+    if (view !== "library" || !focusSearch.current) return;
+    focusSearch.current = false;
+    searchRef.current?.focus();
+  }, [view]);
   const customFilesKey = useMemo(
     () =>
       sourceFiles
@@ -385,6 +398,7 @@ export function SoundsPane({
     setSort("suggested");
     setQuery("");
     setPage(0);
+    setView("library");
     onIncomingHandled?.(incoming.key);
     document
       .getElementById("sound-library")
@@ -418,6 +432,7 @@ export function SoundsPane({
     <section data-testid="settings-sounds" className="min-w-0 text-left">
       <PaneHeader
         title="Sounds"
+        compact
         actions={
           copySettings ? (
             <CopySettings
@@ -429,416 +444,482 @@ export function SoundsPane({
         }
       />
 
-      <section data-testid="sounds-volume" aria-labelledby="sounds-volume-title" className="mb-6">
-        <h2 id="sounds-volume-title" className="eyebrow mb-1">
-          Game audio
-        </h2>
-        <div className="pane-split gap-y-0">
-          <Slider
-            id="sounds-game-volume"
-            label="Game volume"
-            value={Math.round(draft.gameVolume * 100)}
-            min={0}
-            max={100}
-            disabled={locked}
-            format={(value) => `${value}%`}
-            onChange={(value) => setDraft((current) => ({ ...current, gameVolume: value / 100 }))}
-          />
-          <Slider
-            id="sounds-music-volume"
-            label="Music volume"
-            value={Math.round(draft.musicVolume * 100)}
-            min={0}
-            max={100}
-            disabled={locked}
-            format={(value) => `${value}%`}
-            onChange={(value) => setDraft((current) => ({ ...current, musicVolume: value / 100 }))}
-          />
-        </div>
-      </section>
-
-      <div className="pane-split gap-y-6">
-        {(["hit", "kill"] as const).map((kind) => (
-          <SoundSlot
-            key={kind}
-            kind={kind}
-            slot={draft[kind]}
-            locked={locked}
-            canAudition={canAudition}
-            playing={player.playing}
-            onPlay={(choice) => toggle(kind, choice)}
-            onChange={(update) => patchSlot(kind, update)}
-            repeatDelay={kind === "hit" ? draft.repeatDelay : undefined}
-            onRepeatDelay={(repeatDelay) => setDraft((current) => ({ ...current, repeatDelay }))}
-            onBrowse={() => {
-              setTarget(kind);
-              searchRef.current?.focus();
-              searchRef.current?.scrollIntoView?.({ block: "center" });
-            }}
-          />
-        ))}
+      <div className="pane-views">
+        <ClassTabs
+          tabs={[
+            { id: "sounds", label: "Hit and kill sound" },
+            { id: "library", label: "Sound library" },
+          ]}
+          selected={view}
+          label="Sounds"
+          idPrefix="sounds-view"
+          panelId="sounds-view-panel"
+          onSelect={setView}
+        />
       </div>
 
-      {record ? (
-        <div
-          data-testid="sounds-files"
-          className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4"
-        >
-          <p className="t-meta min-w-0">Your own sound files are saved in this profile.</p>
-          <button
-            type="button"
-            data-testid="sounds-remove"
-            disabled={removeLocked}
-            onClick={onRemove}
-            className="btn btn-ghost"
+      <div id="sounds-view-panel" role="tabpanel" aria-labelledby={`sounds-view-${view}`}>
+        <div hidden={view !== "sounds"} className="pt-5" data-testid="sounds-view-sounds">
+          <section
+            data-testid="sounds-volume"
+            aria-labelledby="sounds-volume-title"
+            className="mb-6"
           >
-            <Trash size={14} aria-hidden="true" /> Remove sound files
-          </button>
-        </div>
-      ) : null}
-
-      {dormantSounds.length ? (
-        <section data-testid="sounds-saved-inactive" className="pane-note mt-4">
-          <p>
-            Saved custom sound files stay in this profile while built-in effects play. Assigning
-            your own sound file replaces one; Remove sound files deletes both saved files.
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {dormantSounds.map(({ kind, entry, effect }) => (
-              <button
-                key={kind}
-                type="button"
-                data-testid={`sounds-use-saved-${kind}`}
-                className="btn btn-ghost"
-                onClick={() =>
-                  patchSlot(kind, {
-                    choice: { kind: "installed", entry },
-                    boost: boostOf(entry),
-                  })
+            <h2 id="sounds-volume-title" className="eyebrow mb-1">
+              Game audio
+            </h2>
+            <div className="pane-split gap-y-0">
+              <Slider
+                id="sounds-game-volume"
+                label="Game volume"
+                value={Math.round(draft.gameVolume * 100)}
+                min={0}
+                max={100}
+                disabled={locked}
+                format={(value) => `${value}%`}
+                onChange={(value) =>
+                  setDraft((current) => ({ ...current, gameVolume: value / 100 }))
                 }
-              >
-                Use saved {kind} sound instead of{" "}
-                {STOCK_HITSOUND_EFFECTS[effect]?.label ?? "effect"}
-              </button>
+              />
+              <Slider
+                id="sounds-music-volume"
+                label="Music volume"
+                value={Math.round(draft.musicVolume * 100)}
+                min={0}
+                max={100}
+                disabled={locked}
+                format={(value) => `${value}%`}
+                onChange={(value) =>
+                  setDraft((current) => ({ ...current, musicVolume: value / 100 }))
+                }
+              />
+            </div>
+          </section>
+
+          <div className="pane-split gap-y-6">
+            {(["hit", "kill"] as const).map((kind) => (
+              <SoundSlot
+                key={kind}
+                kind={kind}
+                slot={draft[kind]}
+                locked={locked}
+                canAudition={canAudition}
+                playing={player.playing}
+                onPlay={(choice) => toggle(kind, choice)}
+                onChange={(update) => patchSlot(kind, update)}
+                onBrowse={() => {
+                  setTarget(kind);
+                  focusSearch.current = true;
+                  setView("library");
+                }}
+              />
             ))}
           </div>
-        </section>
-      ) : null}
 
-      {hasSavedCatalogSound ? (
-        <section data-testid="sounds-retired-source" className="pane-note mt-4">
-          A sound here is from a retired catalog. It still plays.
-        </section>
-      ) : null}
+          <Disclosure
+            profileId={profileId}
+            storageKey="sounds-advanced"
+            summary="Pitch and repeat timing"
+            testId="sounds-advanced"
+            className="mt-3"
+          >
+            <div className="pane-split mt-1 gap-y-4">
+              {(["hit", "kill"] as const).map((kind) => (
+                <fieldset key={kind} className="min-w-0">
+                  <legend className="eyebrow mb-1">{SLOT_TITLES[kind]}</legend>
+                  <Slider
+                    id={`sounds-${kind}-pitch-min`}
+                    label="Pitch at 10 damage"
+                    accessibleLabel={`${SLOT_TITLES[kind]} pitch at 10 damage`}
+                    hint="100 is normal."
+                    wideLabel
+                    value={draft[kind].pitchMin}
+                    min={PITCH_MIN}
+                    max={PITCH_MAX}
+                    disabled={locked}
+                    onChange={(pitchMin) => patchSlot(kind, { pitchMin })}
+                  />
+                  <Slider
+                    id={`sounds-${kind}-pitch-max`}
+                    label="Pitch at 150 damage"
+                    accessibleLabel={`${SLOT_TITLES[kind]} pitch at 150 damage`}
+                    wideLabel
+                    value={draft[kind].pitchMax}
+                    min={PITCH_MIN}
+                    max={PITCH_MAX}
+                    disabled={locked}
+                    onChange={(pitchMax) => patchSlot(kind, { pitchMax })}
+                  />
+                  {kind === "hit" ? (
+                    <Slider
+                      id="sounds-repeat-delay"
+                      label="Repeat delay"
+                      accessibleLabel="Hit sound repeat delay"
+                      hint="0 plays every hit."
+                      wideLabel
+                      value={Math.round(draft.repeatDelay * 100)}
+                      min={0}
+                      max={100}
+                      disabled={locked}
+                      format={(value) => `${(value / 100).toFixed(2)} s`}
+                      onChange={(value) =>
+                        setDraft((current) => ({ ...current, repeatDelay: value / 100 }))
+                      }
+                    />
+                  ) : null}
+                </fieldset>
+              ))}
+            </div>
+          </Disclosure>
 
-      {record?.sourceChanged ? (
-        <section data-testid="sounds-source-changed" role="alert" className="surface mt-4 p-3">
-          <h2 className="t-row">Saved sound source changed</h2>
-          <p className="t-meta mt-1">
-            A sound file changed outside execs. Pick both sounds again, or use Remove sound files.
-          </p>
-        </section>
-      ) : null}
-
-      {hitSources.length || killSources.length || sourceIssues.length || sourcesLoading ? (
-        <section data-testid="sounds-source-conflicts" className="surface mt-4 p-3">
-          <h2 className="t-row">Sound file sources</h2>
-          {sourcesLoading ? (
-            <p className="t-meta mt-1">
-              <Loading>Checking other installed sound files…</Loading>
-            </p>
-          ) : null}
-          {hitSources.length || killSources.length ? (
-            <p className="t-meta mt-1">
-              These packs also replace TF2&apos;s hit or kill sound, so TF2 may play theirs.
-            </p>
-          ) : null}
-          {(
-            [
-              ["Hit sound", hitSources],
-              ["Kill sound", killSources],
-            ] as const
-          ).map(([label, candidates]) =>
-            candidates.length ? (
-              <div key={label} className="mt-2">
-                <p className="t-meta">{label} path also appears in:</p>
-                <ul className="mt-1 list-disc space-y-1 pl-5 text-[12.5px] text-ink-muted">
-                  {candidates.map((candidate) => (
-                    <li key={`${candidate.pack}:${candidate.member}:${candidate.kind}`}>
-                      <code>
-                        tf/custom/{candidate.pack}
-                        {candidate.kind === "loose" ? "/" : " → "}
-                        {candidate.member}
-                      </code>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null,
-          )}
-          {sourceIssues.length ? (
-            <div data-testid="sounds-source-incomplete" className="t-meta mt-2 text-warn">
-              <p>Some packs couldn&apos;t be checked.</p>
-              <ul className="mt-1 list-disc pl-5">
-                {sourceIssues.map((issue) => (
-                  <li key={issue}>{issue}</li>
+          {dormantSounds.length ? (
+            <section data-testid="sounds-saved-inactive" className="pane-note mt-4">
+              <p>
+                Saved custom sound files stay in this profile while built-in effects play. Assigning
+                your own sound file replaces one; Remove sound files deletes both saved files.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {dormantSounds.map(({ kind, entry, effect }) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    data-testid={`sounds-use-saved-${kind}`}
+                    className="btn btn-ghost"
+                    onClick={() =>
+                      patchSlot(kind, {
+                        choice: { kind: "installed", entry },
+                        boost: boostOf(entry),
+                      })
+                    }
+                  >
+                    Use saved {kind} sound instead of{" "}
+                    {STOCK_HITSOUND_EFFECTS[effect]?.label ?? "effect"}
+                  </button>
                 ))}
-              </ul>
+              </div>
+            </section>
+          ) : null}
+
+          {hasSavedCatalogSound ? (
+            <section data-testid="sounds-retired-source" className="pane-note mt-4">
+              A sound here is from a retired catalog. It still plays.
+            </section>
+          ) : null}
+
+          {record?.sourceChanged ? (
+            <section data-testid="sounds-source-changed" role="alert" className="surface mt-4 p-3">
+              <h2 className="t-row">Saved sound source changed</h2>
+              <p className="t-meta mt-1">
+                A sound file changed outside execs. Pick both sounds again, or use Remove sound
+                files.
+              </p>
+            </section>
+          ) : null}
+
+          {hitSources.length || killSources.length || sourceIssues.length || sourcesLoading ? (
+            <section data-testid="sounds-source-conflicts" className="surface mt-4 p-3">
+              <h2 className="t-row">Sound file sources</h2>
+              {sourcesLoading ? (
+                <p className="t-meta mt-1">
+                  <Loading>Checking other installed sound files…</Loading>
+                </p>
+              ) : null}
+              {hitSources.length || killSources.length ? (
+                <p className="t-meta mt-1">
+                  These packs also replace TF2&apos;s hit or kill sound, so TF2 may play theirs.
+                </p>
+              ) : null}
+              {(
+                [
+                  ["Hit sound", hitSources],
+                  ["Kill sound", killSources],
+                ] as const
+              ).map(([label, candidates]) =>
+                candidates.length ? (
+                  <div key={label} className="mt-2">
+                    <p className="t-meta">{label} path also appears in:</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5 text-[12.5px] text-ink-muted">
+                      {candidates.map((candidate) => (
+                        <li key={`${candidate.pack}:${candidate.member}:${candidate.kind}`}>
+                          <code>
+                            tf/custom/{candidate.pack}
+                            {candidate.kind === "loose" ? "/" : " → "}
+                            {candidate.member}
+                          </code>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null,
+              )}
+              {sourceIssues.length ? (
+                <div data-testid="sounds-source-incomplete" className="t-meta mt-2 text-warn">
+                  <p>Some packs couldn&apos;t be checked.</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {sourceIssues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+        </div>
+
+        <div hidden={view !== "library"} className="pt-3" data-testid="sounds-view-library">
+          <section id="sound-library" className="scroll-mt-4" aria-label="Sound library">
+            <div className="pane-toolbar">
+              <p className="t-meta" aria-live="polite">
+                {libraryLoading ? (
+                  <Loading>Loading sources…</Loading>
+                ) : (
+                  `${rows.length} of ${library.length} sounds`
+                )}
+              </p>
+              <div className="pane-actions">
+                <button
+                  type="button"
+                  data-testid="sounds-choose-file"
+                  disabled={picking || !canAudition}
+                  title={
+                    canAudition
+                      ? "WAV, MP3 or Ogg Vorbis, up to 30 seconds."
+                      : "Needs the desktop app."
+                  }
+                  onClick={() => void chooseFile()}
+                  className="btn btn-ghost"
+                >
+                  {picking ? <Spinner size={14} /> : <UploadSimple size={14} />}
+                  {picking ? "Reading…" : "Add a sound file…"}
+                </button>
+              </div>
+            </div>
+            {pickError ? (
+              <p data-testid="sounds-pick-error" className="t-meta mt-2 text-warn">
+                {pickError}
+              </p>
+            ) : null}
+            {added ? (
+              <p data-testid="sounds-gamebanana-added" role="status" className="t-meta mt-2">
+                {gameBananaAddedNote(added)}{" "}
+                <button type="button" className="underline" onClick={() => setAdded(null)}>
+                  Dismiss
+                </button>
+              </p>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Segmented
+                label="Choosing for"
+                size="sm"
+                testIdPrefix="sounds-target"
+                options={TARGET_OPTIONS}
+                value={target}
+                onChange={setTarget}
+              />
+              <label className="relative block min-w-40 flex-1">
+                <span className="sr-only">Search sounds</span>
+                <MagnifyingGlass
+                  size={14}
+                  className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint"
+                />
+                <input
+                  ref={searchRef}
+                  type="search"
+                  data-testid="sounds-search"
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setPage(0);
+                  }}
+                  placeholder="Search by name…"
+                  className="field w-full py-2 pr-3 pl-8 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
+                />
+              </label>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <Segmented
+                label="Show"
+                size="sm"
+                testIdPrefix="sounds-filter"
+                options={SOUND_FILTERS.map((option) =>
+                  option.id === "favorites" && favorites.size
+                    ? { ...option, label: `Favorites ${favorites.size}` }
+                    : option,
+                )}
+                value={filter}
+                onChange={(next) => {
+                  setFilter(next);
+                  setPage(0);
+                }}
+              />
+              <Segmented
+                label="Sort sounds"
+                size="sm"
+                testIdPrefix="sounds-sort"
+                options={SOUND_SORTS}
+                value={sort}
+                onChange={(next) => {
+                  setSort(next);
+                  setPage(0);
+                }}
+              />
+            </div>
+            {comfigIndex === null && !comfigError ? (
+              <p className="t-meta mt-2">
+                <Loading>Loading comfig.app sounds…</Loading>
+              </p>
+            ) : null}
+
+            <ul data-testid="sounds-library" className="mt-3 list-none p-0">
+              {paged.entries.map((entry) => {
+                const choice = entry.choiceFor(target);
+                const pick = entry.pickFor(target);
+                const playable = canAudition && stockAvailable(entry, target);
+                const selected = sameChoice(draft[target].choice, choice);
+                const otherKind = target === "hit" ? "kill" : "hit";
+                const inOther = sameChoice(draft[otherKind].choice, entry.choiceFor(otherKind));
+                const clipName = accessibleNames.get(entry.id) ?? entry.label;
+                return (
+                  <li
+                    key={entry.id}
+                    data-testid={`sounds-row-${entry.id}`}
+                    className="row sound-row min-h-11 gap-3 border-b border-edge px-1 py-1.5 last:border-b-0"
+                  >
+                    <PlayButton
+                      verb="Preview"
+                      clipName={clipName}
+                      playing={player.playing === soundKey(pick)}
+                      disabled={!playable}
+                      onClick={() => toggle(target, choice)}
+                    />
+                    <span className="flex min-w-0 flex-1 items-baseline gap-3">
+                      <span className="max-w-[60%] shrink-0 truncate text-[13px] font-medium text-ink">
+                        {entry.label}
+                      </span>
+                      <span className="t-meta truncate">
+                        {soundSourceLabel(entry)}
+                        {entry.meta ? ` · ${entry.meta}` : ""}
+                        {entry.madeFor && entry.madeFor !== target
+                          ? ` · uploaded as a ${entry.madeFor} sound`
+                          : ""}
+                        {inOther ? ` · ${SLOT_TITLES[otherKind]}` : ""}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="sound-icon-button sound-row-action"
+                      data-testid={`sounds-favorite-${entry.id}`}
+                      aria-pressed={favorites.has(entry.id)}
+                      aria-label={`Favorite ${clipName}`}
+                      title={favorites.has(entry.id) ? "Remove from favorites" : "Add to favorites"}
+                      onClick={() => toggleFavorite(entry.id)}
+                    >
+                      <Star
+                        size={14}
+                        weight={favorites.has(entry.id) ? "fill" : "regular"}
+                        aria-hidden="true"
+                      />
+                    </button>
+                    <AssignButton
+                      label={selected ? "Selected" : "Use"}
+                      accessibleLabel={`Use ${clipName} for ${ROLE_NOUNS[target]}`}
+                      active={selected}
+                      disabled={locked}
+                      testId={`sounds-assign-${target}-${entry.id}`}
+                      className="sound-row-action"
+                      onClick={() => assign(target, entry)}
+                    />
+                  </li>
+                );
+              })}
+              {rows.length === 0 ? (
+                <li className="py-8 text-center">
+                  <p className="t-row">
+                    {query.trim()
+                      ? `No sounds match “${query.trim()}”.`
+                      : filter === "favorites"
+                        ? "Star a sound to keep it here."
+                        : "No sounds here yet."}
+                  </p>
+                </li>
+              ) : null}
+            </ul>
+            {paged.pageCount > 1 ? (
+              <SoundPagination
+                page={paged.page}
+                pageCount={paged.pageCount}
+                first={paged.first}
+                last={paged.last}
+                total={rows.length}
+                onPage={(next) => {
+                  setPage(next);
+                  document.getElementById("sound-library")?.scrollIntoView?.({ block: "start" });
+                }}
+              />
+            ) : null}
+            {stockError || comfigError ? (
+              <div className="pane-toolbar mt-3 rounded-md border border-edge bg-panel p-3">
+                <div className="min-w-0">
+                  {stockError ? (
+                    <p data-testid="sounds-stock-error" className="t-meta">
+                      Built-in sounds unavailable: {stockError}
+                    </p>
+                  ) : null}
+                  {comfigError ? (
+                    <p data-testid="sounds-comfig-error" className="t-meta">
+                      comfig.app sounds unavailable: {comfigError}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  disabled={libraryLoading}
+                  onClick={() => setReloadKey((current) => current + 1)}
+                  className="btn btn-ghost"
+                >
+                  <ArrowClockwise size={14} /> Retry sources
+                </button>
+              </div>
+            ) : null}
+          </section>
+
+          {record ? (
+            <div
+              data-testid="sounds-files"
+              className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4"
+            >
+              <p className="t-meta min-w-0">Your own sound files are saved in this profile.</p>
+              <button
+                type="button"
+                data-testid="sounds-remove"
+                disabled={removeLocked}
+                onClick={onRemove}
+                className="btn btn-ghost"
+              >
+                <Trash size={14} aria-hidden="true" /> Remove sound files
+              </button>
             </div>
           ) : null}
-        </section>
-      ) : null}
+
+          <p className="pane-note mt-6">
+            <button
+              type="button"
+              onClick={() => void openExternal("https://comfig.app/hits/")}
+              className="underline decoration-edge-strong underline-offset-2 hover:text-ink"
+            >
+              comfig.app
+            </button>{" "}
+            sounds belong to their creators.
+          </p>
+        </div>
+      </div>
 
       {player.error ? (
         <p data-testid="sounds-play-error" className="t-meta mt-4 text-warn">
           {player.error}
         </p>
       ) : null}
-
-      <section
-        id="sound-library"
-        className="mt-5 scroll-mt-4 border-t border-edge pt-3"
-        aria-label="Sound library"
-      >
-        <div className="pane-toolbar">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3">
-            <h2 className="t-section">Sound library</h2>
-            <p className="t-meta mt-1" aria-live="polite">
-              {libraryLoading ? (
-                <Loading>Loading sources…</Loading>
-              ) : (
-                `${rows.length} of ${library.length} sounds`
-              )}
-            </p>
-          </div>
-          <div className="pane-actions">
-            <button
-              type="button"
-              data-testid="sounds-choose-file"
-              disabled={picking || !canAudition}
-              title={
-                canAudition ? "WAV, MP3 or Ogg Vorbis, up to 30 seconds." : "Needs the desktop app."
-              }
-              onClick={() => void chooseFile()}
-              className="btn btn-ghost"
-            >
-              {picking ? <Spinner size={14} /> : <UploadSimple size={14} />}
-              {picking ? "Reading…" : "Add a sound file…"}
-            </button>
-          </div>
-        </div>
-        {pickError ? (
-          <p data-testid="sounds-pick-error" className="t-meta mt-2 text-warn">
-            {pickError}
-          </p>
-        ) : null}
-        {added ? (
-          <p data-testid="sounds-gamebanana-added" role="status" className="t-meta mt-2">
-            {gameBananaAddedNote(added)}{" "}
-            <button type="button" className="underline" onClick={() => setAdded(null)}>
-              Dismiss
-            </button>
-          </p>
-        ) : null}
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Segmented
-            label="Choosing for"
-            size="sm"
-            testIdPrefix="sounds-target"
-            options={TARGET_OPTIONS}
-            value={target}
-            onChange={setTarget}
-          />
-          <label className="relative block min-w-40 flex-1">
-            <span className="sr-only">Search sounds</span>
-            <MagnifyingGlass
-              size={14}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-faint"
-            />
-            <input
-              ref={searchRef}
-              type="search"
-              data-testid="sounds-search"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(0);
-              }}
-              placeholder="Search by name…"
-              className="field w-full py-2 pr-3 pl-8 text-[13px] text-ink placeholder:text-ink-faint focus:outline-none"
-            />
-          </label>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <Segmented
-            label="Show"
-            size="sm"
-            testIdPrefix="sounds-filter"
-            options={SOUND_FILTERS.map((option) =>
-              option.id === "favorites" && favorites.size
-                ? { ...option, label: `Favorites ${favorites.size}` }
-                : option,
-            )}
-            value={filter}
-            onChange={(next) => {
-              setFilter(next);
-              setPage(0);
-            }}
-          />
-          <Segmented
-            label="Sort sounds"
-            size="sm"
-            testIdPrefix="sounds-sort"
-            options={SOUND_SORTS}
-            value={sort}
-            onChange={(next) => {
-              setSort(next);
-              setPage(0);
-            }}
-          />
-        </div>
-        {comfigIndex === null && !comfigError ? (
-          <p className="t-meta mt-2">
-            <Loading>Loading comfig.app sounds…</Loading>
-          </p>
-        ) : null}
-
-        {paged.pageCount > 1 ? (
-          <SoundPagination
-            position="top"
-            page={paged.page}
-            pageCount={paged.pageCount}
-            first={paged.first}
-            last={paged.last}
-            total={rows.length}
-            onPage={setPage}
-          />
-        ) : null}
-
-        <ul data-testid="sounds-library" className="mt-2 list-none p-0">
-          {paged.entries.map((entry) => {
-            const choice = entry.choiceFor(target);
-            const pick = entry.pickFor(target);
-            const playable = canAudition && stockAvailable(entry, target);
-            const selected = sameChoice(draft[target].choice, choice);
-            const otherKind = target === "hit" ? "kill" : "hit";
-            const inOther = sameChoice(draft[otherKind].choice, entry.choiceFor(otherKind));
-            const clipName = accessibleNames.get(entry.id) ?? entry.label;
-            return (
-              <li
-                key={entry.id}
-                data-testid={`sounds-row-${entry.id}`}
-                className="row min-h-11 gap-3 border-b border-edge px-1 py-1.5 last:border-b-0"
-              >
-                <PlayButton
-                  verb="Preview"
-                  clipName={clipName}
-                  playing={player.playing === soundKey(pick)}
-                  disabled={!playable}
-                  onClick={() => toggle(target, choice)}
-                />
-                <span className="flex min-w-0 flex-1 items-baseline gap-3">
-                  <span className="max-w-[60%] shrink-0 truncate text-[13px] font-medium text-ink">
-                    {entry.label}
-                  </span>
-                  <span className="t-meta truncate">
-                    {soundSourceLabel(entry)}
-                    {entry.meta ? ` · ${entry.meta}` : ""}
-                    {entry.madeFor && entry.madeFor !== target
-                      ? ` · uploaded as a ${entry.madeFor} sound`
-                      : ""}
-                    {inOther ? ` · ${SLOT_TITLES[otherKind]}` : ""}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  className="sound-icon-button"
-                  data-testid={`sounds-favorite-${entry.id}`}
-                  aria-pressed={favorites.has(entry.id)}
-                  aria-label={`Favorite ${clipName}`}
-                  title={favorites.has(entry.id) ? "Remove from favorites" : "Add to favorites"}
-                  onClick={() => toggleFavorite(entry.id)}
-                >
-                  <Star
-                    size={14}
-                    weight={favorites.has(entry.id) ? "fill" : "regular"}
-                    aria-hidden="true"
-                  />
-                </button>
-                <AssignButton
-                  label={selected ? "Selected" : "Use"}
-                  accessibleLabel={`Use ${clipName} for ${ROLE_NOUNS[target]}`}
-                  active={selected}
-                  disabled={locked}
-                  testId={`sounds-assign-${target}-${entry.id}`}
-                  onClick={() => assign(target, entry)}
-                />
-              </li>
-            );
-          })}
-          {rows.length === 0 ? (
-            <li className="py-8 text-center">
-              <p className="t-row">
-                {query.trim()
-                  ? `No sounds match “${query.trim()}”.`
-                  : filter === "favorites"
-                    ? "Star a sound to keep it here."
-                    : "No sounds here yet."}
-              </p>
-            </li>
-          ) : null}
-        </ul>
-        {paged.pageCount > 1 ? (
-          <SoundPagination
-            position="bottom"
-            page={paged.page}
-            pageCount={paged.pageCount}
-            first={paged.first}
-            last={paged.last}
-            total={rows.length}
-            onPage={(next) => {
-              setPage(next);
-              document.getElementById("sound-library")?.scrollIntoView?.({ block: "start" });
-            }}
-          />
-        ) : null}
-        {stockError || comfigError ? (
-          <div className="pane-toolbar mt-3 rounded-md border border-edge bg-panel p-3">
-            <div className="min-w-0">
-              {stockError ? (
-                <p data-testid="sounds-stock-error" className="t-meta">
-                  Built-in sounds unavailable: {stockError}
-                </p>
-              ) : null}
-              {comfigError ? (
-                <p data-testid="sounds-comfig-error" className="t-meta">
-                  comfig.app sounds unavailable: {comfigError}
-                </p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              disabled={libraryLoading}
-              onClick={() => setReloadKey((current) => current + 1)}
-              className="btn btn-ghost"
-            >
-              <ArrowClockwise size={14} /> Retry sources
-            </button>
-          </div>
-        ) : null}
-      </section>
-
-      <p className="pane-note mt-6">
-        <button
-          type="button"
-          onClick={() => void openExternal("https://comfig.app/hits/")}
-          className="underline decoration-edge-strong underline-offset-2 hover:text-ink"
-        >
-          comfig.app
-        </button>{" "}
-        sounds belong to their creators.
-      </p>
 
       {/* Stays in reach at any scroll position: previews are often loud. */}
       <fieldset className="sound-preview-dock" title="Preview volume only">
@@ -894,7 +975,6 @@ export function SoundsPane({
 }
 
 function SoundPagination({
-  position,
   page,
   pageCount,
   first,
@@ -902,7 +982,6 @@ function SoundPagination({
   total,
   onPage,
 }: {
-  position: "top" | "bottom";
   page: number;
   pageCount: number;
   first: number;
@@ -915,17 +994,17 @@ function SoundPagination({
   const jumpPage = parseSoundPageJump(jump, pageCount);
   return (
     <nav
-      aria-label={`Sound library pages, ${position}`}
-      data-testid={`sounds-pagination-${position}`}
+      aria-label={"Sound library pages"}
+      data-testid="sounds-pagination"
       className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
     >
-      <p className="t-meta tnum" aria-live={position === "top" ? "polite" : "off"}>
+      <p className="t-meta tnum" aria-live="polite">
         {first}–{last} of {total}
       </p>
       <div className="flex flex-wrap items-center gap-1">
         <button
           type="button"
-          data-testid={`sounds-page-prev-${position}`}
+          data-testid="sounds-page-prev"
           aria-label="Previous sound page"
           disabled={page === 0}
           onClick={() => onPage(page - 1)}
@@ -955,7 +1034,7 @@ function SoundPagination({
         )}
         <button
           type="button"
-          data-testid={`sounds-page-next-${position}`}
+          data-testid="sounds-page-next"
           aria-label="Next sound page"
           disabled={page >= pageCount - 1}
           onClick={() => onPage(page + 1)}
@@ -971,12 +1050,12 @@ function SoundPagination({
           if (jumpPage !== null) onPage(jumpPage);
         }}
       >
-        <label htmlFor={`sounds-page-jump-${position}`} className="t-meta">
+        <label htmlFor="sounds-page-jump" className="t-meta">
           Page
         </label>
         <input
-          id={`sounds-page-jump-${position}`}
-          data-testid={`sounds-page-jump-${position}`}
+          id="sounds-page-jump"
+          data-testid="sounds-page-jump"
           type="text"
           inputMode="numeric"
           pattern="[0-9]+"
@@ -1008,8 +1087,6 @@ function SoundSlot({
   onPlay,
   onChange,
   onBrowse,
-  repeatDelay,
-  onRepeatDelay,
 }: {
   kind: HitsoundKind;
   slot: SlotDraft;
@@ -1019,9 +1096,6 @@ function SoundSlot({
   onPlay: (choice: SoundChoice) => void;
   onChange: (update: Partial<SlotDraft>) => void;
   onBrowse: () => void;
-  /** Hit sounds only: seconds before the next hit can play the sound again. */
-  repeatDelay?: number;
-  onRepeatDelay: (seconds: number) => void;
 }) {
   const title = SLOT_TITLES[kind];
   const key = soundKey(pickForChoice(kind, slot.choice));
@@ -1108,46 +1182,6 @@ function SoundSlot({
           onChange={(id) => onChange({ boost: Number(id) as BoostDb })}
         />
       </div>
-      <div className="mt-2 border-t border-edge pt-1">
-        <Slider
-          id={`sounds-${kind}-pitch-min`}
-          label="Pitch at 10 damage"
-          accessibleLabel={`${title} pitch at 10 damage`}
-          hint="100 is normal."
-          wideLabel
-          value={slot.pitchMin}
-          min={PITCH_MIN}
-          max={PITCH_MAX}
-          disabled={locked}
-          onChange={(pitchMin) => onChange({ pitchMin })}
-        />
-        <Slider
-          id={`sounds-${kind}-pitch-max`}
-          label="Pitch at 150 damage"
-          accessibleLabel={`${title} pitch at 150 damage`}
-          wideLabel
-          value={slot.pitchMax}
-          min={PITCH_MIN}
-          max={PITCH_MAX}
-          disabled={locked}
-          onChange={(pitchMax) => onChange({ pitchMax })}
-        />
-        {repeatDelay === undefined ? null : (
-          <Slider
-            id="sounds-repeat-delay"
-            label="Repeat delay"
-            accessibleLabel="Hit sound repeat delay"
-            hint="0 plays every hit."
-            wideLabel
-            value={Math.round(repeatDelay * 100)}
-            min={0}
-            max={100}
-            disabled={locked}
-            format={(value) => `${(value / 100).toFixed(2)} s`}
-            onChange={(value) => onRepeatDelay(value / 100)}
-          />
-        )}
-      </div>
     </section>
   );
 }
@@ -1189,6 +1223,7 @@ function AssignButton({
   active,
   disabled,
   testId,
+  className = "",
   onClick,
 }: {
   label: string;
@@ -1196,6 +1231,7 @@ function AssignButton({
   active: boolean;
   disabled: boolean;
   testId: string;
+  className?: string;
   onClick: () => void;
 }) {
   return (
@@ -1213,7 +1249,7 @@ function AssignButton({
         active
           ? "text-ink shadow-[inset_0_0_0_1.5px_var(--color-brand)]"
           : "btn-ghost text-ink-muted"
-      }`}
+      } ${className}`.trim()}
     >
       {label}
     </button>

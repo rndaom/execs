@@ -1,5 +1,7 @@
 # Viewmodels
 
+Viewmodels has two tabs: **In game** and **Per weapon**.
+
 ## In game
 
 - **Viewmodel FOV**: your weapon's perspective, separate from world FOV.
@@ -10,7 +12,7 @@ These save on their own, like Gameplay.
 
 ## Per weapon
 
-Each class is one table: a row per weapon slot with its weapons listed beneath it, then inspect animations. Choose **Shown**, **Hidden** or **Hands only** for a whole slot or for one weapon. Changing a slot moves the weapons that follow it; a weapon you set on its own keeps its choice. Your choices wait in a bar at the bottom of the page until you press **Apply changes**, or **Discard changes** to go back. Applying builds `tf/custom/execs-viewmodels.vpk` from your own TF2 files; only your first-person view changes, and nothing is written until you apply.
+Each class is one table: a row per weapon slot, then inspect animations. Choose **Shown**, **Hidden** or **Hands only** for a whole slot. To set one weapon differently from its slot, open **Customize weapons** under the table; it opens by itself when a weapon is already set on its own. Changing a slot moves the weapons that follow it; a weapon you set on its own keeps its choice. Your choices wait in a bar at the bottom of the page until you press **Apply changes**, or **Discard changes** to go back. Applying builds `tf/custom/execs-viewmodels.vpk` from your own TF2 files; only your first-person view changes, and nothing is written until you apply.
 
 **Set every class…** applies one choice to the whole profile (show all, hide all, or keep melee visible) and shows exactly what changes first.
 

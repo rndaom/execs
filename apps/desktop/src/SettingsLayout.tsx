@@ -1,16 +1,12 @@
-import { PencilSimple, SquaresFour } from "@phosphor-icons/react";
 import { Component, createRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
-import { DotBackdrop } from "./components/DotBackdrop";
 import { SETTINGS_TAB_ICONS } from "./components/ui/tabIcons";
 import { contentBlocks, revealBlocks } from "./lib/entrance";
 import { SETTINGS_TAB_GROUPS, SETTINGS_TAB_LABELS, type SettingsTab } from "./lib/settings-ui";
 
-type WorkspaceTab = SettingsTab | "app" | "setups" | "edit";
+type WorkspaceTab = SettingsTab | "app";
 
 function workspaceLabel(tab: WorkspaceTab) {
-  if (tab === "app") return "App settings";
-  if (tab === "edit") return "Edit";
-  return tab === "setups" ? "Setups" : SETTINGS_TAB_LABELS[tab];
+  return tab === "app" ? "App settings" : SETTINGS_TAB_LABELS[tab];
 }
 
 type ScrollRegionProps = {
@@ -122,9 +118,6 @@ export function SettingsLayout({
   scrollIdentity = null,
   utility,
   page = null,
-  onSetups,
-  onEdit,
-  editLabel = "Edit",
   changed,
 }: {
   tab: SettingsTab;
@@ -135,19 +128,12 @@ export function SettingsLayout({
   /** Global actions, such as App settings, remain reachable below the nav. */
   utility?: ReactNode;
   /** A global page can share the shell without becoming a profile pane. */
-  page?: "setups" | "edit" | "app" | null;
-  /** Opens the Setups page; its entry tops the sidebar when provided. */
-  onSetups?: () => void;
-  /** Opens the Edit page; its entry sits under Setups when provided. */
-  onEdit?: () => void;
-  /** The Edit entry's text, naming the setup in the game. */
-  editLabel?: string;
+  page?: "app" | null;
   /** Panes with changes that have not reached the profile yet. */
   changed?: ReadonlySet<SettingsTab>;
 }) {
   const nav = useRef<HTMLElement | null>(null);
-  // App settings sits below the nav, so it has no item here to travel to.
-  const activeTab = page === null ? tab : page === "app" ? null : page;
+  const activeTab = page === null ? tab : null;
   const [indicator, setIndicator] = useState<{
     top: number;
     height: number;
@@ -195,48 +181,9 @@ export function SettingsLayout({
               style={{ transform: `translateY(${indicator.top}px)`, height: indicator.height }}
             />
           ) : null}
-          {onSetups ? (
-            <div className="settings-nav-group">
-              <button
-                type="button"
-                data-testid="settings-tab-setups"
-                data-active={page === "setups" ? "true" : "false"}
-                aria-current={page === "setups" ? "page" : undefined}
-                title="Setups"
-                onClick={onSetups}
-                className="settings-nav-item"
-              >
-                <span aria-hidden="true" className="shrink-0">
-                  <SquaresFour size={16} weight="regular" />
-                </span>
-                <span className="settings-nav-label">Setups</span>
-              </button>
-              {onEdit ? (
-                <button
-                  type="button"
-                  data-testid="settings-tab-edit"
-                  data-active={page === "edit" ? "true" : "false"}
-                  aria-current={page === "edit" ? "page" : undefined}
-                  title={editLabel}
-                  onClick={onEdit}
-                  className="settings-nav-item"
-                >
-                  <span aria-hidden="true" className="shrink-0">
-                    <PencilSimple size={16} weight="regular" />
-                  </span>
-                  <span className="settings-nav-label settings-nav-label-clip">{editLabel}</span>
-                </button>
-              ) : null}
-            </div>
-          ) : null}
           {SETTINGS_TAB_GROUPS.map((group) => (
-            <div key={group.label} className="settings-nav-group">
-              {group.label ? (
-                <p className="eyebrow settings-nav-heading" aria-hidden="true">
-                  {group.label}
-                </p>
-              ) : null}
-              {group.tabs.map((item) => {
+            <div key={group[0]} className="settings-nav-group">
+              {group.map((item) => {
                 const active = page === null && item === tab;
                 const Icon = SETTINGS_TAB_ICONS[item];
                 return (
@@ -271,7 +218,6 @@ export function SettingsLayout({
         {utility ? <div className="settings-utility">{utility}</div> : null}
       </aside>
       <div className="settings-workspace">
-        <DotBackdrop />
         <PaneScrollRegion tab={page ?? tab} scrollIdentity={scrollIdentity}>
           {children}
         </PaneScrollRegion>
