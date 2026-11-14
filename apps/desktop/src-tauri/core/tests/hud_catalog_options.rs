@@ -131,8 +131,10 @@ fn flawhud_full_schema_applies_supported_choices_without_log_files() {
     let mut cases = vec![BTreeMap::new()];
     let mut log_files = Vec::new();
     for control in schema.controls.values().flatten() {
-        if let Some(write) = &control.write_file {
+        // The HUD editor writes these itself, into the HUD or tf/cfg/flawhud/.
+        if let Some(write) = control.write_file.as_ref().or(control.write_cfg.as_ref()) {
             log_files.push(write.file_name.clone());
+            assert!(execs_core::hud_schema_compat::unavailable_reason(control).is_some());
         }
         if execs_core::hud_schema_compat::unavailable_reason(control).is_some() {
             continue;
@@ -166,8 +168,9 @@ fn flawhud_full_schema_applies_supported_choices_without_log_files() {
     );
     for options in cases {
         let mut tree = original.clone();
-        apply_hud_options(&mut tree, &schema, "flawhud", &options)
+        let applied = apply_hud_options(&mut tree, &schema, "flawhud", &options)
             .unwrap_or_else(|error| panic!("{options:?}: {error:?}"));
+        assert!(applied.cfg_writes.is_empty(), "{options:?}");
         for file in &log_files {
             assert_eq!(
                 tree.get(file),

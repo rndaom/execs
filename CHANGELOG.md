@@ -31,6 +31,9 @@ User-facing changes only. The release workflow publishes the matching
 - After Steam moves TF2 to another library or drive, confirming the new folder no longer fails
   with "This library belongs to another TF2 install". execs now offers to move your profiles to
   the new folder, as intended.
+- HUD options: rayshud's Centered Class Select and Centered Team Select are two options, as in
+  the HUD's own editor, instead of one combined option. A setup that had the combined option on
+  keeps both on.
 
 ### Changed
 
