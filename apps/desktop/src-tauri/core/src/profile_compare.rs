@@ -114,7 +114,7 @@ pub(crate) fn tokens(line: &str) -> Vec<String> {
 }
 
 /// `name value` and `bind key command` lines, last one wins, credentials skipped.
-pub(crate) fn managed_values(text: &str) -> BTreeMap<String, String> {
+fn managed_values(text: &str) -> BTreeMap<String, String> {
     let mut values = BTreeMap::new();
     for line in text.lines() {
         let parts = tokens(line);
@@ -221,22 +221,16 @@ pub(crate) fn sound_names(
     )
 }
 
-/// The execs Gameplay and Binds cfg text a saved profile holds, concatenated.
-pub(crate) fn managed_text(profiles_dir: &Path, manifest: &ProfileManifest) -> String {
-    let mut text = String::new();
+fn library_side(profiles_dir: &Path, manifest: &ProfileManifest) -> CompareSide {
+    let mut managed_text = String::new();
     for path in MANAGED_COMPARE_PATHS {
         if manifest.files.iter().any(|file| file.path == path) {
             if let Ok(bytes) = profile_file_bytes_from(profiles_dir, &manifest.id, path) {
-                text.push_str(&String::from_utf8_lossy(&bytes));
-                text.push('\n');
+                managed_text.push_str(&String::from_utf8_lossy(&bytes));
+                managed_text.push('\n');
             }
         }
     }
-    text
-}
-
-fn library_side(profiles_dir: &Path, manifest: &ProfileManifest) -> CompareSide {
-    let managed_text = managed_text(profiles_dir, manifest);
     let (hit_sound, kill_sound) = sound_names(manifest.hitsound.as_ref());
     CompareSide {
         id: manifest.id.clone(),

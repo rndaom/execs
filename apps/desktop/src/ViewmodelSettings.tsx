@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { PaneSection } from "./components/ui/PaneSection";
 import { SliderRow } from "./components/ui/SliderRow";
 import { SwitchRow } from "./components/ui/Switch";
 import { useAppStatus } from "./hooks/useAppStatus";
@@ -62,14 +61,12 @@ export function ViewmodelSettings({
   }
 
   return (
-    <PaneSection
-      id="viewmodel-settings"
-      title="In game"
-      description={cfgReady ? undefined : "Startup settings are still loading or need a retry."}
-      as="fieldset"
-      first
-    >
-      <div className="pane-split mt-3">
+    <fieldset data-testid="viewmodel-settings">
+      <legend className="sr-only">In game</legend>
+      {cfgReady ? null : (
+        <p className="t-meta mb-3">Startup settings are still loading or need a retry.</p>
+      )}
+      <div className="pane-split">
         <div className="min-w-0">
           {/* The readout keeps an imported fraction until the slider moves. */}
           <SliderRow
@@ -94,7 +91,7 @@ export function ViewmodelSettings({
               note={
                 draft.r_drawviewmodel === 1
                   ? undefined
-                  : "Every viewmodel is hidden in game, whatever you choose per weapon below."
+                  : "Every viewmodel is hidden in game, whatever you choose under Per weapon."
               }
               onChange={(next) => patch({ r_drawviewmodel: next ? 1 : 0 })}
             />
@@ -125,11 +122,11 @@ export function ViewmodelSettings({
             description={OFFICIAL_ADDON_DETAILS["transparent-viewmodels"]}
             checked={transparentViewmodels}
             disabled={addonLocked || !canUseComfigAddons}
-            note={canUseComfigAddons ? undefined : "Available with mastercomfig."}
+            note={canUseComfigAddons ? undefined : "Available with a Comfig profile."}
             onChange={() => onToggleTransparentViewmodels()}
           />
         </div>
       </div>
-    </PaneSection>
+    </fieldset>
   );
 }

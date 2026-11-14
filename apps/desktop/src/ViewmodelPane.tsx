@@ -1,5 +1,6 @@
 import { DownloadSimple, Trash } from "@phosphor-icons/react";
 import { useState } from "react";
+import { ClassTabs } from "./components/ui/ClassTabs";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
 import type { ViewmodelBuildRequest, ViewmodelRecord, ViewmodelSourceCatalog } from "./lib/bridge";
@@ -7,7 +8,12 @@ import { legacyViewmodelSelectionCount } from "./lib/viewmodel-ui";
 import { ViewmodelBuilder } from "./ViewmodelBuilder";
 import { ViewmodelSettings, type ViewmodelSettingsProps } from "./ViewmodelSettings";
 
-/** Per-class viewmodel choices, with the profile's saved pack kept usable. */
+type ViewmodelView = "game" | "weapons";
+
+/**
+ * Viewmodels in two views: the in-game settings, and the per-class weapon
+ * choices with the profile's saved pack kept usable beside them.
+ */
 export function ViewmodelPane({
   active,
   profileId,
@@ -33,6 +39,7 @@ export function ViewmodelPane({
   const locked = !useCanWrite();
   const { running } = useAppStatus();
   const [barSlot, setBarSlot] = useState<HTMLDivElement | null>(null);
+  const [view, setView] = useState<ViewmodelView>("game");
   const previouslyBuilt = record?.source === "compiled";
   const locallyBuilt = record?.source === "stockBuilt";
   const legacyChoices = legacyViewmodelSelectionCount(record);
@@ -46,25 +53,8 @@ export function ViewmodelPane({
         ? "Your own VPK."
         : "None. TF2 shows its normal viewmodels.";
 
-  return (
-    <section data-testid="settings-viewmodels" className="min-w-0 text-left">
-      <PaneHeader title="Viewmodels" />
-      {record?.sourceChanged ? (
-        <p data-testid="viewmodel-source-changed" role="alert" className="t-meta mb-4 text-warn">
-          This pack was changed outside execs. Replace or remove it.
-        </p>
-      ) : null}
-      {settings ? (
-        <div className="mb-8">
-          <ViewmodelSettings key={profileId ?? "no-profile"} profileId={profileId} {...settings} />
-        </div>
-      ) : null}
-      {settings ? (
-        <h2 id="viewmodel-per-weapon" className="t-section section mb-3">
-          Per weapon
-        </h2>
-      ) : null}
-
+  const weapons = (
+    <>
       <ViewmodelBuilder
         key={profileId ?? "no-profile"}
         active={active}
@@ -117,7 +107,50 @@ export function ViewmodelPane({
           ) : null}
         </div>
       </section>
-      {/* The apply bar sits at the end of the pane so it stays in view throughout. */}
+    </>
+  );
+
+  return (
+    <section data-testid="settings-viewmodels" className="min-w-0 text-left">
+      <PaneHeader title="Viewmodels" compact={Boolean(settings)} />
+      {record?.sourceChanged ? (
+        <p data-testid="viewmodel-source-changed" role="alert" className="t-meta mb-4 text-warn">
+          This pack was changed outside execs. Replace or remove it.
+        </p>
+      ) : null}
+      {settings ? (
+        <div className="pane-views">
+          <ClassTabs
+            tabs={[
+              { id: "game", label: "In game" },
+              { id: "weapons", label: "Per weapon" },
+            ]}
+            selected={view}
+            label="Viewmodels"
+            idPrefix="viewmodel-view"
+            panelId="viewmodel-view-panel"
+            onSelect={setView}
+          />
+        </div>
+      ) : null}
+
+      {settings ? (
+        <div id="viewmodel-view-panel" role="tabpanel" aria-labelledby={`viewmodel-view-${view}`}>
+          <div hidden={view !== "game"} className="pt-5" data-testid="viewmodel-view-game">
+            <ViewmodelSettings
+              key={profileId ?? "no-profile"}
+              profileId={profileId}
+              {...settings}
+            />
+          </div>
+          <div hidden={view !== "weapons"} className="pt-5" data-testid="viewmodel-view-weapons">
+            {weapons}
+          </div>
+        </div>
+      ) : (
+        weapons
+      )}
+      {/* The apply bar sits at the end of the pane so it stays in view in both views. */}
       <div ref={setBarSlot} className="contents" />
     </section>
   );

@@ -392,8 +392,22 @@ it("browses for the slot that asked and keeps focus on the chosen sound", async 
     expect(box.querySelector('[data-testid="sounds-sort-suggested"]')).not.toBeNull();
     expect(box.querySelector('[data-testid="sounds-filter-all"]')).not.toBeNull();
     expect(button("sounds-hit-browse").getAttribute("aria-label")).toBe("Browse sounds for hits");
+    // The pane opens on the two slots; the library waits on its own tab.
+    const slots = box.querySelector<HTMLElement>('[data-testid="sounds-view-sounds"]');
+    const library = box.querySelector<HTMLElement>('[data-testid="sounds-view-library"]');
+    expect(slots?.hidden).toBe(false);
+    expect(library?.hidden).toBe(true);
+    expect(library?.contains(box.querySelector('[data-testid="sounds-search"]'))).toBe(true);
+    // Pitch and repeat timing stay folded until asked for.
+    expect(box.querySelector<HTMLDetailsElement>('[data-testid="sounds-advanced"]')?.open).toBe(
+      false,
+    );
+    expect(box.querySelectorAll('[data-testid="sounds-pagination"]').length).toBeLessThanOrEqual(1);
 
     await act(async () => button("sounds-kill-browse").click());
+    expect(slots?.hidden).toBe(true);
+    expect(library?.hidden).toBe(false);
+    expect(box.querySelector("#sounds-view-library")?.getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(box.querySelector('[data-testid="sounds-search"]'));
     expect(box.querySelector('[data-testid="sounds-assign-hit-stock:1"]')).toBeNull();
     const use = button("sounds-assign-kill-stock:1");

@@ -223,7 +223,7 @@ export function ComfigPane({
   if (detail && detail.layer !== "comfig") {
     return (
       <section data-testid="settings-comfig" className="min-w-0 text-left">
-        <PaneHeader title="Performance" />
+        <PaneHeader title="Comfig" />
         <div data-testid="comfig-vanilla-gate" className="comfig-empty">
           <h2 className="t-section">This profile doesn't use mastercomfig</h2>
           {onTryComfig ? (
@@ -249,7 +249,7 @@ export function ComfigPane({
     <section data-testid="settings-comfig" className="min-w-0 text-left">
       <PaneHeader
         compact
-        title="Performance"
+        title="Comfig"
         actions={
           statusProblem ? (
             <p aria-live="polite" className="badge">
@@ -277,7 +277,7 @@ export function ComfigPane({
             },
           ]}
           selected={view}
-          label="Performance"
+          label="Comfig"
           idPrefix="comfig-view"
           panelId="comfig-view-panel"
           onSelect={setView}

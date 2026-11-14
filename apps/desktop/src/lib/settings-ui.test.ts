@@ -2,12 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { emptyLibrary, previewSavedLibrary } from "./library-ui";
 import {
   canWriteSettings,
-  editLabel,
   readLastPane,
-  SETTINGS_TAB_GROUPS,
   SETTINGS_TAB_LABELS,
   SETTINGS_TABS,
-  SETUP_GROUPS,
   showSettingsChrome,
   writeLastPane,
 } from "./settings-ui";
@@ -27,41 +24,11 @@ describe("settings chrome", () => {
     vi.resetModules();
     try {
       const production = await import("./settings-ui");
-      expect(production.SETTINGS_TAB_GROUPS.flatMap((group) => group.tabs)).toEqual([
-        ...SETTINGS_TABS,
-      ]);
-      expect(production.SETTINGS_TAB_GROUPS.at(-1)).toEqual({
-        label: "Steam",
-        tabs: ["inventory"],
-      });
+      expect(production.SETTINGS_TAB_GROUPS.flat()).toEqual([...SETTINGS_TABS]);
+      expect(production.SETTINGS_TAB_GROUPS.at(-1)).toEqual(["inventory"]);
     } finally {
       vi.unstubAllEnvs();
     }
-  });
-
-  it("groups the sidebar like the Edit page, without headings that repeat a pane's name", () => {
-    expect(SETUP_GROUPS.map((group) => group.label)).toEqual([
-      "Look",
-      "Feel",
-      "Sound",
-      "Mods",
-      "Performance",
-      "Advanced",
-    ]);
-    expect(SETTINGS_TAB_GROUPS).toEqual([
-      { label: "Look", tabs: ["hud", "crosshair", "viewmodels"] },
-      { label: "Feel", tabs: ["gameplay", "binds"] },
-      { label: "", tabs: ["sounds", "mods", "comfig"] },
-      { label: "Advanced", tabs: ["files", "launch"] },
-      { label: "Steam", tabs: ["inventory"] },
-    ]);
-    expect(SETTINGS_TAB_LABELS.comfig).toBe("Performance");
-  });
-
-  it("names the Edit page after the setup in the game", () => {
-    expect(editLabel("FPS")).toBe("Edit FPS");
-    expect(editLabel("  ")).toBe("Edit");
-    expect(editLabel(null)).toBe("Edit");
   });
 
   it("shows only when a usable library has an active profile", () => {

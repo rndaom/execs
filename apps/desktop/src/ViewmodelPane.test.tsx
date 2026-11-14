@@ -192,6 +192,35 @@ describe("Viewmodels source-derived draft", () => {
     expect(importPack).toHaveBeenCalledWith(false);
   });
 
+  it("opens on the in-game settings and keeps the weapon choices one tab away", async () => {
+    await render();
+    const game = element('[data-testid="viewmodel-view-game"]');
+    const weapons = element('[data-testid="viewmodel-view-weapons"]');
+    expect(element("#viewmodel-view-game").getAttribute("aria-selected")).toBe("true");
+    expect(game.hidden).toBe(false);
+    expect(weapons.hidden).toBe(true);
+    expect(game.contains(element('[data-testid="viewmodel-settings"]'))).toBe(true);
+    expect(weapons.contains(element('[data-testid="viewmodel-saved-pack"]'))).toBe(true);
+
+    await click("#viewmodel-view-weapons");
+    expect(element("#viewmodel-view-weapons").getAttribute("aria-selected")).toBe("true");
+    expect(game.hidden).toBe(true);
+    expect(weapons.hidden).toBe(false);
+    expect(element("#viewmodel-view-panel").getAttribute("aria-labelledby")).toBe(
+      "viewmodel-view-weapons",
+    );
+
+    // Nothing is set on its own yet, so single weapons stay folded under their slots.
+    expect(element<HTMLDetailsElement>('[data-testid="viewmodel-weapons"]').open).toBe(false);
+    expect(element('[data-testid="viewmodel-weapons-summary"]').textContent).toBe(
+      "Every weapon follows its slot",
+    );
+    // A change made on one tab keeps its apply bar on the other.
+    await click('[data-testid="viewmodel-slot-choice-primary-full"]');
+    await click("#viewmodel-view-game");
+    expect(box.querySelector('[data-testid="viewmodel-build"]')).not.toBeNull();
+  });
+
   it("keeps a previously built profile record visible and read only", async () => {
     record = {
       id: "execs-viewmodels",
@@ -249,7 +278,11 @@ describe("Viewmodels source-derived draft", () => {
     expect(
       element('[data-testid="viewmodel-weapon"][data-group-id="scout/b"]').dataset.choice,
     ).toBe("shown");
-    expect(box.querySelector("details")).toBeNull();
+    // A weapon set on its own opens the fold and is counted on its summary.
+    expect(element<HTMLDetailsElement>('[data-testid="viewmodel-weapons"]').open).toBe(true);
+    expect(element('[data-testid="viewmodel-weapons-summary"]').textContent).toBe(
+      "1 set on its own",
+    );
     expect(box.querySelector('[data-testid="viewmodel-build"]')).toBeNull();
     await click('[data-testid="viewmodel-slot-choice-primary-full"]');
     expect(element('[data-testid="viewmodel-choice-summary"]').textContent).toBe("1 class changed");

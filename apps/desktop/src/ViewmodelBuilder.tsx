@@ -4,6 +4,7 @@ import { ApplyBar } from "./components/ui/ApplyBar";
 import { ChoiceMatrixHead, ChoiceMatrixRow } from "./components/ui/ChoiceMatrix";
 import { ClassIcon } from "./components/ui/ClassIcon";
 import { ClassTabs } from "./components/ui/ClassTabs";
+import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { Segmented } from "./components/ui/Segmented";
 import { Loading } from "./components/ui/Spinner";
@@ -554,6 +555,7 @@ function ViewmodelCatalogChoices({
           {layout ? (
             <ViewmodelClassChoices
               key={selectedClass}
+              profileId={profileId}
               catalog={catalog}
               className={selectedClass}
               layout={layout}
@@ -685,11 +687,13 @@ function ViewmodelCatalogChoices({
 }
 
 /**
- * One class as a table: a row per slot with its weapons listed beneath it,
- * then inspect animations and weapons outside the slots. Each row is one
- * choice under shared Shown / Hidden / Hands only columns.
+ * One class as a table: a row per slot naming its weapons, then inspect
+ * animations. Single weapons, and weapons outside the slots, fold away under
+ * "Customize weapons". Each row is one choice under shared Shown / Hidden /
+ * Hands only columns.
  */
 function ViewmodelClassChoices({
+  profileId,
   catalog,
   className,
   layout,
@@ -697,6 +701,7 @@ function ViewmodelClassChoices({
   editable,
   onEdit,
 }: {
+  profileId: string | null;
   catalog: ViewmodelSourceCatalog;
   className: string;
   layout: ViewmodelClassLayout;
@@ -708,6 +713,9 @@ function ViewmodelClassChoices({
   const inspect = viewmodelInspectChoice(choices, layout.inspect);
   const conflicts = viewmodelConflictRows(catalog, choices, className);
   const partlyShown = viewmodelPartlyShownRows(catalog, choices, className);
+  const exceptions = viewmodelExceptions(choices, layout);
+  // A slot with one weapon is that weapon; only slots with several fold out.
+  const weaponGroups = layout.slots.filter((slot) => slot.rows.length > 1);
 
   function weaponRow(row: ViewmodelRow, base: ViewmodelChoice) {
     const choice = viewmodelRowChoice(choices, row);
@@ -741,26 +749,22 @@ function ViewmodelClassChoices({
           const base = viewmodelSlotChoice(choices, slot.rows);
           const single = slot.rows.length === 1;
           return (
-            <Fragment key={slot.id}>
-              <ChoiceMatrixRow<ViewmodelChoice>
-                kind={single ? "item" : "group"}
-                name={`viewmodel-${className}-${slot.id}`}
-                label={slot.label}
-                accessibleLabel={`${classLabel} ${slot.label}`}
-                detail={single ? viewmodelRowLabel(slot.rows[0]) : undefined}
-                title={single ? viewmodelRowItemNames(slot.rows[0]).join(", ") : undefined}
-                columns={MODE_OPTIONS}
-                value={base}
-                neutralValue="shown"
-                disabled={!editable}
-                testId={`viewmodel-slot-${slot.id}`}
-                testIdPrefix={`viewmodel-slot-choice-${slot.id}`}
-                onChange={(mode) =>
-                  onEdit((current) => viewmodelWithSlot(current, slot.rows, mode))
-                }
-              />
-              {single ? null : slot.rows.map((row) => weaponRow(row, base))}
-            </Fragment>
+            <ChoiceMatrixRow<ViewmodelChoice>
+              key={slot.id}
+              kind="item"
+              name={`viewmodel-${className}-${slot.id}`}
+              label={slot.label}
+              accessibleLabel={`${classLabel} ${slot.label}`}
+              detail={slot.rows.map(viewmodelRowLabel).join(", ")}
+              title={single ? viewmodelRowItemNames(slot.rows[0]).join(", ") : undefined}
+              columns={MODE_OPTIONS}
+              value={base}
+              neutralValue="shown"
+              disabled={!editable}
+              testId={`viewmodel-slot-${slot.id}`}
+              testIdPrefix={`viewmodel-slot-choice-${slot.id}`}
+              onChange={(mode) => onEdit((current) => viewmodelWithSlot(current, slot.rows, mode))}
+            />
           );
         })}
         {layout.inspect.length ? (
@@ -782,17 +786,53 @@ function ViewmodelClassChoices({
             }
           />
         ) : null}
-        {layout.other.length ? (
-          <>
-            <div className="choice-matrix-row choice-matrix-group">
-              <div className="choice-matrix-label">
-                <p className="t-row">Other</p>
-              </div>
-            </div>
-            {layout.other.map((row) => weaponRow(row, "shown"))}
-          </>
-        ) : null}
       </div>
+
+      {weaponGroups.length || layout.other.length ? (
+        <Disclosure
+          profileId={profileId}
+          storageKey="viewmodel-weapons"
+          testId="viewmodel-weapons"
+          className="mt-2 max-w-[720px]"
+          defaultOpen={exceptions.length > 0}
+          summary={
+            <span className="flex min-w-0 flex-1 items-baseline justify-between gap-3">
+              <span>Customize weapons</span>
+              <span className="t-meta" data-testid="viewmodel-weapons-summary">
+                {exceptions.length
+                  ? `${exceptions.length} set on ${exceptions.length === 1 ? "its" : "their"} own`
+                  : "Every weapon follows its slot"}
+              </span>
+            </span>
+          }
+        >
+          <div className="choice-matrix" data-testid="viewmodel-weapon-matrix">
+            {weaponGroups.map((slot) => {
+              const base = viewmodelSlotChoice(choices, slot.rows);
+              return (
+                <Fragment key={slot.id}>
+                  <div className="choice-matrix-row choice-matrix-group">
+                    <div className="choice-matrix-label">
+                      <p className="t-row">{slot.label}</p>
+                    </div>
+                  </div>
+                  {slot.rows.map((row) => weaponRow(row, base))}
+                </Fragment>
+              );
+            })}
+            {layout.other.length ? (
+              <>
+                <div className="choice-matrix-row choice-matrix-group">
+                  <div className="choice-matrix-label">
+                    <p className="t-row">Other</p>
+                  </div>
+                </div>
+                {layout.other.map((row) => weaponRow(row, "shown"))}
+              </>
+            ) : null}
+          </div>
+        </Disclosure>
+      ) : null}
 
       {conflicts.length ? (
         <p role="alert" data-testid="viewmodel-conflict" className="t-meta mt-3 text-warn">
