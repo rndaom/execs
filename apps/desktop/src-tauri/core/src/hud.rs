@@ -746,12 +746,12 @@ pub fn extract_hud_zip(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
     finish_extracted(extract_zip(bytes, HUD_LIMITS)?)
 }
 
-/// `index` is the pinned schema index when it has been read. Before that the
-/// state says options may exist, and reading the schema settles it.
+/// `index` is the schema index built into the app, so the state always
+/// knows whether the installed HUD has options, without a request.
 pub fn hud_ui_state(
     manifest: &ProfileManifest,
     catalog: &[HudCatalogEntry],
-    index: Option<&crate::hud_schema_index::HudSchemaIndex>,
+    index: &crate::hud_schema_index::HudSchemaIndex,
 ) -> HudUiState {
     let status = resolve_hud(manifest);
     let installed = status.as_ref().map(|item| item.record.clone());
@@ -773,9 +773,9 @@ pub fn hud_ui_state(
         }
         _ => false,
     };
-    let schema_supported = installed.as_ref().is_some_and(|record| {
-        index.is_none_or(|index| schema_index_entry_for(index, record, catalog).is_some())
-    });
+    let schema_supported = installed
+        .as_ref()
+        .is_some_and(|record| schema_index_entry_for(index, record, catalog).is_some());
     HudUiState {
         schema_supported,
         installed,
@@ -4029,22 +4029,21 @@ mod tests {
             [0u8, 159, 146, 150]
         );
 
-        // Options exist when the pinned index lists the HUD, by repository
-        // for a catalog install; before the index is read the pane asks.
-        let index = |file: &str, repo: &str| crate::hud_schema_index::HudSchemaIndex {
-            entries: vec![crate::hud_schema_index::schema_index_entry(
-                file,
-                &format!(r#"{{"Links":{{"GitHub":"{repo}"}}}}"#),
-            )
-            .unwrap()],
+        // Options exist when the index lists the HUD, by repository for a
+        // catalog install.
+        let index = |file: &str, repo: &str| {
+            crate::hud_schema_index::parse_schema_folder(&format!(
+                r#"{{"commit":"abc","schemas":[{{"file":"{file}","github":"{repo}"}}]}}"#
+            ))
+            .unwrap()
+            .1
         };
-        assert!(hud_ui_state(&manifest, &[], None).schema_supported);
         let by_name = index("rayshud.json", "https://github.com/raysfire/rayshud");
-        assert!(hud_ui_state(&manifest, &[], Some(&by_name)).schema_supported);
+        assert!(hud_ui_state(&manifest, &[], &by_name).schema_supported);
         let other = index("flawhud.json", "https://github.com/CriticalFlaw/flawhud");
-        assert!(!hud_ui_state(&manifest, &[], Some(&other)).schema_supported);
+        assert!(!hud_ui_state(&manifest, &[], &other).schema_supported);
         let renamed = index("rays.json", "https://github.com/RaysFire/RaysHUD/");
-        assert!(!hud_ui_state(&manifest, &[], Some(&renamed)).schema_supported);
+        assert!(!hud_ui_state(&manifest, &[], &renamed).schema_supported);
         let mut record = manifest.hud.clone().unwrap();
         record.source = HudSource::HudDb;
         let catalog = [catalog_entry_from_json(

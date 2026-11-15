@@ -30,12 +30,13 @@ User-facing changes only. The release workflow publishes the matching
 ### Changed
 
 - HUD options appear for every HUD that TF2HUD.Editor has options for, instead of a fixed list:
-  hexhud, sunsethud, darhud, Improved Default HUD, m0rehud, Middle-Mann and the HUDs the editor
+  sunsethud, darhud, Improved Default HUD, m0rehud, Middle-Mann and the HUDs the editor
   gives its shared options (ahud, broeselhud, CLIP HUD, omphud and others) now have them. An
   imported HUD gets its options when its folder is named after the HUD.
 - An option that does not fit the installed HUD, because the file or section it edits is not in
-  that version, is listed as unavailable with the reason and left alone. The rest keep working.
-  m0rehud is no longer blocked as a whole.
+  that version, is left alone. These fold under one line below the options that work, which
+  opens to each one's reason. A HUD where no option fits shows no options. m0rehud is no longer
+  blocked as a whole.
 
 - Calmer pages: settings sit in a narrower column that is easier to read on a wide window, the
   sidebar is split into short groups, and the dot backdrop stays on the first-run and library

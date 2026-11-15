@@ -2,11 +2,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+  isSchemaFileName,
   pinIsBehind,
   pinnedCommit,
+  SCHEMA_INDEX_FILE,
   schemaFolderReport,
   schemaHuds,
+  schemaIndex,
+  schemaIndexText,
   sharedHuds,
+  stripJsonComments,
 } from "./pinned-sources.mjs";
 
 test("reads both pinned commits from the fetch modules", () => {
@@ -69,4 +74,44 @@ test("the report names every HUD a pin bump would add or drop", () => {
   assert.deepEqual(schemaFolderReport(pinned, pinned), [
     "The same HUDs have schemas; only their contents changed.",
   ]);
+});
+
+test("the built-in schema index was generated for the pinned commit", () => {
+  // `node scripts/pinned-sources.mjs --write-index` regenerates it, and a
+  // plain run compares it with the folder upstream.
+  const fetch = readFileSync(
+    new URL("../apps/desktop/src-tauri/src/hud_fetch.rs", import.meta.url),
+    "utf8",
+  );
+  const text = readFileSync(new URL(`../${SCHEMA_INDEX_FILE}`, import.meta.url), "utf8");
+  const index = JSON.parse(text);
+  assert.equal(index.commit, pinnedCommit(fetch, "SCHEMA_COMMIT"));
+  assert.equal(schemaIndexText(index), text);
+  assert.ok(index.schemas.length > 0);
+  for (const schema of index.schemas) assert.ok(isSchemaFileName(schema.file), schema.file);
+});
+
+test("the schema index records what each file in the folder says", () => {
+  const index = schemaIndex("abc", {
+    "newhud.json": `{ // a comment with a "quote
+      "Links": {"GitHub": "https://github.com/someone/NewHUD"}, /* block */ "Controls": {}}`,
+    "named.json": '{"Name":"Named // HUD","Controls":{}}',
+    "common.json": '[{"Name":"Plain Hud","Links":{"GitHub":"https://github.com/other/plain"}},{}]',
+    "shared-hud.json": '{"Controls":{}}',
+    "not-a-schema.json": "[1, 2",
+    "list.json": "[1, 2]",
+    "../escape.json": "{}",
+    "README.md": "{}",
+  });
+  assert.deepEqual(index, {
+    commit: "abc",
+    schemas: [
+      { file: "named.json", name: "Named // HUD", github: null },
+      { file: "newhud.json", name: null, github: "https://github.com/someone/NewHUD" },
+    ],
+    shared: [{ name: "Plain Hud", github: "https://github.com/other/plain" }],
+  });
+  // Without the shared schema the list offers nothing.
+  assert.deepEqual(schemaIndex("abc", { "common.json": '[{"Name":"Plain Hud"}]' }).shared, []);
+  assert.equal(stripJsonComments('{"a":"\\\\"} // x'), '{"a":"\\\\"} ');
 });

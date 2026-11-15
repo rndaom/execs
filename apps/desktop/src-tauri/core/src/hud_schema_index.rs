@@ -1,8 +1,12 @@
-//! Which TF2HUD.Editor schema file belongs to which HUD, built from the
-//! pinned commit's schema folder instead of a list of HUD names. Each schema
-//! names its HUD's repository; `common.json` lists the HUDs the editor gives
-//! the options in `shared-hud.json`. A HUD is matched by repository, then by
-//! name, so a schema added upstream needs no code here.
+//! Which TF2HUD.Editor schema file belongs to which HUD. The index is built
+//! into the app: `hud_schema_index.json` records, for the pinned commit's
+//! schema folder, the repository and name each schema gives its HUD and the
+//! HUDs the editor gives the options in `shared-hud.json`. It is generated
+//! by `scripts/pinned-sources.mjs --write-index`, which also fails when the
+//! file no longer matches the pinned folder. A HUD is matched by repository,
+//! then by name, so a schema added upstream needs no code here.
+
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
@@ -10,9 +14,7 @@ use crate::hud::github_repo_parts;
 use crate::hud_apply::strip_json_comments;
 use crate::profile::ProfileError;
 
-/// The editor's list of HUDs that get the shared options. Not a schema.
-pub const SHARED_HUD_LIST_FILE: &str = "common.json";
-/// The options the editor offers every HUD in `SHARED_HUD_LIST_FILE`.
+/// The options the editor offers every HUD in its shared list.
 pub const SHARED_SCHEMA_FILE: &str = "shared-hud.json";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,22 +63,33 @@ pub fn normalize_hud_repo(repo: &str) -> Option<String> {
     Some(format!("{owner}/{name}").to_ascii_lowercase())
 }
 
+/// The checked-in record of the pinned schema folder.
 #[derive(Deserialize)]
-struct Described {
-    #[serde(rename = "Name", default)]
-    name: Option<String>,
-    #[serde(rename = "Links", default)]
-    links: Option<Links>,
+struct Folder {
+    commit: String,
+    schemas: Vec<Described>,
+    #[serde(default)]
+    shared: Vec<Described>,
 }
 
 #[derive(Deserialize)]
-struct Links {
-    #[serde(rename = "GitHub", default)]
+struct Described {
+    /// The schema file; absent for a HUD in the shared list.
+    #[serde(default)]
+    file: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
     github: Option<String>,
 }
 
 impl Described {
-    fn entry(self, file: &str, stem: Option<&str>) -> HudSchemaIndexEntry {
+    fn entry(self) -> Option<HudSchemaIndexEntry> {
+        let file = self.file.unwrap_or_else(|| SHARED_SCHEMA_FILE.to_string());
+        if !is_schema_file_name(&file) {
+            return None;
+        }
+        let stem = (file != SHARED_SCHEMA_FILE).then(|| file.trim_end_matches(".json"));
         let mut names: Vec<String> = stem
             .into_iter()
             .chain(self.name.as_deref())
@@ -84,42 +97,53 @@ impl Described {
             .filter(|name| !name.is_empty())
             .collect();
         names.dedup();
-        HudSchemaIndexEntry {
-            file: file.to_string(),
-            repo: self
-                .links
-                .and_then(|links| links.github)
-                .as_deref()
-                .and_then(normalize_hud_repo),
-            names,
-        }
+        let repo = self.github.as_deref().and_then(normalize_hud_repo);
+        (repo.is_some() || !names.is_empty()).then_some(HudSchemaIndexEntry { file, repo, names })
     }
 }
 
-fn parse<T: serde::de::DeserializeOwned>(raw: &str) -> Result<T, ProfileError> {
-    serde_json::from_str(&strip_json_comments(raw)).map_err(|err| ProfileError::Io(err.to_string()))
-}
-
-/// Whether a cached or downloaded schema folder file is whole: JSON once the
+/// Whether a cached or downloaded schema file is whole: JSON once the
 /// editor's comments are stripped.
 pub fn is_schema_json(raw: &str) -> bool {
-    parse::<serde_json::Value>(raw).is_ok()
+    serde_json::from_str::<serde_json::Value>(&strip_json_comments(raw)).is_ok()
 }
 
-/// The index entry for one HUD's own schema file.
-pub fn schema_index_entry(file: &str, raw: &str) -> Result<HudSchemaIndexEntry, ProfileError> {
-    let stem = file.strip_suffix(".json").unwrap_or(file);
-    Ok(parse::<Described>(raw)?.entry(file, Some(stem)))
-}
-
-/// One entry per HUD in the editor's shared list, each reading the shared
-/// schema.
-pub fn shared_index_entries(raw: &str) -> Result<Vec<HudSchemaIndexEntry>, ProfileError> {
-    Ok(parse::<Vec<Described>>(raw)?
+/// The commit and index a folder record describes. A HUD's own schema comes
+/// before the shared list.
+pub fn parse_schema_folder(raw: &str) -> Result<(String, HudSchemaIndex), ProfileError> {
+    let folder: Folder =
+        serde_json::from_str(raw).map_err(|err| ProfileError::Io(err.to_string()))?;
+    let entries = folder
+        .schemas
         .into_iter()
-        .map(|hud| hud.entry(SHARED_SCHEMA_FILE, None))
-        .filter(|entry| entry.repo.is_some() || !entry.names.is_empty())
-        .collect())
+        .filter(|schema| schema.file.as_deref() != Some(SHARED_SCHEMA_FILE))
+        .chain(
+            folder
+                .shared
+                .into_iter()
+                .map(|hud| Described { file: None, ..hud }),
+        )
+        .filter_map(Described::entry)
+        .collect();
+    Ok((folder.commit, HudSchemaIndex { entries }))
+}
+
+fn pinned() -> &'static (String, HudSchemaIndex) {
+    static PINNED: OnceLock<(String, HudSchemaIndex)> = OnceLock::new();
+    PINNED.get_or_init(|| {
+        parse_schema_folder(include_str!("hud_schema_index.json"))
+            .expect("the checked-in schema index is valid")
+    })
+}
+
+/// The index of the pinned schema folder, built into the app.
+pub fn pinned_schema_index() -> &'static HudSchemaIndex {
+    &pinned().1
+}
+
+/// The TF2HUD.Editor commit the built-in index was generated from.
+pub fn pinned_schema_index_commit() -> &'static str {
+    &pinned().0
 }
 
 impl HudSchemaIndex {
@@ -146,28 +170,19 @@ mod tests {
     use super::*;
 
     fn index() -> HudSchemaIndex {
-        let mut entries = vec![
-            schema_index_entry(
-                "middle-mann.json",
-                r#"{ // comments are allowed
-                    "Links": {"GitHub": "https://github.com/Vexcenot/-Middle-Mann"}}"#,
-            )
-            .unwrap(),
-            schema_index_entry(
-                "idhud.json",
-                r#"{"Name":"Improved Default HUD","Links":{"GitHub":"https://github.com/idhud-tf2/idhud"}}"#,
-            )
-            .unwrap(),
-            schema_index_entry("hypnotize-hud.json", r#"{"Controls":{}}"#).unwrap(),
-        ];
-        entries.extend(
-            shared_index_entries(
-                r#"[{"Name":"Broesel Hud","Links":{"GitHub":"https://github.com/TF2HUDsArchive/Broesel-Hud"}},
-                    {"Name":"idhud","Links":{}}, {"Links":{}}]"#,
-            )
-            .unwrap(),
-        );
-        HudSchemaIndex { entries }
+        parse_schema_folder(
+            r#"{"commit":"abc","schemas":[
+                {"file":"middle-mann.json","name":null,"github":"https://github.com/Vexcenot/-Middle-Mann"},
+                {"file":"idhud.json","name":"Improved Default HUD","github":"https://github.com/idhud-tf2/idhud"},
+                {"file":"hypnotize-hud.json","name":null,"github":null},
+                {"file":"../escape.json","name":"escape","github":null},
+                {"file":"shared-hud.json","name":"shared","github":null}],
+              "shared":[
+                {"name":"Broesel Hud","github":"https://github.com/TF2HUDsArchive/Broesel-Hud"},
+                {"name":"idhud","github":null}, {"name":null,"github":null}]}"#,
+        )
+        .unwrap()
+        .1
     }
 
     #[test]
@@ -228,8 +243,11 @@ mod tests {
         );
         // `idhud` is in the shared list too; its own schema wins.
         assert_eq!(index.find("idhud", None).unwrap().file, "idhud.json");
-        // The nameless, linkless shared entry was dropped, not matched by "".
+        // The nameless, linkless shared entry was dropped, not matched by "";
+        // so were the unsafe file name and the shared schema listed as a HUD.
         assert_eq!(index.entries.len(), 5);
+        assert!(index.find("escape", None).is_none());
+        assert!(index.find("shared", None).is_none());
     }
 
     #[test]
@@ -251,8 +269,24 @@ mod tests {
     }
 
     #[test]
-    fn a_schema_that_is_not_json_is_refused() {
-        assert!(schema_index_entry("broken.json", "{").is_err());
-        assert!(shared_index_entries("{}").is_err());
+    fn a_folder_record_that_is_not_json_is_refused() {
+        assert!(parse_schema_folder("{").is_err());
+        assert!(parse_schema_folder("[]").is_err());
+    }
+
+    #[test]
+    fn the_built_in_index_names_the_pinned_huds() {
+        assert_eq!(pinned_schema_index_commit().len(), 40);
+        let index = pinned_schema_index();
+        let file = |id: &str, repo: Option<&str>| index.find(id, repo).map(|e| e.file.as_str());
+        assert_eq!(
+            file("anything", Some("https://github.com/raysfire/rayshud")),
+            Some("rayshud.json")
+        );
+        assert_eq!(file("rayshud-master", None), Some("rayshud.json"));
+        assert_eq!(file("middlemann", None), Some("middle-mann.json"));
+        assert_eq!(file("broeselhud", None), Some(SHARED_SCHEMA_FILE));
+        assert_eq!(file("toonhud", None), None);
+        assert!(index.entries.iter().all(|e| is_schema_file_name(&e.file)));
     }
 }

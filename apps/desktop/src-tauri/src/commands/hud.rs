@@ -110,9 +110,9 @@ pub async fn get_hud_state() -> Result<HudStatePayload, CommandError> {
         let catalog_unavailable = catalog.as_ref().is_none_or(|value| value.warning.is_some());
         let catalog = catalog.map(|value| value.entries).unwrap_or_default();
         let manifest = active_manifest(&profile_id)?;
-        let index = crate::hud_fetch::cached_schema_index();
+        let index = execs_core::hud_schema_index::pinned_schema_index();
         Ok(HudStatePayload {
-            state: execs_core::hud_ui_state(&manifest, &catalog, index.as_ref()),
+            state: execs_core::hud_ui_state(&manifest, &catalog, index),
             catalog_unavailable,
             profile_id,
         })
@@ -514,17 +514,17 @@ pub async fn apply_hud_options(
 }
 
 /// The pinned editor schema for an installed HUD, when the editor has one.
-/// The first call after a new pin reads the schema folder from GitHub.
+/// A HUD the built-in index does not list makes no request.
 fn schema_for_record(
     record: &execs_core::HudRecord,
 ) -> Result<Option<execs_core::HudSchema>, CommandError> {
-    let index = crate::hud_fetch::schema_index()?;
+    let index = execs_core::hud_schema_index::pinned_schema_index();
     let catalog = crate::hud_fetch::load_cached_catalog_payload()
         .ok()
         .flatten()
         .map(|value| value.entries)
         .unwrap_or_default();
-    let Some(entry) = execs_core::schema_index_entry_for(&index, record, &catalog) else {
+    let Some(entry) = execs_core::schema_index_entry_for(index, record, &catalog) else {
         return Ok(None);
     };
     Ok(Some(crate::hud_fetch::fetch_hud_schema(&entry.file)?))
@@ -583,7 +583,7 @@ fn fetch_hud_from_catalog(
     progress(HudInstallStep::Checking);
     let extracted = execs_core::extract_hud_archive(&bytes).map_err(hud_input_error)?;
     let schema = if include_schema {
-        let index = crate::hud_fetch::schema_index()?;
+        let index = execs_core::hud_schema_index::pinned_schema_index();
         match index.find(&entry.id, Some(&entry.repo)) {
             Some(found) => Some(crate::hud_fetch::fetch_hud_schema(&found.file)?),
             None => None,

@@ -44,6 +44,7 @@ import {
   PREVIEW_HUD_CATALOG,
   PREVIEW_HUD_SCHEMA,
   previewInstalledState,
+  previewUnfitHudSchema,
   schemaSupportedIds,
 } from "./hud-ui";
 import { createInventorySimulation } from "./inventory-simulation";
@@ -207,9 +208,18 @@ export function createPreviewApi(state: PreviewState): Api {
   let launchOptions = recommendedLaunchOptions();
   let steamLaunchOptions = "-novid";
   let hudState: HudUiState =
-    state === "settings-hud-installed" || state === "hud-ownership"
+    state === "settings-hud-installed" ||
+    state === "settings-hud-no-fit" ||
+    state === "settings-hud-few-fit" ||
+    state === "hud-ownership"
       ? previewInstalledState()
       : emptyHudState();
+  const hudSchema =
+    state === "settings-hud-no-fit"
+      ? previewUnfitHudSchema(0)
+      : state === "settings-hud-few-fit"
+        ? previewUnfitHudSchema(3)
+        : PREVIEW_HUD_SCHEMA;
   let hudOwnershipPending = state === "hud-ownership";
   let mods: ModRecord[] =
     state === "settings-mods" ? PREVIEW_PROFILE_MODS.map((m) => ({ ...m })) : [];
@@ -1080,7 +1090,7 @@ export function createPreviewApi(state: PreviewState): Api {
       if (requireDetail().id !== expectedProfileId || hudState.installed?.id !== expectedHudId) {
         throw new Error("The installed HUD changed. Reload HUD options.");
       }
-      return hudState.schemaSupported ? PREVIEW_HUD_SCHEMA : null;
+      return hudState.schemaSupported ? hudSchema : null;
     },
     async applyHudOptions(options, expectedProfileId, expectedHudId) {
       if (requireDetail().id !== expectedProfileId || hudState.installed?.id !== expectedHudId) {
