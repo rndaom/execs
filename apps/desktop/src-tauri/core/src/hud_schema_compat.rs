@@ -116,13 +116,6 @@ pub fn migrate_saved_options(
     migrated
 }
 
-pub fn check_catalog_schema(id: &str) -> Result<(), ProfileError> {
-    if id.eq_ignore_ascii_case("m0rehud") {
-        return Err(ProfileError::Io("The available m0rehud Classic options do not match the catalog's m0rehud files and contain duplicate control names. Use the HUD author's customization instructions. Your saved options are retained; they have not been reapplied.".into()));
-    }
-    Ok(())
-}
-
 pub fn validate_identities(schema: &HudSchema) -> Result<(), ProfileError> {
     let mut names = BTreeSet::new();
     for control in schema.controls.values().flatten() {
@@ -184,6 +177,19 @@ pub fn unavailable_top_level_reason(control: &HudControl) -> Option<&'static str
             "This HUD editor control has no supported type. Use the HUD author's instructions. Previously saved values are retained but are not applied.",
         )
     })
+}
+
+/// The controls execs cannot apply to any HUD, by name, with the reason.
+pub fn unsupported_controls(schema: &HudSchema) -> std::collections::BTreeMap<String, String> {
+    schema
+        .controls
+        .values()
+        .flatten()
+        .filter_map(|control| {
+            unavailable_top_level_reason(control)
+                .map(|reason| (control.name.clone(), reason.to_string()))
+        })
+        .collect()
 }
 
 /// budhud's YouTuber profile choices: label, the value saved profiles hold,
@@ -249,7 +255,6 @@ fn keep_saved_budhud_profile_values(schema: &mut HudSchema) -> Result<(), Profil
 /// c87968920fdfa289018b43de6fca69e08c8f988e. Match the exact old data before
 /// adapting it; unexpected data must not silently receive a guessed rewrite.
 pub fn adapt_pinned_schema(id: &str, schema: &mut HudSchema) -> Result<(), ProfileError> {
-    check_catalog_schema(id)?;
     validate_identities(schema)?;
     if id.eq_ignore_ascii_case("budhud") {
         return keep_saved_budhud_profile_values(schema);
@@ -257,6 +262,33 @@ pub fn adapt_pinned_schema(id: &str, schema: &mut HudSchema) -> Result<(), Profi
     if !id.eq_ignore_ascii_case("kbnhud") {
         return Ok(());
     }
+    correct_kbnhud_targets(schema)
+}
+
+/// The schema files whose known upstream mistakes are corrected by exact
+/// match. Their control names must stay unique: saved profiles hold values
+/// under them, so a duplicate no correction recognizes refuses the schema.
+pub fn has_pinned_corrections(file: &str) -> bool {
+    matches!(file, "rayshud.json" | "kbnhud.json" | "budhud.json")
+}
+
+/// Read one pinned schema file. A file with corrections is held to them and
+/// fails closed on anything unexpected; any other file is read as it is, and
+/// `unavailable_controls` turns off what cannot be used.
+pub fn parse_schema_file(file: &str, raw: &str) -> Result<HudSchema, ProfileError> {
+    if !has_pinned_corrections(file) {
+        return crate::hud_apply::parse_hud_schema_unchecked(raw);
+    }
+    let mut schema = crate::hud_apply::parse_hud_schema(raw)?;
+    match file {
+        "budhud.json" => keep_saved_budhud_profile_values(&mut schema)?,
+        "kbnhud.json" => correct_kbnhud_targets(&mut schema)?,
+        _ => {}
+    }
+    Ok(schema)
+}
+
+fn correct_kbnhud_targets(schema: &mut HudSchema) -> Result<(), ProfileError> {
     for (name, path, node, outline) in [
         (
             "kbn_crosshair2_size",
@@ -297,8 +329,19 @@ pub fn preserve_unavailable_options(
     previous: &std::collections::BTreeMap<String, String>,
     requested: &mut std::collections::BTreeMap<String, String>,
 ) -> Result<(), ProfileError> {
+    preserve_blocked_options(schema, &unsupported_controls(schema), previous, requested)
+}
+
+/// Keep the saved value of every control in `blocked`, and refuse a request
+/// that tries to change one.
+pub fn preserve_blocked_options(
+    schema: &HudSchema,
+    blocked: &std::collections::BTreeMap<String, String>,
+    previous: &std::collections::BTreeMap<String, String>,
+    requested: &mut std::collections::BTreeMap<String, String>,
+) -> Result<(), ProfileError> {
     for control in schema.controls.values().flatten() {
-        if unavailable_top_level_reason(control).is_none() {
+        if !blocked.contains_key(&control.name) {
             continue;
         }
         let stored = previous.get(&control.name).unwrap_or(&control.value);
@@ -320,10 +363,7 @@ pub fn preserve_unavailable_options(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        apply_hud_options, parse_hud_schema, schema_file_name, schema_supported, schema_view,
-        HudTree,
-    };
+    use crate::{apply_hud_options, parse_hud_schema, schema_view, HudTree};
     use std::collections::BTreeMap;
 
     #[test]
@@ -447,47 +487,6 @@ mod tests {
                 parse_hud_schema(&raw).unwrap_or_else(|error| panic!("{id}: {}", error.message()));
             adapt_pinned_schema(id, &mut schema).unwrap();
             validate_identities(&schema).unwrap();
-        }
-        assert!(check_catalog_schema("m0rehud").is_err());
-    }
-
-    #[test]
-    #[ignore = "requires the pinned downloaded schema corpus, EXECS_HUD_SCHEMA_CORPUS"]
-    fn omitted_catalog_schemas_are_triaged_by_the_same_parser_and_operation_gate() {
-        let corpus = std::path::PathBuf::from(
-            std::env::var_os("EXECS_HUD_SCHEMA_CORPUS").expect("schema corpus directory"),
-        );
-        for id in ["berryhud", "eve-plus", "hexhud", "hud-fixes", "sunsethud"] {
-            let raw = std::fs::read_to_string(corpus.join(id).join("schema.json")).unwrap();
-            let schema =
-                parse_hud_schema(&raw).unwrap_or_else(|error| panic!("{id}: {}", error.message()));
-            let view = schema_view(&schema);
-            let controls: Vec<_> = view
-                .sections
-                .iter()
-                .flat_map(|section| &section.controls)
-                .collect();
-            let unavailable = controls
-                .iter()
-                .filter(|control| control.unavailable_reason.is_some())
-                .count();
-            eprintln!(
-                "{id}: {} displayed controls, {unavailable} unavailable operations",
-                controls.len()
-            );
-            assert!(controls.iter().all(|control| {
-                let source = schema
-                    .controls
-                    .values()
-                    .flatten()
-                    .find(|item| item.name == control.name)
-                    .unwrap();
-                if source.special.is_some() || source.special_parameters.is_some() {
-                    control.unavailable_reason.is_some()
-                } else {
-                    true
-                }
-            }));
         }
     }
 
@@ -627,16 +626,6 @@ mod tests {
     }
 
     #[test]
-    fn catalog_and_stored_hypnotize_ids_share_the_schema() {
-        for id in ["hypnotizehud", "hypnotize-hud", "HypnotizeHUD"] {
-            assert!(schema_supported(id));
-            assert_eq!(schema_file_name(id), Some("hypnotize-hud.json"));
-        }
-        assert!(schema_supported("eve-plus"));
-        assert_eq!(schema_file_name("eve-plus"), Some("eve-plus.json"));
-    }
-
-    #[test]
     fn duplicate_top_level_ids_refuse_but_unnamed_choices_are_valid() {
         let error =
             parse_hud_schema(r#"{"Controls":{"A":[{"Name":"same"}],"B":[{"Name":"same"}]}}"#)
@@ -646,10 +635,70 @@ mod tests {
             r#"{"Controls":{"A":[{"Name":"unique","Options":[{"Value":"0"},{"Value":"1"}]}]}}"#
         )
         .is_ok());
-        assert!(check_catalog_schema("m0rehud")
-            .unwrap_err()
-            .message()
-            .contains("do not match"));
+    }
+
+    #[test]
+    fn corrected_files_refuse_unknown_duplicates_and_other_files_turn_them_off() {
+        let raw = r#"{"Controls":{"A":[{"Name":"same","Type":"Checkbox"}],"B":[{"Name":"same","Type":"Checkbox"},{"Name":"other","Type":"Checkbox","Value":"false"}]}}"#;
+        for file in ["rayshud.json", "kbnhud.json", "budhud.json"] {
+            assert!(has_pinned_corrections(file));
+            assert!(parse_schema_file(file, raw)
+                .unwrap_err()
+                .message()
+                .contains("duplicate control name: same"));
+        }
+        let schema = parse_schema_file("newhud.json", raw).unwrap();
+        let blocked = crate::unavailable_controls(&schema, &HudTree::default());
+        assert!(blocked["same"].contains("for 2 options"), "{blocked:?}");
+        assert!(!blocked.contains_key("other"));
+        let view = crate::schema_view_for_hud(&schema, &HudTree::default());
+        let reasons: Vec<bool> = view
+            .sections
+            .iter()
+            .flat_map(|section| &section.controls)
+            .map(|control| control.unavailable_reason.is_some())
+            .collect();
+        assert_eq!(reasons, [true, true, false]);
+        // The shared name's saved value stays put; the other control saves.
+        let previous = BTreeMap::from([("same".into(), "true".into())]);
+        let mut requested = BTreeMap::from([
+            ("same".into(), "false".into()),
+            ("other".into(), "true".into()),
+        ]);
+        assert!(preserve_blocked_options(&schema, &blocked, &previous, &mut requested).is_err());
+        let mut requested = BTreeMap::from([("other".into(), "true".into())]);
+        preserve_blocked_options(&schema, &blocked, &previous, &mut requested).unwrap();
+        assert_eq!(requested["same"], "true");
+        assert_eq!(requested["other"], "true");
+    }
+
+    #[test]
+    fn a_corrected_file_gets_its_corrections_whatever_the_hud_is_called() {
+        let control: serde_json::Value = serde_json::from_str(include_str!(
+            "../fixtures/hud-options/budhud-youtuber-profile.json"
+        ))
+        .unwrap();
+        let raw = serde_json::json!({"Controls":{"General UI":[control]}}).to_string();
+        let schema = parse_schema_file("budhud.json", &raw).unwrap();
+        let values: Vec<&str> = schema.controls["General UI"][0]
+            .options
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|choice| choice.value.as_str())
+            .collect();
+        assert_eq!(values, ["0", "1", "2", "5", "6", "7", "8"]);
+        // The same data under another file name is not budhud's to correct.
+        let untouched = parse_schema_file("other.json", &raw).unwrap();
+        assert_eq!(
+            untouched.controls["General UI"][0]
+                .options
+                .as_ref()
+                .unwrap()[3]
+                .value,
+            "3"
+        );
+        assert!(parse_schema_file("budhud.json", r#"{"Controls":{}}"#).is_err());
     }
 
     #[test]

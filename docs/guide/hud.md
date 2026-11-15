@@ -18,6 +18,10 @@ When you install or import a HUD over another one, the old HUD is kept as a back
 
 HUDs with a [TF2HUD.Editor](https://github.com/CriticalFlaw/TF2HUD.Editor) schema list their options under **Installed**, grouped the way the HUD's author grouped them. Some HUDs draw their own crosshair; that crosshair appears on top of TF2's, so it can show two at once. A HUD crosshair glyph picks a shape from the HUD's font, so the character shown in execs isn't a picture of it.
 
+Options come from the editor's list of HUDs, so a HUD the editor supports has them without an execs update naming it. A HUD installed from the catalog is matched by its repository; an imported one by its folder name (`rayshud-master` counts as rayshud). Some HUDs share one common set of options instead of having their own.
+
+Each option is tried against the HUD's files before it is offered. One that does not fit, because the file or section it edits is not in the version you have, is listed as unavailable with the reason, and execs leaves it alone. This happens when the HUD has changed since its options were written. Options that would write outside execs's own folders are unavailable too.
+
 The author's screenshots show the HUD's defaults; open TF2 to see it with your options.
 
 ## Return to stock HUD

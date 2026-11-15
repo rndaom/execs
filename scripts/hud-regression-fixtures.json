@@ -40,5 +40,75 @@
     "archiveSha256": "3bc50bda8d20ba3ea5d3db16bcf8d9f87ea9a23f9057c0499113af136109baec",
     "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/eve-plus.json",
     "schemaSha256": "8e2e37b9719ff6cd10da02f82aee97cebe22114d63cbcaf8c56c6308a58287e8"
+  },
+  {
+    "id": "hexhud",
+    "archiveUrl": "https://codeload.github.com/Hypnootize/hexhud/zip/b91156b6f207297b9e24a0d3cea9849f214d1ab6",
+    "archiveSha256": "f556783d972631c29741bb5b2f54079514d2d442e96b10d03b14cdca481cc59d",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/hexhud.json",
+    "schemaSha256": "7dd3c3949ba8f6e2bb0e19af2b2b06ad1027fc60afd15da3dc025e21a2cc4c96"
+  },
+  {
+    "id": "sunsethud",
+    "archiveUrl": "https://codeload.github.com/Hypnootize/sunsethud/zip/c587bc5d84dda6cb848425c9053d55abb9c35010",
+    "archiveSha256": "f4a7ff4b6cf9109d153519d34be5948999c65b7dbb7c7d1afa28863c97080d87",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/sunsethud.json",
+    "schemaSha256": "a00b6a994f9ffab1f3c4edc7785e8a113007aeb9b59c47cad78beb07ac5d483c"
+  },
+  {
+    "id": "darhud",
+    "archiveUrl": "https://codeload.github.com/DarSitam/DarHud/zip/e3b44fef3673bd416b7b3b495c19fa97361bfa52",
+    "archiveSha256": "f9a11b8a854e8c1f08ed0a6292bad3af0575b7263618aae5b1b2b8265736b3e4",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/darhud.json",
+    "schemaSha256": "04693bde29b55d5bd0ccfd7f63b790662c4352f5955d4524664dc9ee383bd858"
+  },
+  {
+    "id": "hud-fixes",
+    "archiveUrl": "https://codeload.github.com/CriticalFlaw/tf2hud-fixes/zip/c6a6252375c6b5f8f71d08f40adc44d96bb2ad76",
+    "archiveSha256": "a170f641d1cbbfdb5a6b2f0f50ff63e24d49f8381a09f145763fe891d37414a0",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/hud-fixes.json",
+    "schemaSha256": "ffc4fe37b84a706d3308342d5adc813b0fc9c7eeed97de5e0b5fd4dd965ed4aa"
+  },
+  {
+    "id": "improved-default-hud",
+    "archiveUrl": "https://codeload.github.com/idhud-tf2/idhud/zip/cdae3ce5de41e665d07a13d394c46243810088ab",
+    "archiveSha256": "be6bca4350f97b8a23fdb0f0e358e72ced417cf54e05f52b2e7d10b69e26cef4",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/idhud.json",
+    "schemaSha256": "79da821f8c849338f240010e50665d7166ce0f52762e42150de07c923ab6f381"
+  },
+  {
+    "id": "m0rehud",
+    "archiveUrl": "https://codeload.github.com/Hypnootize/m0rehud/zip/4f00092352c34d3317e195db5a5c414b0143a898",
+    "archiveSha256": "409c308b542bdd799f66c9b96c759ea3249fdb73aa70566904e2b182c24e1830",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/m0rehud-classic.json",
+    "schemaSha256": "4864602b67526f4c87cb06ad26d2cf87d351302ad6be10a924d610794eba89de"
+  },
+  {
+    "id": "ahud-cc",
+    "archiveUrl": "https://codeload.github.com/jakadak/ahud-cc/zip/446614b37d27c8b2605a256a6f85d8e193e90813",
+    "archiveSha256": "40794a62a62ce2bb3234846a1644ea80c97a81756b0b6055147b243a013db13a",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/shared-hud.json",
+    "schemaSha256": "e24c4e914954b0cfa1d33cb9cec17e4f99150eef777fe740886c1701f1879ef6"
+  },
+  {
+    "id": "broesel-hud",
+    "archiveUrl": "https://codeload.github.com/TF2HUDsArchive/Broesel-Hud/zip/6e33915acac30cfe774a78abfd25a879b90bfb6c",
+    "archiveSha256": "2ac8f7c4f02a1acc8ecc46008e9235a652add68d9281363dfab56d40970654b9",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/shared-hud.json",
+    "schemaSha256": "e24c4e914954b0cfa1d33cb9cec17e4f99150eef777fe740886c1701f1879ef6"
+  },
+  {
+    "id": "clip-hud",
+    "archiveUrl": "https://codeload.github.com/TF2HUDsArchive/Clip-Hud/zip/f77879deddad8adbae4ca890bce6f374037c3da3",
+    "archiveSha256": "73d56067503e9c13f06b75f485a89540df34f80732893ce65555daa01c64e8e1",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/shared-hud.json",
+    "schemaSha256": "e24c4e914954b0cfa1d33cb9cec17e4f99150eef777fe740886c1701f1879ef6"
+  },
+  {
+    "id": "omp-hud",
+    "archiveUrl": "https://codeload.github.com/TF2HUDsArchive/OMP-Hud/zip/e051158f22ba1be5343eb9765451a037c8460589",
+    "archiveSha256": "808018b008eff14dd3782d941d73df2a6406bf870aad827242d7a60bd9d875e7",
+    "schemaUrl": "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor/c87968920fdfa289018b43de6fca69e08c8f988e/src/HUDEditor/JSON/shared-hud.json",
+    "schemaSha256": "e24c4e914954b0cfa1d33cb9cec17e4f99150eef777fe740886c1701f1879ef6"
   }
 ]

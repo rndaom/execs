@@ -87,7 +87,8 @@ Walk this list:
 - `tf2_misc_*_dir.vpk` is still never written.
 - `latest.json` will list both `windows-x86_64` and `linux-x86_64`.
 - `node scripts/pinned-sources.mjs` reports no change to comfig.app's hit
-  sound list or TF2HUD.Editor's schemas since their pins. If either changed,
+  sound list or TF2HUD.Editor's schemas since their pins, and names any HUD
+  whose schema was added or removed upstream. If either changed,
   review it, bump the pin and rerun the tests: new uploads and schema fixes
   reach players only through a release.
 

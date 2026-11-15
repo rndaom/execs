@@ -6,7 +6,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use execs_core::hud::catalog_cache_file;
-use execs_core::{catalog_entry_from_json, schema_file_name, HudCatalogEntry, HudInstallKind};
+use execs_core::hud_schema_index::{
+    is_schema_file_name, is_schema_json, schema_index_entry, shared_index_entries,
+    SHARED_HUD_LIST_FILE, SHARED_SCHEMA_FILE,
+};
+use execs_core::{catalog_entry_from_json, HudCatalogEntry, HudInstallKind, HudSchemaIndex};
 use serde::{Deserialize, Serialize};
 
 use crate::net::{self, RemoteSource, MIB};
@@ -21,7 +25,12 @@ const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db"
 /// The SHA is part of the cache filename, so bumping this constant invalidates
 /// the cache by construction.
 const SCHEMA_COMMIT: &str = "c87968920fdfa289018b43de6fca69e08c8f988e";
+const SCHEMA_REPO: &str = "CriticalFlaw/TF2HUD.Editor";
 const RAW_SCHEMA_BASE: &str = "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor";
+/// The folder every schema file lives in. Its listing at the pinned commit is
+/// what decides which HUDs have options.
+const SCHEMA_FOLDER: &str = "src/HUDEditor/JSON";
+const SCHEMA_INDEX_MAX_FILES: usize = 256;
 
 const CATALOG_WORKERS: usize = 12;
 const CATALOG_MAX_DOCUMENTS: usize = 1024;
@@ -1029,47 +1038,152 @@ fn resolve_relative(src: &str, base: &str) -> String {
     format!("{path}/{src}")
 }
 
-pub fn fetch_hud_schema(id: &str) -> Result<String, String> {
-    execs_core::hud_schema_compat::check_catalog_schema(id).map_err(|e| e.message().to_string())?;
-    let file = schema_file_name(id).ok_or_else(|| {
-        "This HUD has no in-app options. Use the author’s page for extras.".to_string()
-    })?;
-    let root = execs_core::try_execs_data_dir()?;
+/// One file of the pinned schema folder, from the cache or the network.
+/// "Not empty" was once the whole validity check; a truncated or half-written
+/// cache file then broke the options pane for good. Parse it.
+fn schema_file_text(root: &Path, file: &str) -> Result<String, String> {
+    if !is_schema_file_name(file) {
+        return Err("The HUD options schema has an unexpected file name.".into());
+    }
     let cache = root
         .join("hud-catalog")
         .join("schemas")
         .join(format!("{SCHEMA_COMMIT}-{file}"));
-    // "Not empty" was the whole validity check before; a truncated or
-    // half-written cache file then broke the options pane for good. Parse it.
-    if let Ok(bytes) = net::read_cache_file_capped(&root, &cache, SCHEMA_CACHE_MAX_BYTES) {
+    if let Ok(bytes) = net::read_cache_file_capped(root, &cache, SCHEMA_CACHE_MAX_BYTES) {
         if let Ok(text) = String::from_utf8(bytes) {
-            if execs_core::parse_hud_schema(&text).is_ok() {
-                return adapted_schema(id, &text);
+            if is_schema_json(&text) {
+                return Ok(text);
             }
         }
     }
-    let url = format!("{RAW_SCHEMA_BASE}/{SCHEMA_COMMIT}/src/HUDEditor/JSON/{file}");
+    let url = format!("{RAW_SCHEMA_BASE}/{SCHEMA_COMMIT}/{SCHEMA_FOLDER}/{file}");
     let bytes = net::download_bytes_for(&url, SCHEMA_CACHE_MAX_BYTES, RemoteSource::GitHubRaw)?;
     let text =
         String::from_utf8(bytes).map_err(|_| "The HUD options schema is not UTF-8.".to_string())?;
-    execs_core::parse_hud_schema(&text).map_err(|err| {
+    if !is_schema_json(&text) {
+        return Err("The HUD options schema could not be read.".into());
+    }
+    // Atomic: the validity check above is what a half-written file would
+    // otherwise fail on every start.
+    net::write_cache_file_within(root, &cache, text.as_bytes())
+        .map_err(|err| format!("Could not save the HUD options schema ({err})."))?;
+    Ok(text)
+}
+
+/// The options schema in one file of the pinned folder, with the corrections
+/// for that file applied.
+pub fn fetch_hud_schema(file: &str) -> Result<execs_core::HudSchema, String> {
+    let root = execs_core::try_execs_data_dir()?;
+    let text = schema_file_text(&root, file)?;
+    execs_core::hud_schema_compat::parse_schema_file(file, &text).map_err(|err| {
         format!(
             "The HUD options schema could not be read ({}).",
             err.message()
         )
-    })?;
-    // Atomic: the validity check above is what a half-written file would
-    // otherwise fail on every start.
-    net::write_cache_file_within(&root, &cache, text.as_bytes())
-        .map_err(|err| format!("Could not save the HUD options schema ({err})."))?;
-    adapted_schema(id, &text)
+    })
 }
 
-fn adapted_schema(id: &str, raw: &str) -> Result<String, String> {
-    let mut schema = execs_core::parse_hud_schema(raw).map_err(|e| e.message().to_string())?;
-    execs_core::hud_schema_compat::adapt_pinned_schema(id, &mut schema)
-        .map_err(|e| e.message().to_string())?;
-    serde_json::to_string(&schema).map_err(|e| e.to_string())
+fn schema_index_cache(root: &Path) -> std::path::PathBuf {
+    // Not a `.json` name: no schema file can collide with it.
+    root.join("hud-catalog")
+        .join("schemas")
+        .join(format!("{SCHEMA_COMMIT}.index"))
+}
+
+/// The schema index already on disk for the pinned commit. Never fetches.
+pub fn cached_schema_index() -> Option<HudSchemaIndex> {
+    let root = execs_core::try_execs_data_dir().ok()?;
+    let bytes =
+        net::read_cache_file_capped(&root, &schema_index_cache(&root), SCHEMA_CACHE_MAX_BYTES)
+            .ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+#[derive(Debug, Deserialize)]
+struct SchemaFolderEntry {
+    name: String,
+    #[serde(rename = "type")]
+    kind: String,
+}
+
+/// Which schema file belongs to which HUD at the pinned commit. Built once
+/// per pin from the folder's listing and each schema's own links, then read
+/// from the cache: a new pin has a new cache name.
+pub fn schema_index() -> Result<HudSchemaIndex, String> {
+    if let Some(index) = cached_schema_index() {
+        return Ok(index);
+    }
+    let root = execs_core::try_execs_data_dir()?;
+    let client = net::api_client()?;
+    let url = format!(
+        "https://api.github.com/repos/{SCHEMA_REPO}/contents/{SCHEMA_FOLDER}?ref={SCHEMA_COMMIT}"
+    );
+    let listing: Vec<SchemaFolderEntry> = net::get_json_for(&client, &url, RemoteSource::GitHubApi)
+        .map_err(|err| format!("Could not list the HUD option schemas ({err})"))?;
+    let files: Vec<String> = listing
+        .into_iter()
+        .filter(|entry| entry.kind == "file" && is_schema_file_name(&entry.name))
+        .map(|entry| entry.name)
+        .collect();
+    if files.is_empty() || files.len() > SCHEMA_INDEX_MAX_FILES {
+        return Err(format!(
+            "GitHub returned an unexpected HUD option schema folder ({} files).",
+            files.len()
+        ));
+    }
+    let index = build_schema_index(&files, |file| schema_file_text(&root, file))?;
+    let bytes = serde_json::to_vec(&index).map_err(|err| err.to_string())?;
+    net::write_cache_file_within(&root, &schema_index_cache(&root), &bytes)
+        .map_err(|err| format!("Could not save the HUD option schema index ({err})."))?;
+    Ok(index)
+}
+
+/// Read every listed file and index the HUDs they describe. A file that
+/// cannot be fetched fails the build, so a network error is retried instead
+/// of cached; a file that is not a schema is left out.
+fn build_schema_index(
+    files: &[String],
+    read: impl Fn(&str) -> Result<String, String> + Sync,
+) -> Result<HudSchemaIndex, String> {
+    let workers = CATALOG_WORKERS.min(files.len()).max(1);
+    let texts: Vec<Result<String, String>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = files
+            .chunks(files.len().div_ceil(workers))
+            .map(|chunk| {
+                let read = &read;
+                scope.spawn(move || chunk.iter().map(|file| read(file)).collect::<Vec<_>>())
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|_| vec![Err("A schema download stopped unexpectedly.".into())])
+            })
+            .collect()
+    });
+    if texts.len() != files.len() {
+        return Err("A schema download stopped unexpectedly.".into());
+    }
+    let shares = files.iter().any(|file| file == SHARED_SCHEMA_FILE);
+    let mut own = Vec::new();
+    let mut shared = Vec::new();
+    for (file, text) in files.iter().zip(texts) {
+        let text = text?;
+        if file == SHARED_SCHEMA_FILE {
+            continue;
+        }
+        if file == SHARED_HUD_LIST_FILE {
+            if shares {
+                shared = shared_index_entries(&text).unwrap_or_default();
+            }
+        } else if let Ok(entry) = schema_index_entry(file, &text) {
+            own.push(entry);
+        }
+    }
+    own.extend(shared);
+    Ok(HudSchemaIndex { entries: own })
 }
 
 #[cfg(test)]
@@ -1424,8 +1538,66 @@ mod tests {
     }
 
     #[test]
+    fn the_schema_index_is_built_from_whatever_files_the_folder_lists() {
+        let files: Vec<String> = [
+            "newhud.json",
+            "common.json",
+            "shared-hud.json",
+            "not-a-schema.json",
+        ]
+        .map(String::from)
+        .to_vec();
+        let read = |file: &str| -> Result<String, String> {
+            Ok(match file {
+                "newhud.json" => {
+                    r#"{"Links":{"GitHub":"https://github.com/someone/NewHUD"},"Controls":{}}"#
+                }
+                "common.json" => {
+                    r#"[{"Name":"Plain Hud","Links":{"GitHub":"https://github.com/other/plain"}}]"#
+                }
+                "shared-hud.json" => r#"{"Controls":{}}"#,
+                _ => "[1, 2",
+            }
+            .to_string())
+        };
+        let index = build_schema_index(&files, read).unwrap();
+        assert_eq!(index.entries.len(), 2);
+        let own = index
+            .find("anything", Some("https://github.com/Someone/newhud"))
+            .unwrap();
+        assert_eq!(own.file, "newhud.json");
+        assert_eq!(index.find("new-hud", None).unwrap().file, "newhud.json");
+        assert_eq!(
+            index.find("plainhud", None).unwrap().file,
+            SHARED_SCHEMA_FILE
+        );
+        // The list and the shared schema are not HUDs themselves.
+        assert!(index.find("common", None).is_none());
+        assert!(index.find("shared-hud", None).is_none());
+
+        // Without the shared schema the list offers nothing.
+        let no_shared: Vec<String> = files
+            .iter()
+            .filter(|file| *file != SHARED_SCHEMA_FILE)
+            .cloned()
+            .collect();
+        let index = build_schema_index(&no_shared, read).unwrap();
+        assert!(index.find("plainhud", None).is_none());
+
+        // A failed download is an error to retry, never an index to cache.
+        let offline = |file: &str| {
+            if file == "newhud.json" {
+                Err("offline".to_string())
+            } else {
+                read(file)
+            }
+        };
+        assert_eq!(build_schema_index(&files, offline).unwrap_err(), "offline");
+    }
+
+    #[test]
     fn the_schema_url_and_cache_name_are_both_pinned_to_the_commit() {
-        let url = format!("{RAW_SCHEMA_BASE}/{SCHEMA_COMMIT}/src/HUDEditor/JSON/rayshud.json");
+        let url = format!("{RAW_SCHEMA_BASE}/{SCHEMA_COMMIT}/{SCHEMA_FOLDER}/rayshud.json");
         assert!(url.contains(SCHEMA_COMMIT));
         assert!(!url.contains("/master/"));
     }

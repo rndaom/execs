@@ -193,6 +193,15 @@ export const PREVIEW_HUD_SCHEMA: HudSchemaView = {
           minimum: "0",
           maximum: "30",
         },
+        {
+          name: "StreamerMode",
+          label: "Streamer mode",
+          controlType: "checkbox",
+          value: "false",
+          choices: [],
+          unavailableReason:
+            "This option does not fit the installed HUD: resource/ui/streamer.res: not in this HUD.",
+        },
       ],
     },
   ],
@@ -407,22 +416,9 @@ export function hudOverlayCrosshairState(
     : "disabled";
 }
 
-export function hudSchemaUnavailableReason(hudId: string): string {
-  const pending: Record<string, string> = {
-    berryhud:
-      "BerryHUD's catalog archive has multiple HUD roots; its editor schema has not been verified against one selected root. Use the author's customization instructions.",
-    hexhud:
-      "HExHUD's editor schema targets an animation file missing from the checked catalog archive. Use the author's customization instructions.",
-    "hud-fixes":
-      "Community HUD Fixes' editor schema targets an animation file missing from the checked catalog archive. Use the author's customization instructions.",
-    sunsethud:
-      "SunsetHUD's editor schema contains an unresolved crosshair control reference in the checked catalog archive. Use the author's customization instructions.",
-  };
-  return (
-    pending[hudId.toLowerCase()] ??
-    "No in-app options for this HUD. Use the HUD author's customization instructions."
-  );
-}
+/** Shown when TF2HUD.Editor has no schema for the installed HUD. */
+export const HUD_NO_OPTIONS_NOTE =
+  "No in-app options for this HUD. Use the HUD author's customization instructions.";
 
 export function parseHudRgba(value: string): { r: number; g: number; b: number; a: number } {
   const parts = value

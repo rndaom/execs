@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { pinIsBehind, pinnedCommit } from "./pinned-sources.mjs";
+import {
+  pinIsBehind,
+  pinnedCommit,
+  schemaFolderReport,
+  schemaHuds,
+  sharedHuds,
+} from "./pinned-sources.mjs";
 
 test("reads both pinned commits from the fetch modules", () => {
   for (const [file, constant] of [
@@ -27,4 +33,40 @@ test("a pin is behind only when the path changed after it", () => {
   assert.equal(pinIsBehind("diverged"), true);
   assert.equal(pinIsBehind("identical"), false);
   assert.equal(pinIsBehind("behind"), false);
+});
+
+test("a schema folder listing names the HUDs, not the shared files or folders", () => {
+  const listing = [
+    { name: "Schema", type: "dir" },
+    { name: "rayshud.json", type: "file" },
+    { name: "middle-mann.json", type: "file" },
+    { name: "common.json", type: "file" },
+    { name: "shared-hud.json", type: "file" },
+    { name: "notes.md", type: "file" },
+  ];
+  assert.deepEqual(schemaHuds(listing), ["middle-mann", "rayshud"]);
+  assert.deepEqual(sharedHuds('[{"Name":"7HUD"},{"Name":"ahud-cc"},{"Author":"x"}]'), [
+    "7HUD",
+    "ahud-cc",
+  ]);
+  assert.deepEqual(sharedHuds("not json"), []);
+});
+
+test("the report names every HUD a pin bump would add or drop", () => {
+  const pinned = { huds: ["budhud", "rayshud", "zeeshud"], shared: ["7HUD", "omphud"] };
+  assert.deepEqual(
+    schemaFolderReport(pinned, {
+      huds: ["budhud", "newhud", "otherhud", "rayshud"],
+      shared: ["7HUD", "PeachHUD"],
+    }),
+    [
+      "New HUD schemas upstream: newhud, otherhud",
+      "HUD schemas removed upstream: zeeshud",
+      "HUDs added to the shared options list: PeachHUD",
+      "HUDs removed from the shared options list: omphud",
+    ],
+  );
+  assert.deepEqual(schemaFolderReport(pinned, pinned), [
+    "The same HUDs have schemas; only their contents changed.",
+  ]);
 });

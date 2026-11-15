@@ -45,6 +45,7 @@ import {
   filterHudCatalog,
   formatHudRgba,
   HUD_CATALOG_PAGE_SIZE,
+  HUD_NO_OPTIONS_NOTE,
   HUD_SORTS,
   hudAuthorCopy,
   hudCatalogControls,
@@ -52,7 +53,6 @@ import {
   hudInstallSourceCopy,
   hudOptionsDirty,
   hudPageLinks,
-  hudSchemaUnavailableReason,
   hudStatCopy,
   installedHudLabel,
   isHudCheckboxOn,
@@ -457,9 +457,10 @@ export function HudPane({
                   draft={draft}
                   onChange={(name, value) => setDraft((current) => ({ ...current, [name]: value }))}
                 />
-              ) : state.installed && !state.schemaSupported ? (
+              ) : state.installed &&
+                (!state.schemaSupported || (!schemaLoading && !schemaError && !schema)) ? (
                 <p data-testid="hud-options-notes" className="t-meta section">
-                  {hudSchemaUnavailableReason(state.installed.id)}
+                  {HUD_NO_OPTIONS_NOTE}
                 </p>
               ) : null}
             </section>
@@ -1411,9 +1412,11 @@ function HudOptions({
         {schema.sections.map((section) => (
           <fieldset key={section.name} className="hud-option-group">
             <legend className="eyebrow">{section.name}</legend>
-            {section.controls.map((control) => (
+            {section.controls.map((control, index) => (
               <HudOptionControl
-                key={control.name}
+                // A schema can use one name twice; both are then unavailable.
+                // biome-ignore lint/suspicious/noArrayIndexKey: the list is fixed per schema
+                key={`${control.name}-${index}`}
                 control={control}
                 value={draft[control.name] ?? control.value}
                 onChange={(value) => onChange(control.name, value)}

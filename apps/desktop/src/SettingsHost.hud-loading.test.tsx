@@ -254,6 +254,17 @@ describe("HUD loading through the real settings host and pane", () => {
     expect(container.querySelector('[data-testid="hud-options"]')).toBeNull();
   });
 
+  it("shows the no-options note, not an error, when reading the schema finds none", async () => {
+    // Before the schema index has been read, the state says options may exist.
+    state = installed("custom-hud");
+    api.getHudSchema.mockResolvedValueOnce(null as unknown as HudSchemaView);
+    await render();
+    expect(api.getHudSchema).toHaveBeenLastCalledWith("A", "custom-hud");
+    expect(element("hud-options-notes").textContent).toContain("No in-app options");
+    expect(container.querySelector('[data-testid="hud-schema-error"]')).toBeNull();
+    expect(container.querySelector('[data-testid="hud-options"]')).toBeNull();
+  });
+
   it("ignores late local state and schema completions across profiles", async () => {
     const oldState = deferred<HudStatePayload>();
     const slowCatalog = deferred<Awaited<ReturnType<typeof api.getHudCatalog>>>();

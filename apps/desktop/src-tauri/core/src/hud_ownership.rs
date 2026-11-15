@@ -252,6 +252,7 @@ fn ownership_sources(
             &manifest,
             &folder,
             MAX_HUD_TOTAL_BYTES.saturating_sub(total),
+            None,
         )?;
         for file in &manifest.files {
             if let Some(rel) = hud_file_rel(&file.path, &folder) {
