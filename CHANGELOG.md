@@ -5,6 +5,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
 ### Fixed
 
 - Linux AppImage: Steam started by Launch TF2, Verify game files or Steam closing no longer
@@ -37,7 +39,6 @@ User-facing changes only. The release workflow publishes the matching
   that version, is left alone. These fold under one line below the options that work, which
   opens to each one's reason. A HUD where no option fits shows no options. m0rehud is no longer
   blocked as a whole.
-
 - Calmer pages: settings sit in a narrower column that is easier to read on a wide window, the
   sidebar is split into short groups, and the dot backdrop stays on the first-run and library
   screens only.
