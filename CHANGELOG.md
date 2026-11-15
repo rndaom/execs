@@ -26,8 +26,19 @@ User-facing changes only. The release workflow publishes the matching
 - HUD options: rayshud's Centered Class Select and Centered Team Select are two options, as in
   the HUD's own editor, instead of one combined option. A setup that had the combined option on
   keeps both on.
+- HUD options: one option the installed HUD has no files for no longer stops every other option
+  from saving. budhud's options save again.
 
 ### Changed
+
+- HUD options appear for every HUD that TF2HUD.Editor has options for, instead of a fixed list:
+  sunsethud, darhud, Improved Default HUD, m0rehud, Middle-Mann and the HUDs the editor
+  gives its shared options (ahud, broeselhud, CLIP HUD, omphud and others) now have them. An
+  imported HUD gets its options when its folder is named after the HUD.
+- An option that does not fit the installed HUD, because the file or section it edits is not in
+  that version, is left alone. These fold under one line below the options that work, which
+  opens to each one's reason. A HUD where no option fits shows no options. m0rehud is no longer
+  blocked as a whole.
 
 - Calmer pages: settings sit in a narrower column that is easier to read on a wide window, the
   sidebar is split into short groups, and the dot backdrop stays on the first-run and library

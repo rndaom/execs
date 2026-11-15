@@ -23,6 +23,7 @@ pub mod hud;
 pub mod hud_apply;
 pub mod hud_backups;
 pub mod hud_schema_compat;
+pub mod hud_schema_index;
 mod hud_text_edit;
 pub mod ice;
 pub mod inventory;
@@ -107,17 +108,18 @@ pub use hitsound::{
 };
 pub use hud::{
     apply_schema_options, apply_schema_options_to, catalog_cache_dir, catalog_entry_from_json,
-    extract_hud_archive, extract_hud_zip, hud_id_from_name, hud_tree_from_dir, hud_ui_state,
-    hud_zip_url, install_hud_pack, install_hud_pack_with_cfgs, load_catalog_cache_from,
-    load_hud_tree_from_profile, match_hud_catalog, resolve_hud, save_catalog_cache_to,
-    schema_file_name, schema_supported, sync_hud_exec_lines, sync_hud_exec_lines_to,
+    extract_hud_archive, extract_hud_zip, hud_id_from_name, hud_schema_view, hud_schema_view_to,
+    hud_tree_from_dir, hud_ui_state, hud_zip_url, install_hud_pack, install_hud_pack_with_cfgs,
+    load_catalog_cache_from, load_hud_tree_from_profile, match_hud_catalog, resolve_hud,
+    save_catalog_cache_to, schema_index_entry_for, sync_hud_exec_lines, sync_hud_exec_lines_to,
     HudCatalogCache, HudCatalogEntry, HudInstallKind, HudStatus, HudTree, HudUiState,
-    SUPPORTED_SCHEMA_HUDS,
 };
 pub use hud_apply::{
-    apply_hud_options, apply_hud_options_for_layer, hud_cfg_path, hud_cfg_stem, parse_hud_schema,
-    schema_view, HudSchema, HudSchemaView, HUD_CFG_PREFIX,
+    apply_fitting_hud_options, apply_hud_options, apply_hud_options_for_layer, hud_cfg_path,
+    hud_cfg_stem, parse_hud_schema, schema_view, schema_view_for_hud, unavailable_controls,
+    HudSchema, HudSchemaView, HUD_CFG_PREFIX,
 };
+pub use hud_schema_index::{HudSchemaIndex, HudSchemaIndexEntry};
 pub use launch::{
     get_profile_launch_options, launch_sync_status, recommended_launch_options,
     set_profile_launch_options, LaunchSyncStatus, LaunchWriteReason, SetLaunchResult,

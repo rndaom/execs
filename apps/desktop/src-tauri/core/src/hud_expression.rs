@@ -51,30 +51,80 @@ fn current_value(control: &HudControl, options: &BTreeMap<String, String>) -> St
     }
 }
 
-/// Every reference reads the same snapshot, including controls without Files.
-/// This ensures changing an outline checkbox reevaluates a size control's font.
-pub(super) fn resolve_schema(
+/// Resolve every control not named in `blocked`. Every reference reads the
+/// same snapshot, including controls without Files, so changing an outline
+/// checkbox reevaluates a size control's font.
+/// A blocked control still lends its value to references, unless its name is
+/// shared: then no reference can tell which control it means.
+pub(super) fn resolve_schema_except(
     schema: &HudSchema,
     options: &BTreeMap<String, String>,
+    blocked: &BTreeMap<String, String>,
 ) -> Result<HudSchema, ProfileError> {
-    let mut values = BTreeMap::new();
-    let mut budget = Budget::default();
-    for control in schema.controls.values().flatten() {
-        budget.visit(0)?;
-        let value = current_value(control, options);
-        budget.text(&value)?;
-        if !control.name.is_empty() && values.insert(control.name.clone(), value).is_some() {
+    let mut resolver = Resolver::new(schema, options, blocked)?;
+    let mut resolved = schema.clone();
+    for control in resolved.controls.values_mut().flatten() {
+        if blocked.contains_key(&control.name) {
+            continue;
+        }
+        if let Err(ProfileError::Io(reason)) = resolver.resolve(control, options) {
+            let label = if control.label.is_empty() {
+                &control.name
+            } else {
+                &control.label
+            };
             return Err(error(format!(
-                "Ambiguous HUD control reference ${}",
+                "HUD option \"{label}\" ({}): {reason}",
                 control.name
             )));
         }
     }
-    let mut resolved = schema.clone();
-    for control in resolved.controls.values_mut().flatten() {
-        resolve_control(control, options, &values, &mut budget, 0)?;
-    }
     Ok(resolved)
+}
+
+/// One value snapshot and one work budget for a whole schema.
+pub(super) struct Resolver {
+    values: BTreeMap<String, String>,
+    budget: Budget,
+}
+
+impl Resolver {
+    pub(super) fn new(
+        schema: &HudSchema,
+        options: &BTreeMap<String, String>,
+        blocked: &BTreeMap<String, String>,
+    ) -> Result<Self, ProfileError> {
+        let mut values = BTreeMap::new();
+        let mut shared = Vec::new();
+        let mut budget = Budget::default();
+        for control in schema.controls.values().flatten() {
+            budget.visit(0)?;
+            let value = current_value(control, options);
+            budget.text(&value)?;
+            if !control.name.is_empty() && values.insert(control.name.clone(), value).is_some() {
+                if !blocked.contains_key(&control.name) {
+                    return Err(error(format!(
+                        "Ambiguous HUD control reference ${}",
+                        control.name
+                    )));
+                }
+                shared.push(control.name.clone());
+            }
+        }
+        for name in shared {
+            values.remove(&name);
+        }
+        Ok(Self { values, budget })
+    }
+
+    /// Resolve one control in place against the snapshot.
+    pub(super) fn resolve(
+        &mut self,
+        control: &mut HudControl,
+        options: &BTreeMap<String, String>,
+    ) -> Result<(), ProfileError> {
+        resolve_control(control, options, &self.values, &mut self.budget, 0)
+    }
 }
 
 fn resolve_control(
@@ -90,10 +140,11 @@ fn resolve_control(
         if let Some(files) = files.as_object_mut() {
             for (path, patch) in files {
                 resolve_json(patch, &current, values, budget, depth + 1).map_err(|err| {
-                    error(format!(
-                        "HUD option \"{}\" ({}), {path}: {err:?}",
-                        control.label, control.name
-                    ))
+                    let reason = match err {
+                        ProfileError::Io(reason) => reason,
+                        other => other.message().to_string(),
+                    };
+                    error(format!("{path}: {reason}"))
                 })?;
             }
         }

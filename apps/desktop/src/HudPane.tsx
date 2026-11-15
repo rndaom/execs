@@ -14,6 +14,7 @@ import { useContext, useEffect, useMemo, useReducer, useRef, useState } from "re
 import { Alert } from "./components/ui/Alert";
 import { ChoiceChips } from "./components/ui/ChoiceChips";
 import { ClassTabs } from "./components/ui/ClassTabs";
+import { Disclosure } from "./components/ui/Disclosure";
 import { Modal } from "./components/ui/Modal";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { Segmented } from "./components/ui/Segmented";
@@ -45,6 +46,7 @@ import {
   filterHudCatalog,
   formatHudRgba,
   HUD_CATALOG_PAGE_SIZE,
+  HUD_NO_OPTIONS_NOTE,
   HUD_SORTS,
   hudAuthorCopy,
   hudCatalogControls,
@@ -52,8 +54,9 @@ import {
   hudInstallSourceCopy,
   hudOptionsDirty,
   hudPageLinks,
-  hudSchemaUnavailableReason,
   hudStatCopy,
+  hudUnavailableNote,
+  hudUnavailableSummary,
   installedHudLabel,
   isHudCheckboxOn,
   paginateHudCatalog,
@@ -453,13 +456,15 @@ export function HudPane({
               ) : null}
               {state.installed && state.schemaSupported && schema ? (
                 <HudOptions
+                  profileId={profileId}
                   schema={schema}
                   draft={draft}
                   onChange={(name, value) => setDraft((current) => ({ ...current, [name]: value }))}
                 />
-              ) : state.installed && !state.schemaSupported ? (
+              ) : state.installed &&
+                (!state.schemaSupported || (!schemaLoading && !schemaError && !schema)) ? (
                 <p data-testid="hud-options-notes" className="t-meta section">
-                  {hudSchemaUnavailableReason(state.installed.id)}
+                  {HUD_NO_OPTIONS_NOTE}
                 </p>
               ) : null}
             </section>
@@ -1385,15 +1390,35 @@ function HudLightbox({
  * hiding in a drop-down.
  */
 function HudOptions({
+  profileId,
   schema,
   draft,
   onChange,
 }: {
+  profileId: string | null;
   schema: HudSchemaView;
   draft: Record<string, string>;
   onChange: (name: string, value: string) => void;
 }) {
-  const drawsCrosshair = schema.sections.some((section) =>
+  // Options that don't match this version of the HUD fold away under one
+  // line; a HUD where none match has no options to show.
+  const sections = schema.sections
+    .map((section) => ({
+      ...section,
+      controls: section.controls.filter((control) => !control.unavailableReason),
+    }))
+    .filter((section) => section.controls.length > 0);
+  const unavailable = schema.sections.flatMap((section) =>
+    section.controls.filter((control) => control.unavailableReason),
+  );
+  if (sections.length === 0) {
+    return (
+      <p data-testid="hud-options-notes" className="t-meta section">
+        {HUD_NO_OPTIONS_NOTE}
+      </p>
+    );
+  }
+  const drawsCrosshair = sections.some((section) =>
     section.controls.some((control) => control.controlType === "crosshair"),
   );
   return (
@@ -1408,7 +1433,7 @@ function HudOptions({
         <p className="t-meta mt-1">This HUD draws its own crosshair, on top of TF2’s.</p>
       ) : null}
       <div className="hud-option-groups">
-        {schema.sections.map((section) => (
+        {sections.map((section) => (
           <fieldset key={section.name} className="hud-option-group">
             <legend className="eyebrow">{section.name}</legend>
             {section.controls.map((control) => (
@@ -1422,6 +1447,28 @@ function HudOptions({
           </fieldset>
         ))}
       </div>
+      {unavailable.length > 0 ? (
+        <Disclosure
+          profileId={profileId}
+          storageKey="hud-unavailable-options"
+          testId="hud-options-unavailable"
+          className="mt-2"
+          summary={hudUnavailableSummary(unavailable.length)}
+        >
+          <ul className="hud-unavailable">
+            {unavailable.map((control, index) => (
+              // A schema can use one name twice; both are then unavailable.
+              // biome-ignore lint/suspicious/noArrayIndexKey: the list is fixed per schema
+              <li key={`${control.name}-${index}`} data-testid="hud-option-unavailable">
+                <span>{control.label}</span>
+                <span className="t-meta">
+                  {hudUnavailableNote(control.unavailableReason ?? "")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
+      ) : null}
     </section>
   );
 }
@@ -1436,16 +1483,6 @@ function HudOptionControl({
   onChange: (value: string) => void;
 }) {
   const inputId = `hud-opt-${control.name}`;
-  if (control.unavailableReason) {
-    return (
-      <div className="hud-option" data-testid="hud-option-unavailable">
-        <div className="min-w-0">
-          <p className="t-row">{control.label} - Unavailable</p>
-          <p className="t-meta mt-1">{control.unavailableReason}</p>
-        </div>
-      </div>
-    );
-  }
   if (control.controlType === "checkbox") {
     return (
       <div className="hud-option">

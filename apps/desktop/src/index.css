@@ -2477,6 +2477,23 @@ a:focus-visible,
     color: var(--color-ink);
   }
 
+  .hud-unavailable {
+    display: grid;
+    margin: 0;
+    padding: 0 0 8px 22px;
+    list-style: none;
+  }
+
+  .hud-unavailable > li {
+    display: grid;
+    grid-template-columns: minmax(120px, 200px) minmax(0, 1fr);
+    gap: 16px;
+    padding-block: 5px;
+    border-bottom: 1px solid var(--color-edge);
+    font-size: 13px;
+    color: var(--color-ink-muted);
+  }
+
   .hud-option-stacked {
     display: grid;
     justify-content: stretch;

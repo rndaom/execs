@@ -340,7 +340,10 @@ describe("HUD workspace interactions", () => {
     await render({ schema });
     await surface("installed");
     expect(element("hud-options").textContent).toContain("This HUD draws its own crosshair");
-    expect(element("hud-options").textContent).toContain("Menu Background - Unavailable");
+    expect(element("hud-options-unavailable").textContent).toContain(
+      "1 option isn’t available for this version",
+    );
+    expect(element("hud-option-unavailable").textContent).toContain("Menu Background");
     expect(container.querySelector('[data-testid="hud-opt-rh_val_main_menu_bg"]')).toBeNull();
     expect(container.querySelector("select")).toBeNull();
     expect(element("hud-opt-rh_val_xhair_style").dataset.value).toBe("<");

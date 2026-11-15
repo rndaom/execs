@@ -1,0 +1,126 @@
+{
+  "commit": "c87968920fdfa289018b43de6fca69e08c8f988e",
+  "schemas": [
+    {
+      "file": "berryhud.json",
+      "name": null,
+      "github": "https://github.com/hexereii/BerryHUD"
+    },
+    {
+      "file": "budhud.json",
+      "name": null,
+      "github": "https://github.com/rbjaxter/budhud"
+    },
+    {
+      "file": "darhud.json",
+      "name": null,
+      "github": "https://github.com/DarSitam/darhud"
+    },
+    {
+      "file": "eve-plus.json",
+      "name": null,
+      "github": "https://github.com/RoseyLemonz/eve-plus"
+    },
+    {
+      "file": "flawhud.json",
+      "name": null,
+      "github": "https://github.com/CriticalFlaw/flawhud"
+    },
+    {
+      "file": "hexhud.json",
+      "name": null,
+      "github": "https://github.com/Hypnootize/hexhud"
+    },
+    {
+      "file": "hud-fixes.json",
+      "name": null,
+      "github": "https://github.com/CriticalFlaw/tf2hud-fixes"
+    },
+    {
+      "file": "hypnotize-hud.json",
+      "name": null,
+      "github": "https://github.com/Hypnootize/hypnotizehud"
+    },
+    {
+      "file": "idhud.json",
+      "name": "Improved Default HUD",
+      "github": "https://github.com/idhud-tf2/idhud"
+    },
+    {
+      "file": "kbnhud.json",
+      "name": null,
+      "github": "https://github.com/Jotunn/kbnhud"
+    },
+    {
+      "file": "m0rehud-classic.json",
+      "name": "m0rehud (Classic)",
+      "github": "https://github.com/Hypnootize/m0rehud"
+    },
+    {
+      "file": "middle-mann.json",
+      "name": null,
+      "github": "https://github.com/Vexcenot/-Middle-Mann"
+    },
+    {
+      "file": "rayshud.json",
+      "name": null,
+      "github": "https://github.com/raysfire/rayshud"
+    },
+    {
+      "file": "sunsethud.json",
+      "name": null,
+      "github": "https://github.com/Hypnootize/sunsethud"
+    },
+    {
+      "file": "zeeshud.json",
+      "name": null,
+      "github": "https://github.com/Zeesastrous/ZeesHUD"
+    }
+  ],
+  "shared": [
+    {
+      "name": "7HUD",
+      "github": "https://github.com/Sevin7/7HUD"
+    },
+    {
+      "name": "ahud-cc",
+      "github": "https://github.com/jakadak/ahud-cc"
+    },
+    {
+      "name": "Broesel Hud",
+      "github": "https://github.com/TF2HUDsArchive/Broesel-Hud"
+    },
+    {
+      "name": "cliphud",
+      "github": "https://github.com/TF2HUDsArchive/Clip-Hud"
+    },
+    {
+      "name": "collyhud",
+      "github": "https://github.com/omnibombulator/collyhud"
+    },
+    {
+      "name": "coolerHUD",
+      "github": "https://github.com/Pyromaniax/Cooler-HUD"
+    },
+    {
+      "name": "essentialsHUD",
+      "github": "https://github.com/CriticalFlaw/essentialsHUD"
+    },
+    {
+      "name": "Half-Life 2 HUD",
+      "github": "https://github.com/VillageGreenPreserver/Half-Life-2-Hud"
+    },
+    {
+      "name": "omphud",
+      "github": "https://github.com/TF2HUDsArchive/OMP-Hud"
+    },
+    {
+      "name": "PeachHUD",
+      "github": "https://github.com/PapaPeach/PeachHUD"
+    },
+    {
+      "name": "WeirdcoreHUD",
+      "github": "https://github.com/zTomma/WeirdcoreHUD"
+    }
+  ]
+}

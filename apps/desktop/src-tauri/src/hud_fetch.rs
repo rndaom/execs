@@ -6,7 +6,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use execs_core::hud::catalog_cache_file;
-use execs_core::{catalog_entry_from_json, schema_file_name, HudCatalogEntry, HudInstallKind};
+use execs_core::hud_schema_index::{is_schema_file_name, is_schema_json};
+use execs_core::{catalog_entry_from_json, HudCatalogEntry, HudInstallKind};
 use serde::{Deserialize, Serialize};
 
 use crate::net::{self, RemoteSource, MIB};
@@ -22,6 +23,9 @@ const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db"
 /// the cache by construction.
 const SCHEMA_COMMIT: &str = "c87968920fdfa289018b43de6fca69e08c8f988e";
 const RAW_SCHEMA_BASE: &str = "https://raw.githubusercontent.com/CriticalFlaw/TF2HUD.Editor";
+/// The folder every schema file lives in. Its listing at the pinned commit is
+/// what decides which HUDs have options.
+const SCHEMA_FOLDER: &str = "src/HUDEditor/JSON";
 
 const CATALOG_WORKERS: usize = 12;
 const CATALOG_MAX_DOCUMENTS: usize = 1024;
@@ -1029,47 +1033,49 @@ fn resolve_relative(src: &str, base: &str) -> String {
     format!("{path}/{src}")
 }
 
-pub fn fetch_hud_schema(id: &str) -> Result<String, String> {
-    execs_core::hud_schema_compat::check_catalog_schema(id).map_err(|e| e.message().to_string())?;
-    let file = schema_file_name(id).ok_or_else(|| {
-        "This HUD has no in-app options. Use the author’s page for extras.".to_string()
-    })?;
-    let root = execs_core::try_execs_data_dir()?;
+/// One file of the pinned schema folder, from the cache or the network.
+/// "Not empty" was once the whole validity check; a truncated or half-written
+/// cache file then broke the options pane for good. Parse it.
+fn schema_file_text(root: &Path, file: &str) -> Result<String, String> {
+    if !is_schema_file_name(file) {
+        return Err("The HUD options schema has an unexpected file name.".into());
+    }
     let cache = root
         .join("hud-catalog")
         .join("schemas")
         .join(format!("{SCHEMA_COMMIT}-{file}"));
-    // "Not empty" was the whole validity check before; a truncated or
-    // half-written cache file then broke the options pane for good. Parse it.
-    if let Ok(bytes) = net::read_cache_file_capped(&root, &cache, SCHEMA_CACHE_MAX_BYTES) {
+    if let Ok(bytes) = net::read_cache_file_capped(root, &cache, SCHEMA_CACHE_MAX_BYTES) {
         if let Ok(text) = String::from_utf8(bytes) {
-            if execs_core::parse_hud_schema(&text).is_ok() {
-                return adapted_schema(id, &text);
+            if is_schema_json(&text) {
+                return Ok(text);
             }
         }
     }
-    let url = format!("{RAW_SCHEMA_BASE}/{SCHEMA_COMMIT}/src/HUDEditor/JSON/{file}");
+    let url = format!("{RAW_SCHEMA_BASE}/{SCHEMA_COMMIT}/{SCHEMA_FOLDER}/{file}");
     let bytes = net::download_bytes_for(&url, SCHEMA_CACHE_MAX_BYTES, RemoteSource::GitHubRaw)?;
     let text =
         String::from_utf8(bytes).map_err(|_| "The HUD options schema is not UTF-8.".to_string())?;
-    execs_core::parse_hud_schema(&text).map_err(|err| {
+    if !is_schema_json(&text) {
+        return Err("The HUD options schema could not be read.".into());
+    }
+    // Atomic: the validity check above is what a half-written file would
+    // otherwise fail on every start.
+    net::write_cache_file_within(root, &cache, text.as_bytes())
+        .map_err(|err| format!("Could not save the HUD options schema ({err})."))?;
+    Ok(text)
+}
+
+/// The options schema in one file of the pinned folder, with the corrections
+/// for that file applied.
+pub fn fetch_hud_schema(file: &str) -> Result<execs_core::HudSchema, String> {
+    let root = execs_core::try_execs_data_dir()?;
+    let text = schema_file_text(&root, file)?;
+    execs_core::hud_schema_compat::parse_schema_file(file, &text).map_err(|err| {
         format!(
             "The HUD options schema could not be read ({}).",
             err.message()
         )
-    })?;
-    // Atomic: the validity check above is what a half-written file would
-    // otherwise fail on every start.
-    net::write_cache_file_within(&root, &cache, text.as_bytes())
-        .map_err(|err| format!("Could not save the HUD options schema ({err})."))?;
-    adapted_schema(id, &text)
-}
-
-fn adapted_schema(id: &str, raw: &str) -> Result<String, String> {
-    let mut schema = execs_core::parse_hud_schema(raw).map_err(|e| e.message().to_string())?;
-    execs_core::hud_schema_compat::adapt_pinned_schema(id, &mut schema)
-        .map_err(|e| e.message().to_string())?;
-    serde_json::to_string(&schema).map_err(|e| e.to_string())
+    })
 }
 
 #[cfg(test)]
@@ -1424,8 +1430,17 @@ mod tests {
     }
 
     #[test]
+    fn the_built_in_schema_index_was_generated_for_the_pinned_commit() {
+        // `node scripts/pinned-sources.mjs --write-index` regenerates it.
+        assert_eq!(
+            execs_core::hud_schema_index::pinned_schema_index_commit(),
+            SCHEMA_COMMIT
+        );
+    }
+
+    #[test]
     fn the_schema_url_and_cache_name_are_both_pinned_to_the_commit() {
-        let url = format!("{RAW_SCHEMA_BASE}/{SCHEMA_COMMIT}/src/HUDEditor/JSON/rayshud.json");
+        let url = format!("{RAW_SCHEMA_BASE}/{SCHEMA_COMMIT}/{SCHEMA_FOLDER}/rayshud.json");
         assert!(url.contains(SCHEMA_COMMIT));
         assert!(!url.contains("/master/"));
     }

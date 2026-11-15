@@ -43,17 +43,6 @@ pub(crate) use ownership::{
     refuse_hud_vpk, refuse_profile_hud_vpks, require_resolved_hud, require_resolved_live_huds,
 };
 
-pub const SUPPORTED_SCHEMA_HUDS: &[&str] = &[
-    "rayshud",
-    "budhud",
-    "flawhud",
-    "eve-plus",
-    "m0rehud",
-    "kbnhud",
-    "hypnotize-hud",
-    "hypnotizehud",
-];
-
 const RAW_HUD_DB: &str = "https://raw.githubusercontent.com/mastercomfig/hud-db";
 const MAX_HUD_CATALOG_CACHE_BYTES: u64 = 16 * 1024 * 1024;
 const CURRENT_HUD_UI_VERSION: u32 = 3;
@@ -473,23 +462,25 @@ pub fn catalog_hud_id(id: &str) -> &str {
     }
 }
 
-pub fn schema_supported(id: &str) -> bool {
-    SUPPORTED_SCHEMA_HUDS
-        .iter()
-        .any(|known| known.eq_ignore_ascii_case(id))
-}
-
-pub fn schema_file_name(id: &str) -> Option<&'static str> {
-    match id.to_ascii_lowercase().as_str() {
-        "rayshud" => Some("rayshud.json"),
-        "budhud" => Some("budhud.json"),
-        "flawhud" => Some("flawhud.json"),
-        "eve-plus" => Some("eve-plus.json"),
-        "m0rehud" => Some("m0rehud-classic.json"),
-        "kbnhud" => Some("kbnhud.json"),
-        "hypnotize-hud" | "hypnotizehud" => Some("hypnotize-hud.json"),
-        _ => None,
-    }
+/// The schema file with a HUD's options, from the pinned schema index. A
+/// hud-db install is matched by the catalog entry's repository; anything else
+/// (an imported folder, or a catalog that is not loaded) by name.
+pub fn schema_index_entry_for<'a>(
+    index: &'a crate::hud_schema_index::HudSchemaIndex,
+    record: &HudRecord,
+    catalog: &[HudCatalogEntry],
+) -> Option<&'a crate::hud_schema_index::HudSchemaIndexEntry> {
+    let repo = (record.source == HudSource::HudDb)
+        .then(|| {
+            catalog
+                .iter()
+                .find(|entry| {
+                    catalog_hud_id(&entry.id).eq_ignore_ascii_case(catalog_hud_id(&record.id))
+                })
+                .map(|entry| entry.repo.as_str())
+        })
+        .flatten();
+    index.find(&record.id, repo)
 }
 
 pub fn sanitize_hud_id(id: &str) -> Result<String, ProfileError> {
@@ -755,7 +746,13 @@ pub fn extract_hud_zip(bytes: &[u8]) -> Result<ExtractedHud, ProfileError> {
     finish_extracted(extract_zip(bytes, HUD_LIMITS)?)
 }
 
-pub fn hud_ui_state(manifest: &ProfileManifest, catalog: &[HudCatalogEntry]) -> HudUiState {
+/// `index` is the schema index built into the app, so the state always
+/// knows whether the installed HUD has options, without a request.
+pub fn hud_ui_state(
+    manifest: &ProfileManifest,
+    catalog: &[HudCatalogEntry],
+    index: &crate::hud_schema_index::HudSchemaIndex,
+) -> HudUiState {
     let status = resolve_hud(manifest);
     let installed = status.as_ref().map(|item| item.record.clone());
     let inferred = status.as_ref().is_some_and(|item| item.inferred);
@@ -776,8 +773,11 @@ pub fn hud_ui_state(manifest: &ProfileManifest, catalog: &[HudCatalogEntry]) -> 
         }
         _ => false,
     };
+    let schema_supported = installed
+        .as_ref()
+        .is_some_and(|record| schema_index_entry_for(index, record, catalog).is_some());
     HudUiState {
-        schema_supported: id.is_some_and(schema_supported),
+        schema_supported,
         installed,
         inferred,
         catalog_hash,
@@ -1302,7 +1302,41 @@ fn load_hud_tree_from_manifest(
         manifest,
         folder,
         MAX_HUD_TOTAL_BYTES,
+        None,
     )
+}
+
+/// The profile's HUD options as the pane shows them: each control checked
+/// against the installed HUD's files. Reads the library only. The check needs
+/// the contents of the files the schema edits and just the names of the rest,
+/// so a HUD's fonts and materials are not read to list its options.
+pub fn hud_schema_view_to(
+    profiles_dir: &Path,
+    profile_id: &str,
+    schema: &crate::hud_apply::HudSchema,
+) -> Result<crate::hud_apply::HudSchemaView, ProfileError> {
+    let manifest = load_manifest(profiles_dir, profile_id)?;
+    let status = resolve_hud(&manifest)
+        .ok_or_else(|| ProfileError::Io("Install a HUD before loading its options.".into()))?;
+    let folder = manifest_hud_folder_resolved(&manifest.files, &status.record.id)
+        .unwrap_or_else(|| status.record.id.clone());
+    let edited = crate::hud_apply::referenced_hud_files(schema);
+    let tree = load_hud_tree_from_manifest_with_limit(
+        profiles_dir,
+        profile_id,
+        &manifest,
+        &folder,
+        MAX_HUD_TOTAL_BYTES,
+        Some(&edited),
+    )?;
+    Ok(crate::hud_apply::schema_view_for_hud(schema, &tree))
+}
+
+pub fn hud_schema_view(
+    profile_id: &str,
+    schema: &crate::hud_apply::HudSchema,
+) -> Result<crate::hud_apply::HudSchemaView, ProfileError> {
+    hud_schema_view_to(&profiles_dir(), profile_id, schema)
 }
 
 fn load_hud_tree_from_manifest_with_limit(
@@ -1311,6 +1345,9 @@ fn load_hud_tree_from_manifest_with_limit(
     manifest: &ProfileManifest,
     folder: &str,
     byte_limit: u64,
+    // When set, only these files (lowercased HUD-relative paths) are read;
+    // every other file is present by name with no contents.
+    only_contents_of: Option<&std::collections::BTreeSet<String>>,
 ) -> Result<HudTree, ProfileError> {
     let mut tree = HudTree::default();
     let mut total = 0u64;
@@ -1322,6 +1359,12 @@ fn load_hud_tree_from_manifest_with_limit(
             return Err(ProfileError::Io(format!(
                 "That profile's HUD has more than {MAX_HUD_ENTRIES} files and cannot be edited safely."
             )));
+        }
+        if only_contents_of
+            .is_some_and(|wanted| !wanted.contains(&normalize_hud_rel(rel).to_ascii_lowercase()))
+        {
+            tree.insert(rel, Vec::new());
+            continue;
         }
         let source = exclusive_file_path(profiles_dir, profile_id, &file.path);
         let remaining = byte_limit.saturating_sub(total);
@@ -1492,24 +1535,29 @@ where
             "Install a HUD before saving options.".into(),
         ));
     }
-    crate::hud_schema_compat::preserve_unavailable_options(
-        schema,
-        &status.record.options,
-        &mut options,
-    )?;
     let folder = manifest_hud_folder_resolved(&manifest.files, &status.record.id)
         .unwrap_or_else(|| status.record.id.clone());
     let mut tree = load_hud_tree_from_manifest(profiles_dir, profile_id, &manifest, &folder)?;
+    // The options that do not fit these files are the ones the pane showed as
+    // unavailable: their saved values stay, and they are not applied.
+    let blocked = crate::hud_apply::unavailable_controls(schema, &tree);
+    crate::hud_schema_compat::preserve_blocked_options(
+        schema,
+        &blocked,
+        &status.record.options,
+        &mut options,
+    )?;
     // Write back into the folder the manifest already spells, not the
     // lowercased id: `RaysHUD/` and `rayshud/` are two entries on disk on
     // Linux and two manifest paths everywhere.
     let layer = crate::apply::cfg_layer_from_manifest(profiles_dir, &manifest)?;
-    let applied = crate::hud_apply::apply_hud_options_for_layer(
+    let applied = crate::hud_apply::apply_hud_options_except(
         &mut tree,
         schema,
         &status.record.id,
         &options,
         layer,
+        &blocked,
     )?;
     let autoexec = prepare_hud_autoexec_update(
         profiles_dir,
@@ -3895,6 +3943,123 @@ mod tests {
         ))
         .unwrap();
         assert!(written.contains("0 153 255 255"), "{written}");
+        cleanup(&dir);
+    }
+
+    /// The pane lists an option the HUD's files cannot take as unavailable;
+    /// saving keeps its stored value, applies the rest, and adds no file.
+    #[test]
+    fn options_that_do_not_fit_the_installed_hud_are_listed_and_left_alone() {
+        let dir = test_temp_dir();
+        let (profiles, root, id) = active_profile(&dir);
+        let colors = b"\"Scheme\"\n{\n\t\"Colors\"\n\t{\n\t\t\"bh_Health_Buff\"\t\t\"255 0 0 255\"\n\t}\n}\n";
+        for (rel, bytes) in [
+            ("tf/custom/RaysHUD/info.vdf", info_vdf()),
+            (
+                "tf/custom/RaysHUD/resource/clientscheme_colors.res",
+                colors.as_slice(),
+            ),
+            // Not text, and not something the schema edits: never read.
+            (
+                "tf/custom/RaysHUD/resource/fonts/hud.ttf",
+                [0u8, 159, 146, 150].as_slice(),
+            ),
+        ] {
+            put_exclusive_file_to(&profiles, &root, &id, rel, bytes, unlocked()).unwrap();
+        }
+        let schema = crate::hud_apply::parse_hud_schema(
+            r##"{"Controls":{"Options":[
+  {"Name":"bh_Health_Buff","Type":"ColorPicker","Value":"0 153 255 255",
+   "Files":{"resource/clientscheme_colors.res":{"Scheme":{"Colors":{"bh_Health_Buff":"$value"}}}}},
+  {"Name":"chat","Label":"Chat on top","Type":"Checkbox","Value":"false",
+   "Files":{"resource/ui/basechat.res":{"HudChat":{"ypos":{"true":"30","false":"295"}}}}}
+]}}"##,
+        )
+        .unwrap();
+        match_hud_catalog_to(&profiles, &root, &id, "rayshud", None, unlocked()).unwrap();
+
+        let view = hud_schema_view_to(&profiles, &id, &schema).unwrap();
+        let controls = &view.sections[0].controls;
+        assert!(controls[0].unavailable_reason.is_none());
+        assert!(controls[1]
+            .unavailable_reason
+            .as_deref()
+            .unwrap()
+            .contains("resource/ui/basechat.res"));
+
+        let refused = apply_schema_options_to(
+            &profiles,
+            &root,
+            &id,
+            &schema,
+            BTreeMap::from([("chat".into(), "true".into())]),
+            unlocked(),
+        )
+        .unwrap_err();
+        assert!(refused.message().contains("Chat on top is unavailable"));
+
+        apply_schema_options_to(
+            &profiles,
+            &root,
+            &id,
+            &schema,
+            BTreeMap::from([("bh_Health_Buff".into(), "1 2 3 255".into())]),
+            unlocked(),
+        )
+        .unwrap();
+        let manifest = load_manifest(&profiles, &id).unwrap();
+        assert!(manifest
+            .files
+            .iter()
+            .all(|file| !file.path.ends_with("basechat.res")));
+        let written = fs::read_to_string(exclusive_file_path(
+            &profiles,
+            &id,
+            "tf/custom/RaysHUD/resource/clientscheme_colors.res",
+        ))
+        .unwrap();
+        assert!(written.contains("1 2 3 255"), "{written}");
+        assert_eq!(
+            fs::read(exclusive_file_path(
+                &profiles,
+                &id,
+                "tf/custom/RaysHUD/resource/fonts/hud.ttf"
+            ))
+            .unwrap(),
+            [0u8, 159, 146, 150]
+        );
+
+        // Options exist when the index lists the HUD, by repository for a
+        // catalog install.
+        let index = |file: &str, repo: &str| {
+            crate::hud_schema_index::parse_schema_folder(&format!(
+                r#"{{"commit":"abc","schemas":[{{"file":"{file}","github":"{repo}"}}]}}"#
+            ))
+            .unwrap()
+            .1
+        };
+        let by_name = index("rayshud.json", "https://github.com/raysfire/rayshud");
+        assert!(hud_ui_state(&manifest, &[], &by_name).schema_supported);
+        let other = index("flawhud.json", "https://github.com/CriticalFlaw/flawhud");
+        assert!(!hud_ui_state(&manifest, &[], &other).schema_supported);
+        let renamed = index("rays.json", "https://github.com/RaysFire/RaysHUD/");
+        assert!(!hud_ui_state(&manifest, &[], &renamed).schema_supported);
+        let mut record = manifest.hud.clone().unwrap();
+        record.source = HudSource::HudDb;
+        let catalog = [catalog_entry_from_json(
+            "rayshud",
+            r#"{"name":"rayshud","author":"raysfire","repo":"https://github.com/raysfire/rayshud","hash":"abc123"}"#,
+            "1111111111111111111111111111111111111111",
+        )
+        .unwrap()];
+        assert_eq!(
+            schema_index_entry_for(&renamed, &record, &catalog)
+                .unwrap()
+                .file,
+            "rays.json"
+        );
+        record.source = HudSource::Local;
+        assert!(schema_index_entry_for(&renamed, &record, &catalog).is_none());
         cleanup(&dir);
     }
 

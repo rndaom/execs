@@ -13,7 +13,6 @@ import {
   hudOptionsDirty,
   hudOverlayCrosshairState,
   hudPageLinks,
-  hudSchemaUnavailableReason,
   hudStatCopy,
   installedHudLabel,
   isHudCheckboxOn,
@@ -196,15 +195,6 @@ describe("hud catalog helpers", () => {
       hudOverlayCrosshairState("rayshud", unsupported, { rh_toggle_xhair_enable: "true" }),
     ).toBe("possible");
     expect(hudOverlayCrosshairState("rayshud", null, {})).toBe("none");
-  });
-
-  it("explains why overlapping catalog HUDs have no editor controls yet", () => {
-    expect(hudSchemaUnavailableReason("berryhud")).toContain("multiple HUD roots");
-    expect(hudSchemaUnavailableReason("hexhud")).toContain("missing");
-    expect(hudSchemaUnavailableReason("hud-fixes")).toContain("missing");
-    expect(hudSchemaUnavailableReason("sunsethud")).toContain("unresolved");
-    expect(hudSchemaUnavailableReason("eve-plus")).toContain("No in-app options");
-    expect(hudSchemaUnavailableReason("unknown")).toContain("No in-app options");
   });
 });
 

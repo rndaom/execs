@@ -6,7 +6,7 @@ import { ToastProvider } from "./components/ui/Toast";
 import { AppStatusProvider } from "./hooks/useAppStatus";
 import type { Api } from "./lib/api";
 import type { HudSchemaView, HudStatePayload } from "./lib/bridge";
-import { emptyHudState, PREVIEW_HUD_CATALOG } from "./lib/hud-ui";
+import { emptyHudState, PREVIEW_HUD_CATALOG, previewUnfitHudSchema } from "./lib/hud-ui";
 import { SettingsHost } from "./SettingsHost";
 
 // Real host, HUD pane, seeded drafts, autosave, toast, and DOM event handlers;
@@ -252,6 +252,41 @@ describe("HUD loading through the real settings host and pane", () => {
     await render();
     expect(element("hud-options-notes").textContent).toContain("No in-app options");
     expect(container.querySelector('[data-testid="hud-options"]')).toBeNull();
+  });
+
+  it("shows the no-options note, not an error, when reading the schema finds none", async () => {
+    state = installed("custom-hud");
+    api.getHudSchema.mockResolvedValueOnce(null as unknown as HudSchemaView);
+    await render();
+    expect(api.getHudSchema).toHaveBeenLastCalledWith("A", "custom-hud");
+    expect(element("hud-options-notes").textContent).toContain("No in-app options");
+    expect(container.querySelector('[data-testid="hud-schema-error"]')).toBeNull();
+    expect(container.querySelector('[data-testid="hud-options"]')).toBeNull();
+  });
+
+  it("folds options that don't fit under one line and keeps the rest", async () => {
+    state = installed("custom-hud");
+    api.getHudSchema.mockResolvedValueOnce(previewUnfitHudSchema(3));
+    await render();
+    const options = element("hud-options");
+    expect(options.querySelectorAll("fieldset")).toHaveLength(1);
+    const fold = element("hud-options-unavailable") as HTMLDetailsElement;
+    expect(fold.open).toBe(false);
+    expect(fold.querySelector("summary")?.textContent).toBe(
+      "34 options aren’t available for this version",
+    );
+    const rows = fold.querySelectorAll('[data-testid="hud-option-unavailable"]');
+    expect(rows).toHaveLength(34);
+    expect(rows[0].textContent).toBe("Health buffcustomizations/colors.res: not in this HUD.");
+  });
+
+  it("shows the no-options note when no option fits the installed HUD", async () => {
+    state = installed("custom-hud");
+    api.getHudSchema.mockResolvedValueOnce(previewUnfitHudSchema(0));
+    await render();
+    expect(element("hud-options-notes").textContent).toContain("No in-app options");
+    expect(container.querySelector('[data-testid="hud-options"]')).toBeNull();
+    expect(container.querySelector('[data-testid="hud-option-unavailable"]')).toBeNull();
   });
 
   it("ignores late local state and schema completions across profiles", async () => {
