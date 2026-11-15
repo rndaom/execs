@@ -1,30 +1,30 @@
-# Linux development package baseline: public v0.2.2
+# Linux development package baseline: public v0.3.0
 
 The Linux development package job uses the platform-independent synthetic profile
-exports in [windows-package-v022](windows-package-v022/README.md). Those ZIPs were
-emitted by the unmodified tagged v0.2.2 core; the directory name follows the
+exports in [windows-package-v030](windows-package-v030/README.md). Those ZIPs were
+emitted by the unmodified tagged v0.3.0 core; the directory name follows the
 Windows fixture it shares, not a platform restriction. Their payloads are cfg,
 Source VPK and HUD files, without platform-specific paths in the portable
 manifests. The Linux fixture still authors its own isolated HOME/XDG/TMPDIR,
 library identity, settings and synthetic TF2 root. Release upgrade checks keep
-their own previous-public fixture (`package-smoke-v021.json`).
+their own previous-public fixture (`package-smoke-v022.json`).
 
-[development-package-v022.json](development-package-v022.json) pins the public
+[development-package-v030.json](development-package-v030.json) pins the public
 AppImage and Debian package metadata. Both artifacts and their signatures were
-downloaded from GitHub v0.2.2 using `gh release download`; each size and SHA-256
+downloaded from GitHub v0.3.0 using `gh release download`; each size and SHA-256
 matched the release asset metadata. `verifyPublicPackage` verified both updater
 signatures against the configured product public key. The exact artifact and
 signature hashes are checked again by the hosted job before any package runs.
 No downloaded executable is committed or launched during this local check.
 
-The tagged commit is `95058a75f8183fb39eaa6efd33d8b44c47c03c1d`; the published
-release-commit.json names the same commit and workflow run `36946290396`. Its
+The tagged commit is `e1eb7148aecc8f6c42114451681a22172f347f68`; the published
+release-commit.json names the same commit and workflow run `43758690914`. Its
 source/export generation evidence is retained with the shared fixture. The job
 refuses drift in the latest tag, publication timestamp or pinned assets; a new
-public release requires an authentic fixture refresh. The v0.2.1 pins this file
-replaces are in Git history (`development-package-v021.json`).
+public release requires an authentic fixture refresh. The v0.2.2 pins this file
+replaces are in Git history (`development-package-v022.json`).
 
-A development candidate whose version is still 0.2.2 exercises a **same-version
+A development candidate whose version is still 0.3.0 exercises a **same-version
 replacement**, not an upgrade or release. AppImage replaces the complete file;
 Debian uses `apt-get install --reinstall` so equal version strings cannot silently
 keep the public executable. Exact candidate binary hashes remain required. A

@@ -1,0 +1,31 @@
+{
+  "tagName": "v0.3.0",
+  "publishedAt": "2026-11-15T21:03:07Z",
+  "exporterRevision": "e1eb7148aecc8f6c42114451681a22172f347f68",
+  "packages": {
+    "appimage": {
+      "artifact": {
+        "name": "execs_0.3.0_amd64.AppImage",
+        "bytes": 102681080,
+        "sha256": "c0315df657b7fce183ebdb0715dcc6e206a687319a407e046dc9a25bd8274a03"
+      },
+      "signature": {
+        "name": "execs_0.3.0_amd64.AppImage.sig",
+        "bytes": 416,
+        "sha256": "f2638e8d1916b2f4ccd2a3a0ee8414bcbdf6c3f6572a116ba30b935f6f4e4c86"
+      }
+    },
+    "deb": {
+      "artifact": {
+        "name": "execs_0.3.0_amd64.deb",
+        "bytes": 15596292,
+        "sha256": "38665d18993b0cac7b48da33e7d12a7fbe49efcb5211cec9aa6f42a6bfe84b78"
+      },
+      "signature": {
+        "name": "execs_0.3.0_amd64.deb.sig",
+        "bytes": 408,
+        "sha256": "090fe05e5f3a0b0d8bae418998cc0aaf0d5f6e4cc67aec952e30305ae16a2ad7"
+      }
+    }
+  }
+}

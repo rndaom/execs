@@ -1,0 +1,26 @@
+{
+  "exporterTag": "v0.3.0",
+  "exporterRevision": "e1eb7148aecc8f6c42114451681a22172f347f68",
+  "sourceFilesVerified": 331,
+  "registryDependenciesMatchPublicLock": 122,
+  "signatureVerified": true,
+  "releaseCommit": {
+    "commit": "e1eb7148aecc8f6c42114451681a22172f347f68",
+    "run": "43758690914"
+  },
+  "results": {
+    "cases": [
+      {
+        "archiveSha256": "6f8d13b65e7a7d11528d2bc928b18bb71c9b1ceadf90980d26742a44499bed5f",
+        "case": "no-hud",
+        "liveUnchanged": true
+      },
+      {
+        "archiveSha256": "04b1435a573b492f15f0018f6a9d0630beb66046981e61d9d66bba2b94efa1f8",
+        "case": "single-hud",
+        "liveUnchanged": true
+      }
+    ],
+    "exporterRevision": "e1eb7148aecc8f6c42114451681a22172f347f68"
+  }
+}
