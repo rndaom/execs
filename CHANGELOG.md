@@ -5,6 +5,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
 ### Fixed
 
 - Linux AppImage: Steam started by Launch TF2, Verify game files or Steam closing no longer
