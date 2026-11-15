@@ -110,8 +110,9 @@ pub async fn get_hud_state() -> Result<HudStatePayload, CommandError> {
         let catalog_unavailable = catalog.as_ref().is_none_or(|value| value.warning.is_some());
         let catalog = catalog.map(|value| value.entries).unwrap_or_default();
         let manifest = active_manifest(&profile_id)?;
+        let index = execs_core::hud_schema_index::pinned_schema_index();
         Ok(HudStatePayload {
-            state: execs_core::hud_ui_state(&manifest, &catalog),
+            state: execs_core::hud_ui_state(&manifest, &catalog, index),
             catalog_unavailable,
             profile_id,
         })
@@ -408,7 +409,7 @@ pub async fn update_hud(
         let progress = hud_progress(&app, &status.record.id);
         let fetched = fetch_hud_from_catalog(
             &status.record.id,
-            execs_core::schema_supported(&status.record.id) && !status.record.options.is_empty(),
+            !status.record.options.is_empty(),
             &progress,
         )?;
         Ok((
@@ -456,12 +457,12 @@ pub async fn get_hud_schema(
                 "The installed HUD changed. Reload HUD options.",
             ));
         }
-        if !execs_core::schema_supported(&status.record.id) {
+        let Some(schema) = schema_for_record(&status.record)? else {
             return Ok(None);
-        }
-        let raw = crate::hud_fetch::fetch_hud_schema(&status.record.id)?;
-        let schema = execs_core::parse_hud_schema(&raw)?;
-        Ok(Some(execs_core::schema_view(&schema)))
+        };
+        // Each option is checked against the HUD's files in the library, so
+        // one that does not fit this HUD is listed as unavailable.
+        Ok(Some(execs_core::hud_schema_view(&profile_id, &schema)?))
     })
     .await
 }
@@ -485,14 +486,12 @@ pub async fn apply_hud_options(
             &expected_profile_id,
             &expected_hud_id,
         )?;
-        if !execs_core::schema_supported(&status.record.id) {
-            return Err(CommandError::unknown("This HUD has no in-app options."));
-        }
-        let raw = crate::hud_fetch::fetch_hud_schema(&status.record.id)?;
+        let schema = schema_for_record(&status.record)?
+            .ok_or_else(|| CommandError::unknown("This HUD has no in-app options."))?;
         Ok((
             ActiveContext::capture(&root, &profile_id),
             initial_hud,
-            execs_core::parse_hud_schema(&raw)?,
+            schema,
         ))
     })
     .await?;
@@ -512,6 +511,23 @@ pub async fn apply_hud_options(
         )?)
     })
     .await
+}
+
+/// The pinned editor schema for an installed HUD, when the editor has one.
+/// A HUD the built-in index does not list makes no request.
+fn schema_for_record(
+    record: &execs_core::HudRecord,
+) -> Result<Option<execs_core::HudSchema>, CommandError> {
+    let index = execs_core::hud_schema_index::pinned_schema_index();
+    let catalog = crate::hud_fetch::load_cached_catalog_payload()
+        .ok()
+        .flatten()
+        .map(|value| value.entries)
+        .unwrap_or_default();
+    let Some(entry) = execs_core::schema_index_entry_for(index, record, &catalog) else {
+        return Ok(None);
+    };
+    Ok(Some(crate::hud_fetch::fetch_hud_schema(&entry.file)?))
 }
 
 fn ensure_hud_unchanged(
@@ -567,8 +583,11 @@ fn fetch_hud_from_catalog(
     progress(HudInstallStep::Checking);
     let extracted = execs_core::extract_hud_archive(&bytes).map_err(hud_input_error)?;
     let schema = if include_schema {
-        let raw = crate::hud_fetch::fetch_hud_schema(&entry.id)?;
-        Some(execs_core::parse_hud_schema(&raw)?)
+        let index = execs_core::hud_schema_index::pinned_schema_index();
+        match index.find(&entry.id, Some(&entry.repo)) {
+            Some(found) => Some(crate::hud_fetch::fetch_hud_schema(&found.file)?),
+            None => None,
+        }
     } else {
         None
     };
@@ -612,15 +631,11 @@ fn install_fetched_hud(
         }
     }
     let mut cfg_writes = Vec::new();
-    if execs_core::schema_supported(&entry.id) && !options.is_empty() {
-        let schema = schema.ok_or_else(|| {
-            CommandError::unknown(
-                "The HUD options changed while the download was running. Try again.",
-            )
-        })?;
-        let applied = execs_core::apply_hud_options_for_layer(
-            &mut tree, &schema, &entry.id, &options, layer,
-        )?;
+    if let Some(schema) = schema.filter(|_| !options.is_empty()) {
+        // An option that no longer fits the new files keeps its saved value
+        // and is skipped; the rest are applied again.
+        let applied =
+            execs_core::apply_fitting_hud_options(&mut tree, &schema, &entry.id, &options, layer)?;
         cfg_writes = applied.cfg_writes;
     }
     Ok(execs_core::install_hud_pack_with_cfgs(

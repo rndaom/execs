@@ -193,10 +193,108 @@ export const PREVIEW_HUD_SCHEMA: HudSchemaView = {
           minimum: "0",
           maximum: "30",
         },
+        {
+          name: "StreamerMode",
+          label: "Streamer mode",
+          controlType: "checkbox",
+          value: "false",
+          choices: [],
+          unavailableReason:
+            "This option does not fit the installed HUD: resource/ui/streamer.res: not in this HUD.",
+        },
       ],
     },
   ],
 };
+
+/** A schema written for another version of the HUD: only the first `fit`
+ *  options match the installed files. */
+export function previewUnfitHudSchema(fit: number): HudSchemaView {
+  const sections: [string, string, string[]][] = [
+    [
+      "Colors",
+      "customizations/colors.res",
+      [
+        "Ammo",
+        "Ammo low",
+        "Health",
+        "Health buff",
+        "Health low",
+        "Ubercharge",
+        "Ubercharge full",
+        "Damage numbers",
+        "Killstreak",
+        "Team Red",
+        "Team Blue",
+        "Target ID",
+      ],
+    ],
+    [
+      "Crosshair",
+      "customizations/crosshair.res",
+      ["Enable crosshair", "Style", "Size", "Color", "Hit flash", "Outline", "Outline size"],
+    ],
+    [
+      "Health and ammo",
+      "customizations/player.res",
+      [
+        "Health cross",
+        "Health position",
+        "Ammo position",
+        "Low ammo warning",
+        "Metal position",
+        "Item meters",
+      ],
+    ],
+    [
+      "Menus",
+      "customizations/menus.res",
+      [
+        "Main menu style",
+        "Class select",
+        "Team select",
+        "Loadout style",
+        "Backpack rows",
+        "Console button",
+      ],
+    ],
+    [
+      "Extras",
+      "customizations/extras.res",
+      [
+        "Speedometer",
+        "Uber counter",
+        "Killfeed rows",
+        "Chat position",
+        "Scoreboard",
+        "Player model",
+      ],
+    ],
+  ];
+  let seen = 0;
+  return {
+    author: "raysfire",
+    sections: sections.map(([name, file, labels]) => ({
+      name,
+      controls: labels.map((label) => {
+        const index = seen++;
+        const color = name === "Colors";
+        return {
+          name: `preview_${index}`,
+          label,
+          controlType: color ? "color" : "checkbox",
+          value: color ? "0 153 255 255" : "false",
+          choices: [],
+          ...(index < fit
+            ? {}
+            : {
+                unavailableReason: `This option does not fit the installed HUD: ${file}: not in this HUD.`,
+              }),
+        };
+      }),
+    })),
+  };
+}
 
 export function emptyHudState(): HudUiState {
   return {
@@ -407,21 +505,20 @@ export function hudOverlayCrosshairState(
     : "disabled";
 }
 
-export function hudSchemaUnavailableReason(hudId: string): string {
-  const pending: Record<string, string> = {
-    berryhud:
-      "BerryHUD's catalog archive has multiple HUD roots; its editor schema has not been verified against one selected root. Use the author's customization instructions.",
-    hexhud:
-      "HExHUD's editor schema targets an animation file missing from the checked catalog archive. Use the author's customization instructions.",
-    "hud-fixes":
-      "Community HUD Fixes' editor schema targets an animation file missing from the checked catalog archive. Use the author's customization instructions.",
-    sunsethud:
-      "SunsetHUD's editor schema contains an unresolved crosshair control reference in the checked catalog archive. Use the author's customization instructions.",
-  };
-  return (
-    pending[hudId.toLowerCase()] ??
-    "No in-app options for this HUD. Use the HUD author's customization instructions."
-  );
+/** Shown when TF2HUD.Editor has no schema for the installed HUD. */
+export const HUD_NO_OPTIONS_NOTE =
+  "No in-app options for this HUD. Use the HUD author's customization instructions.";
+
+/** The one line unavailable options fold under. */
+export function hudUnavailableSummary(count: number): string {
+  return count === 1
+    ? "1 option isn’t available for this version"
+    : `${count} options aren’t available for this version`;
+}
+
+/** An unavailable option's reason without the lead-in the fold already gives. */
+export function hudUnavailableNote(reason: string): string {
+  return reason.replace(/^This option does not fit the installed HUD: /, "");
 }
 
 export function parseHudRgba(value: string): { r: number; g: number; b: number; a: number } {

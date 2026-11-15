@@ -94,6 +94,8 @@ describe("preview query", () => {
     expect(previewSettingsTab("settings-gameplay")).toBe("gameplay");
     expect(previewSettingsTab("settings-hud")).toBe("hud");
     expect(previewSettingsTab("settings-hud-installed")).toBe("hud");
+    expect(previewSettingsTab("settings-hud-no-fit")).toBe("hud");
+    expect(previewSettingsTab("settings-hud-few-fit")).toBe("hud");
     expect(previewSettingsTab("settings-crosshair")).toBe("crosshair");
     expect(previewSettingsTab("settings-viewmodels")).toBe("viewmodels");
     expect(previewSettingsTab("settings-files")).toBe("files");

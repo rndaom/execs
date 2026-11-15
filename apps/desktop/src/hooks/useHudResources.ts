@@ -73,6 +73,7 @@ export function useHudResources(
       if (!state.installed || !state.schemaSupported) return;
       // Option schemas can use the network. The local read (and an already
       // committed import) finishes now; schema failure has its own result.
+      // No schema at all means the HUD has no options, which is not a failure.
       void api
         .getHudSchema(profileId, state.installed.id)
         .then((schema) => {
@@ -81,9 +82,7 @@ export function useHudResources(
             ...previous,
             schema,
             schemaLoading: false,
-            schemaError: schema
-              ? null
-              : "No options were returned for this HUD. Retry loading options.",
+            schemaError: null,
           }));
         })
         .catch((error) => {

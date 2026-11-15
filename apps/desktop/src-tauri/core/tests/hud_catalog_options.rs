@@ -23,13 +23,13 @@ fn fixture(hud: &str) -> (HudTree, HudSchema) {
     fixture_checked(hud).unwrap_or_else(|error| panic!("{hud}: {error}"))
 }
 
-/// C3 compatibility triage uses the same parsed schema, extracted archive and
-/// first-party apply path as the supported HUD fixtures above. Its output is a
-/// scoped report: a parsed schema alone is insufficient to enable a catalog ID.
+/// Every alternative of every e.v.e Plus control applies, changes something
+/// and is idempotent. `hud_option_fit` covers the HUDs whose schema only
+/// partly fits their files.
 #[test]
 #[ignore = "requires pinned HUD archives; set EXECS_HUD_AUDIT_FIXTURES"]
-fn omitted_catalog_schema_file_operation_triage() {
-    for hud in ["berryhud", "eve-plus", "hexhud", "hud-fixes", "sunsethud"] {
+fn eve_plus_schema_file_operations_all_apply() {
+    for hud in ["eve-plus"] {
         let (original, schema) = match fixture_checked(hud) {
             Ok(value) => value,
             Err(error) => {

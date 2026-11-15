@@ -35,6 +35,8 @@ export const PREVIEW_STATES = [
   "settings-hud",
   "settings-hud-browser",
   "settings-hud-installed",
+  "settings-hud-no-fit",
+  "settings-hud-few-fit",
   "hud-ownership",
   "settings-crosshair",
   "settings-viewmodels",
@@ -87,6 +89,8 @@ const READY: PreviewState[] = [
   "settings-hud",
   "settings-hud-browser",
   "settings-hud-installed",
+  "settings-hud-no-fit",
+  "settings-hud-few-fit",
   "hud-ownership",
   "settings-crosshair",
   "settings-viewmodels",
@@ -237,6 +241,8 @@ export function previewSettingsTab(state: PreviewState): SettingsTab | null {
     case "settings-hud":
     case "settings-hud-browser":
     case "settings-hud-installed":
+    case "settings-hud-no-fit":
+    case "settings-hud-few-fit":
     case "hud-ownership":
       return "hud";
     case "settings-crosshair":

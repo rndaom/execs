@@ -8,7 +8,9 @@ use std::{
 
 use execs_core::hud::install_hud_pack_to;
 use execs_core::profile::{create_profile_record_to, load_manifest, set_active_profile_to};
-use execs_core::{apply_schema_options_to, parse_hud_schema, HudRecord, HudSource, HudTree};
+use execs_core::{
+    apply_schema_options_to, hud_schema_view_to, parse_hud_schema, HudRecord, HudSource, HudTree,
+};
 
 const SCHEMA: &str = include_str!("../fixtures/hud-options/schema.json");
 const ANIMATION: &str = "scripts/hudanimations_custom.txt";
@@ -136,7 +138,7 @@ fn hud_options_publish_identical_library_live_bytes_and_reapply_idempotently() {
 }
 
 #[test]
-fn late_schema_errors_leave_every_library_live_cfg_and_manifest_byte_unchanged() {
+fn an_option_that_cannot_apply_is_turned_off_and_changes_no_byte_of_its_own() {
     let fixture = Fixture::new();
     for invalid in [
         serde_json::json!({"scripts/hudanimations_custom.txt": {"unsupported": []}}),
@@ -151,22 +153,53 @@ fn late_schema_errors_leave_every_library_live_cfg_and_manifest_byte_unchanged()
             "FileName": "fixture.cfg", "TrueText": "cl_hud_minmode 1\n", "FalseText": "cl_hud_minmode 0\n"
         });
         let schema = parse_hud_schema(&raw.to_string()).unwrap();
-        let before = fixture.snapshot();
-        let options = BTreeMap::from([("fh_toggle_disguise_image".into(), "true".into())]);
-        let error = apply_schema_options_to(
-            &fixture.profiles,
-            &fixture.root,
-            &fixture.id,
-            &schema,
-            options,
-            Vec::<String>::new(),
-        )
-        .unwrap_err();
-        assert!(
-            error.message().contains("Late failure\" (late_failure)"),
-            "{error:?}"
-        );
-        assert_eq!(fixture.snapshot(), before);
+        // The option is found unusable before anything is staged, so it is
+        // listed as unavailable and skipped; nothing it names is written.
+        let view = hud_schema_view_to(&fixture.profiles, &fixture.id, &schema).unwrap();
+        let late = view
+            .sections
+            .iter()
+            .flat_map(|section| &section.controls)
+            .find(|control| control.name == "late_failure")
+            .unwrap();
+        assert!(late.unavailable_reason.is_some());
+
+        // Saving with it at its default applies the rest and leaves it out.
+        // Asking to change it is refused. Neither writes a byte for it.
+        let mut before: Option<BTreeMap<PathBuf, Vec<u8>>> = None;
+        for requested in [None, Some("true"), Some("false")] {
+            let options = requested
+                .map(|value| ("late_failure".to_string(), value.to_string()))
+                .into_iter()
+                .collect::<BTreeMap<_, _>>();
+            let result = apply_schema_options_to(
+                &fixture.profiles,
+                &fixture.root,
+                &fixture.id,
+                &schema,
+                options,
+                Vec::<String>::new(),
+            );
+            match requested {
+                Some("false") => assert!(
+                    result
+                        .unwrap_err()
+                        .message()
+                        .contains("Late failure is unavailable"),
+                    "a change to an unavailable option is refused"
+                ),
+                _ => drop(result.unwrap()),
+            }
+            let mut after = fixture.snapshot();
+            // Both carry a modified time.
+            after.retain(|path, _| {
+                !path.ends_with("manifest.json") && !path.ends_with("index.json")
+            });
+            assert_eq!(before.get_or_insert_with(|| after.clone()), &after);
+            let saved = load_manifest(&fixture.profiles, &fixture.id).unwrap();
+            assert!(saved.hud.unwrap().options.is_empty());
+        }
+        assert!(!fixture.root.join("tf/custom/escape.res").exists());
     }
 }
 

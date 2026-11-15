@@ -71,6 +71,8 @@ execFileSync(
     "hud_catalog_options",
     "--test",
     "hud_expression_archives",
+    "--test",
+    "hud_option_fit",
     "--",
     "--ignored",
   ],

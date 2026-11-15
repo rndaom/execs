@@ -13,6 +13,10 @@ use crate::vdf::{parse_hud_vdf, VdfMap, VdfValue};
 #[path = "hud_expression.rs"]
 mod expressions;
 
+#[path = "hud_option_fit.rs"]
+mod fit;
+pub use fit::{referenced_hud_files, unavailable_controls};
+
 #[cfg(test)]
 #[path = "hud_moves_tests.rs"]
 mod move_tests;
@@ -268,19 +272,25 @@ pub fn hud_cfg_stem(file_name: &str) -> String {
 }
 
 pub fn parse_hud_schema(raw: &str) -> Result<HudSchema, ProfileError> {
+    let schema = parse_hud_schema_unchecked(raw)?;
+    crate::hud_schema_compat::validate_identities(&schema)?;
+    Ok(schema)
+}
+
+/// `parse_hud_schema` without the unique-name requirement, for a schema no
+/// correction covers. `unavailable_controls` turns off the controls that share
+/// a name, so one upstream mistake costs those options and not the whole HUD.
+pub fn parse_hud_schema_unchecked(raw: &str) -> Result<HudSchema, ProfileError> {
     let mut raw: serde_json::Value = serde_json::from_str(&strip_json_comments(raw))
         .map_err(|err| ProfileError::Io(err.to_string()))?;
     crate::hud_schema_compat::normalize_pinned_duplicates(&mut raw);
-    let schema: HudSchema =
-        serde_json::from_value(raw).map_err(|err| ProfileError::Io(err.to_string()))?;
-    crate::hud_schema_compat::validate_identities(&schema)?;
-    Ok(schema)
+    serde_json::from_value(raw).map_err(|err| ProfileError::Io(err.to_string()))
 }
 
 /// Some TF2HUD.Editor schemas carry `//` and `/* */` comments, which strict
 /// JSON rejects. Comments outside string literals are blanked; strings are
 /// left alone so a URL with `//` in it survives.
-fn strip_json_comments(raw: &str) -> String {
+pub(crate) fn strip_json_comments(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     let mut chars = raw.chars().peekable();
     let mut in_string = false;
@@ -329,12 +339,28 @@ fn strip_json_comments(raw: &str) -> String {
 }
 
 pub fn schema_view(schema: &HudSchema) -> HudSchemaView {
+    schema_view_with(
+        schema,
+        &crate::hud_schema_compat::unsupported_controls(schema),
+    )
+}
+
+/// The options as the pane shows them for one installed HUD: every control
+/// that does not fit `tree` carries the reason and cannot be changed.
+pub fn schema_view_for_hud(schema: &HudSchema, tree: &HudTree) -> HudSchemaView {
+    schema_view_with(schema, &unavailable_controls(schema, tree))
+}
+
+fn schema_view_with(schema: &HudSchema, blocked: &BTreeMap<String, String>) -> HudSchemaView {
     let sections = schema
         .controls
         .iter()
         .map(|(name, controls)| HudSchemaSection {
             name: name.clone(),
-            controls: controls.iter().map(view_control).collect(),
+            controls: controls
+                .iter()
+                .map(|control| view_control(control, blocked.get(&control.name)))
+                .collect(),
         })
         .filter(|section| !section.controls.is_empty())
         .collect();
@@ -362,41 +388,77 @@ pub fn apply_hud_options_for_layer(
     options: &BTreeMap<String, String>,
     layer: CfgLayer,
 ) -> Result<HudApplyResult, ProfileError> {
-    // Validate and resolve the complete schema before changing even the staged
-    // tree. A later control failure must not leave earlier edits in the caller.
-    let migrated_options = crate::hud_schema_compat::migrate_saved_options(hud_id, options);
-    let options = &migrated_options;
-    let schema = expressions::resolve_schema(schema, options)?;
-    let mut staged = tree.clone();
-    let result = apply_resolved_hud_options(&mut staged, &schema, hud_id, options, layer)?;
-    *tree = staged;
-    Ok(result)
+    crate::hud_schema_compat::validate_identities(schema)?;
+    let blocked = crate::hud_schema_compat::unsupported_controls(schema);
+    apply_hud_options_except(tree, schema, hud_id, options, layer, &blocked)
 }
 
-fn apply_resolved_hud_options(
+/// Apply the options that fit this HUD's files and leave the rest alone: a
+/// control `unavailable_controls` turns off for `tree` is skipped, where
+/// `apply_hud_options_for_layer` would refuse the whole schema.
+pub fn apply_fitting_hud_options(
     tree: &mut HudTree,
     schema: &HudSchema,
     hud_id: &str,
     options: &BTreeMap<String, String>,
     layer: CfgLayer,
 ) -> Result<HudApplyResult, ProfileError> {
-    crate::hud_schema_compat::validate_identities(schema)?;
-    let custom = schema
-        .customizations_folder
-        .as_deref()
-        .map(validate_hud_move_path)
-        .transpose()?;
-    let enabled = schema
-        .enabled_folder
-        .as_deref()
-        .map(validate_hud_move_path)
-        .transpose()?;
+    let blocked = unavailable_controls(schema, tree);
+    apply_hud_options_except(tree, schema, hud_id, options, layer, &blocked)
+}
+
+/// Apply every control not named in `blocked`.
+pub(crate) fn apply_hud_options_except(
+    tree: &mut HudTree,
+    schema: &HudSchema,
+    hud_id: &str,
+    options: &BTreeMap<String, String>,
+    layer: CfgLayer,
+    blocked: &BTreeMap<String, String>,
+) -> Result<HudApplyResult, ProfileError> {
+    // Validate and resolve the complete schema before changing even the staged
+    // tree. A later control failure must not leave earlier edits in the caller.
+    let migrated_options = crate::hud_schema_compat::migrate_saved_options(hud_id, options);
+    let options = &migrated_options;
+    let schema = expressions::resolve_schema_except(schema, options, blocked)?;
+    let mut staged = tree.clone();
+    let result = apply_resolved_hud_options(&mut staged, &schema, options, layer, blocked)?;
+    *tree = staged;
+    Ok(result)
+}
+
+/// The schema's two move folders, validated.
+fn move_folders(schema: &HudSchema) -> Result<(Option<String>, Option<String>), ProfileError> {
+    let folder = |name: &Option<String>| name.as_deref().map(validate_hud_move_path).transpose();
+    Ok((
+        folder(&schema.customizations_folder)?,
+        folder(&schema.enabled_folder)?,
+    ))
+}
+
+fn apply_resolved_hud_options(
+    tree: &mut HudTree,
+    schema: &HudSchema,
+    options: &BTreeMap<String, String>,
+    layer: CfgLayer,
+    blocked: &BTreeMap<String, String>,
+) -> Result<HudApplyResult, ProfileError> {
+    // Unusable move folders stop the options that move files, not the rest.
+    let folders = move_folders(schema);
+    let (custom, enabled) = match &folders {
+        Ok((custom, enabled)) => (custom.clone(), enabled.clone()),
+        Err(_) => (None, None),
+    };
     let mut cfg_writes = Vec::new();
     for controls in schema.controls.values() {
         for control in controls {
-            // Keep legacy saved values, but never apply unknown editor operations.
-            if crate::hud_schema_compat::unavailable_top_level_reason(control).is_some() {
+            // Keep legacy saved values, but never apply unknown editor
+            // operations or an option that does not fit the HUD's files.
+            if blocked.contains_key(&control.name) {
                 continue;
+            }
+            if let (Err(error), true) = (&folders, fit::moves_files(control)) {
+                return Err(error.clone());
             }
             apply_control(
                 tree,
@@ -404,7 +466,7 @@ fn apply_resolved_hud_options(
                 options,
                 custom.as_deref(),
                 enabled.as_deref(),
-                hud_id,
+                false,
                 layer,
                 &mut cfg_writes,
             )
@@ -437,7 +499,7 @@ fn apply_resolved_hud_options(
     })
 }
 
-fn view_control(control: &HudControl) -> HudSchemaControl {
+fn view_control(control: &HudControl, unavailable: Option<&String>) -> HudSchemaControl {
     let kind = normalize_type(&control.control_type);
     let choices = if kind == "crosshair" {
         HUD_CROSSHAIR_GLYPHS
@@ -476,8 +538,7 @@ fn view_control(control: &HudControl) -> HudSchemaControl {
         control_type: kind.to_string(),
         value: control.value.clone(),
         choices,
-        unavailable_reason: crate::hud_schema_compat::unavailable_top_level_reason(control)
-            .map(str::to_owned),
+        unavailable_reason: unavailable.cloned(),
         minimum: control.minimum.as_ref().map(json_to_string),
         maximum: control.maximum.as_ref().map(json_to_string),
     }
@@ -490,7 +551,9 @@ fn apply_control(
     options: &BTreeMap<String, String>,
     custom: Option<&str>,
     enabled: Option<&str>,
-    hud_id: &str,
+    // A dry run: refuse an edit to a file or section the HUD does not have,
+    // where a real apply would add it.
+    strict: bool,
     layer: CfgLayer,
     cfg_writes: &mut Vec<(String, Vec<u8>)>,
 ) -> Result<(), ProfileError> {
@@ -523,7 +586,7 @@ fn apply_control(
                 }
             }
             if let Some(files) = &control.files {
-                merge_files(tree, files, if on { "1" } else { "0" }, Some(on))?;
+                merge_files_checked(tree, files, if on { "1" } else { "0" }, Some(on), strict)?;
             }
             if let Some(write) = &control.write_file {
                 let text = if on {
@@ -554,7 +617,7 @@ fn apply_control(
                 )));
             }
             apply_value_files(
-                tree, control, &current, custom, enabled, hud_id, layer, cfg_writes,
+                tree, control, &current, custom, enabled, strict, layer, cfg_writes,
             )?;
         }
         "combo" => {
@@ -613,12 +676,12 @@ fn apply_control(
             }
             switch_combo_base_aliases(tree, control, choice)?;
             apply_control(
-                tree, choice, options, custom, enabled, hud_id, layer, cfg_writes,
+                tree, choice, options, custom, enabled, strict, layer, cfg_writes,
             )?;
         }
         _ => {
             apply_value_files(
-                tree, control, &current, custom, enabled, hud_id, layer, cfg_writes,
+                tree, control, &current, custom, enabled, strict, layer, cfg_writes,
             )?;
         }
     }
@@ -632,11 +695,10 @@ fn apply_value_files(
     current: &str,
     custom: Option<&str>,
     enabled: Option<&str>,
-    hud_id: &str,
+    strict: bool,
     layer: CfgLayer,
     cfg_writes: &mut Vec<(String, Vec<u8>)>,
 ) -> Result<(), ProfileError> {
-    let _ = hud_id;
     if let Some(file_name) = control.file_name.as_deref() {
         let (Some(custom), Some(enabled)) = (custom, enabled) else {
             return Err(ProfileError::Io(
@@ -649,7 +711,7 @@ fn apply_value_files(
         tree.rename(&rename.old_name, &rename.new_name)?;
     }
     if let Some(files) = &control.files {
-        merge_files(tree, files, current, None)?;
+        merge_files_checked(tree, files, current, None, strict)?;
     }
     if let Some(write) = &control.write_file {
         tree.insert(
@@ -809,11 +871,22 @@ fn swap_custom_file(
     tree.rename(&from, &to)
 }
 
+#[cfg(test)]
 fn merge_files(
     tree: &mut HudTree,
     files: &serde_json::Value,
     value: &str,
     toggle: Option<bool>,
+) -> Result<(), ProfileError> {
+    merge_files_checked(tree, files, value, toggle, false)
+}
+
+fn merge_files_checked(
+    tree: &mut HudTree,
+    files: &serde_json::Value,
+    value: &str,
+    toggle: Option<bool>,
+    strict: bool,
 ) -> Result<(), ProfileError> {
     let Some(map) = files.as_object() else {
         return Err(ProfileError::Io(
@@ -849,7 +922,10 @@ fn merge_files(
                 .first()
                 .map_or(rel.as_str(), |path| path.as_str())
                 .to_string();
-            merge_file(tree, &target, patch, value, toggle)
+            if strict && matches.is_empty() {
+                return Err(ProfileError::Io("not in this HUD".into()));
+            }
+            merge_file(tree, &target, patch, value, toggle, strict)
         })();
         result.map_err(|error| match error {
             ProfileError::Io(reason) => ProfileError::Io(format!("{rel}: {reason}")),
@@ -865,6 +941,7 @@ fn merge_file(
     patch: &serde_json::Value,
     value: &str,
     toggle: Option<bool>,
+    strict: bool,
 ) -> Result<(), ProfileError> {
     let patch = patch
         .as_object()
@@ -910,14 +987,29 @@ fn merge_file(
         })
         .map(|(index, _)| index)
         .collect::<Vec<_>>();
+    // A section the file inherits through #base can be overridden by adding
+    // it; without an include, a section the HUD lacks has nothing to change.
+    let inherits = existing
+        .lines()
+        .any(|line| base_target_range(line).is_some());
+    let fits = |root: &VdfMap| match missing_section(root, &patch_map) {
+        Some(section) if strict && !inherits => Err(ProfileError::Io(format!(
+            "no {section} section in this HUD"
+        ))),
+        _ => Ok(()),
+    };
     match headers.as_slice() {
-        [] => merge_hud_map(&mut vdf, &patch_map),
+        [] => {
+            fits(&vdf)?;
+            merge_hud_map(&mut vdf, &patch_map)
+        }
         [index] => {
             let VdfValue::Obj(root) = &mut vdf.entries[*index].1 else {
                 return Err(ProfileError::Io(
                     "HUD resource header must contain an object".into(),
                 ));
             };
+            fits(root)?;
             merge_hud_map(root, &patch_map);
         }
         _ => {
@@ -1000,6 +1092,23 @@ fn edit_animation_lines(
         }
     }
     Ok(out)
+}
+
+/// The first panel the patch edits that `target` does not have. Values and
+/// blocks inside a panel the HUD has may be new (`customclassdata`,
+/// `if_mvm`); a whole panel may not.
+fn missing_section(target: &VdfMap, patch: &VdfMap) -> Option<String> {
+    patch
+        .entries
+        .iter()
+        .filter(|(_, value)| matches!(value, VdfValue::Obj(_)))
+        .map(|(key, _)| key)
+        .find(|key| {
+            !target.entries.iter().any(|(existing, child)| {
+                existing.eq_ignore_ascii_case(key) && matches!(child, VdfValue::Obj(_))
+            })
+        })
+        .cloned()
 }
 
 /// A HUD patch owns one conditional variant, never an unrelated platform's
