@@ -20,6 +20,16 @@ struct PendingImport {
     revision: String,
     inputs: Vec<ImportInput>,
     source: ModSource,
+    /// The GameBanana file a review was downloaded from, so a HUD found in it
+    /// can be fetched again for the HUD installer.
+    remote: Option<RemoteFile>,
+}
+
+struct RemoteFile {
+    section: GameBananaSection,
+    id: u64,
+    file_id: u64,
+    title: String,
 }
 
 struct ImportInput {
@@ -136,6 +146,7 @@ async fn prepare_local(
             revision: baseline,
             inputs: Vec::new(),
             source: ModSource::Local,
+            remote: None,
         };
         for path in paths {
             let prepared = read_local(&path, folder)?;
@@ -205,6 +216,12 @@ pub async fn prepare_gamebanana_mod(
                 id: profile.id,
                 url: profile.url,
             },
+            remote: Some(RemoteFile {
+                section,
+                id,
+                file_id,
+                title: profile.name,
+            }),
         })
     })
     .await?;
@@ -313,6 +330,95 @@ pub async fn confirm_mod_import(
     super::shared::logged("Installed mod packs", result)
 }
 
+/// Install a reviewed choice that is a HUD as the profile's HUD. The source is
+/// read again by the HUD importer, so the result matches Import HUD exactly: a
+/// picked archive or folder from disk (unchanged since review), a GameBanana
+/// file from a fresh, rechecked download. A source holding more than one HUD
+/// gets the importer's own guidance.
+#[tauri::command]
+pub async fn confirm_mod_import_as_hud(
+    gate: tauri::State<'_, WriteGate>,
+    pending: tauri::State<'_, PendingModImport>,
+    token: String,
+    choice: String,
+) -> Result<ProfileDetail, CommandError> {
+    let prepared = take_review(&mut *pending.0.lock().await, &token)?;
+    let (prepared, name, tree) = blocking(move || {
+        let (name, tree) = hud_from_review(&prepared, &choice)?;
+        Ok((prepared, name, tree))
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
+    let result = with_profile(move |root, id| {
+        execs_core::refuse_if_running()?;
+        ensure_review_current(&prepared, &root, &id, &revision(&id)?)?;
+        super::hud::install_local_hud(&root, &id, &name, tree)
+    })
+    .await;
+    super::shared::logged("Installed a HUD from a mod review", result)
+}
+
+fn hud_from_review(
+    pending: &PendingImport,
+    choice: &str,
+) -> Result<(String, execs_core::HudTree), CommandError> {
+    let reviewed = response(String::new(), pending)?
+        .choices
+        .into_iter()
+        .find(|reviewed| reviewed.id == choice)
+        .ok_or_else(|| CommandError::unknown("That mod choice is no longer available."))?;
+    match reviewed.hud.as_deref() {
+        Some("folder") => {}
+        Some(_) => {
+            return Err(CommandError::unknown(
+                "Extract this HUD VPK, then choose its extracted folder in HUD → Import HUD.",
+            ))
+        }
+        None => return Err(CommandError::unknown("That choice is not a HUD.")),
+    }
+    let index: usize = choice
+        .split_once(':')
+        .and_then(|(index, _)| index.parse().ok())
+        .ok_or_else(|| CommandError::unknown("That mod choice is no longer available."))?;
+    let input = pending
+        .inputs
+        .get(index)
+        .ok_or_else(|| CommandError::unknown("That mod choice is no longer available."))?;
+    if let Some((path, folder)) = &input.local {
+        if read_local(path, *folder)?.fingerprint != input.prepared.fingerprint {
+            return Err(CommandError::new(
+                "ImportSourceChanged",
+                "The mod files changed after review. Choose them again.",
+            ));
+        }
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let extracted = if *folder {
+            execs_core::hud_tree_from_dir(path)
+        } else {
+            let limit = crate::hud_fetch::HUD_ZIP_MAX_BYTES;
+            let bytes = super::shared::read_bounded_file(
+                path,
+                limit,
+                super::shared::archive_too_large(limit),
+            )?;
+            execs_core::extract_hud_archive(&bytes)
+        };
+        return Ok((name, extracted.map_err(super::hud::hud_input_error)?.tree));
+    }
+    let remote = pending
+        .remote
+        .as_ref()
+        .ok_or_else(|| CommandError::unknown("That mod choice is no longer available."))?;
+    let pick =
+        gamebanana::download_file_in(remote.section, remote.id, remote.file_id, FileUse::Hud)?;
+    let bytes = gamebanana::download_pick(&pick)?;
+    let extracted = execs_core::extract_hud_archive(&bytes).map_err(super::hud::hud_input_error)?;
+    Ok((remote.title.clone(), extracted.tree))
+}
+
 #[tauri::command]
 pub async fn cancel_mod_import(
     pending: tauri::State<'_, PendingModImport>,
@@ -359,6 +465,7 @@ mod tests {
                 prepared: read_local(path, folder).unwrap(),
             }],
             source: ModSource::Local,
+            remote: None,
         }
     }
     #[test]

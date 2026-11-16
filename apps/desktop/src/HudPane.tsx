@@ -50,6 +50,7 @@ import {
   HUD_SORTS,
   hudAuthorCopy,
   hudCatalogControls,
+  hudCatalogMatch,
   hudDisplayName,
   hudInstallSourceCopy,
   hudOptionsDirty,
@@ -231,6 +232,7 @@ export function HudPane({
   const installedEntry = installedId
     ? (catalog.find((entry) => entry.id.toLowerCase() === installedId.toLowerCase()) ?? null)
     : null;
+  const catalogMatch = hudCatalogMatch(catalog, state);
   const mutationBlocked = locked || dirty || stateLoading || stateError !== null;
   const mutationReason = running
     ? "Close TF2 before changing the installed HUD."
@@ -399,8 +401,10 @@ export function HudPane({
                     {installedEntry ? `${hudAuthorCopy(installedEntry)} · ` : ""}
                     {installedLabel}
                   </p>
-                  {state.inferred ? (
-                    <p className="t-meta mt-3">Match it to hud-db to enable updates.</p>
+                  {catalogMatch ? (
+                    <p className="t-meta mt-3">
+                      Match it to {hudDisplayName(catalogMatch)} in the catalog to get updates.
+                    </p>
                   ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {state.updateAvailable ? (
@@ -415,16 +419,16 @@ export function HudPane({
                         {running ? "Close TF2 to update" : "Update HUD"}
                       </button>
                     ) : null}
-                    {state.inferred ? (
+                    {catalogMatch ? (
                       <button
                         type="button"
                         data-testid="hud-match"
                         disabled={mutationBlocked}
                         title={mutationReason}
-                        onClick={() => onMatch(installedId)}
+                        onClick={() => onMatch(catalogMatch.id)}
                         className="btn btn-ghost"
                       >
-                        Match to catalog…
+                        Match to catalog
                       </button>
                     ) : null}
                     <button

@@ -3,7 +3,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ModImportReview } from "../lib/bridge";
-import { ModImportDialog, modChoiceDescription, modChoiceSoundNote } from "./ModImportDialog";
+import {
+  ModImportDialog,
+  modChoiceDescription,
+  modChoiceHudNote,
+  modChoiceSoundNote,
+} from "./ModImportDialog";
 
 const choice = (
   overrides: Partial<ModImportReview["choices"][number]>,
@@ -83,4 +88,41 @@ it("flags a pack that replaces TF2's hit or kill sound and does not choose it fo
     (button) => button.textContent === "Install selected",
   );
   expect(install?.disabled).toBe(true);
+});
+
+it("offers a HUD to the HUD installer instead of selecting it as a pack", async () => {
+  const onConfirm = vi.fn();
+  const onInstallHud = vi.fn();
+  await act(async () =>
+    root.render(
+      <ModImportDialog
+        review={{
+          token: "t",
+          readmes: [],
+          choices: [
+            choice({ id: "0:0", name: "Pure HUD", hud: "folder" }),
+            choice({ id: "0:1", name: "Packed HUD", hud: "vpk" }),
+            choice({ id: "0:2", name: "Skins" }),
+          ],
+        }}
+        onClose={vi.fn()}
+        onConfirm={onConfirm}
+        onInstallHud={onInstallHud}
+        hudName="budhud"
+      />,
+    ),
+  );
+  expect(document.body.querySelector('[data-testid="mod-choice-hud-0:0"]')).not.toBeNull();
+  expect(document.body.querySelector('[data-testid="mod-choice-hud-0:2"]')).toBeNull();
+  // Only the ordinary pack is a selectable choice.
+  expect(document.body.querySelectorAll('[role="switch"]')).toHaveLength(1);
+  expect(document.body.textContent).toContain("It installs as your HUD, not as a pack.");
+  expect(document.body.textContent).toContain(modChoiceHudNote(choice({ hud: "vpk" })));
+  const buttons = [...document.body.querySelectorAll("button")];
+  // Only the loose-file HUD can go to the installer; the VPK one cannot.
+  const replace = buttons.filter((button) => button.textContent === "Replace budhud");
+  expect(replace).toHaveLength(1);
+  await act(async () => replace[0].click());
+  expect(onInstallHud).toHaveBeenCalledWith("0:0");
+  expect(onConfirm).not.toHaveBeenCalled();
 });

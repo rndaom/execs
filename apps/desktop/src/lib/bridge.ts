@@ -1122,6 +1122,11 @@ export async function installHud(id: string): Promise<ProfileDetail> {
 }
 
 /** Pick a ZIP, 7z or RAR on disk and install it as this profile's HUD. Null = cancelled. */
+/** Installs a listing from GameBanana's HUDs category as the profile's HUD. */
+export async function installGameBananaHud(id: number, fileId: number): Promise<ProfileDetail> {
+  return call<ProfileDetail>("install_gamebanana_hud", { id, fileId });
+}
+
 export async function importHudArchive(): Promise<ProfileDetail | null> {
   return call<ProfileDetail | null>("import_hud_archive");
 }
@@ -1526,6 +1531,11 @@ export type ModImportReview = {
     disabledReason: string | null;
     /** TF2's hit or kill sound paths this choice ships, which compete with Sounds. */
     soundSlots: HitsoundKind[];
+    /**
+     * Set when the choice is a HUD, which never installs as a pack: `folder`
+     * can go to the HUD installer, a `vpk` has to be extracted first.
+     */
+    hud?: "folder" | "vpk" | null;
   }[];
   readmes: { path: string; text: string; truncated: boolean }[];
 };
@@ -1564,6 +1574,11 @@ export async function prepareGameBananaHitsounds(
   fileId: number,
 ): Promise<GameBananaSounds> {
   return call<GameBananaSounds>("prepare_gamebanana_hitsounds", { id, fileId });
+}
+
+/** Installs a reviewed choice that is a HUD as the profile's HUD. */
+export async function confirmModImportAsHud(token: string, choice: string): Promise<ProfileDetail> {
+  return call<ProfileDetail>("confirm_mod_import_as_hud", { token, choice });
 }
 
 export async function confirmModImport(token: string, choices: string[]): Promise<ProfileDetail> {
@@ -1630,16 +1645,23 @@ export async function gameBananaModCategories(
   return call<GameBananaCategory[]>("gamebanana_mod_categories", { refresh, section });
 }
 
-/** `forSounds` marks loose WAV/MP3/Ogg files usable for a hit or kill sound. */
+/** What a GameBanana file will be used as, which decides the file types offered. */
+export type GameBananaFileUse = "pack" | "sound" | "hud";
+
+/**
+ * `sound` marks loose WAV/MP3/Ogg files usable for a hit or kill sound; `hud`
+ * leaves only the archives a HUD installs from.
+ */
 export async function gameBananaDownloadVariants(
   id: number,
   section: GameBananaSection = "mod",
-  forSounds = false,
+  fileUse: GameBananaFileUse = "pack",
 ): Promise<GameBananaDownloadVariant[]> {
   return call<GameBananaDownloadVariant[]>("gamebanana_download_variants", {
     id,
     section,
-    forSounds,
+    forSounds: fileUse === "sound",
+    forHud: fileUse === "hud",
   });
 }
 
