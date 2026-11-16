@@ -839,6 +839,7 @@ pub fn run() {
             commands::mod_import::prepare_import_mod_folder,
             commands::mod_import::prepare_gamebanana_mod,
             commands::mod_import::confirm_mod_import,
+            commands::mod_import::confirm_mod_import_as_hud,
             commands::mod_import::cancel_mod_import,
             commands::mods::remove_mod,
             commands::mods::set_mod_enabled,

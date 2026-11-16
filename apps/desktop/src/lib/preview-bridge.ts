@@ -1362,6 +1362,9 @@ export function createPreviewApi(state: PreviewState): Api {
         ],
       };
     },
+    async confirmModImportAsHud() {
+      throw notInPreview("Installing a HUD from a mod review");
+    },
     async confirmModImport(token: string, choices: string[]) {
       const pending = pendingModImport;
       if (!pending || pending.token !== token)

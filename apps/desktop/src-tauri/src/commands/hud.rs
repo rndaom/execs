@@ -354,7 +354,7 @@ pub async fn import_hud_folder(
     super::shared::logged("Imported a HUD folder", result)
 }
 
-fn install_local_hud(
+pub(super) fn install_local_hud(
     root: &Path,
     profile_id: &str,
     name: &str,
@@ -377,7 +377,7 @@ fn install_local_hud(
 
 // These errors describe rejected input before any profile write. Keep the
 // core error code without its generic profile-library write failure prefix.
-fn hud_input_error(error: execs_core::ProfileError) -> CommandError {
+pub(super) fn hud_input_error(error: execs_core::ProfileError) -> CommandError {
     match error {
         execs_core::ProfileError::Io(message) => CommandError::new("Io", message),
         other => other.into(),
