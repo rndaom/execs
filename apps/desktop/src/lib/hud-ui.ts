@@ -564,3 +564,17 @@ export function hudCatalogMatch(
   const close = catalog.filter((entry) => normalizeHudName(entry.id) === wanted);
   return close.length === 1 ? close[0] : null;
 }
+
+/**
+ * The folder id a HUD gets when it is installed under `name` (an archive, a
+ * folder or a GameBanana listing title). Mirrors the native `hud_id_from_name`
+ * closely enough to recognise that HUD as the installed one.
+ */
+export function hudIdFromName(name: string): string {
+  const stem = name.trim().replace(/(\.(zip|7z|rar|ZIP|7Z|RAR))+$/, "");
+  const id = stem
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return id === "" ? "custom-hud" : id;
+}

@@ -11,6 +11,7 @@ import {
   hudCatalogControls,
   hudCatalogMatch,
   hudDisplayName,
+  hudIdFromName,
   hudOptionsDirty,
   hudOverlayCrosshairState,
   hudPageLinks,
@@ -437,5 +438,14 @@ describe("hudCatalogMatch", () => {
     expect(match("pure-hud")).toBeNull();
     expect(match("m0re_hud")).toBeNull();
     expect(match("m0re-hud")).toBe("m0re-hud");
+  });
+});
+
+describe("hudIdFromName", () => {
+  it("matches the folder id a HUD is installed under", () => {
+    expect(hudIdFromName("Pure HUD")).toBe("pure-hud");
+    expect(hudIdFromName("  m0re_HUD v2.1!.zip ")).toBe("m0re_hud-v2-1");
+    expect(hudIdFromName("budhud.7z")).toBe("budhud");
+    expect(hudIdFromName("—")).toBe("custom-hud");
   });
 });

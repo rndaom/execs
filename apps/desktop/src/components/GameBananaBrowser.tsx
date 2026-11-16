@@ -4,6 +4,7 @@ import { useGameBananaBrowser } from "../hooks/useGameBananaBrowser";
 import type { Api } from "../lib/api";
 import type {
   GameBananaDownloadVariant,
+  GameBananaFileUse,
   GameBananaMod,
   GameBananaSection,
   ModRecord,
@@ -22,6 +23,7 @@ import {
   gameBananaVariantOversized,
   OVERSIZED_MOD_ROUTE,
 } from "../lib/gamebanana-browser-ui";
+import { hudIdFromName } from "../lib/hud-ui";
 import {
   foldCategories,
   isGameBananaInstalled,
@@ -44,6 +46,11 @@ function listingKey(mod: GameBananaMod): string {
   return `${mod.section}:${mod.id}`;
 }
 
+function fileUseOf(mod: GameBananaMod): GameBananaFileUse {
+  if (mod.route === "hud") return "hud";
+  return gameBananaSoundSlot(mod) ? "sound" : "pack";
+}
+
 /** Search and install GameBanana listings without coupling presentation to request state. */
 export function GameBananaBrowser({
   api,
@@ -54,6 +61,8 @@ export function GameBananaBrowser({
   previewData = false,
   onInstall,
   onUseInSounds,
+  onInstallHud,
+  installedHud = null,
   onOpenHud,
   onManageInstalled,
 }: {
@@ -72,6 +81,13 @@ export function GameBananaBrowser({
    * once handed over, or with the reason it could not be prepared.
    */
   onUseInSounds?: (mod: GameBananaMod, fileId: number) => Promise<true | { failed: string }>;
+  /**
+   * Installs a HUD listing as the profile's HUD. Resolves true once installed,
+   * or with the reason it could not be.
+   */
+  onInstallHud?: (mod: GameBananaMod, fileId: number) => Promise<true | { failed: string }>;
+  /** The profile's HUD, so its listing reads as installed and a new one as a replacement. */
+  installedHud?: { id: string; name: string } | null;
   onOpenHud?: () => void;
   onManageInstalled?: () => void;
 }) {
@@ -105,11 +121,7 @@ export function GameBananaBrowser({
     setInstall({ key, state: "loading" });
     setAnnouncement(`Loading files for ${mod.name}.`);
     try {
-      const variants = await api.gameBananaDownloadVariants(
-        mod.id,
-        mod.section,
-        gameBananaSoundSlot(mod) !== null,
-      );
+      const variants = await api.gameBananaDownloadVariants(mod.id, mod.section, fileUseOf(mod));
       if (token !== choiceToken.current) return;
       setChooser({ mod, variants, selectedId: gameBananaDefaultVariant(variants) });
       setInstall(null);
@@ -140,6 +152,23 @@ export function GameBananaBrowser({
       } else {
         setInstall({ key, state: "failed", reason: handed.failed || undefined });
         setAnnouncement(`${name} could not be prepared. Retry is available on its card.`);
+      }
+      return;
+    }
+    if (mod.route === "hud") {
+      setAnnouncement(`Installing ${name} as your HUD.`);
+      let done: true | { failed: string } = { failed: "" };
+      try {
+        done = onInstallHud ? await onInstallHud(mod, fileId) : { failed: "" };
+      } catch (err) {
+        done = { failed: err instanceof Error ? err.message : "" };
+      }
+      if (done === true) {
+        setInstall(null);
+        setAnnouncement(`${name} is now your HUD.`);
+      } else {
+        setInstall({ key, state: "failed", reason: done.failed || undefined });
+        setAnnouncement(`${name} could not be installed. Retry is available on its card.`);
       }
       return;
     }
@@ -438,8 +467,10 @@ export function GameBananaBrowser({
                 mod={mod}
                 meta={gameBananaMetaLine(mod, browser.sort)}
                 installed={
-                  gameBananaSoundSlot(mod) === null &&
-                  isGameBananaInstalled(installed, mod.id, mod.section)
+                  mod.route === "hud"
+                    ? installedHud?.id === hudIdFromName(mod.name)
+                    : gameBananaSoundSlot(mod) === null &&
+                      isGameBananaInstalled(installed, mod.id, mod.section)
                 }
                 locked={locked || install?.state === "installing"}
                 running={running}
@@ -518,7 +549,9 @@ export function GameBananaBrowser({
               ? "The author uploaded more than one file. Pick the one you want."
               : gameBananaSoundSlot(chooser.mod)
                 ? "Check the file, then download it and choose a sound in Sounds."
-                : "Check the file, then download and install it."
+                : chooser.mod.route === "hud"
+                  ? "Check the file, then download it and install it as your HUD."
+                  : "Check the file, then download and install it."
           }
           testId="mods-gb-file-choice"
           className="fixed top-1/2 left-1/2 max-h-[calc(100dvh-2rem)] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto sm:p-6"
@@ -527,7 +560,12 @@ export function GameBananaBrowser({
           {chooser.variants.some((variant) => variant.splitPart) ? (
             <Alert tone="info" testId="mods-gb-split-notice" className="mt-4 py-2">
               This mod is split into parts. execs can't combine them. Follow the author's
-              instructions, then use Import mod.
+              instructions, then use {chooser.mod.route === "hud" ? "Import HUD" : "Import mod"}.
+            </Alert>
+          ) : null}
+          {chooser.mod.route === "hud" && installedHud ? (
+            <Alert tone="info" testId="mods-gb-hud-replace-notice" className="mt-4 py-2">
+              This replaces {installedHud.name}, your current HUD.
             </Alert>
           ) : null}
           {chooser.variants.some(gameBananaVariantOversized) ? (
@@ -590,7 +628,11 @@ export function GameBananaBrowser({
             >
               {gameBananaSoundSlot(chooser.mod)
                 ? "Download and open in Sounds"
-                : "Download and review"}
+                : chooser.mod.route !== "hud"
+                  ? "Download and review"
+                  : installedHud
+                    ? "Download and replace HUD"
+                    : "Download and install HUD"}
             </button>
           </div>
         </Modal>

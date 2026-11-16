@@ -28,19 +28,33 @@ export function modChoiceSoundNote(choice: ModImportReview["choices"][number]): 
   return `Also replaces TF2's ${what}, which can override what you chose in Sounds. To use only those sounds, choose them in Sounds instead.`;
 }
 
+/** Why a HUD choice is not a pack, and what to do with it instead. */
+export function modChoiceHudNote(choice: ModImportReview["choices"][number]): string | null {
+  if (choice.hud === "folder") return "This is a HUD. It installs as your HUD, not as a pack.";
+  if (choice.hud === "vpk")
+    return "This is a HUD in a VPK. Extract it, then import its folder in HUD.";
+  return null;
+}
+
 /** The native review owns the payload; this dialog returns only selected opaque IDs. */
 export function ModImportDialog({
   review,
   onClose,
   onConfirm,
+  onInstallHud,
+  hudName = null,
 }: {
   review: ModImportReview;
   onClose: () => void;
   onConfirm: (choices: string[]) => void;
+  /** Hands a HUD choice to the HUD installer, which replaces the profile's HUD. */
+  onInstallHud?: (choice: string) => void;
+  /** The profile's current HUD, named on the button that replaces it. */
+  hudName?: string | null;
 }) {
   // A lone choice starts selected, unless it would replace a Sounds file.
   const [selected, setSelected] = useState<string[]>(() => {
-    const available = review.choices.filter((choice) => !choice.disabledReason);
+    const available = review.choices.filter((choice) => !choice.disabledReason && !choice.hud);
     return available.length === 1 && !modChoiceSoundNote(available[0]) ? [available[0].id] : [];
   });
   return (
@@ -53,22 +67,45 @@ export function ModImportDialog({
     >
       <div className={review.readmes.length ? "grid gap-6 lg:grid-cols-2" : ""}>
         <div>
-          {review.choices.map((choice) => (
-            <SwitchRow
-              key={choice.id}
-              id={`mod-choice-${choice.id}`}
-              label={choice.name}
-              description={modChoiceDescription(choice)}
-              note={choice.disabledReason ?? modChoiceSoundNote(choice) ?? undefined}
-              disabled={!!choice.disabledReason}
-              checked={selected.includes(choice.id)}
-              onChange={(checked) =>
-                setSelected((current) =>
-                  checked ? [...current, choice.id] : current.filter((id) => id !== choice.id),
-                )
-              }
-            />
-          ))}
+          {review.choices.map((choice) =>
+            choice.hud && !choice.disabledReason ? (
+              <div
+                key={choice.id}
+                data-testid={`mod-choice-hud-${choice.id}`}
+                className="flex flex-wrap items-center justify-between gap-3 border-b border-edge py-3 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <p className="t-row break-words">{choice.name}</p>
+                  <p className="t-meta mt-0.5 break-words">{modChoiceDescription(choice)}</p>
+                  <p className="t-meta mt-1">{modChoiceHudNote(choice)}</p>
+                </div>
+                {choice.hud === "folder" && onInstallHud ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => onInstallHud(choice.id)}
+                  >
+                    {hudName ? `Replace ${hudName}` : "Install as HUD"}
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <SwitchRow
+                key={choice.id}
+                id={`mod-choice-${choice.id}`}
+                label={choice.name}
+                description={modChoiceDescription(choice)}
+                note={choice.disabledReason ?? modChoiceSoundNote(choice) ?? undefined}
+                disabled={!!choice.disabledReason}
+                checked={selected.includes(choice.id)}
+                onChange={(checked) =>
+                  setSelected((current) =>
+                    checked ? [...current, choice.id] : current.filter((id) => id !== choice.id),
+                  )
+                }
+              />
+            ),
+          )}
         </div>
         {review.readmes.length ? <ModReadmes readmes={review.readmes} /> : null}
       </div>

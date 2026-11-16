@@ -256,6 +256,50 @@ pub async fn import_hud_archive(
     super::shared::logged("Imported a HUD archive", result)
 }
 
+/// Install a HUD from its GameBanana listing, using the file the player chose
+/// on the listing's card. The listing must be in GameBanana's HUDs category
+/// and the file is rechecked against a fresh download page. The archive goes
+/// through the same reader and checks as an imported one, and the record is
+/// `Local`, named after the listing.
+#[tauri::command]
+pub async fn install_gamebanana_hud(
+    gate: tauri::State<'_, WriteGate>,
+    id: u64,
+    file_id: u64,
+) -> Result<ProfileDetail, CommandError> {
+    use crate::gamebanana::{self, FileUse, GameBananaSection};
+    let (context, initial_hud, name, tree) = with_profile(move |root, profile_id| {
+        execs_core::refuse_if_running()?;
+        let manifest = active_manifest(&profile_id)?;
+        let profile = gamebanana::submission_profile(GameBananaSection::Mod, id)?;
+        profile.require_hud()?;
+        let pick = gamebanana::download_file_in(GameBananaSection::Mod, id, file_id, FileUse::Hud)?;
+        let bytes = gamebanana::download_pick(&pick)?;
+        let tree = execs_core::extract_hud_archive(&bytes)
+            .map_err(hud_input_error)?
+            .tree;
+        Ok((
+            ActiveContext::capture(&root, &profile_id),
+            manifest.hud,
+            profile.name,
+            tree,
+        ))
+    })
+    .await?;
+    let _guard = gate.lock_for_write().await?;
+    let result = with_profile(move |root, profile_id| {
+        context.ensure_current(&root, &profile_id)?;
+        ensure_hud_unchanged(
+            &profile_id,
+            initial_hud.as_ref(),
+            "The installed HUD changed while that download was running. Try again.",
+        )?;
+        install_local_hud(&root, &profile_id, &name, tree)
+    })
+    .await;
+    super::shared::logged("Installed a HUD from GameBanana", result)
+}
+
 /// Install a HUD from a folder on disk (an extracted download, or one the
 /// user maintains). Same rules as the archive path.
 #[tauri::command]
@@ -310,7 +354,7 @@ pub async fn import_hud_folder(
     super::shared::logged("Imported a HUD folder", result)
 }
 
-fn install_local_hud(
+pub(super) fn install_local_hud(
     root: &Path,
     profile_id: &str,
     name: &str,
@@ -333,7 +377,7 @@ fn install_local_hud(
 
 // These errors describe rejected input before any profile write. Keep the
 // core error code without its generic profile-library write failure prefix.
-fn hud_input_error(error: execs_core::ProfileError) -> CommandError {
+pub(super) fn hud_input_error(error: execs_core::ProfileError) -> CommandError {
     match error {
         execs_core::ProfileError::Io(message) => CommandError::new("Io", message),
         other => other.into(),

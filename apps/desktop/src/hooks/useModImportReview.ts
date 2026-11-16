@@ -5,10 +5,13 @@ import type { ModImportReview } from "../lib/bridge";
 /** The one installable choice when nothing needs the player's decision. */
 export function onlyModImportChoice(review: ModImportReview): string | null {
   const [only] = review.choices;
-  return review.choices.length === 1 && !only.disabledReason ? only.id : null;
+  return review.choices.length === 1 && !only.disabledReason && !only.hud ? only.id : null;
 }
 
-export type ChosenModImport = { token: string; ids: string[] };
+/** The packs to install, or the one HUD choice to hand to the HUD installer. */
+export type ChosenModImport = { token: string; ids: string[]; hud?: string };
+
+type Choice = { ids: string[]; hud?: string };
 
 /**
  * Holds the chooser for a prepared native mod review. Preparing (download,
@@ -25,19 +28,19 @@ export function useModImportReview(
   const [review, setReview] = useState<ModImportReview | null>(null);
   const pending = useRef<{
     review: ModImportReview;
-    resolve: (ids: string[] | null) => void;
+    resolve: (choice: Choice | null) => void;
   } | null>(null);
   const generation = useRef(0);
   const context = useRef({ profileId, active });
   context.current = { profileId, active };
 
-  function close(ids: string[] | null) {
+  function close(choice: Choice | null) {
     const current = pending.current;
     pending.current = null;
     setReview(null);
     if (!current) return;
-    if (ids === null) void api.cancelModImport(current.review.token).catch(() => {});
-    current.resolve(ids);
+    if (choice === null) void api.cancelModImport(current.review.token).catch(() => {});
+    current.resolve(choice);
   }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: each pane/profile lifetime invalidates pending native reviews.
@@ -79,11 +82,11 @@ export function useModImportReview(
     const only = onlyModImportChoice(next);
     if (only !== null) return { token: next.token, ids: [only] };
     close(null);
-    const ids = await new Promise<string[] | null>((resolve) => {
+    const choice = await new Promise<Choice | null>((resolve) => {
       pending.current = { review: next, resolve };
       setReview(next);
     });
-    return ids ? { token: next.token, ids } : null;
+    return choice ? { token: next.token, ...choice } : null;
   }
 
   return {
@@ -91,6 +94,8 @@ export function useModImportReview(
     begin,
     choose,
     cancel: () => close(null),
-    confirm: (ids: string[]) => close(ids),
+    confirm: (ids: string[]) => close({ ids }),
+    /** Hand one HUD choice to the HUD installer instead of installing packs. */
+    confirmHud: (id: string) => close({ ids: [], hud: id }),
   };
 }

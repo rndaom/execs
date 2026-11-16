@@ -31,6 +31,10 @@ pub struct ModImportChoice {
     /// files compete with the ones the Sounds pane manages, so the review
     /// says so and does not choose the pack for the player.
     pub sound_slots: Vec<String>,
+    /// Set when this choice is a HUD, which never installs as a pack:
+    /// `folder` for loose files the HUD importer can read from the same
+    /// source, `vpk` for a HUD packed in a VPK, which it cannot.
+    pub hud: Option<String>,
 }
 
 /// The two virtual paths the Sounds pane owns, and the slot each one plays.
@@ -282,7 +286,17 @@ impl PreparedModImport {
             if let Some(content) = &content {
                 budget.add(content)?;
             }
+            // An unreadable `info.vdf` leaves the choice an ordinary pack; the
+            // installer checks again before anything is written.
+            let hud = content
+                .as_ref()
+                .filter(|content| crate::mods::is_hud_content(content).unwrap_or(false))
+                .map(|content| match content {
+                    ModContent::Tree(_) => "folder".to_string(),
+                    ModContent::Vpk(_) => "vpk".to_string(),
+                });
             choices.push(ModImportChoice {
+                hud,
                 id: index.to_string(),
                 name,
                 path,
@@ -553,6 +567,41 @@ mod tests {
         assert_eq!(slots["loose"], ["hit", "kill"]);
         assert_eq!(slots["packed.vpk"], ["kill"]);
         assert!(slots["voices"].is_empty());
+    }
+
+    #[test]
+    fn a_hud_choice_is_flagged_so_the_review_can_offer_the_hud_installer() {
+        let info = b"\"hud\" { \"ui_version\" \"3\" }".to_vec();
+        let prepared = PreparedModImport::from_entries(
+            "download",
+            vec![
+                ("myhud/info.vdf".into(), info.clone()),
+                ("myhud/resource/ui/hudlayout.res".into(), vec![1]),
+                ("skins/materials/red.vmt".into(), vec![2]),
+            ],
+        )
+        .unwrap();
+        let flags: BTreeMap<_, _> = prepared
+            .choices
+            .iter()
+            .map(|choice| (choice.path.as_str(), choice.hud.clone()))
+            .collect();
+        assert_eq!(flags["myhud"].as_deref(), Some("folder"));
+        assert_eq!(flags["skins"], None);
+
+        // An outdated HUD is not offered to the HUD installer, which refuses it.
+        let old = PreparedModImport::from_entries(
+            "download",
+            vec![
+                (
+                    "myhud/info.vdf".into(),
+                    b"\"hud\" { \"ui_version\" \"1\" }".to_vec(),
+                ),
+                ("myhud/resource/ui/hudlayout.res".into(), vec![1]),
+            ],
+        )
+        .unwrap();
+        assert!(old.choices.iter().all(|choice| choice.hud.is_none()));
     }
 
     #[test]

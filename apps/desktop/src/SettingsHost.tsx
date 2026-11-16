@@ -878,6 +878,19 @@ export function SettingsHost({
       }
       const chosen = await modImport.choose(prepared.review, started);
       if (!chosen) return "superseded";
+      if (chosen.hud !== undefined) {
+        const hudChoice = chosen.hud;
+        // The HUD installer replaces the profile's one HUD from the same source.
+        const installedHud = await write(
+          async () => {
+            await api.confirmModImportAsHud(chosen.token, hudChoice);
+            await hud.reloadLocal();
+          },
+          { success: "HUD installed", failure: "Could not install", pending: "Installing HUD…" },
+          { onFailure },
+        );
+        return installedHud || failed === null ? installedHud : { failed };
+      }
       const installed = await write(
         async () => {
           await api.confirmModImport(chosen.token, chosen.ids);
@@ -1312,6 +1325,38 @@ export function SettingsHost({
           loading={modsLoading}
           report={modsReport}
           hudImportRequired={modsHudImportRequired}
+          installedHud={
+            detail?.hud
+              ? {
+                  id: detail.hud.id,
+                  name:
+                    hud.catalog.find((entry) => entry.id === detail.hud?.id)?.name ?? detail.hud.id,
+                }
+              : null
+          }
+          // The HUD installer replaces the profile's one HUD; the card waits
+          // for the install and the HUD state reload behind it.
+          onInstallGameBananaHud={async (mod, fileId) => {
+            setModsHudImportRequired(null);
+            let failed = "";
+            const installed = await write(
+              async () => {
+                await api.installGameBananaHud(mod.id, fileId);
+                await hud.reloadLocal();
+              },
+              {
+                success: "HUD installed",
+                failure: "Could not install",
+                pending: "Installing HUD…",
+              },
+              {
+                onFailure: (message) => {
+                  failed = message;
+                },
+              },
+            );
+            return installed ? true : { failed };
+          }}
           onReviewHudImport={() => onNavigate?.("hud")}
           onDismissHudImport={() => setModsHudImportRequired(null)}
           onApply={(addons, particleMods, profileParticleMods) => {
@@ -1654,6 +1699,12 @@ export function SettingsHost({
           review={modImport.review}
           onClose={modImport.cancel}
           onConfirm={modImport.confirm}
+          onInstallHud={modImport.confirmHud}
+          hudName={
+            detail?.hud
+              ? (hud.catalog.find((entry) => entry.id === detail.hud?.id)?.name ?? detail.hud.id)
+              : null
+          }
         />
       ) : null}
       {shownLoadError ? (
