@@ -539,6 +539,32 @@ export function formatHudRgba(r: number, g: number, b: number, a: number): strin
   return `${r} ${g} ${b} ${a}`;
 }
 
+/** Letters and digits only, without the branch suffix GitHub adds to a downloaded folder. */
+function normalizeHudName(name: string): string {
+  const lower = name.trim().toLowerCase();
+  const suffix = ["-master", "-main"].find((end) => lower.endsWith(end));
+  return (suffix ? lower.slice(0, -suffix.length) : lower).replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * The catalog HUD an imported or found HUD can be matched to: the one with its
+ * folder name, ignoring case, punctuation and a `-master`/`-main` suffix. Null
+ * when the HUD already comes from the catalog, or when no single entry fits.
+ */
+export function hudCatalogMatch(
+  catalog: HudCatalogEntry[],
+  state: HudUiState,
+): HudCatalogEntry | null {
+  const installed = state.installed;
+  if (!installed || (installed.source === "hudDb" && !state.inferred)) return null;
+  const exact = catalog.find((entry) => entry.id.toLowerCase() === installed.id.toLowerCase());
+  if (exact) return exact;
+  const wanted = normalizeHudName(installed.id);
+  if (wanted === "") return null;
+  const close = catalog.filter((entry) => normalizeHudName(entry.id) === wanted);
+  return close.length === 1 ? close[0] : null;
+}
+
 /**
  * The folder id a HUD gets when it is installed under `name` (an archive, a
  * folder or a GameBanana listing title). Mirrors the native `hud_id_from_name`

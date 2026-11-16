@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- HUD: an imported HUD that is also in the catalog now offers Match to catalog, so it can get
+  updates. The button was missing for imported HUDs.
 - Mods: when a mod you import or download turns out to be a HUD, the file review now offers
   Install as HUD. Before, the install was refused and you had to import the file again in HUD.
 - Mods: a HUD found on GameBanana can now be installed from its card with Install HUD. Open HUD
