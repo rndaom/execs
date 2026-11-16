@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Mods: an outdated HUD can no longer be installed as a custom pack. The file review greys it out
+  and says to get an updated copy from the author, as Import HUD does.
 - Crosshair and Sounds: when another pack replaces the same files, Show in Mods now opens Custom
   packs with that pack marked, instead of only opening Mods.
 - HUD and Viewmodels: importing something that belongs in Mods now says so and offers Open Mods,
