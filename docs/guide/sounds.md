@@ -26,7 +26,7 @@ In **Mods → Browse → Sounds**, hit and kill sound uploads say **Use in Sound
 ## Messages you may see
 
 - **A sound file changed outside execs**: its saved name may no longer describe the audio. Pick both sounds again, or use **Remove sound files**.
-- **Other packs also replace TF2's hit or kill sound**: TF2 may play theirs, depending on which pack loads first.
+- **Other packs also replace TF2's hit or kill sound**: TF2 may play theirs, depending on which pack loads first. **Show in Mods** opens Custom packs on that pack, where you can turn it off or remove it.
 - **A sound from a retired catalog**: it still plays and stays in your profile; choosing another sound replaces it.
 
 ## Credits

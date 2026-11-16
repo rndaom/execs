@@ -186,6 +186,15 @@ export function SettingsHost({
   const [modsLoading, setModsLoading] = useState(false);
   const [modsReport, setModsReport] = useState<PreloaderReport | null>(null);
   const [modsHudImportRequired, setModsHudImportRequired] = useState<string | null>(null);
+  // A pack another pane named as conflicting, to show in Mods → Custom packs.
+  const [modsPackFocus, setModsPackFocus] = useState<{ pack: string; key: number } | null>(null);
+  const openModsPack = useCallback(
+    (pack: string) => {
+      setModsPackFocus((current) => ({ pack, key: (current?.key ?? 0) + 1 }));
+      onNavigate?.("mods");
+    },
+    [onNavigate],
+  );
   // A GameBanana hit or kill sound on its way to the Sounds library.
   const [incomingSounds, setIncomingSounds] = useState<IncomingSounds | null>(null);
   const incomingSoundsKey = useRef(0);
@@ -1189,7 +1198,7 @@ export function SettingsHost({
           stockSprites={stockSprites}
           stockArtSources={crosshairContent}
           sourceStatus={crosshairSourceStatus}
-          onOpenMods={() => onNavigate?.("mods")}
+          onOpenMods={openModsPack}
           launchOptions={launchSeed}
           gameResolution={gameResolution}
           onPreviewVtf={(bytes) => api.previewCrosshairVtf(bytes)}
@@ -1311,6 +1320,7 @@ export function SettingsHost({
           sourceRefreshKey={refreshKey}
           incoming={incomingSounds}
           onIncomingHandled={clearIncomingSounds}
+          onOpenModsPack={openModsPack}
           // Sound files and CVars share one recoverable native transaction.
           onSave={(gameplayText, pack) =>
             write(async () => {
@@ -1355,6 +1365,7 @@ export function SettingsHost({
           mods={detail?.mods ?? []}
           loading={modsLoading}
           report={modsReport}
+          packFocus={modsPackFocus}
           hudImportRequired={modsHudImportRequired}
           installedHud={
             detail?.hud

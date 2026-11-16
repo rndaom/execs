@@ -174,7 +174,8 @@ export function CrosshairPane({
   onDeactivate?: (stock?: { file: string; scale: number }) => Promise<unknown>;
   stockArtSources?: ContentIndex | null;
   sourceStatus?: CrosshairSourceStatus | null;
-  onOpenMods?: () => void;
+  /** Shows the named `tf/custom` pack in Mods → Custom packs. */
+  onOpenMods?: (pack: string) => void;
   hudOverlayState?: "enabled" | "disabled" | "possible" | "none";
   hudName?: string;
   onOpenHud?: () => void;
@@ -559,8 +560,12 @@ export function CrosshairPane({
               different art.
             </p>
             {onOpenMods ? (
-              <button type="button" className="btn btn-ghost mt-2" onClick={onOpenMods}>
-                Open installed mods
+              <button
+                type="button"
+                className="btn btn-ghost mt-2"
+                onClick={() => onOpenMods(stockArtConflict.pack)}
+              >
+                Show in Mods
               </button>
             ) : null}
           </div>

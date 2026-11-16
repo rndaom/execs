@@ -26,7 +26,7 @@ Imported PNGs larger than 64 × 64 are fitted into 64 × 64, keeping their shape
 
 - **Your crosshair pack was changed outside execs**: its pictures may not match what TF2 draws. **Repair pack** writes it again, or remove it at the bottom of the page.
 - **TF2 updated its weapon files**: **Update pack** writes the pack again from the new files. An older pack without a recorded script version asks you to update it once to check it.
-- **Another pack also replaces a crosshair image**: TF2 may show that pack's art instead of the picture in execs.
+- **Another pack also replaces a crosshair image**: TF2 may show that pack's art instead of the picture in execs. **Show in Mods** opens Custom packs on that pack.
 - **A HUD's crosshair overlay**: it draws on top of the crosshair here; turn it off in the HUD's options.
 
 ## Not part of TF2's crosshair

@@ -109,6 +109,8 @@ export type ModsPaneProps = {
   hudImportRequired?: string | null;
   onReviewHudImport?: () => void;
   onDismissHudImport?: () => void;
+  /** A pack another pane asked to show; a new `key` opens Custom packs on it. */
+  packFocus?: { pack: string; key: number } | null;
   /** Navigate from Viewmodels directly to the shared Casual preload control. */
   casualOpenRequest?: number;
 };
@@ -147,6 +149,7 @@ export function ModsPane({
   hudImportRequired,
   onReviewHudImport,
   onDismissHudImport,
+  packFocus = null,
   casualOpenRequest,
 }: ModsPaneProps) {
   const { running, busy } = useAppStatus();
@@ -220,6 +223,15 @@ export function ModsPane({
   useEffect(() => {
     if (casualOpenRequest) setTask("casual");
   }, [casualOpenRequest]);
+  // The highlight lasts until the player picks another task themselves.
+  const [focusedPack, setFocusedPack] = useState<{ pack: string; key: number } | null>(null);
+  const packFocusKey = packFocus?.key ?? 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new request, not a re-render with the same one, opens Custom packs.
+  useEffect(() => {
+    if (!packFocus) return;
+    setFocusedPack(packFocus);
+    setTask("installed");
+  }, [packFocusKey]);
   const [confirmRestore, setConfirmRestore] = useState(false);
   // Steam's verify runs outside the app; while it does, poll the status and,
   // once every stale file reads as stock again, put the selection back.
@@ -369,7 +381,10 @@ export function ModsPane({
           label="Mod tasks"
           idPrefix="mods-task"
           panelId="mods-task-panel"
-          onSelect={setTask}
+          onSelect={(next) => {
+            setFocusedPack(null);
+            setTask(next);
+          }}
         />
         {task !== "casual" && hasRepair ? (
           <button
@@ -555,6 +570,7 @@ export function ModsPane({
           <ModList
             key={profileId}
             first
+            focus={focusedPack}
             active={active && task === "installed"}
             showImport={false}
             mods={mods}

@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- Crosshair and Sounds: when another pack replaces the same files, Show in Mods now opens Custom
+  packs with that pack marked, instead of only opening Mods.
 - HUD and Viewmodels: importing something that belongs in Mods now says so and offers Open Mods,
   instead of only failing.
 - HUD: an imported HUD that is also in the catalog now offers Match to catalog, so it can get
