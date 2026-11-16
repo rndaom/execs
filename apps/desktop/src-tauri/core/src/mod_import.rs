@@ -280,6 +280,12 @@ impl PreparedModImport {
                 }
                 None => disabled_metadata[&path],
             };
+            // An outdated HUD would install as a pack TF2 ignores.
+            if disabled_reason.is_none() {
+                disabled_reason = content
+                    .as_ref()
+                    .and_then(|content| crate::mods::outdated_hud_reason(content).ok().flatten());
+            }
             if disabled_reason.is_some() {
                 content = None;
             }
@@ -602,6 +608,10 @@ mod tests {
         )
         .unwrap();
         assert!(old.choices.iter().all(|choice| choice.hud.is_none()));
+        // It cannot be picked as a pack either, and says why.
+        let reason = old.choices[0].disabled_reason.as_deref().unwrap();
+        assert!(reason.contains("UI version 1; TF2 requires 3"), "{reason}");
+        assert!(old.select(&["0".into()]).is_err());
     }
 
     #[test]

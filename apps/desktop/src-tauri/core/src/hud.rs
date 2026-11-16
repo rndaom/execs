@@ -733,14 +733,33 @@ fn validate_hud_info(tree: &HudTree) -> Result<(), ProfileError> {
     let info = tree
         .info_vdf()
         .ok_or_else(|| ProfileError::Io(NO_HUD_FOUND.into()))?;
-    match std::str::from_utf8(info).ok().and_then(parse_ui_version) {
-        Some(CURRENT_HUD_UI_VERSION) => Ok(()),
-        Some(version) => Err(ProfileError::Io(format!(
-            "This HUD declares UI version {version}; TF2 requires {CURRENT_HUD_UI_VERSION}. Get an updated copy from the author. Your current HUD has not changed."
+    match outdated_hud_info(info) {
+        None => Ok(()),
+        Some(reason) => Err(ProfileError::Io(format!(
+            "{reason} Your current HUD has not changed."
         ))),
-        None => Err(ProfileError::Io(
-            "This HUD's info.vdf is invalid or has no ui_version. Get a complete, updated copy from the author. Your current HUD has not changed.".into(),
-        )),
+    }
+}
+
+/// The refusal for an `info.vdf` that declares a UI version other than the
+/// current one. `None` when it declares the current version or none at all,
+/// which is how an `info.vdf` that is not HUD metadata reads.
+pub(crate) fn other_ui_version_reason(info: &[u8]) -> Option<String> {
+    let version = std::str::from_utf8(info).ok().and_then(parse_ui_version)?;
+    (version != CURRENT_HUD_UI_VERSION).then(|| format!(
+        "This HUD declares UI version {version}; TF2 requires {CURRENT_HUD_UI_VERSION}. Get an updated copy from the author."
+    ))
+}
+
+/// Why an `info.vdf` does not describe a HUD TF2 will load, or `None` when it
+/// declares the current UI version.
+pub(crate) fn outdated_hud_info(info: &[u8]) -> Option<String> {
+    match std::str::from_utf8(info).ok().and_then(parse_ui_version) {
+        Some(CURRENT_HUD_UI_VERSION) => None,
+        Some(_) => other_ui_version_reason(info),
+        None => Some(
+            "This HUD's info.vdf is invalid or has no ui_version. Get a complete, updated copy from the author.".into(),
+        ),
     }
 }
 

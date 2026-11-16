@@ -477,6 +477,7 @@ where
     for (name, content) in packs {
         selection_budget.add(&content)?;
         refuse_hud_mod(&content)?;
+        refuse_outdated_hud_mod(&content)?;
         refuse_crosshair_script_collision(&content, &crosshair_scripts)?;
 
         let display = display_name(&name);
@@ -576,25 +577,62 @@ where
     detail_from_manifest(profiles_dir, &manifest)
 }
 
+/// Every `info.vdf` a pack carries: any depth in loose files, the root of a VPK.
+fn hud_info_files(content: &ModContent) -> Result<Vec<Vec<u8>>, ProfileError> {
+    Ok(match content {
+        ModContent::Tree(entries) => entries
+            .iter()
+            .filter(|(path, _)| {
+                path.rsplit('/')
+                    .next()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("info.vdf"))
+            })
+            .map(|(_, bytes)| bytes.clone())
+            .collect(),
+        ModContent::Vpk(bytes) => {
+            read_vpk_dir_bytes_filtered(bytes, &|path| path.eq_ignore_ascii_case("info.vdf"))
+                .map_err(|err| ProfileError::Io(err.message()))?
+                .files
+                .into_values()
+                .collect()
+        }
+    })
+}
+
 /// Whether a pack is a HUD: it carries an `info.vdf` declaring the current UI
 /// version. Detection requires real compatibility data.
 pub fn is_hud_content(content: &ModContent) -> Result<bool, ProfileError> {
-    Ok(match content {
-        ModContent::Tree(entries) => entries.iter().any(|(path, bytes)| {
-            path.rsplit('/')
-                .next()
-                .is_some_and(|name| name.eq_ignore_ascii_case("info.vdf"))
-                && crate::hud::is_current_hud_info(bytes)
-        }),
-        ModContent::Vpk(bytes) => {
-            let info =
-                read_vpk_dir_bytes_filtered(bytes, &|path| path.eq_ignore_ascii_case("info.vdf"))
-                    .map_err(|err| ProfileError::Io(err.message()))?;
-            info.files
-                .values()
-                .any(|bytes| crate::hud::is_current_hud_info(bytes))
-        }
-    })
+    Ok(hud_info_files(content)?
+        .iter()
+        .any(|info| crate::hud::is_current_hud_info(info)))
+}
+
+/// Why a pack is a HUD TF2 no longer loads: an `info.vdf` declares an older or
+/// newer UI version and none declares the current one. `None` for a current
+/// HUD, and for a pack whose `info.vdf` is missing or declares no UI version,
+/// which is an ordinary mod.
+pub fn outdated_hud_reason(content: &ModContent) -> Result<Option<String>, ProfileError> {
+    let infos = hud_info_files(content)?;
+    if infos
+        .iter()
+        .any(|info| crate::hud::is_current_hud_info(info))
+    {
+        return Ok(None);
+    }
+    Ok(infos
+        .iter()
+        .find_map(|info| crate::hud::other_ui_version_reason(info)))
+}
+
+/// An outdated HUD would install as a pack TF2 ignores, so it is refused with
+/// the reason the HUD importer gives.
+fn refuse_outdated_hud_mod(content: &ModContent) -> Result<(), ProfileError> {
+    match outdated_hud_reason(content)? {
+        Some(reason) => Err(ProfileError::OutdatedHud(format!(
+            "{reason} No selected files were installed."
+        ))),
+        None => Ok(()),
+    }
 }
 
 /// HUDs need the one-HUD replacement review, including when a mod picker or
@@ -1285,6 +1323,28 @@ pub fn read_mod_pcf(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_outdated_hud_is_named_and_an_ordinary_or_current_pack_is_not() {
+        let pack = |info: Option<&[u8]>| {
+            let mut files = vec![("resource/ui/hudlayout.res".to_string(), vec![1])];
+            files.extend(info.map(|bytes| ("info.vdf".to_string(), bytes.to_vec())));
+            ModContent::Tree(files)
+        };
+        let old = pack(Some(b"\"hud\" { \"ui_version\" \"2\" }"));
+        let reason = outdated_hud_reason(&old).unwrap().unwrap();
+        assert!(reason.contains("UI version 2; TF2 requires 3"), "{reason}");
+        let error = refuse_outdated_hud_mod(&old).unwrap_err();
+        assert_eq!(error.code(), "OutdatedHud");
+        assert!(error.message().contains("Get an updated copy"));
+        // An `info.vdf` that declares no UI version is not HUD metadata.
+        let addon = pack(Some(b"\"Addon\" { \"version\" \"3\" }"));
+        assert_eq!(outdated_hud_reason(&addon).unwrap(), None);
+        assert_eq!(outdated_hud_reason(&pack(None)).unwrap(), None);
+        let current = pack(Some(b"\"hud\" { \"ui_version\" \"3\" }"));
+        assert_eq!(outdated_hud_reason(&current).unwrap(), None);
+        assert!(refuse_outdated_hud_mod(&current).is_ok());
+    }
+
     #[test]
     fn oversized_mods_name_their_size_the_limit_and_the_manual_route() {
         let message = oversized_mod_message(Some(1_503_238_554));

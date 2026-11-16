@@ -120,6 +120,8 @@ pub enum ProfileError {
     HudReviewRequired,
     HudLiveReviewRequired,
     HudImportRequired(String),
+    /// A pack carries HUD metadata TF2 no longer accepts.
+    OutdatedHud(String),
     KeptPackHandoff(Vec<String>),
     PendingLiveHandoff,
     /// A drive lacks room for a write; the message names the drive and sizes.
@@ -154,6 +156,7 @@ impl ProfileError {
             Self::HudReviewRequired => "HudReviewRequired",
             Self::HudLiveReviewRequired => "HudLiveReviewRequired",
             Self::HudImportRequired(_) => "HudImportRequired",
+            Self::OutdatedHud(_) => "OutdatedHud",
             Self::KeptPackHandoff(_) => "KeptPackHandoff",
             Self::PendingLiveHandoff => "PendingLiveHandoff",
             Self::NotEnoughSpace(_) => "NotEnoughSpace",
@@ -200,7 +203,7 @@ impl ProfileError {
                 "{name} is still saved as a Casual particle source on this profile. Deselect it and choose Apply mods, or Restore stock files, before removing its source pack."
             ),
             Self::HudReviewRequired | Self::HudLiveReviewRequired => "This setup contains more than one HUD. Review which HUD to keep before continuing. Original files will be preserved outside mounted HUD folders.".into(),
-            Self::HudImportRequired(message) => message.clone(),
+            Self::HudImportRequired(message) | Self::OutdatedHud(message) => message.clone(),
             Self::KeptPackHandoff(packs) => format!(
                 "These kept packs are still installed: {}. Capture them in this profile before switching, or remove them from TF2 yourself.",
                 packs.join(", ")
