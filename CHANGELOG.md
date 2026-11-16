@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Mods: a HUD found on GameBanana can now be installed from its card with Install HUD. Open HUD
+  used to lead to the HUD pane, where a HUD outside the HUD list could not be found.
+
 ## [0.3.0] - 2026-11-15
 
 ### Fixed

@@ -323,19 +323,31 @@ pub struct GameBananaProfile {
     pub name: String,
     pub url: String,
     pub updated_at: Option<i64>,
-    /// `Mod`, or the Sounds slot a hit or kill sound upload is made for.
+    /// `Mod`, `Hud`, or the Sounds slot a hit or kill sound upload is made for.
     pub route: GameBananaModRoute,
 }
 
 impl GameBananaProfile {
     /// Mods installs refuse hit and kill sounds: those files belong to the
-    /// Sounds pane, which owns TF2's two canonical sound paths.
+    /// Sounds pane, which owns TF2's two canonical sound paths. HUDs are
+    /// refused too: a profile has one HUD, installed by the HUD installer.
     pub fn require_pack(&self) -> Result<(), String> {
         match self.route {
             GameBananaModRoute::HitSound | GameBananaModRoute::KillSound => Err(
                 "That GameBanana upload is a hit or kill sound. Use it in Sounds instead.".into(),
             ),
-            GameBananaModRoute::Mod | GameBananaModRoute::Hud => Ok(()),
+            GameBananaModRoute::Hud => {
+                Err("That GameBanana mod is a HUD. Use Install HUD on its card.".into())
+            }
+            GameBananaModRoute::Mod => Ok(()),
+        }
+    }
+
+    /// Only an upload in GameBanana's HUDs category installs as the profile's HUD.
+    pub fn require_hud(&self) -> Result<(), String> {
+        match self.route {
+            GameBananaModRoute::Hud => Ok(()),
+            _ => Err("That GameBanana mod is not a HUD. Install it from Mods.".into()),
         }
     }
 }
@@ -712,16 +724,15 @@ fn profile_from(
     if !is_browsable_category(&category.name) {
         return Err("That GameBanana category cannot be installed from Mods.".into());
     }
-    if is_gui_category(category) {
-        let immediate = page
-            .category
-            .as_ref()
-            .ok_or("Could not verify that mod's GameBanana category. Try again later.")?;
-        if is_hud_category(immediate) {
-            return Err("That GameBanana mod is a HUD. Install it from the HUD pane.".into());
-        }
-    }
+    let is_hud = section == GameBananaSection::Mod
+        && is_gui_category(category)
+        && is_hud_category(
+            page.category
+                .as_ref()
+                .ok_or("Could not verify that mod's GameBanana category. Try again later.")?,
+        );
     let route = match category_id_from_url(&category.profile_url, section) {
+        _ if is_hud => GameBananaModRoute::Hud,
         Some(category_id) => {
             sound_slot_route(section, category_id).unwrap_or(GameBananaModRoute::Mod)
         }
@@ -822,12 +833,14 @@ pub fn mod_id_from_url(url: &str) -> Option<u64> {
     (!segments.any(|part| !part.is_empty())).then_some(id)
 }
 
-/// What a downloaded file is for: a custom pack (VPK or archive), or a hit
-/// or kill sound the Sounds pane prepares (an archive or one audio file).
+/// What a downloaded file is for: a custom pack (VPK or archive), a hit or
+/// kill sound the Sounds pane prepares (an archive or one audio file), or the
+/// profile's HUD (an archive the HUD importer reads).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileUse {
     Pack,
     Sound,
+    Hud,
 }
 
 fn download_files(section: GameBananaSection, id: u64) -> Result<Vec<DownloadFile>, String> {
@@ -927,6 +940,7 @@ fn pick_file_by_id(
         return Err(match file_use {
             FileUse::Pack => "That GameBanana file is not a VPK, ZIP, 7z or RAR.",
             FileUse::Sound => "That GameBanana file is not a ZIP, 7z, RAR, WAV, MP3 or Ogg file.",
+            FileUse::Hud => "That GameBanana file is not a ZIP, 7z or RAR.",
         }
         .into());
     }
@@ -1031,6 +1045,7 @@ fn file_is_supported(file: &DownloadFile, file_use: FileUse) -> bool {
     let kind = match file_use {
         FileUse::Pack => is_archive_file(&lower) || lower.ends_with(".vpk"),
         FileUse::Sound => is_archive_file(&lower) || is_audio_file(&lower),
+        FileUse::Hud => is_archive_file(&lower),
     };
     kind && file.size_bytes.is_none_or(|size| size <= MOD_MAX_BYTES)
 }
@@ -1545,33 +1560,39 @@ mod tests {
                 "{name}"
             );
         }
-        // A GUI mod installs unless its own category is HUDs (by name or id),
-        // or GameBanana does not say which GUI category it is.
+        // A GUI mod installs as a pack unless its own category is HUDs (by
+        // name or id), which installs as the HUD instead, or GameBanana does
+        // not say which GUI category it is.
         let mut menu = valid.clone();
         menu["_aRootCategory"] = serde_json::json!({
             "_sName": "Interface",
             "_sProfileUrl": "https://gamebanana.com/mods/cats/1644"
         });
         menu["_aCategory"] = serde_json::json!({ "_sName": "Icons" });
-        assert!(profile_from(
+        let icons = profile_from(
             serde_json::from_value(menu.clone()).unwrap(),
             7,
-            GameBananaSection::Mod
+            GameBananaSection::Mod,
         )
-        .is_ok());
+        .unwrap();
+        assert!(icons.require_pack().is_ok());
+        assert!(icons.require_hud().unwrap_err().contains("Mods"));
         for hud in [
             serde_json::json!({ "_sName": "HUDs" }),
             serde_json::json!({ "_sName": "Renamed", "_sProfileUrl": "https://gamebanana.com/mods/cats/1649" }),
         ] {
             let mut page = menu.clone();
             page["_aCategory"] = hud;
-            let err = profile_from(
+            let profile = profile_from(
                 serde_json::from_value(page).unwrap(),
                 7,
                 GameBananaSection::Mod,
             )
-            .unwrap_err();
-            assert!(err.contains("HUD pane"), "{err}");
+            .unwrap();
+            assert_eq!(profile.route, GameBananaModRoute::Hud);
+            assert!(profile.require_hud().is_ok());
+            let err = profile.require_pack().unwrap_err();
+            assert!(err.contains("Install HUD"), "{err}");
         }
         let mut unknown = menu.clone();
         unknown.as_object_mut().unwrap().remove("_aCategory");
@@ -2104,6 +2125,12 @@ mod tests {
         };
         assert_eq!(supported(FileUse::Pack), [2, 3]);
         assert_eq!(supported(FileUse::Sound), [1, 2, 4]);
+        // A HUD installs from an archive only, never a VPK or a loose file.
+        assert_eq!(supported(FileUse::Hud), [2]);
+        assert!(pick_file_by_id(files.clone(), 2, FileUse::Hud).is_ok());
+        assert!(pick_file_by_id(files.clone(), 3, FileUse::Hud)
+            .unwrap_err()
+            .contains("not a ZIP, 7z or RAR"));
         assert!(pick_file_by_id(files.clone(), 1, FileUse::Sound).is_ok());
         assert!(pick_file_by_id(files.clone(), 1, FileUse::Pack)
             .unwrap_err()
@@ -2182,9 +2209,12 @@ mod tests {
         let mod_profile = |id| submission_profile(GameBananaSection::Mod, id);
         let profile = mod_profile(mod_record.id).unwrap();
         println!("profile: {profile:?}");
-        // Maps install like other mods (tr_walkway); a HUD goes to the HUD pane.
-        assert!(mod_profile(74812).is_ok());
-        assert!(mod_profile(26852).unwrap_err().contains("HUD"));
+        // Maps install like other mods (tr_walkway); a HUD installs as the HUD.
+        assert!(mod_profile(74812).unwrap().require_pack().is_ok());
+        let hud = mod_profile(26852).unwrap();
+        assert_eq!(hud.route, GameBananaModRoute::Hud);
+        assert!(hud.require_pack().unwrap_err().contains("HUD"));
+        assert!(hud.require_hud().is_ok());
 
         let sounds =
             search_mods(GameBananaSection::Sound, "", "views", None, 1, false, true).unwrap();

@@ -169,16 +169,20 @@ pub async fn gamebanana_mod_categories(
 
 /// Show the author's file names and descriptions before a specific file is
 /// downloaded. The selected id is rechecked against a fresh page at install.
-/// `forSounds` marks loose WAV/MP3/Ogg files usable for a hit or kill sound.
+/// `forSounds` marks loose WAV/MP3/Ogg files usable for a hit or kill sound;
+/// `forHud` leaves only the archives a HUD can be installed from.
 #[tauri::command]
 pub async fn gamebanana_download_variants(
     id: u64,
     section: Option<String>,
     for_sounds: Option<bool>,
+    for_hud: Option<bool>,
 ) -> Result<Vec<GameBananaDownloadVariant>, CommandError> {
     let section = GameBananaSection::parse(section.as_deref())?;
     let file_use = if for_sounds.unwrap_or(false) {
         FileUse::Sound
+    } else if for_hud.unwrap_or(false) {
+        FileUse::Hud
     } else {
         FileUse::Pack
     };

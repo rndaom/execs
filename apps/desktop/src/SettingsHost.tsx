@@ -1312,6 +1312,38 @@ export function SettingsHost({
           loading={modsLoading}
           report={modsReport}
           hudImportRequired={modsHudImportRequired}
+          installedHud={
+            detail?.hud
+              ? {
+                  id: detail.hud.id,
+                  name:
+                    hud.catalog.find((entry) => entry.id === detail.hud?.id)?.name ?? detail.hud.id,
+                }
+              : null
+          }
+          // The HUD installer replaces the profile's one HUD; the card waits
+          // for the install and the HUD state reload behind it.
+          onInstallGameBananaHud={async (mod, fileId) => {
+            setModsHudImportRequired(null);
+            let failed = "";
+            const installed = await write(
+              async () => {
+                await api.installGameBananaHud(mod.id, fileId);
+                await hud.reloadLocal();
+              },
+              {
+                success: "HUD installed",
+                failure: "Could not install",
+                pending: "Installing HUD…",
+              },
+              {
+                onFailure: (message) => {
+                  failed = message;
+                },
+              },
+            );
+            return installed ? true : { failed };
+          }}
           onReviewHudImport={() => onNavigate?.("hud")}
           onDismissHudImport={() => setModsHudImportRequired(null)}
           onApply={(addons, particleMods, profileParticleMods) => {

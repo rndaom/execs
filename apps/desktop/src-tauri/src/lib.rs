@@ -833,6 +833,7 @@ pub fn run() {
             commands::preloader::cancel_game_file_repair,
             commands::preloader::set_profile_preload,
             commands::hud::import_hud_archive,
+            commands::hud::install_gamebanana_hud,
             commands::hud::import_hud_folder,
             commands::mod_import::prepare_import_mod_archive,
             commands::mod_import::prepare_import_mod_folder,

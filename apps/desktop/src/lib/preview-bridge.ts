@@ -14,6 +14,7 @@ import {
   type ComfigState,
   type FilesSource,
   type GameBananaDownloadVariant,
+  type GameBananaFileUse,
   type GameBananaMod,
   type GameBananaSection,
   type GameBananaSort,
@@ -41,6 +42,7 @@ import { defaultGameplay, managedCfgScopeOf, parseCvarMap } from "./gameplay-ui"
 import { PREVIEW_HUD_BROWSER_CATALOG, PREVIEW_HUD_BROWSER_STATS } from "./hud-browser-preview";
 import {
   emptyHudState,
+  hudIdFromName,
   PREVIEW_HUD_CATALOG,
   PREVIEW_HUD_SCHEMA,
   previewInstalledState,
@@ -1063,6 +1065,25 @@ export function createPreviewApi(state: PreviewState): Api {
       };
       return requireDetail();
     },
+    async installGameBananaHud(id: number, fileId: number) {
+      const listing = previewGameBananaListing(id, "mod");
+      const variants = await this.gameBananaDownloadVariants(id, "mod", "hud");
+      if (listing?.route !== "hud" || !variants.some((file) => file.id === fileId)) {
+        throw notInPreview(`Installing HUD ${id}`);
+      }
+      if (previewLocked(state))
+        throw new BridgeError("Close TF2 before changing the HUD.", "GameRunning");
+      // A short pause so the fixture shows the card's install overlay.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      hudState = {
+        installed: { id: hudIdFromName(listing.name), hash: null, source: "local", options: {} },
+        inferred: false,
+        schemaSupported: false,
+        catalogHash: null,
+        updateAvailable: false,
+      };
+      return requireDetail();
+    },
     async importHudArchive() {
       throw notInPreview("Importing a HUD archive");
     },
@@ -1351,7 +1372,7 @@ export function createPreviewApi(state: PreviewState): Api {
     },
     async prepareGameBananaHitsounds(id: number, fileId: number) {
       const listing = previewGameBananaListing(id, "sound");
-      const variants = await this.gameBananaDownloadVariants(id, "sound", true);
+      const variants = await this.gameBananaDownloadVariants(id, "sound", "sound");
       if (
         (listing?.route !== "hitSound" && listing?.route !== "killSound") ||
         !variants.some((file) => file.id === fileId)
@@ -1480,11 +1501,15 @@ export function createPreviewApi(state: PreviewState): Api {
     async gameBananaDownloadVariants(
       id: number,
       section: GameBananaSection = "mod",
-      forSounds = false,
+      fileUse: GameBananaFileUse = "pack",
     ): Promise<GameBananaDownloadVariant[]> {
       const listing = previewGameBananaListing(id, section);
       const soundSlot = listing?.route === "hitSound" || listing?.route === "killSound";
-      if (!listing || (listing.route !== "mod" && !(soundSlot && forSounds))) {
+      const allowed =
+        listing?.route === "mod" ||
+        (soundSlot && fileUse === "sound") ||
+        (listing?.route === "hud" && fileUse === "hud");
+      if (!listing || !allowed) {
         throw notInPreview(`GameBanana files for ${id}`);
       }
       const files: GameBananaDownloadVariant[] = [
