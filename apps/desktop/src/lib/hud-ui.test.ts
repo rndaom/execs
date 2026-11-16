@@ -10,6 +10,7 @@ import {
   hudAuthorCopy,
   hudCatalogControls,
   hudDisplayName,
+  hudIdFromName,
   hudOptionsDirty,
   hudOverlayCrosshairState,
   hudPageLinks,
@@ -410,5 +411,14 @@ describe("hud sorting", () => {
     expect(hudAuthorCopy({ author: "raysfire" })).toBe("by raysfire");
     expect(hudDisplayName({ name: "512561891" })).toBe("Untitled HUD");
     expect(hudDisplayName({ name: "7HUD" })).toBe("7HUD");
+  });
+});
+
+describe("hudIdFromName", () => {
+  it("matches the folder id a HUD is installed under", () => {
+    expect(hudIdFromName("Pure HUD")).toBe("pure-hud");
+    expect(hudIdFromName("  m0re_HUD v2.1!.zip ")).toBe("m0re_hud-v2-1");
+    expect(hudIdFromName("budhud.7z")).toBe("budhud");
+    expect(hudIdFromName("—")).toBe("custom-hud");
   });
 });

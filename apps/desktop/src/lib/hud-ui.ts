@@ -538,3 +538,17 @@ export function parseHudRgba(value: string): { r: number; g: number; b: number; 
 export function formatHudRgba(r: number, g: number, b: number, a: number): string {
   return `${r} ${g} ${b} ${a}`;
 }
+
+/**
+ * The folder id a HUD gets when it is installed under `name` (an archive, a
+ * folder or a GameBanana listing title). Mirrors the native `hud_id_from_name`
+ * closely enough to recognise that HUD as the installed one.
+ */
+export function hudIdFromName(name: string): string {
+  const stem = name.trim().replace(/(\.(zip|7z|rar|ZIP|7Z|RAR))+$/, "");
+  const id = stem
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return id === "" ? "custom-hud" : id;
+}

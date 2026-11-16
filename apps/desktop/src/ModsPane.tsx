@@ -98,6 +98,13 @@ export type ModsPaneProps = {
   ) => Promise<ModInstallResult>;
   /** Prepares a GameBanana hit or kill sound and opens it in Sounds. */
   onUseGameBananaSound?: (mod: GameBananaMod, fileId: number) => Promise<true | { failed: string }>;
+  /** Installs a GameBanana HUD listing as the profile's HUD. */
+  onInstallGameBananaHud?: (
+    mod: GameBananaMod,
+    fileId: number,
+  ) => Promise<true | { failed: string }>;
+  /** The profile's HUD: its folder id and the name to show for it. */
+  installedHud?: { id: string; name: string } | null;
   /** A refused mod payload that must use the HUD replacement review. */
   hudImportRequired?: string | null;
   onReviewHudImport?: () => void;
@@ -135,6 +142,8 @@ export function ModsPane({
   onCopyMod,
   onInstallGameBananaMod,
   onUseGameBananaSound,
+  onInstallGameBananaHud,
+  installedHud,
   hudImportRequired,
   onReviewHudImport,
   onDismissHudImport,
@@ -535,6 +544,8 @@ export function ModsPane({
             previewData={previewData}
             onInstall={onInstallGameBananaMod}
             onUseInSounds={onUseGameBananaSound}
+            onInstallHud={onInstallGameBananaHud}
+            installedHud={installedHud}
             onOpenHud={onReviewHudImport}
             onManageInstalled={() => setTask("installed")}
           />

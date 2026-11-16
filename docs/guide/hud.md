@@ -8,6 +8,8 @@ The catalog comes from [hud-db](https://github.com/mastercomfig/hud-db), with ac
 
 **Install** downloads the HUD from its author. Some authors only offer a page with several files; execs then opens the page so you can download the one you want and import it.
 
+A HUD that is on GameBanana but not in this list can be installed from Mods: find it under Browse and choose **Install HUD**. It then appears here like an imported HUD.
+
 ## Importing
 
 **Import HUD** takes a ZIP, 7z or RAR, or a folder you already extracted. execs checks that it is a TF2 HUD (its `info.vdf` declares UI version 3) before installing it. An archive with several HUDs inside asks you to import the one you want as a folder.
