@@ -123,6 +123,7 @@ export function SoundsPane({
   copySettings,
   incoming,
   onIncomingHandled,
+  onOpenModsPack,
 }: {
   api: Api;
   /** The profile this draft belongs to; a switch discards it. */
@@ -152,6 +153,8 @@ export function SoundsPane({
   incoming?: IncomingSounds | null;
   /** Called once the incoming sounds are in the library. */
   onIncomingHandled?: (key: number) => void;
+  /** Shows the named `tf/custom` pack in Mods → Custom packs. */
+  onOpenModsPack?: (pack: string) => void;
 }) {
   const { running, busy } = useAppStatus();
   // Picking a sound is a draft; only removing the installed files waits on the
@@ -646,6 +649,15 @@ export function SoundsPane({
                             {candidate.kind === "loose" ? "/" : " → "}
                             {candidate.member}
                           </code>
+                          {onOpenModsPack ? (
+                            <button
+                              type="button"
+                              className="ml-2 underline decoration-edge-strong underline-offset-2 hover:text-ink"
+                              onClick={() => onOpenModsPack(candidate.pack)}
+                            >
+                              Show in Mods
+                            </button>
+                          ) : null}
                         </li>
                       ))}
                     </ul>

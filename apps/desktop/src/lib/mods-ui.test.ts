@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ModRecord } from "./bridge";
 import {
   canPreferParticleProvider,
   DIRECT_BURNING_OVERLAY_ID,
@@ -13,6 +14,7 @@ import {
   type ModSelection,
   modDomId,
   modMetaLine,
+  modOwnsPack,
   modSourceLabel,
   modSourceUrl,
   modsApplyEnabled,
@@ -456,5 +458,17 @@ describe("particle file overlaps", () => {
       "disguises",
     );
     expect(particleSkipAdvice("could not parse: bad header")).toContain("damaged");
+  });
+});
+
+describe("modOwnsPack", () => {
+  const mod = { pack: "Cool Hits.vpk", inactivePack: undefined } as ModRecord;
+  it("matches a conflict notice's pack name to its record", () => {
+    expect(modOwnsPack(mod, "cool hits.vpk")).toBe(true);
+    expect(modOwnsPack(mod, "Cool Hits")).toBe(true);
+    expect(modOwnsPack(mod, "other")).toBe(false);
+    expect(modOwnsPack({ ...mod, pack: "stored-1", inactivePack: "creator" }, "creator")).toBe(
+      true,
+    );
   });
 });

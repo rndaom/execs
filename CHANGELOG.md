@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- Crosshair and Sounds: when another pack replaces the same files, Show in Mods now opens Custom
+  packs with that pack marked, instead of only opening Mods.
+
 ## [0.3.0] - 2026-11-15
 
 ### Fixed

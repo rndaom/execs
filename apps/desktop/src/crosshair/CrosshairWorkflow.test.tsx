@@ -627,6 +627,7 @@ describe("older packs and notices", () => {
     expect(box.textContent).toContain("so TF2 may show different art");
     await click('[data-testid="crosshair-stock-art-notice"] button');
     expect(openMods).toHaveBeenCalledTimes(1);
+    expect(openMods).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("warns about outside edits and rebuilds on request", async () => {

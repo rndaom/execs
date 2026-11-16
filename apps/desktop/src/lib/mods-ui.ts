@@ -370,6 +370,16 @@ export function modMetaLine(mod: ModRecord): string {
   return `${modSourceLabel(mod.source)} · ${formatModBytes(mod.bytes)}`;
 }
 
+/**
+ * Whether `pack`, a name under `tf/custom` as a conflict notice gives it, is
+ * this record's pack. Case and a `.vpk` ending are ignored, and a disabled
+ * pack still answers to the name it mounts under.
+ */
+export function modOwnsPack(mod: ModRecord, pack: string): boolean {
+  const key = (name: string) => name.toLowerCase().replace(/\.vpk$/, "");
+  return [mod.pack, mod.inactivePack].some((name) => name && key(name) === key(pack));
+}
+
 /** A stable, selector-safe suffix for a record's test id. */
 export function modDomId(id: string): string {
   return id.replace(/[^a-z0-9]+/gi, "-").toLowerCase();

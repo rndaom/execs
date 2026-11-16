@@ -33,6 +33,34 @@ afterEach(async () => {
 });
 
 describe("ModList", () => {
+  it("marks the pack another pane asked to show, or says it isn't a custom pack", async () => {
+    const render = (pack: string) =>
+      root.render(
+        <ModList
+          mods={[mod, { ...mod, id: "other", pack: "other.vpk" }]}
+          locked={false}
+          running={false}
+          onImportArchive={vi.fn()}
+          onImportFolder={vi.fn()}
+          onRemove={vi.fn()}
+          focus={{ pack, key: 1 }}
+        />,
+      );
+    await act(async () => render("Long-Mod.vpk"));
+    expect(
+      box.querySelector('[data-testid="mods-row-long-mod"]')?.getAttribute("data-focused"),
+    ).toBe("true");
+    expect(box.querySelector('[data-testid="mods-row-other"]')?.hasAttribute("data-focused")).toBe(
+      false,
+    );
+    expect(box.querySelector('[data-testid="mods-focus-missing"]')).toBeNull();
+    await act(async () => render("execs-crosshairs"));
+    expect(box.querySelector('[data-testid="mods-focus-missing"]')?.textContent).toContain(
+      "tf/custom/execs-crosshairs",
+    );
+    expect(box.querySelector("[data-focused]")).toBeNull();
+  });
+
   it("toggles saved packs and protects selected particle sources", async () => {
     const onSetEnabled = vi.fn();
     const render = (selected: string[], inactive = false) =>

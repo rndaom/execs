@@ -1,8 +1,8 @@
 import { ArrowSquareOut, Package } from "@phosphor-icons/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ModRecord, ModUpdateStatus, ProfileSummary } from "../lib/bridge";
 import { openExternal } from "../lib/bridge";
-import { formatModBytes, modDomId, modMetaLine, modSourceUrl } from "../lib/mods-ui";
+import { formatModBytes, modDomId, modMetaLine, modOwnsPack, modSourceUrl } from "../lib/mods-ui";
 import { ModImport } from "./ModImport";
 import { Modal } from "./ui/Modal";
 import { PaneSection } from "./ui/PaneSection";
@@ -34,7 +34,10 @@ export function ModList({
   checking = false,
   managementError,
   onCheckUpdates,
+  focus = null,
 }: {
+  /** A `tf/custom` pack to scroll to and mark; a new `key` repeats it. */
+  focus?: { pack: string; key: number } | null;
   mods: ModRecord[];
   /** TF2 is running or a write is in flight. */
   locked: boolean;
@@ -66,6 +69,13 @@ export function ModList({
       setCopying(null);
     }
   }, [active]);
+  const focused = focus ? (mods.find((mod) => modOwnsPack(mod, focus.pack)) ?? null) : null;
+  const focusedRow = useRef<HTMLLIElement | null>(null);
+  const focusKey = focus?.key ?? 0;
+  // Scroll once per request, not on every list refresh.
+  useEffect(() => {
+    if (focusKey && active) focusedRow.current?.scrollIntoView?.({ block: "center" });
+  }, [focusKey, active]);
   const copyMod = mods.find((mod) => mod.id === copying);
   // A status refresh may protect or remove a pack while its dialog is open.
   const current = confirming ? mods.find((mod) => mod.id === confirming.id) : undefined;
@@ -114,6 +124,12 @@ export function ModList({
         </p>
       ) : null}
 
+      {focus && !focused ? (
+        <p className="pane-note mt-3" data-testid="mods-focus-missing">
+          tf/custom/{focus.pack} isn't one of this profile's custom packs.
+        </p>
+      ) : null}
+
       {mods.length === 0 ? (
         <div
           data-testid="mods-yours-empty"
@@ -139,8 +155,12 @@ export function ModList({
             return (
               <li
                 key={mod.id}
+                ref={mod === focused ? focusedRow : undefined}
                 data-testid={`mods-row-${modDomId(mod.id)}`}
-                className="flex min-h-20 flex-wrap items-center gap-x-4 gap-y-2 border-b border-edge py-4 last:border-b-0"
+                data-focused={mod === focused ? "true" : undefined}
+                className={`flex min-h-20 flex-wrap items-center gap-x-4 gap-y-2 border-b border-edge py-4 last:border-b-0 ${
+                  mod === focused ? "rounded-md px-3 ring-2 ring-brand" : ""
+                }`}
               >
                 <span
                   aria-hidden="true"
