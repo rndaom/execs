@@ -1531,6 +1531,11 @@ export type ModImportReview = {
     disabledReason: string | null;
     /** TF2's hit or kill sound paths this choice ships, which compete with Sounds. */
     soundSlots: HitsoundKind[];
+    /**
+     * Set when the choice is a HUD, which never installs as a pack: `folder`
+     * can go to the HUD installer, a `vpk` has to be extracted first.
+     */
+    hud?: "folder" | "vpk" | null;
   }[];
   readmes: { path: string; text: string; truncated: boolean }[];
 };
@@ -1569,6 +1574,11 @@ export async function prepareGameBananaHitsounds(
   fileId: number,
 ): Promise<GameBananaSounds> {
   return call<GameBananaSounds>("prepare_gamebanana_hitsounds", { id, fileId });
+}
+
+/** Installs a reviewed choice that is a HUD as the profile's HUD. */
+export async function confirmModImportAsHud(token: string, choice: string): Promise<ProfileDetail> {
+  return call<ProfileDetail>("confirm_mod_import_as_hud", { token, choice });
 }
 
 export async function confirmModImport(token: string, choices: string[]): Promise<ProfileDetail> {

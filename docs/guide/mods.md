@@ -9,7 +9,7 @@ Listings and files come from [GameBanana](https://gamebanana.com/games/297); eve
 - **Mods** and **Sounds** are GameBanana's two TF2 sections; each has its own categories.
 - **Popular**, **Likes** and **Views** use GameBanana's all-time counts. **Updated** and **New** use the dates GameBanana shows. With no category picked, totals are estimates, because execs hides categories it can't install (decal tools, prefabs, server weapons).
 - **Maps** install into the pack's `maps` folder, with their bot navigation and MvM missions. Play one with `map` and the map's name in the console, offline or on a server you host.
-- **HUDs** install as your profile's HUD, not as a custom pack. **Install HUD** lets you pick the author's file and tells you which HUD it replaces; afterwards the card shows Installed and **Open HUD** takes you to the HUD pane. Other GUI mods (menus, icons, fonts, loading screens) install like any mod.
+- **HUDs** install as your profile's HUD, not as a custom pack. **Install HUD** lets you pick the author's file and tells you which HUD it replaces; afterwards the card shows Installed and **Open HUD** takes you to the HUD pane. Other GUI mods (menus, icons, fonts, loading screens) install like any mod. If a file you import or download from another category turns out to be a HUD, the file review offers **Install as HUD** for it; a HUD packed in a VPK has to be extracted and imported in the HUD pane.
 - **Hit and kill sounds** open in Sounds instead of installing.
 
 When a mod has several files, execs lists them with their names, sizes and dates so you can pick one. Split uploads (part 1, part 2…) can't be joined by execs; follow the author's instructions and use **Import mod** with the extracted files.
