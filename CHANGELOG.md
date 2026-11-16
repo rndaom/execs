@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- HUD: an imported HUD that is also in the catalog now offers Match to catalog, so it can get
+  updates. The button was missing for imported HUDs.
+
 ## [0.3.0] - 2026-11-15
 
 ### Fixed

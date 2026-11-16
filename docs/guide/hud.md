@@ -12,6 +12,8 @@ The catalog comes from [hud-db](https://github.com/mastercomfig/hud-db), with ac
 
 **Import HUD** takes a ZIP, 7z or RAR, or a folder you already extracted. execs checks that it is a TF2 HUD (its `info.vdf` declares UI version 3) before installing it. An archive with several HUDs inside asks you to import the one you want as a folder.
 
+An imported HUD that is also in the catalog shows **Match to catalog** on the Installed view. Matching it lets execs check that HUD for updates; a folder named after a download (`rayshud-master`) is renamed to the catalog's name.
+
 When you install or import a HUD over another one, the old HUD is kept as a backup outside TF2's HUD folders. App settings → Storage lists those backups.
 
 ## HUD options
