@@ -9,6 +9,14 @@ User-facing changes only. The release workflow publishes the matching
 
 - Crosshair and Sounds: when another pack replaces the same files, Show in Mods now opens Custom
   packs with that pack marked, instead of only opening Mods.
+- HUD and Viewmodels: importing something that belongs in Mods now says so and offers Open Mods,
+  instead of only failing.
+- HUD: an imported HUD that is also in the catalog now offers Match to catalog, so it can get
+  updates. The button was missing for imported HUDs.
+- Mods: when a mod you import or download turns out to be a HUD, the file review now offers
+  Install as HUD. Before, the install was refused and you had to import the file again in HUD.
+- Mods: a HUD found on GameBanana can now be installed from its card with Install HUD. Open HUD
+  used to lead to the HUD pane, where a HUD outside the HUD list could not be found.
 
 ## [0.3.0] - 2026-11-15
 

@@ -9,7 +9,9 @@ import {
   type HudSort,
   hudAuthorCopy,
   hudCatalogControls,
+  hudCatalogMatch,
   hudDisplayName,
+  hudIdFromName,
   hudOptionsDirty,
   hudOverlayCrosshairState,
   hudPageLinks,
@@ -410,5 +412,40 @@ describe("hud sorting", () => {
     expect(hudAuthorCopy({ author: "raysfire" })).toBe("by raysfire");
     expect(hudDisplayName({ name: "512561891" })).toBe("Untitled HUD");
     expect(hudDisplayName({ name: "7HUD" })).toBe("7HUD");
+  });
+});
+
+describe("hudCatalogMatch", () => {
+  const catalog = [{ id: "rayshud" }, { id: "Middle-Mann" }, { id: "m0re-hud" }, { id: "m0rehud" }];
+  const match = (id: string, source: "local" | "hudDb" = "local", inferred = false) =>
+    hudCatalogMatch(catalog as never, {
+      installed: { id, hash: null, source, options: {} },
+      inferred,
+      schemaSupported: false,
+      catalogHash: null,
+      updateAvailable: false,
+    })?.id ?? null;
+
+  it("offers the catalog HUD an imported folder is a copy of", () => {
+    expect(match("rayshud")).toBe("rayshud");
+    expect(match("RaysHUD-master")).toBe("rayshud");
+    expect(match("middlemann-main")).toBe("Middle-Mann");
+    expect(match("rayshud", "hudDb", true)).toBe("rayshud");
+  });
+
+  it("offers nothing for a catalog install, an unknown HUD or an unclear name", () => {
+    expect(match("rayshud", "hudDb")).toBeNull();
+    expect(match("pure-hud")).toBeNull();
+    expect(match("m0re_hud")).toBeNull();
+    expect(match("m0re-hud")).toBe("m0re-hud");
+  });
+});
+
+describe("hudIdFromName", () => {
+  it("matches the folder id a HUD is installed under", () => {
+    expect(hudIdFromName("Pure HUD")).toBe("pure-hud");
+    expect(hudIdFromName("  m0re_HUD v2.1!.zip ")).toBe("m0re_hud-v2-1");
+    expect(hudIdFromName("budhud.7z")).toBe("budhud");
+    expect(hudIdFromName("—")).toBe("custom-hud");
   });
 });

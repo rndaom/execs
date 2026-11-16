@@ -86,6 +86,18 @@ it("installs a single available pack without opening the chooser", async () => {
   await expect(result).resolves.toEqual({ token: single.token, ids: ["0"] });
 });
 
+it("asks about a lone HUD and hands it to the HUD installer, never to packs", async () => {
+  const hudOnly = { ...review, choices: [{ ...choice("0"), hud: "folder" as const }] };
+  let result!: Promise<ChosenModImport | null>;
+  await act(async () => {
+    result = prepare(async () => hudOnly);
+  });
+  expect(hook.review).toEqual(hudOnly);
+  await act(async () => hook.confirmHud("0"));
+  await expect(result).resolves.toEqual({ token: hudOnly.token, ids: [], hud: "0" });
+  expect(cancel).not.toHaveBeenCalled();
+});
+
 it("still asks when the only other choice cannot be installed", async () => {
   const mixed = { ...review, choices: [choice("0"), choice("1", "Split archive volumes")] };
   await act(async () => {

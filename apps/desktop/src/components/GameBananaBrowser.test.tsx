@@ -166,7 +166,7 @@ describe("GameBananaBrowser presentation", () => {
     await act(async () => install?.click());
     await act(async () => Promise.resolve());
 
-    expect(variants).toHaveBeenCalledWith(11, "mod", false);
+    expect(variants).toHaveBeenCalledWith(11, "mod", "pack");
     expect(box.textContent).toContain("Optional class menu");
     expect(onInstall).not.toHaveBeenCalled();
     const selected = box.querySelector<HTMLButtonElement>(
@@ -280,15 +280,79 @@ describe("GameBananaBrowser presentation", () => {
     expect(onInstall).toHaveBeenCalledWith(11, 131, "mod");
   });
 
-  it("routes GUI HUDs to HUD and installs other GUI mods like any mod", async () => {
+  it("installs GUI HUDs as the HUD and other GUI mods like any mod", async () => {
     const onInstall = vi.fn(async () => true);
+    const onInstallHud = vi.fn(async () => true as const);
     const onOpenHud = vi.fn();
+    const hudListing: GameBananaMod = {
+      ...records[0],
+      id: 21,
+      name: "Pure HUD",
+      category: "GUIs",
+      subCategory: "HUDs",
+      route: "hud",
+    };
     search.mockResolvedValue({
       ...page(1),
       records: [
-        { ...records[0], id: 21, category: "GUIs", subCategory: "HUDs", route: "hud" },
+        hudListing,
         { ...records[0], id: 22, category: "GUIs", subCategory: "Menus", route: "mod" },
       ],
+    });
+    const show = (installedHud: { id: string; name: string } | null) =>
+      act(async () => {
+        root.render(
+          <GameBananaBrowser
+            api={api()}
+            active
+            installed={[]}
+            locked={false}
+            running={false}
+            onInstall={onInstall}
+            onInstallHud={onInstallHud}
+            installedHud={installedHud}
+            onOpenHud={onOpenHud}
+          />,
+        );
+      });
+    await show({ id: "budhud", name: "budhud" });
+    await act(async () => Promise.resolve());
+    expect(box.querySelector('[data-testid="mods-gb-route-21"]')).toBeNull();
+    expect(box.querySelector('[data-testid="mods-gb-route-22"]')).toBeNull();
+    expect(box.querySelector('[data-testid="mods-gb-install-22"]')).not.toBeNull();
+    const install = box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-21"]');
+    expect(install?.textContent).toBe("Install HUD");
+
+    await act(async () => install?.click());
+    await act(async () => Promise.resolve());
+    expect(variants).toHaveBeenCalledWith(21, "mod", "hud");
+    expect(box.textContent).toContain("This replaces budhud, your current HUD.");
+    const confirm = box.querySelector<HTMLButtonElement>(
+      '[data-testid="mods-gb-install-selected"]',
+    );
+    expect(confirm?.textContent).toBe("Download and replace HUD");
+    await act(async () => {
+      box.querySelector<HTMLInputElement>('input[value="111"]')?.click();
+    });
+    await act(async () => confirm?.click());
+    expect(onInstallHud).toHaveBeenCalledWith(hudListing, 111);
+    expect(onInstall).not.toHaveBeenCalled();
+
+    // Once it is the profile's HUD the card says so and leads to the HUD pane.
+    await show({ id: "pure-hud", name: "pure-hud" });
+    expect(box.querySelector('[data-testid="mods-gb-install-21"]')).toBeNull();
+    expect(box.querySelector('[data-testid="mods-gb-installed-21"]')).not.toBeNull();
+    await act(async () => {
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-route-21"]')?.click();
+    });
+    expect(onOpenHud).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a HUD's install failure on its card", async () => {
+    const onInstallHud = vi.fn(async () => ({ failed: "No HUD folder was found." }));
+    search.mockResolvedValue({
+      ...page(1),
+      records: [{ ...records[0], id: 21, category: "GUIs", subCategory: "HUDs", route: "hud" }],
     });
     await act(async () => {
       root.render(
@@ -298,20 +362,25 @@ describe("GameBananaBrowser presentation", () => {
           installed={[]}
           locked={false}
           running={false}
-          onInstall={onInstall}
-          onOpenHud={onOpenHud}
+          onInstall={vi.fn(async () => true)}
+          onInstallHud={onInstallHud}
         />,
       );
     });
     await act(async () => Promise.resolve());
-    expect(box.querySelector('[data-testid="mods-gb-install-21"]')).toBeNull();
-    expect(box.querySelector('[data-testid="mods-gb-route-22"]')).toBeNull();
-    expect(box.textContent).not.toContain("Follow the author's instructions");
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-21"]')?.click(),
+    );
+    await act(async () => Promise.resolve());
+    expect(box.textContent).toContain("Download and install HUD");
     await act(async () => {
-      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-route-21"]')?.click();
+      box.querySelector<HTMLInputElement>('input[value="111"]')?.click();
     });
-    expect(onOpenHud).toHaveBeenCalledOnce();
-    expect(box.querySelector('[data-testid="mods-gb-install-22"]')).not.toBeNull();
+    await act(async () =>
+      box.querySelector<HTMLButtonElement>('[data-testid="mods-gb-install-selected"]')?.click(),
+    );
+    expect(box.textContent).toContain("Install failed: No HUD folder was found.");
+    expect(box.querySelector('[data-testid="mods-gb-install-21"]')?.textContent).toBe("Retry");
   });
 
   it("browses GameBanana's Sounds section and sends hit sounds to Sounds, not Install", async () => {
@@ -367,7 +436,7 @@ describe("GameBananaBrowser presentation", () => {
 
     await act(async () => use?.click());
     await act(async () => Promise.resolve());
-    expect(variants).toHaveBeenCalledWith(21865, "sound", true);
+    expect(variants).toHaveBeenCalledWith(21865, "sound", "sound");
     await act(async () => {
       box.querySelector<HTMLInputElement>('input[value="111"]')?.click();
     });

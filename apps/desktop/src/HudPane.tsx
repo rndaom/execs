@@ -50,6 +50,7 @@ import {
   HUD_SORTS,
   hudAuthorCopy,
   hudCatalogControls,
+  hudCatalogMatch,
   hudDisplayName,
   hudInstallSourceCopy,
   hudOptionsDirty,
@@ -116,6 +117,9 @@ export function HudPane({
   onApplyOptions,
   onImportArchive,
   onImportFolder,
+  modsImportHint = null,
+  onOpenMods,
+  onDismissModsImportHint,
 }: {
   api: Api;
   /** The profile this draft belongs to; a switch discards it. */
@@ -147,6 +151,10 @@ export function HudPane({
   /** Install a HUD from a ZIP, 7z or RAR, or a folder on this computer. */
   onImportArchive: () => HudMutationResult;
   onImportFolder: () => HudMutationResult;
+  /** Why the last import was refused as not being a HUD; it may be a mod. */
+  modsImportHint?: string | null;
+  onOpenMods?: () => void;
+  onDismissModsImportHint?: () => void;
 }) {
   const { running, busy, setError } = useAppStatus();
   const active = useContext(AutosaveActivity);
@@ -224,6 +232,7 @@ export function HudPane({
   const installedEntry = installedId
     ? (catalog.find((entry) => entry.id.toLowerCase() === installedId.toLowerCase()) ?? null)
     : null;
+  const catalogMatch = hudCatalogMatch(catalog, state);
   const mutationBlocked = locked || dirty || stateLoading || stateError !== null;
   const mutationReason = running
     ? "Close TF2 before changing the installed HUD."
@@ -322,6 +331,27 @@ export function HudPane({
         }
       />
 
+      {modsImportHint ? (
+        <Alert tone="warn" testId="hud-import-not-a-hud" className="mb-4">
+          <span className="block font-medium">That isn't a HUD</span>
+          <span className="mt-1 block">
+            It has no info.vdf, so nothing was imported. A mod is imported in Mods.
+          </span>
+          <span className="mt-3 flex flex-wrap gap-2">
+            {onOpenMods ? (
+              <button type="button" className="btn btn-ghost" onClick={onOpenMods}>
+                Open Mods
+              </button>
+            ) : null}
+            {onDismissModsImportHint ? (
+              <button type="button" className="btn btn-quiet" onClick={onDismissModsImportHint}>
+                Dismiss
+              </button>
+            ) : null}
+          </span>
+        </Alert>
+      ) : null}
+
       <div className="pane-views">
         <ClassTabs
           label="HUD workspace"
@@ -371,8 +401,10 @@ export function HudPane({
                     {installedEntry ? `${hudAuthorCopy(installedEntry)} · ` : ""}
                     {installedLabel}
                   </p>
-                  {state.inferred ? (
-                    <p className="t-meta mt-3">Match it to hud-db to enable updates.</p>
+                  {catalogMatch ? (
+                    <p className="t-meta mt-3">
+                      Match it to {hudDisplayName(catalogMatch)} in the catalog to get updates.
+                    </p>
                   ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {state.updateAvailable ? (
@@ -387,16 +419,16 @@ export function HudPane({
                         {running ? "Close TF2 to update" : "Update HUD"}
                       </button>
                     ) : null}
-                    {state.inferred ? (
+                    {catalogMatch ? (
                       <button
                         type="button"
                         data-testid="hud-match"
                         disabled={mutationBlocked}
                         title={mutationReason}
-                        onClick={() => onMatch(installedId)}
+                        onClick={() => onMatch(catalogMatch.id)}
                         className="btn btn-ghost"
                       >
-                        Match to catalog…
+                        Match to catalog
                       </button>
                     ) : null}
                     <button

@@ -281,6 +281,13 @@ export function SettingsHost({
   }, [settled, onSettledChange]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Profile changes invalidate guidance from the previous import attempt.
   useEffect(() => setModsHudImportRequired(null), [profileId]);
+  // An import refused because the pick belongs in Mods, kept on its pane.
+  const [modsImportHint, setModsImportHint] = useState<{
+    tab: "hud" | "viewmodels";
+    message: string;
+  } | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the notice belongs to the profile it was raised in.
+  useEffect(() => setModsImportHint(null), [profileId]);
   const hud = useHudResources(
     api,
     profileId,
@@ -663,6 +670,15 @@ export function SettingsHost({
         options?.onHandledFailure?.("review-required");
         return false;
       }
+      if (failure.code === "NotAHud" || failure.code === "ViewmodelMixedContent") {
+        if (started) toast.cancelSave(copy?.source);
+        setModsImportHint({
+          tab: failure.code === "NotAHud" ? "hud" : "viewmodels",
+          message: failure.message,
+        });
+        options?.onFailure?.(failure.message);
+        return false;
+      }
       if (
         (failure.code === "HudReviewRequired" || failure.code === "HudLiveReviewRequired") &&
         expectedProfileId &&
@@ -887,6 +903,19 @@ export function SettingsHost({
       }
       const chosen = await modImport.choose(prepared.review, started);
       if (!chosen) return "superseded";
+      if (chosen.hud !== undefined) {
+        const hudChoice = chosen.hud;
+        // The HUD installer replaces the profile's one HUD from the same source.
+        const installedHud = await write(
+          async () => {
+            await api.confirmModImportAsHud(chosen.token, hudChoice);
+            await hud.reloadLocal();
+          },
+          { success: "HUD installed", failure: "Could not install", pending: "Installing HUD…" },
+          { onFailure },
+        );
+        return installedHud || failed === null ? installedHud : { failed };
+      }
       const installed = await write(
         async () => {
           await api.confirmModImport(chosen.token, chosen.ids);
@@ -1114,8 +1143,15 @@ export function SettingsHost({
               await hud.reloadLocal();
             });
           }}
+          modsImportHint={modsImportHint?.tab === "hud" ? modsImportHint.message : null}
+          onOpenMods={() => {
+            setModsImportHint(null);
+            onNavigate?.("mods");
+          }}
+          onDismissModsImportHint={() => setModsImportHint(null)}
           onImportArchive={() => {
             setModsHudImportRequired(null);
+            setModsImportHint(null);
             return write(
               async () => {
                 if ((await api.importHudArchive()) === null) return null;
@@ -1127,6 +1163,7 @@ export function SettingsHost({
           }}
           onImportFolder={() => {
             setModsHudImportRequired(null);
+            setModsImportHint(null);
             return write(
               async () => {
                 if ((await api.importHudFolder()) === null) return null;
@@ -1232,7 +1269,14 @@ export function SettingsHost({
           }}
           profilePreload={modsPayload?.profilePreload ?? null}
           loadCatalog={api.getViewmodelSourceCatalog}
+          modsImportHint={modsImportHint?.tab === "viewmodels" ? modsImportHint.message : null}
+          onOpenMods={() => {
+            setModsImportHint(null);
+            onNavigate?.("mods");
+          }}
+          onDismissModsImportHint={() => setModsImportHint(null)}
           onImport={(preload) => {
+            setModsImportHint(null);
             return write(
               async () => {
                 if ((await api.importViewmodels(preload)) === null) return null;
@@ -1323,6 +1367,38 @@ export function SettingsHost({
           report={modsReport}
           packFocus={modsPackFocus}
           hudImportRequired={modsHudImportRequired}
+          installedHud={
+            detail?.hud
+              ? {
+                  id: detail.hud.id,
+                  name:
+                    hud.catalog.find((entry) => entry.id === detail.hud?.id)?.name ?? detail.hud.id,
+                }
+              : null
+          }
+          // The HUD installer replaces the profile's one HUD; the card waits
+          // for the install and the HUD state reload behind it.
+          onInstallGameBananaHud={async (mod, fileId) => {
+            setModsHudImportRequired(null);
+            let failed = "";
+            const installed = await write(
+              async () => {
+                await api.installGameBananaHud(mod.id, fileId);
+                await hud.reloadLocal();
+              },
+              {
+                success: "HUD installed",
+                failure: "Could not install",
+                pending: "Installing HUD…",
+              },
+              {
+                onFailure: (message) => {
+                  failed = message;
+                },
+              },
+            );
+            return installed ? true : { failed };
+          }}
           onReviewHudImport={() => onNavigate?.("hud")}
           onDismissHudImport={() => setModsHudImportRequired(null)}
           onApply={(addons, particleMods, profileParticleMods) => {
@@ -1665,6 +1741,12 @@ export function SettingsHost({
           review={modImport.review}
           onClose={modImport.cancel}
           onConfirm={modImport.confirm}
+          onInstallHud={modImport.confirmHud}
+          hudName={
+            detail?.hud
+              ? (hud.catalog.find((entry) => entry.id === detail.hud?.id)?.name ?? detail.hud.id)
+              : null
+          }
         />
       ) : null}
       {shownLoadError ? (

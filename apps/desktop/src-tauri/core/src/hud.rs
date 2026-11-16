@@ -725,12 +725,14 @@ fn finish_extracted(raw: Vec<(String, Vec<u8>)>) -> Result<ExtractedHud, Profile
     })
 }
 
+/// The refusal for an archive or folder with no `info.vdf`: not a HUD at all,
+/// which is how an ordinary mod picked in the HUD pane ends up.
+pub const NO_HUD_FOUND: &str = "No HUD folder was found (missing info.vdf). Choose a complete HUD download or its extracted HUD folder.";
+
 fn validate_hud_info(tree: &HudTree) -> Result<(), ProfileError> {
-    let info = tree.info_vdf().ok_or_else(|| {
-        ProfileError::Io(
-            "No HUD folder was found (missing info.vdf). Choose a complete HUD download or its extracted HUD folder.".into(),
-        )
-    })?;
+    let info = tree
+        .info_vdf()
+        .ok_or_else(|| ProfileError::Io(NO_HUD_FOUND.into()))?;
     match std::str::from_utf8(info).ok().and_then(parse_ui_version) {
         Some(CURRENT_HUD_UI_VERSION) => Ok(()),
         Some(version) => Err(ProfileError::Io(format!(

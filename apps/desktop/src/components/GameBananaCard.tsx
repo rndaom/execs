@@ -40,7 +40,9 @@ export function GameBananaCard({
   /** Why the last install failed, kept on the card after the notice fades. */
   failureReason?: string;
   onView: () => void;
+  /** Starts the install: a pack, a HUD, or a sound handed to Sounds. */
   onInstall: () => void;
+  /** Opens the HUD pane for a HUD listing that is the installed HUD. */
   onOpenHud: () => void;
   /** Opens Custom packs for a listing that is already installed. */
   onManage?: () => void;
@@ -54,6 +56,8 @@ export function GameBananaCard({
   // Hit and kill sounds are chosen in Sounds; preparing them writes nothing to
   // TF2, so a running game does not block it.
   const soundSlot = gameBananaSoundSlot(mod);
+  // A HUD listing installs as the profile's one HUD, not as a custom pack.
+  const hud = mod.route === "hud";
   const installLabel = installing
     ? soundSlot
       ? "Preparing…"
@@ -66,7 +70,9 @@ export function GameBananaCard({
           ? "Use in Sounds"
           : running
             ? "Close TF2 to install"
-            : "Install";
+            : hud
+              ? "Install HUD"
+              : "Install";
   const category = mod.subCategory ? `${mod.category} · ${mod.subCategory}` : mod.category;
 
   return (
@@ -153,7 +159,7 @@ export function GameBananaCard({
         >
           <ArrowSquareOut size={15} />
         </button>
-        {mod.route === "hud" ? (
+        {hud && installed ? (
           <button
             type="button"
             data-testid={`mods-gb-route-${mod.id}`}

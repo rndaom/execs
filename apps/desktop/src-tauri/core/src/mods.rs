@@ -576,10 +576,10 @@ where
     detail_from_manifest(profiles_dir, &manifest)
 }
 
-/// HUDs need the one-HUD replacement review, including when a mod picker or
-/// GameBanana supplied their bytes. Detection requires real compatibility data.
-fn refuse_hud_mod(content: &ModContent) -> Result<(), ProfileError> {
-    let hud = match content {
+/// Whether a pack is a HUD: it carries an `info.vdf` declaring the current UI
+/// version. Detection requires real compatibility data.
+pub fn is_hud_content(content: &ModContent) -> Result<bool, ProfileError> {
+    Ok(match content {
         ModContent::Tree(entries) => entries.iter().any(|(path, bytes)| {
             path.rsplit('/')
                 .next()
@@ -594,8 +594,13 @@ fn refuse_hud_mod(content: &ModContent) -> Result<(), ProfileError> {
                 .values()
                 .any(|bytes| crate::hud::is_current_hud_info(bytes))
         }
-    };
-    if !hud {
+    })
+}
+
+/// HUDs need the one-HUD replacement review, including when a mod picker or
+/// GameBanana supplied their bytes.
+fn refuse_hud_mod(content: &ModContent) -> Result<(), ProfileError> {
+    if !is_hud_content(content)? {
         return Ok(());
     }
     let instruction = if matches!(content, ModContent::Vpk(_)) {
