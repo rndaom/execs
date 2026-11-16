@@ -1081,6 +1081,9 @@ fn validate_viewmodel_import_metadata(
     Ok(())
 }
 
+/// Ends the refusal for a VPK that carries more than viewmodels.
+pub const MIXED_VIEWMODEL_PACK: &str = "Import mixed-content packs through Mods.";
+
 /// A custom VPK mounts every member as game content. Keep the Viewmodels
 /// shortcut limited to compiled first-person weapon models; mixed packs belong
 /// in Mods, where CFG members receive their separate trust review.
@@ -1089,7 +1092,7 @@ fn validate_viewmodel_vpk(bytes: &[u8]) -> Result<(), ProfileError> {
     validate_vpk_dir_bytes_with_paths(bytes, &mut |path| {
         if !is_viewmodel_member(path) {
             return Err(VpkError(format!(
-                "Viewmodel VPK contains unrelated content: {path}. Import mixed-content packs through Mods."
+                "Viewmodel VPK contains unrelated content: {path}. {MIXED_VIEWMODEL_PACK}"
             )));
         }
         if path.to_ascii_lowercase().ends_with(".mdl") {

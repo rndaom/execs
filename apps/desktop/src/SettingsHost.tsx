@@ -272,6 +272,13 @@ export function SettingsHost({
   }, [settled, onSettledChange]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Profile changes invalidate guidance from the previous import attempt.
   useEffect(() => setModsHudImportRequired(null), [profileId]);
+  // An import refused because the pick belongs in Mods, kept on its pane.
+  const [modsImportHint, setModsImportHint] = useState<{
+    tab: "hud" | "viewmodels";
+    message: string;
+  } | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the notice belongs to the profile it was raised in.
+  useEffect(() => setModsImportHint(null), [profileId]);
   const hud = useHudResources(
     api,
     profileId,
@@ -652,6 +659,15 @@ export function SettingsHost({
         if (started) toast.cancelSave(copy?.source);
         setModsHudImportRequired(failure.message);
         options?.onHandledFailure?.("review-required");
+        return false;
+      }
+      if (failure.code === "NotAHud" || failure.code === "ViewmodelMixedContent") {
+        if (started) toast.cancelSave(copy?.source);
+        setModsImportHint({
+          tab: failure.code === "NotAHud" ? "hud" : "viewmodels",
+          message: failure.message,
+        });
+        options?.onFailure?.(failure.message);
         return false;
       }
       if (
@@ -1118,8 +1134,15 @@ export function SettingsHost({
               await hud.reloadLocal();
             });
           }}
+          modsImportHint={modsImportHint?.tab === "hud" ? modsImportHint.message : null}
+          onOpenMods={() => {
+            setModsImportHint(null);
+            onNavigate?.("mods");
+          }}
+          onDismissModsImportHint={() => setModsImportHint(null)}
           onImportArchive={() => {
             setModsHudImportRequired(null);
+            setModsImportHint(null);
             return write(
               async () => {
                 if ((await api.importHudArchive()) === null) return null;
@@ -1131,6 +1154,7 @@ export function SettingsHost({
           }}
           onImportFolder={() => {
             setModsHudImportRequired(null);
+            setModsImportHint(null);
             return write(
               async () => {
                 if ((await api.importHudFolder()) === null) return null;
@@ -1236,7 +1260,14 @@ export function SettingsHost({
           }}
           profilePreload={modsPayload?.profilePreload ?? null}
           loadCatalog={api.getViewmodelSourceCatalog}
+          modsImportHint={modsImportHint?.tab === "viewmodels" ? modsImportHint.message : null}
+          onOpenMods={() => {
+            setModsImportHint(null);
+            onNavigate?.("mods");
+          }}
+          onDismissModsImportHint={() => setModsImportHint(null)}
           onImport={(preload) => {
+            setModsImportHint(null);
             return write(
               async () => {
                 if ((await api.importViewmodels(preload)) === null) return null;

@@ -117,6 +117,9 @@ export function HudPane({
   onApplyOptions,
   onImportArchive,
   onImportFolder,
+  modsImportHint = null,
+  onOpenMods,
+  onDismissModsImportHint,
 }: {
   api: Api;
   /** The profile this draft belongs to; a switch discards it. */
@@ -148,6 +151,10 @@ export function HudPane({
   /** Install a HUD from a ZIP, 7z or RAR, or a folder on this computer. */
   onImportArchive: () => HudMutationResult;
   onImportFolder: () => HudMutationResult;
+  /** Why the last import was refused as not being a HUD; it may be a mod. */
+  modsImportHint?: string | null;
+  onOpenMods?: () => void;
+  onDismissModsImportHint?: () => void;
 }) {
   const { running, busy, setError } = useAppStatus();
   const active = useContext(AutosaveActivity);
@@ -323,6 +330,27 @@ export function HudPane({
           </>
         }
       />
+
+      {modsImportHint ? (
+        <Alert tone="warn" testId="hud-import-not-a-hud" className="mb-4">
+          <span className="block font-medium">That isn't a HUD</span>
+          <span className="mt-1 block">
+            It has no info.vdf, so nothing was imported. A mod is imported in Mods.
+          </span>
+          <span className="mt-3 flex flex-wrap gap-2">
+            {onOpenMods ? (
+              <button type="button" className="btn btn-ghost" onClick={onOpenMods}>
+                Open Mods
+              </button>
+            ) : null}
+            {onDismissModsImportHint ? (
+              <button type="button" className="btn btn-quiet" onClick={onDismissModsImportHint}>
+                Dismiss
+              </button>
+            ) : null}
+          </span>
+        </Alert>
+      ) : null}
 
       <div className="pane-views">
         <ClassTabs

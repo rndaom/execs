@@ -519,15 +519,24 @@ pub async fn import_viewmodels(
     with_profile(move |root, profile_id| {
         context.ensure_current(&root, &profile_id)?;
         ensure_viewmodel_unchanged(&profile_id, initial_viewmodel.as_ref())?;
-        Ok(execs_core::import_viewmodel_vpk(
-            &root,
-            &profile_id,
-            &bytes,
-            preload,
-        )?)
+        execs_core::import_viewmodel_vpk(&root, &profile_id, &bytes, preload)
+            .map_err(viewmodel_input_error)
     })
     .await
     .map(Some)
+}
+
+// A VPK with more than viewmodels gets its own code so the pane can point it
+// to Mods.
+fn viewmodel_input_error(error: execs_core::ProfileError) -> CommandError {
+    match error {
+        execs_core::ProfileError::Io(message)
+            if message.ends_with(execs_core::viewmodel::MIXED_VIEWMODEL_PACK) =>
+        {
+            CommandError::new("ViewmodelMixedContent", message)
+        }
+        other => other.into(),
+    }
 }
 
 fn ensure_viewmodel_unchanged(

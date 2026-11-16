@@ -1,5 +1,6 @@
 import { DownloadSimple, Trash } from "@phosphor-icons/react";
 import { useState } from "react";
+import { Alert } from "./components/ui/Alert";
 import { ClassTabs } from "./components/ui/ClassTabs";
 import { PaneHeader } from "./components/ui/PaneHeader";
 import { useAppStatus, useCanWrite } from "./hooks/useAppStatus";
@@ -24,6 +25,9 @@ export function ViewmodelPane({
   onImport,
   onBuild,
   onRemove,
+  modsImportHint = null,
+  onOpenMods,
+  onDismissModsImportHint,
 }: {
   active: boolean;
   profileId: string | null;
@@ -33,6 +37,10 @@ export function ViewmodelPane({
   profilePreload: boolean | null;
   loadCatalog: () => Promise<ViewmodelSourceCatalog>;
   onImport: (preload: boolean) => void;
+  /** Why the last VPK was refused for carrying more than viewmodels. */
+  modsImportHint?: string | null;
+  onOpenMods?: () => void;
+  onDismissModsImportHint?: () => void;
   onBuild: (request: ViewmodelBuildRequest) => Promise<boolean>;
   onRemove: () => void;
 }) {
@@ -68,6 +76,25 @@ export function ViewmodelPane({
         onBuild={onBuild}
         onRemovePack={onRemove}
       />
+
+      {modsImportHint ? (
+        <Alert tone="warn" testId="viewmodel-import-mixed" className="mb-4">
+          <span className="block font-medium">That pack has more than viewmodels</span>
+          <span className="mt-1 block">{modsImportHint}</span>
+          <span className="mt-3 flex flex-wrap gap-2">
+            {onOpenMods ? (
+              <button type="button" className="btn btn-ghost" onClick={onOpenMods}>
+                Open Mods
+              </button>
+            ) : null}
+            {onDismissModsImportHint ? (
+              <button type="button" className="btn btn-quiet" onClick={onDismissModsImportHint}>
+                Dismiss
+              </button>
+            ) : null}
+          </span>
+        </Alert>
+      ) : null}
 
       <section
         data-testid="viewmodel-saved-pack"

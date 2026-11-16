@@ -7,6 +7,8 @@ User-facing changes only. The release workflow publishes the matching
 
 ### Fixed
 
+- HUD and Viewmodels: importing something that belongs in Mods now says so and offers Open Mods,
+  instead of only failing.
 - HUD: an imported HUD that is also in the catalog now offers Match to catalog, so it can get
   updates. The button was missing for imported HUDs.
 - Mods: when a mod you import or download turns out to be a HUD, the file review now offers
