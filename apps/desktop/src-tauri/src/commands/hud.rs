@@ -333,8 +333,13 @@ fn install_local_hud(
 
 // These errors describe rejected input before any profile write. Keep the
 // core error code without its generic profile-library write failure prefix.
+// A pick with no `info.vdf` gets its own code so the HUD pane can point an
+// ordinary mod to Mods.
 fn hud_input_error(error: execs_core::ProfileError) -> CommandError {
     match error {
+        execs_core::ProfileError::Io(message) if message == execs_core::hud::NO_HUD_FOUND => {
+            CommandError::new("NotAHud", message)
+        }
         execs_core::ProfileError::Io(message) => CommandError::new("Io", message),
         other => other.into(),
     }
@@ -676,6 +681,13 @@ mod tests {
         let invalid = hud_input_error(execs_core::extract_hud_archive(b"garbage").unwrap_err());
         assert!(invalid.message.contains("not a ZIP, 7z or RAR"));
         assert!(!invalid.message.contains("profile library"));
+
+        // An ordinary mod has no info.vdf; its own code lets the pane offer Mods.
+        let not_a_hud = hud_input_error(execs_core::ProfileError::Io(
+            execs_core::hud::NO_HUD_FOUND.into(),
+        ));
+        assert_eq!(not_a_hud.code, "NotAHud");
+        assert_eq!(not_a_hud.message, execs_core::hud::NO_HUD_FOUND);
 
         let lock = hud_input_error(execs_core::ProfileError::GameRunning);
         assert_eq!(lock.code, "GameRunning");

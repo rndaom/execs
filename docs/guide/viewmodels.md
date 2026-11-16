@@ -24,6 +24,6 @@ If TF2 updates its files while you have choices waiting, execs keeps them but ca
 
 ## Packs you already have
 
-**Use your own VPK…** installs a viewmodel VPK instead of the one execs builds. Showing every weapon again and applying removes the pack; **Remove pack** does that directly. Profile exports carry the build recipe, not the built model files, so whoever imports the profile builds it from their own TF2.
+**Use your own VPK…** installs a viewmodel VPK instead of the one execs builds. It must hold only viewmodel files; a VPK with anything else is refused with **Open Mods**, where such packs are imported. Showing every weapon again and applying removes the pack; **Remove pack** does that directly. Profile exports carry the build recipe, not the built model files, so whoever imports the profile builds it from their own TF2.
 
 Custom viewmodels on Valve Casual need the profile's preload launch option; see [Mods → Casual setup](mods.md#casual-setup).

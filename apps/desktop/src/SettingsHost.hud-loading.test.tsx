@@ -61,6 +61,7 @@ let container: HTMLDivElement;
 let refreshKey: number;
 let running: boolean;
 let onPendingChange: ReturnType<typeof vi.fn<(pending: boolean) => void>>;
+let onNavigate: ReturnType<typeof vi.fn<(tab: string) => void>>;
 function makeApi() {
   return {
     getFilesContext: vi.fn(async () => ({ profileId, root: "fixture", layer: "vanilla" })),
@@ -104,6 +105,7 @@ async function render() {
             onBindSyncHandled={() => {}}
             onBusyChange={() => {}}
             onPendingChange={onPendingChange}
+            onNavigate={onNavigate}
             onError={() => {}}
           />
         </AppStatusProvider>
@@ -131,6 +133,7 @@ beforeEach(() => {
   refreshKey = 1;
   api = makeApi();
   onPendingChange = vi.fn();
+  onNavigate = vi.fn();
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -320,6 +323,25 @@ describe("HUD loading through the real settings host and pane", () => {
     expect(element("hud-schema-error").textContent).toContain("Schema offline");
     expect(element("toast").textContent).toBe("HUD imported");
     expect(element("toast").getAttribute("data-kind")).toBe("saved");
+  });
+
+  it("points an import that is not a HUD to Mods instead of a bare failure", async () => {
+    await render();
+    api.importHudArchive.mockRejectedValueOnce({
+      code: "NotAHud",
+      message: "No HUD folder was found (missing info.vdf).",
+    });
+    await click("hud-import");
+    await click("hud-import-archive");
+    const hint = element("hud-import-not-a-hud");
+    expect(hint.textContent).toContain("That isn't a HUD");
+    expect(container.querySelector('[data-testid="toast"][data-kind="error"]')).toBeNull();
+    const open = Array.from(hint.querySelectorAll("button")).find(
+      (button) => button.textContent === "Open Mods",
+    );
+    await act(async () => open?.click());
+    expect(onNavigate).toHaveBeenCalledWith("mods");
+    expect(container.querySelector('[data-testid="hud-import-not-a-hud"]')).toBeNull();
   });
 
   it("retains a same-HUD dirty draft through schema failure and retry without saving unavailable controls", async () => {

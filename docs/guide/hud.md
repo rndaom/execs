@@ -10,7 +10,7 @@ The catalog comes from [hud-db](https://github.com/mastercomfig/hud-db), with ac
 
 ## Importing
 
-**Import HUD** takes a ZIP, 7z or RAR, or a folder you already extracted. execs checks that it is a TF2 HUD (its `info.vdf` declares UI version 3) before installing it. An archive with several HUDs inside asks you to import the one you want as a folder.
+**Import HUD** takes a ZIP, 7z or RAR, or a folder you already extracted. execs checks that it is a TF2 HUD (its `info.vdf` declares UI version 3) before installing it. An archive with several HUDs inside asks you to import the one you want as a folder. If what you picked isn't a HUD at all, execs says so and offers **Open Mods**, where ordinary mods are imported.
 
 When you install or import a HUD over another one, the old HUD is kept as a backup outside TF2's HUD folders. App settings → Storage lists those backups.
 

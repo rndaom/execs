@@ -5,6 +5,11 @@ User-facing changes only. The release workflow publishes the matching
 
 ## [Unreleased]
 
+### Fixed
+
+- HUD and Viewmodels: importing something that belongs in Mods now says so and offers Open Mods,
+  instead of only failing.
+
 ## [0.3.0] - 2026-11-15
 
 ### Fixed
